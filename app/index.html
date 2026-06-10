@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-004821-c3ea7c2"></script>
+  <script src="../shared/customer-filters.js?v=20260610-005352-c02208b"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-004821-c3ea7c2"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-005352-c02208b"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-004821-c3ea7c2"></script>
-  <script src="../shared/mast-io.js?v=20260610-004821-c3ea7c2"></script>
-  <script src="../shared/mast-entity.js?v=20260610-004821-c3ea7c2"></script>
+  <script src="../shared/mast-ui.js?v=20260610-005352-c02208b"></script>
+  <script src="../shared/mast-io.js?v=20260610-005352-c02208b"></script>
+  <script src="../shared/mast-entity.js?v=20260610-005352-c02208b"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-004821-c3ea7c2"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-005352-c02208b"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11427,6 +11427,8 @@
     <div id="rmaV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 1: returns -->
     <div id="posV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 2: sales ledger -->
     <div id="commissionTermsV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 2: commission terms -->
+    <div id="receiptsV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 3: day close -->
+    <div id="lookbooksV2Tab" class="tab-content" style="display:none;"></div><!-- sales-v2 wave 3: look books -->
     <div id="customersV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign proof -->
     <div id="duplicatesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Resolve -->
     <div id="calendarV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Calendar -->
@@ -20777,7 +20779,8 @@ var MAST_V2_ROUTE_MAP = {
   blog: 'blog-v2', salesEvents: 'sales-events-v2', inquiries: 'inquiries-v2', jobs: 'jobs-v2',
   campaigns: 'campaigns-v2', 'email-log': 'email-log-v2', 'marketing-calendar': 'marketing-calendar-v2', channels: 'channels-v2', suppressions: 'audit-suppressions-v2',
   pack: 'pack-v2', ship: 'ship-v2', rma: 'rma-v2',
-  pos: 'pos-v2', 'commission-terms': 'commission-terms-v2'
+  pos: 'pos-v2', 'commission-terms': 'commission-terms-v2',
+  receipts: 'receipts-v2', lookbooks: 'lookbooks-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -21993,7 +21996,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-004821-c3ea7c2';
+var MAST_MODULES_V = '20260610-005352-c02208b';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22058,6 +22061,8 @@ var MODULE_MANIFEST = {
   'rma-v2': { src: 'modules/rma-v2.js', routes: ['rma-v2'] }, // sales-v2 wave 1: returns (transaction archetype + return workflow, flag-gated, side-by-side)
   'pos-v2': { src: 'modules/pos-v2.js', routes: ['pos-v2'] }, // sales-v2 wave 2: sales ledger (transaction archetype over in-person orders, flag-gated, side-by-side)
   'commission-terms-v2': { src: 'modules/commission-terms-v2.js', routes: ['commission-terms-v2'] }, // sales-v2 wave 2: versioned commission terms (record archetype, flag-gated, side-by-side)
+  'receipts-v2': { src: 'modules/receipts-v2.js', routes: ['receipts-v2'] }, // sales-v2 wave 3: day close reconciliation (record archetype + match view, flag-gated, side-by-side)
+  'lookbooks-v2': { src: 'modules/lookbooks-v2.js', routes: ['lookbooks-v2'] }, // sales-v2 wave 3: line sheets / lookbooks (composer archetype, flag-gated, side-by-side)
   'campaigns-v2': { src: 'modules/campaigns-v2.js', routes: ['campaigns-v2'] }, // UI-redesign conversion: marketing campaigns read detail (flag-gated, side-by-side)
   'email-log-v2': { src: 'modules/email-log-v2.js', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
   'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', routes: ['marketing-calendar-v2'] }, // UI-redesign conversion: marketing calendar (index control)
