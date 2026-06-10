@@ -375,75 +375,83 @@
   }
   window.engagementInboxOpenUgcPhoto = engagementInboxOpenUgcPhoto;
 
+  // Core of the UGC approval — pure of this module's list state so the V2
+  // inbox (engagement-inbox-v2 via EngagementBridge) can share it. Creates the
+  // canonical Content draft, stamps the submission approved, and kicks the
+  // social + story modules into creating their own per-channel drafts.
+  async function _approveUgcCore(id, u, customerNameFallback, customerId) {
+    u = u || {};
+    // Look up the originating review to recover quote + customer first name
+    // for the auto-drafted Content body.
+    var quote = '';
+    var customerFirstName = '';
+    var productName = u.productName || '';
+    if (u.reviewId) {
+      try {
+        var rev = await MastDB.get('cs_reviews/' + u.reviewId);
+        if (rev) {
+          quote = (rev.body || rev.headline || '').trim();
+          var nm = rev.authorName || rev.reviewerName || '';
+          customerFirstName = (nm.split(' ')[0]) || '';
+          if (!productName) productName = rev.productName || '';
+        }
+      } catch (_e) {}
+    }
+    if (!customerFirstName) {
+      customerFirstName = ((customerNameFallback || '').split(' ')[0]) || 'A customer';
+    }
+
+    // Create a Content draft so Composer/Social/Story all converge on one
+    // canonical object. Source = 'ugc' so analytics can split it out.
+    var contentId = MastDB.newKey('admin/content');
+    var title = 'Customer photo' + (productName ? (': ' + productName) : '');
+    var body = quote
+      ? ('"' + quote + '" — Photo by ' + customerFirstName)
+      : ('Photo by ' + customerFirstName + (productName ? (' — ' + productName) : ''));
+    var contentDoc = {
+      id: contentId,
+      title: title,
+      body: body,
+      images: [u.photoUrl].filter(Boolean),
+      targetChannels: ['social', 'story'],
+      status: 'draft',
+      source: 'ugc',
+      sourceUgcSubmissionId: id,
+      sourceReviewId: u.reviewId || null,
+      sourceProductId: u.productId || null,
+      sourceCustomerId: customerId || u.customerId || null,
+      scheduledAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      linkedArtifacts: {}
+    };
+    await MastDB.set('admin/content/' + contentId, contentDoc);
+
+    // Mark the submission approved + link back to the Content.
+    var nowIso = new Date().toISOString();
+    var approver = (window.currentUser && window.currentUser.uid) || null;
+    await MastDB.update('admin/ugc_submissions/' + id, {
+      status: 'approved',
+      approvedAt: nowIso,
+      approvedBy: approver,
+      contentId: contentId,
+    });
+
+    // Kick the social + story modules into creating their own drafts
+    // attached to this Content. Each module owns its own per-channel draft.
+    try { if (typeof window.socialOpenFromContent === 'function') window.socialOpenFromContent(contentId); } catch (_e) {}
+    try { if (typeof window.storyOpenFromContent === 'function') window.storyOpenFromContent(contentId); } catch (_e) {}
+    return contentId;
+  }
+
   async function engagementInboxApproveUgc(id) {
     var row = rows.find(function(r) { return r.id === id && r.kind === 'ugc'; });
     if (!row) return;
-    var u = row.raw || {};
     try {
-      // Look up the originating review to recover quote + customer first name
-      // for the auto-drafted Content body.
-      var quote = '';
-      var customerFirstName = '';
-      var productName = u.productName || '';
-      if (u.reviewId) {
-        try {
-          var rev = await MastDB.get('cs_reviews/' + u.reviewId);
-          if (rev) {
-            quote = (rev.body || rev.headline || '').trim();
-            var nm = rev.authorName || rev.reviewerName || '';
-            customerFirstName = (nm.split(' ')[0]) || '';
-            if (!productName) productName = rev.productName || '';
-          }
-        } catch (_e) {}
-      }
-      if (!customerFirstName) {
-        customerFirstName = ((row.customerName || '').split(' ')[0]) || 'A customer';
-      }
-
-      // Create a Content draft so Composer/Social/Story all converge on one
-      // canonical object. Source = 'ugc' so analytics can split it out.
-      var contentId = MastDB.newKey('admin/content');
-      var title = 'Customer photo' + (productName ? (': ' + productName) : '');
-      var body = quote
-        ? ('"' + quote + '" — Photo by ' + customerFirstName)
-        : ('Photo by ' + customerFirstName + (productName ? (' — ' + productName) : ''));
-      var contentDoc = {
-        id: contentId,
-        title: title,
-        body: body,
-        images: [u.photoUrl].filter(Boolean),
-        targetChannels: ['social', 'story'],
-        status: 'draft',
-        source: 'ugc',
-        sourceUgcSubmissionId: id,
-        sourceReviewId: u.reviewId || null,
-        sourceProductId: u.productId || null,
-        sourceCustomerId: row.customerId || u.customerId || null,
-        scheduledAt: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        linkedArtifacts: {}
-      };
-      await MastDB.set('admin/content/' + contentId, contentDoc);
-
-      // Mark the submission approved + link back to the Content.
-      var nowIso = new Date().toISOString();
-      var approver = (window.currentUser && window.currentUser.uid) || null;
-      await MastDB.update('admin/ugc_submissions/' + id, {
-        status: 'approved',
-        approvedAt: nowIso,
-        approvedBy: approver,
-        contentId: contentId,
-      });
+      var contentId = await _approveUgcCore(id, row.raw || {}, row.customerName, row.customerId);
       row.status = 'approved';
       row.raw.status = 'approved';
       row.raw.contentId = contentId;
-
-      // Kick the social + story modules into creating their own drafts
-      // attached to this Content. Each module owns its own per-channel draft.
-      try { if (typeof window.socialOpenFromContent === 'function') window.socialOpenFromContent(contentId); } catch (_e) {}
-      try { if (typeof window.storyOpenFromContent === 'function') window.storyOpenFromContent(contentId); } catch (_e) {}
-
       if (typeof showToast === 'function') showToast('UGC approved — social + story drafts created');
       render();
     } catch (err) {
@@ -451,6 +459,28 @@
     }
   }
   window.engagementInboxApproveUgc = engagementInboxApproveUgc;
+
+  // EngagementBridge — delegated write path for engagement-inbox-v2
+  // (marketing-v2 Wave 2). Status writes + the UGC approve/reject flows stay
+  // single-sourced here; the V2 queue never writes cs_* / ugc paths directly.
+  window.EngagementBridge = {
+    markReplied: async function(kind, id) {
+      var path = kind === 'review' ? 'cs_reviews/' : 'cs_tickets/';
+      await MastDB.update(path + id, { status: 'replied', updatedAt: new Date().toISOString() });
+      return true;
+    },
+    approveUgc: function(id, raw, customerName, customerId) {
+      return _approveUgcCore(id, raw, customerName, customerId);
+    },
+    rejectUgc: async function(id) {
+      await MastDB.update('admin/ugc_submissions/' + id, {
+        status: 'rejected',
+        rejectedAt: new Date().toISOString(),
+        rejectedBy: (window.currentUser && window.currentUser.uid) || null,
+      });
+      return true;
+    }
+  };
 
   async function engagementInboxRejectUgc(id) {
     if (!confirm('Reject this photo submission? The photo stays in storage for audit but will not be used.')) return;
