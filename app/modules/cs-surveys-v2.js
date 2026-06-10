@@ -558,6 +558,10 @@
     }
   };
 
+  // Define entities at load time (cs-support-v2 precedent) — row clicks, SOs
+  // and cross-drills need the registry before the first setup() runs.
+  defineEntities();
+
   MastAdmin.registerModule('cs-surveys-v2', {
     routes: { 'cs-surveys-v2': { tab: 'csSurveysV2Tab', setup: function () { ensureTab(); render(); load(); } } }
   });
