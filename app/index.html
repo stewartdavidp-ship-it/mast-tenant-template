@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-222445-4fe292f"></script>
+  <script src="../shared/customer-filters.js?v=20260610-223201-7e421fe"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-222445-4fe292f"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-223201-7e421fe"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-222445-4fe292f"></script>
-  <script src="../shared/mast-io.js?v=20260610-222445-4fe292f"></script>
-  <script src="../shared/mast-entity.js?v=20260610-222445-4fe292f"></script>
+  <script src="../shared/mast-ui.js?v=20260610-223201-7e421fe"></script>
+  <script src="../shared/mast-io.js?v=20260610-223201-7e421fe"></script>
+  <script src="../shared/mast-entity.js?v=20260610-223201-7e421fe"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-222445-4fe292f"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-223201-7e421fe"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6742,9 +6742,9 @@
         <!-- "Products" item removed 2026-05-22 — duplicated Catalog under the Products section
              (same data-route="products"). Catalog lives in the Products section; Admin
              keeps operational/configuration items only. -->
-        <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Permissions</div>
-        <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Analytics</div>
-        <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Audit Log</div>
+        <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Team Access</div>
+        <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Site Traffic</div>
+        <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Activity History</div>
         <!-- Ratified 2026-06-10 (admin-v2-build-plan.md §5): Audit Suppressions
              item removed (Q1 — suppression rules are the audit queue's Muted-rules
              lens; the item was already soft-hidden); Coins folded into Plan &
@@ -6753,7 +6753,7 @@
         <div class="sidebar-item" data-route="settings" onclick="navigateTo('settings')">Settings <span id="sidebarAlertBadge" class="sidebar-badge alert" style="display:none;"></span> <span id="settingsSandboxBadge" style="display:none;background:#f59e0b;color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:700;vertical-align:middle;">SANDBOX</span></div>
         <div class="sidebar-item" data-route="subscription" onclick="navigateTo('subscription')">Plan &amp; Billing</div>
         <div class="sidebar-item" data-route="ask-ai" onclick="navigateTo('ask-ai')">Ask AI</div>
-        <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email Log</div>
+        <div class="sidebar-item" data-route="email-log" onclick="navigateTo('email-log')">Email History</div>
         <div class="sidebar-item" id="testingModeItem" onclick="toggleTestingMode()" style="display:none;">🧪 Testing Mode</div>
       </div>
     </div>
@@ -22133,7 +22133,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-222445-4fe292f';
+var MAST_MODULES_V = '20260610-223201-7e421fe';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.

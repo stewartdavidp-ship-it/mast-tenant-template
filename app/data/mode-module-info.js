@@ -1343,7 +1343,7 @@
       learnMoreUrl: HELP_BASE + 'settings'
     },
     'employees': {
-      label: 'Permissions', section: 'admin',
+      label: 'Team Access', section: 'admin',
       tagline: 'User roles, permissions, and RBAC.',
       outcome: "Decide who on your team can see sales, edit prices, or refund orders — without giving everyone the admin keys.",
       goodFitWhen: "this is on for everyone — even solo shops eventually add a helper who shouldn't see everything.",
@@ -1354,7 +1354,7 @@
       learnMoreUrl: HELP_BASE + 'employees'
     },
     'analytics': {
-      label: 'Analytics', section: 'admin',
+      label: 'Site Traffic', section: 'admin',
       tagline: 'Site analytics and operational metrics.',
       outcome: "See how many people visited your storefront, which pages they hit, and where they came from — without setting up GA4.",
       goodFitWhen: "this is on for everyone — every storefront needs basic traffic visibility.",
@@ -1366,7 +1366,7 @@
       learnMoreUrl: HELP_BASE + 'analytics'
     },
     'auditlog': {
-      label: 'Audit Log', section: 'admin',
+      label: 'Activity History', section: 'admin',
       tagline: 'System audit trail for all admin actions.',
       outcome: "Look up who changed what and when — useful when a price looks wrong or a refund seems off.",
       goodFitWhen: "this is on for everyone — but more useful when you have more than one user.",
@@ -1400,7 +1400,7 @@
       learnMoreUrl: HELP_BASE + 'about'
     },
     'email-log': {
-      label: 'Email Log', section: 'admin',
+      label: 'Email History', section: 'admin',
       tagline: 'Outbound transactional email log.',
       outcome: "Confirm whether a customer actually got their order confirmation, receipt, or shipping update — and resend if not.",
       goodFitWhen: "this is on for everyone — useful any time a customer says \"I never got the email\".",
