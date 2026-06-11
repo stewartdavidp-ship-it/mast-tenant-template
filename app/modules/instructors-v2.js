@@ -235,7 +235,7 @@
       }
       function readSkills() {
         var out = [];
-        document.querySelectorAll('#mastSlideOut .inV2Skill:checked').forEach(function (el) { out.push(el.value); });
+        document.querySelectorAll('#mastSlideOutBody .inV2Skill:checked').forEach(function (el) { out.push(el.value); });
         return out;
       }
       var skills = readSkills();
