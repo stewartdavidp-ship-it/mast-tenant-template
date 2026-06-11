@@ -324,7 +324,7 @@
       var p = period();
       bridge().downloadCsv('statements-' + V2.lens, V2.csv, 'Period ' + p.start + ' → ' + p.end);
     },
-    dayClose: function () { if (window.navigateToClassic) navigateToClassic('finance-cash-flow', { subView: 'dayclose' }); },
+    dayClose: function () { if (window.navigateTo) navigateTo('finance-period-close'); },
     classicTax: function () { if (window.navigateToClassic) navigateToClassic('finance-tax'); }
   };
 

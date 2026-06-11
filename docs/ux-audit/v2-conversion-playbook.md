@@ -285,6 +285,14 @@ read false). Seed realistic content for every surface you'll build.
 
 ## 4 · Build waves (one PR per wave)
 
+**NO CLASSIC ESCAPE HATCHES (operator directive, 2026-06-10).** The earlier rounds'
+pattern — convert the core surface, leave heavy sub-surfaces "single-sourced on
+legacy with a link" — was never operator-sanctioned and is retired. V1 is being
+deleted; every classic link is a missing feature, audited and tracked in
+`classic-dependency-burndown.md`. A wave that can't rebuild a sub-surface re-scopes
+the wave (or escalates the design question) — it does NOT ship a `navigateToClassic`
+link. Sections converted under the old pattern owe their burn-down items.
+
 Scaffold new modules with `node scripts/scaffold-v2-module.mjs <route> <archetype>` — it emits
 the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 
