@@ -1,6 +1,7 @@
 # classes-v2 — Build Plan
 
-Status: **PLANNED** (2026-06-10). Runs `v2-conversion-playbook.md` end-to-end for the
+Status: **SHIPPED** (2026-06-10 — plan #426, Wave 1 #427, Wave 2 #428, Wave 3 #429,
+Wave 4 #430, walk-fixes #431 + #432, holistic this PR; all merged & verified on dev). Runs `v2-conversion-playbook.md` end-to-end for the
 Classes section (sidebar `data-section="classes"`, 8 sub-items). Companion to
 `sales-v2-build-plan.md` / `marketing-v2-build-plan.md` / `operations-v2-build-plan.md` /
 `finance-v2-build-plan.md` / `customer-service-v2-build-plan.md` (worked examples) and
@@ -250,3 +251,107 @@ Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`.
 - [ ] Enrollment list reads are bounded windows (500/1000/2000) — no pagination.
 - [ ] Pass INSTANCE admin (per-user wallet passes) has no admin surface — out of
       scope; definitions only.
+
+
+## Walk findings (2026-06-10 — every route, every CRUD verb incl. CREATE, cold cross-drills, both themes)
+
+1. **Session generation was dead in LEGACY** — `materializeSessions` batch-wrote
+   via an RTDB-style root multi-path `MastDB.update('', {…})`, which throws
+   `path requires doc ID: _root` on Firestore MastDB. Broken since the
+   migration; only the walk's Generate-sessions click surfaced it. Fixed #431
+   (per-doc writes); the V2 Generate action then produced a correct session
+   (1:00–3:30 PM from a 150-min duration, instructor/room denormalized).
+2. **Waitlist renumbering never worked either** — `renumberWaitlist` fanned out
+   to `admin/enrollments` (wrong collection + multi-path); every promote/cancel
+   warned and positions never compacted. Fixed #431.
+3. **resources-v2 and instructors-v2 CREATE were dead since their conversion**
+   — `required:true` on the name field + custom editRender inputs without
+   `name=` attributes → the engine pre-validate collects an empty record and
+   blocks onSave (the contacts-v2 gotcha, **third occurrence**). Fixed #432.
+4. **`MastDB.resources.PATH` is `admin/resources`, not `public/resources`** —
+   the recon (and the Wave-0 seed) used the wrong home; seeded resources were
+   invisible to every reader. Healed by migrating the 3 docs to
+   `admin_resources` (Firestore REST, reported below).
+5. Exercised end-to-end: class CREATE (record + schedule + assignment in one
+   form) → Generate sessions → session visible on Schedule; enrollment intake
+   CREATE (dependent class→session picker, student autofill, capacity-aware);
+   waitlist promote (seat counter bumped, SO re-rendered Confirmed); mark
+   attended; session mark-completed; resource CREATE → mastConfirm DELETE
+   (`#mastDialogOK`-scoped) → re-create kept as demo data ("Annealing Oven");
+   instructor → class drill, calendar → session SO cold drill (module
+   lazy-loaded), session roster → enrollment drill, student Enrollments facet
+   (studentId OR email join — both seed and walk-created rows joined). Both
+   themes screenshot-verified; console clean on every clean boot.
+
+## Scrub report (Wave 0 + walk, sgtest15 — standing authorization, all hard deletes listed)
+
+**Hard deletes (449 docs):** 64 junk classes (45 E2E/Retest/Break/validation-fixture
+names incl. XSS/AAAA…/Bad Type/Negative Price + 19 more matched fixtures; 2
+operator-named duplicates: second "Morning Clay Workshop", "Evening Wheel Throwing
+with Dave"); 101 sessions + 151 enrollments belonging to those classes; 2 junk-named
+enrollments in kept classes (Test Student / E2E Student); 125 harness students
+(`stu_*` @test.com); 4 orphaned waiver signatures (security-test signers referencing
+deleted students). Walk fixture: 1 resource ("Annealing Oven") created and deleted to
+prove the delete verb, then re-created as demo data.
+
+**Renames in place (FK-referenced):** class "Dave's Wheel Throwing" → "Advanced
+Wheel Throwing" (2 enrollments reference it); instructor `Af6fCNEf…` "harness-test-…
+Real Instructor" → "Maya Brennan" (slug healed too); pass defs "harness-l3-sp-… 5-Class
+Glass Pass" → "5-Class Glass Pass", "B9 Verify Pass" → "10-Visit Studio Pass"
+(visitCount 5→10, description rewritten); student Maria Rodriguez `contactId`
+'test-contact-001' → null.
+
+**FK heals (docs recreated at the ids live records reference):** instructor
+`-OpB3FF5…` "David Stewart" (21 classes), instructor `-Ooyt3sd…` "Sarah Chen" (kept
+sessions), resource `-Ooyt49k…` "Main Studio" (kept sessions). Recurring schedules
+extended to late July (3 classes).
+
+**Seeds:** resources Kiln Room + Fusing Lab (later migrated to `admin_resources`
+with Main Studio — walk finding 4); instructor Jonah Reyes; 6 students (waiver
+variety, one minor w/ emergency contact, allergy note); 10 future sessions
+(Jun 11–Jul); 10 enrollments across confirmed/waitlisted/cancelled. Walk writes kept
+as fixtures: class "Glass Bead Making" (+1 generated session), Carlos Mejia fusing
+enrollment, Jenny Park promoted seat, Elena Vasquez attended seat, 1 completed April
+session, resource "Annealing Oven".
+
+## CRUD parity — SHIPPED state
+
+| Surface | C | R | U | D | Notes |
+|---|---|---|---|---|---|
+| classes | ✅ V2 (record+schedule+assignment) | ✅ | ✅ (+⚙ Generate sessions) | ✅ draft-only, no-enrollments, session cascade | publish/unpublish stays classic (checklist) |
+| sessions | ✅ via Generate | ✅ (3 lenses + SO w/ roster) | ✅ complete / cancel | ⬜ no hard delete (enrollment FKs) | |
+| enrollments | ✅ intake (capacity-aware → waitlist) | ✅ | ✅ attended/late/no-show/promote/cancel | ⬜ cancel, never delete | attended/cancelled rows immutable (no actions) |
+| calendar / reports | n/a (lenses) | ✅ | n/a | n/a | Month·List; Catalog·Reports |
+| instructors | ✅ (#432) | ✅ | ✅ | ✅ w/ assignment warn | skills picker classic |
+| resources | ✅ (#432) | ✅ | ✅ | ✅ w/ reference warn | |
+| passes | ✅ | ✅ | ✅ | ✅ archived-only + public-mirror cascade | |
+| students | ✅ | ✅ (+Enrollments facet) | ✅ | ✅ w/ enrollment warn | clearances/documents/waivers classic |
+
+Every delete: `mastConfirm` + `writeAudit` (bridge core) + RBAC `can(route,'delete')`.
+
+## Holistic (this PR)
+
+Sidebar reordered around the operator's process (classes → schedule → enrollments →
+students → instructors → rooms → passes → reports) with plain-language labels
+(**Schedule**, **Rooms & Equipment**, **Class Passes** — registry labels updated to
+match). The **8 → 6 consolidation** (Class Reports folds into Classes, Rooms &
+Equipment folds under Classes setup) is PROPOSED for ratification — both surfaces
+already live as hub lenses/records, so the merge is a sidebar-only change when
+ratified (CS `data-route-alt` precedent).
+
+## Debt register — close-out
+
+- [x] calendar-v2 unreachable under V2 → route-mapped (#427).
+- [x] sessions-v2 orphan → de-orphaned as the Schedule List lens (#428).
+- [x] enrollments read-only → full roster verbs + intake (#427).
+- [x] Generate sessions / schedule / assignment classic-only → native (#429); legacy generation was BROKEN — fixed (#431).
+- [x] resources/instructors CREATE dead → fixed (#432).
+- [ ] `book-settings` hidden tab — needs its own design decision.
+- [ ] Skills/certs pickers, series pricing, waiver picker, image library: classic-linked from classes-v2.
+- [ ] Student clearance-types mgmt, business documents, waiver tooling: classic-linked from students-v2.
+- [ ] Reports lens uses seat revenue (enrollment pricePaidCents); legacy order-line join + sessionLogs/incidents depth stays classic.
+- [ ] Publish/unpublish (pre-publish checklist) stays classic — candidate for a guided V2 action.
+- [ ] `classes.resourceName` name-string pseudo-FK — backfill candidate (resourceId now stamped by the V2 assignment picker).
+- [ ] Enrollment list reads are bounded windows (500/1000/2000) — no pagination.
+- [ ] Pass INSTANCE admin (per-user wallet passes) — out of scope; definitions only.
+- [ ] 8→6 sidebar merge — pending operator ratification.

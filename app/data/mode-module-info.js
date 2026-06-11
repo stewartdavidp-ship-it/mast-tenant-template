@@ -708,7 +708,7 @@
       learnMoreUrl: HELP_BASE + 'book'
     },
     'calendar': {
-      label: 'Calendar', section: 'classes',
+      label: 'Schedule', section: 'classes',
       tagline: 'View all upcoming bookings in calendar form.',
       outcome: "See every class, workshop, and appointment in one calendar — week, month, or instructor view.",
       goodFitWhen: "you teach more than 2 classes a week and want a calendar that updates itself.",
@@ -741,7 +741,7 @@
       // ledger surfaces aren't built in admin yet. Redemption may be in
       // cart.js checkout but no admin tally view exists. Softened outcome
       // + dropped the "active balances per student" alt-text claim.
-      label: 'Passes', section: 'classes',
+      label: 'Class Passes', section: 'classes',
       tagline: 'Multi-class pass and punch-card pricing.',
       outcome: "Sell a 5-class pass or a monthly studio pass — define pricing and visit counts here, sold at checkout.",
       goodFitWhen: "you offer bundled class pricing and want a price list students can buy from.",
@@ -756,7 +756,7 @@
       learnMoreUrl: HELP_BASE + 'passes'
     },
     'resources': {
-      label: 'Resources', section: 'classes',
+      label: 'Rooms & Equipment', section: 'classes',
       tagline: 'Manage rooms, equipment, and instructor time slots.',
       outcome: "Make sure two classes aren't fighting over the same kiln, wheel, or instructor — bookings check availability for you.",
       goodFitWhen: "you have shared studio gear or rooms and want to stop overbooking.",
