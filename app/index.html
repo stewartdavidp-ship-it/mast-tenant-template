@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260611-111217-7f85822"></script>
+  <script src="../shared/customer-filters.js?v=20260611-113449-839f0db"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260611-111217-7f85822"></script>
+  <script src="../shared/variant-reconcile.js?v=20260611-113449-839f0db"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260611-111217-7f85822"></script>
-  <script src="../shared/mast-io.js?v=20260611-111217-7f85822"></script>
-  <script src="../shared/mast-entity.js?v=20260611-111217-7f85822"></script>
+  <script src="../shared/mast-ui.js?v=20260611-113449-839f0db"></script>
+  <script src="../shared/mast-io.js?v=20260611-113449-839f0db"></script>
+  <script src="../shared/mast-entity.js?v=20260611-113449-839f0db"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260611-111217-7f85822"></script>
+  <script src="../shared/product-readiness.core.js?v=20260611-113449-839f0db"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6424,6 +6424,16 @@
   // Apply dark mode immediately (before auth/tenant resolution)
   // so login + wizard screens render dark. loadSettings() can override with saved pref later.
   document.body.classList.add('dark-mode');
+  // V2 is the default (2026-06-11). A user with no stored choice starts in V2;
+  // only an explicit Legacy opt-in ('1', via the Profile toggle) keeps V1. Seeded
+  // HERE — before the nav-chrome check below and long before the module loader —
+  // because the flag-gated v2 modules read mastUiRedesign at script load.
+  try {
+    if (localStorage.getItem('mastLegacyUI') === null) {
+      localStorage.setItem('mastLegacyUI', '0');
+      localStorage.setItem('mastUiRedesign', '1');
+    }
+  } catch (e) {}
   // V2 nav chrome master switch — mirrors the V1/V2 object UI gate (mastLegacyUI).
   // When Legacy UI is OFF (mastLegacyUI==='0') we mark the body so all `body.nav-v2`
   // scoped CSS/behavior activates. Applied this early (before the shell paints) so the
@@ -20960,8 +20970,13 @@ var MAST_V2_ROUTE_MAP = {
   'coins': 'plan-billing-coins-v2',
   'analytics': 'analytics-v2'
 };
+// V2 is the default: the flags are seeded at body-top boot (see the nav-v2
+// chrome hook) so a user with no stored choice starts in V2; only an explicit
+// Legacy opt-in ('1', via the Profile toggle below) keeps V1.
 function mastLegacyUiOn() {
-  try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
+  // catch → legacy: when storage is blocked the v2 modules (which gate on a
+  // localStorage read at load) can't register, so V2 routing would 404.
+  try { return localStorage.getItem('mastLegacyUI') === '1'; } catch (e) { return true; }
 }
 function mastUseV2Routes() { return !mastLegacyUiOn(); }
 function setLegacyUI(on) {
@@ -22196,7 +22211,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260611-111217-7f85822';
+var MAST_MODULES_V = '20260611-113449-839f0db';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
