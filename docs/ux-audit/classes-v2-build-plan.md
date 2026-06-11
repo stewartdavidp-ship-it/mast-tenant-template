@@ -1,7 +1,8 @@
 # classes-v2 — Build Plan
 
 Status: **SHIPPED** (2026-06-10 — plan #426, Wave 1 #427, Wave 2 #428, Wave 3 #429,
-Wave 4 #430, walk-fixes #431 + #432, holistic this PR; all merged & verified on dev). Runs `v2-conversion-playbook.md` end-to-end for the
+Wave 4 #430, walk-fixes #431 + #432, holistic #433, 8→6 merge #435; classic
+burn-down Waves 6–8 #457/#461/#462 + walk-fix #464; all merged & verified on dev). Runs `v2-conversion-playbook.md` end-to-end for the
 Classes section (sidebar `data-section="classes"`, 8 sub-items). Companion to
 `sales-v2-build-plan.md` / `marketing-v2-build-plan.md` / `operations-v2-build-plan.md` /
 `finance-v2-build-plan.md` / `customer-service-v2-build-plan.md` (worked examples) and
@@ -354,3 +355,34 @@ follow-up PR (CS `data-route-alt` precedent).
 - [ ] Enrollment list reads are bounded windows (500/1000/2000) — no pagination.
 - [ ] Pass INSTANCE admin (per-user wallet passes) — out of scope; definitions only.
 - [x] 8→6 sidebar merge — **RATIFIED + SHIPPED 2026-06-10 (Option B)**: Class Reports + Rooms & Equipment fold into the Classes hub (Catalog · Rooms & equipment · Reports lenses); one "Classes" item claims `book-reports` + `resources` via `data-route-alt`; legacy keeps all eight items byte-identical (`.classes-merged-v1/-v2`).
+
+## Classic burn-down (operator directive: V1 is being REMOVED — escape hatches convert, 2026-06-10)
+
+- **Wave 6 (#457)** — classes-v2 editor completion: Series pricing & rules, Policies
+  (waiver template picker, enrollment window), Required certifications, Required
+  skills (+add-new via the catalog core), Class image (shared openImagePicker +
+  /uploadImage CF), Publish/Unpublish on the SO (`ClassesBridge.setExtras/publish/
+  unpublish/ensureSkill`). All classes-v2 + sessions-v2 'classic view' copy removed.
+- **Wave 7 (#461)** — Run-session runtime on the session SO: check-in (one/all),
+  start class, close-out (attended/no-show w/ soft waiver enforcement), complete
+  session (auto-completes open seats + notes), incident recording, walk-in via the
+  enrollment intake preset. `SessionsBridge` run cores; survey side effect resolves
+  classId from the enrollment.
+- **Wave 8 (#462)** — instructors-v2 native skills picker; classes hub **Settings
+  lens** (the hidden legacy book-settings tab's V2 home: cancellation window +
+  cert-types CRUD via `ClassSettingsBridge`; `book-settings` remaps); passes-v2
+  **Holders facet** (per-instance cohorts via `PassesBridge.cohortDefs/
+  instanceMatches/loadInstances`). Classes-domain classic links: **0**.
+- **Walk-fix 3 (#464)** — checkbox collectors were scoped to a non-existent
+  `#mastSlideOut` (body is `#mastSlideOutBody`): recurring schedule days (since
+  Wave 3), required certs/skills and instructor skills silently saved empty.
+- **Walk proof (live)**: skill added through the catalog core → checked → saved;
+  cert requirement saved; class published through the checklist (status
+  `published` + `publishedAt`); run-session check-in-all → start → close-out
+  exercised on sess_wtb_0616 then HEALED back to pre-run state (session
+  classStartedAt/By cleared; 3 enrollments → confirmed, stamps cleared — reported);
+  Settings lens loads config 48h + cert type with Edit/Archive; Holders cohorts
+  render with live counts (1 revoked instance).
+- **Remainder (flagged in classic-dependency-burndown.md)**: students.js deep
+  tooling (clearances/documents/waiver templates CRUD) has no V2 write path and
+  no classic link — Phase-2 gate item, not a link.

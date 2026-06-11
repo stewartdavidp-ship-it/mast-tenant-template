@@ -32,14 +32,14 @@ substantially less in practice (bridge cores already exist for most writes).
 2. **Finance burn-down session**: day-close form, amendment-modal rehome, dunning
    settings, AR detail, tax export, then the reports generators (largest single item).
 3. **Marketing**: blog editor (largest single surface — needs its own session).
-4. **Classes**: schedule generator session.
+4. **Classes**: ~~schedule generator session~~ — ✅ DONE 2026-06-10 (#457 editor completion incl. publish, #461 run-session runtime, #462 instructors skills + Settings lens + pass Holders, #464 selector walk-fix). Classes-domain classic links: **0**.
 5. **Ops/Sales sweep**: channels wizard, Shippo labels, consignments, contacts sync.
 
 ## Full inventory (per module)
 
 See the audit table in this doc's source PR description and per-section plan debt
 registers; the authoritative live check is the grep above. Key per-section counts:
-Sales 4 · Marketing 7 · Operations 2 · Customer Service 4 · Classes 3 · Finance 9 ·
+Sales 4 · Marketing 7 · Operations 2 · Customer Service 4 · ~~Classes 3~~ **Classes 0** (✅ 2026-06-10) · Finance 9 ·
 Contacts 1 · Misc 5 (+ legacy-function reuse: finance amendment submit modal).
 
 ## Standing rule for all future conversion work (playbook-enforced)
@@ -60,3 +60,11 @@ legacy" pattern is deleted as of this PR.
   (legacy saveUserPermissionOverrides delegates to the same core).
   `grep -c "navigateToClassic(" app/modules/*.js` now counts the other
   sections' sites only.
+
+## Classes-domain remainder (NOT a link — flagged for the Phase-2 gate)
+
+`students-v2`'s Clearances / Documents facets are read-only; their CRUD (plus
+waiver-template tooling) lives only in legacy `students.js` with no
+navigateToClassic link, so the 43-site census never counted it. Before V1
+deletion, that tooling needs a V2 home (clearances CRUD = S; documents involve
+uploads/Drive = M; waiver templates are shared with the storefront e-sign flow = M).
