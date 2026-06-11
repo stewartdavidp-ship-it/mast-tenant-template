@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-204943-7a1dba8"></script>
+  <script src="../shared/customer-filters.js?v=20260610-210046-f7e4f34"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-204943-7a1dba8"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-210046-f7e4f34"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-204943-7a1dba8"></script>
-  <script src="../shared/mast-io.js?v=20260610-204943-7a1dba8"></script>
-  <script src="../shared/mast-entity.js?v=20260610-204943-7a1dba8"></script>
+  <script src="../shared/mast-ui.js?v=20260610-210046-f7e4f34"></script>
+  <script src="../shared/mast-io.js?v=20260610-210046-f7e4f34"></script>
+  <script src="../shared/mast-entity.js?v=20260610-210046-f7e4f34"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-204943-7a1dba8"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-210046-f7e4f34"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -707,6 +707,11 @@
        cs-inbox + cs-tickets under the V2 nav; legacy keeps both (byte-identical). */
     body.nav-v2 .cs-merged-v1 { display: none; }
     body:not(.nav-v2) .cs-merged-v2 { display: none; }
+    /* Classes sidebar merge (operator-ratified 2026-06-10, Option B): under the
+       V2 nav, Class Reports + Rooms & Equipment fold into the Classes hub as
+       lenses (8 → 6); legacy keeps all eight items (byte-identical). */
+    body.nav-v2 .classes-merged-v1 { display: none; }
+    body:not(.nav-v2) .classes-merged-v2 { display: none; }
 
     /* ---- group overlines + dividers ---- */
     body.nav-v2 .navv2-overline {
@@ -6616,24 +6621,23 @@
         <span class="sidebar-section-label">Classes</span>
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
-      <!-- Ordered around the operator's process (classes-v2-build-plan.md):
-           define classes → see the schedule → take bookings → know your
-           students → configure who teaches / where / what passes sell →
-           check the numbers. Plain-language labels (Schedule, Rooms &
-           Equipment, Class Passes). Under the V2 flag, calendar and
-           book-reports land on hub lenses (Schedule Month·List; Classes →
-           Reports); a sidebar consolidation (8 → 6: Reports + Rooms fold
-           into their hubs) is proposed in the plan doc pending operator
-           ratification — until then every item keeps its own entry. -->
+      <!-- Ordered around the operator's process (classes-v2-build-plan.md).
+           8→6 merge RATIFIED 2026-06-10 (Option B): under the V2 nav ONE
+           "Classes" item serves book + book-reports + resources (Catalog ·
+           Rooms & equipment · Reports lenses of the classes hub;
+           data-route-alt keeps the active highlight on deep links). Legacy UI
+           keeps all eight items byte-identical (.classes-merged-v1/-v2 —
+           finance/CS precedent). -->
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="book" onclick="navigateTo('book')">Classes</div>
+        <div class="sidebar-item classes-merged-v2" data-route="book" data-route-alt="book-reports resources" onclick="navigateTo('book')">Classes</div>
+        <div class="sidebar-item classes-merged-v1" data-route="book" onclick="navigateTo('book')">Classes</div>
         <div class="sidebar-item" data-route="calendar" onclick="navigateTo('calendar')">Schedule</div>
         <div class="sidebar-item" data-route="enrollments" onclick="navigateTo('enrollments')">Enrollments</div>
         <div class="sidebar-item" data-route="students" onclick="navigateTo('students')">Students</div>
         <div class="sidebar-item" data-route="instructors" onclick="navigateTo('instructors')">Instructors</div>
-        <div class="sidebar-item" data-route="resources" onclick="navigateTo('resources')">Rooms &amp; Equipment</div>
+        <div class="sidebar-item classes-merged-v1" data-route="resources" onclick="navigateTo('resources')">Rooms &amp; Equipment</div>
         <div class="sidebar-item" data-route="passes" onclick="navigateTo('passes')">Class Passes</div>
-        <div class="sidebar-item" data-route="book-reports" onclick="navigateTo('book-reports')">Class Reports</div>
+        <div class="sidebar-item classes-merged-v1" data-route="book-reports" onclick="navigateTo('book-reports')">Class Reports</div>
       </div>
     </div>
     <!-- Finance -->
@@ -20848,7 +20852,7 @@ var MAST_V2_ROUTE_MAP = {
   brand: 'brand-v2', homepage: 'homepage-v2', commissions: 'commissions-v2', products: 'products-v2',
   wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
   contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
-  resources: 'resources-v2', newsletter: 'newsletter-v2',
+  resources: 'classes-rooms-v2', newsletter: 'newsletter-v2',
   'gift-cards': 'gift-cards-v2', coupons: 'coupons-v2', book: 'classes-v2', calendar: 'calendar-v2', 'book-reports': 'book-reports-v2', membership: 'membership-v2',
   'cs-reviews': 'cs-reviews-v2', 'cs-faqs': 'cs-faqs-v2', loyalty: 'loyalty-v2', stories: 'stories-v2', 'cs-members': 'cs-members-v2',
   blog: 'blog-v2', salesEvents: 'sales-events-v2', inquiries: 'inquiries-v2', jobs: 'jobs-v2',
@@ -22115,7 +22119,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-204943-7a1dba8';
+var MAST_MODULES_V = '20260610-210046-f7e4f34';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22158,7 +22162,7 @@ var MODULE_MANIFEST = {
   'products-v2': { src: 'modules/products-v2.js', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
   'coupons-v2': { src: 'modules/coupons-v2.js', routes: ['coupons-v2'] }, // UI-redesign conversion: coupons read detail (flag-gated)
-  'classes-v2': { src: 'modules/classes-v2.js', routes: ['classes-v2', 'book-reports-v2'] }, // ONE classes hub: Catalog + Reports lenses — route picks the lens (classes-v2-build-plan.md)
+  'classes-v2': { src: 'modules/classes-v2.js', routes: ['classes-v2', 'book-reports-v2', 'classes-rooms-v2'] }, // ONE classes hub: Catalog + Rooms & equipment + Reports lenses — route picks the lens (8→6 ratified 2026-06-10)
   'vendors-v2': { src: 'modules/vendors-v2.js', routes: ['vendors-v2'] }, // UI-redesign conversion: vendors read detail (flag-gated)
   'membership-v2': { src: 'modules/membership-v2.js', routes: ['membership-v2'] }, // UI-redesign conversion: membership members read detail (flag-gated)
   'cs-reviews-v2': { src: 'modules/cs-reviews-v2.js', routes: ['cs-reviews-v2'] }, // UI-redesign conversion: CS reviews read detail (flag-gated)

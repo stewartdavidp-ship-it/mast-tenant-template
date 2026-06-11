@@ -517,7 +517,16 @@
     // route-picks-the-lens precedent). #book-reports deep-links to Reports.
     var lensPills = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' +
       '<button class="btn btn-small ' + (V2.lens === 'catalog' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'catalog\')">Catalog</button> ' +
+      '<button class="btn btn-small ' + (V2.lens === 'rooms' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'rooms\')">Rooms &amp; equipment</button> ' +
       '<button class="btn btn-small ' + (V2.lens === 'reports' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'reports\')">Reports</button></div>';
+    if (V2.lens === 'rooms') {
+      tab.innerHTML =
+        U.pageHeader({
+          title: 'Classes', count: 'rooms & equipment',
+          actionsHtml: (can('resources', 'edit') ? '<button class="btn btn-primary" onclick="ClassesV2.newRoom()">+ New room or equipment</button>' : '')
+        }) + lensPills + renderRooms();
+      return;
+    }
     if (V2.lens === 'reports') {
       tab.innerHTML =
         U.pageHeader({ title: 'Classes', count: 'attendance & revenue' }) +
@@ -545,6 +554,29 @@
         onSortFnName: 'ClassesV2.sort', onRowClickFnName: 'ClassesV2.open',
         empty: { title: 'No classes', message: V2.loaded ? 'Add a class to get started.' : 'Loading…' }
       });
+  }
+
+  // ── Rooms & equipment lens — the resources roster, hosted as a hub lens
+  // (8→6 sidebar merge, operator-ratified Option B). Rows drill to the
+  // resources-v2 entity SO (edit + danger zone live there, single-sourced);
+  // create delegates to ResourcesV2.create. Reads V2.resources — already
+  // loaded for the assignment pickers.
+  function renderRooms() {
+    var rows = Object.keys(V2.resources).map(function (k) {
+      return Object.assign({ _key: k }, V2.resources[k]);
+    }).sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || '')); });
+    if (!rows.length) return U.cardTable('Rooms & equipment', '<span class="mu-sub">No rooms or equipment yet. Add what classes get booked into — rooms, kilns, wheels.</span>');
+    function cap(t) { return t ? t.charAt(0).toUpperCase() + t.slice(1) : '—'; }
+    var table = U.relatedTable([
+      { label: 'Name', render: function (r) {
+          return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'resources-v2\',\'' + esc(r._key) + '\')">' + esc(r.name || '—') + '</button>';
+      } },
+      { label: 'Type', render: function (r) { return esc(cap(r.type)); } },
+      { label: 'Sub-type', render: function (r) { return r.subType ? esc(r.subType) : '<span class="mu-sub">—</span>'; } },
+      { label: 'Capacity', align: 'right', render: function (r) { return r.capacity != null ? N.count(r.capacity) : '—'; } },
+      { label: 'Status', render: function (r) { return U.badge(cap(r.status || 'active'), (r.status || 'active') === 'active' ? 'success' : 'neutral'); } }
+    ], rows);
+    return U.cardTable('Rooms & equipment (' + rows.length + ')', table);
   }
 
   // ── Reports lens — attendance / revenue / fill, computed from the loaded
@@ -623,7 +655,24 @@
       render();
     },
     filter: function (f) { V2.statusFilter = f; render(); },
-    lens: function (l) { V2.lens = l === 'reports' ? 'reports' : 'catalog'; render(); },
+    lens: function (l) {
+      V2.lens = (l === 'reports' || l === 'rooms') ? l : 'catalog';
+      // Rooms can change via drilled SOs (create/edit/delete on resources-v2);
+      // refresh the hub's copy when entering the lens so the roster is current.
+      if (V2.lens === 'rooms') { load(); }
+      render();
+    },
+    // Create delegates to the resources-v2 surface (its intake + bridge own
+    // the write); lazy-load the module on a cold hub visit.
+    newRoom: function () {
+      if (window.ResourcesV2 && ResourcesV2.create) { ResourcesV2.create(); return; }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        MastAdmin.loadModule('resources-v2').then(function () {
+          if (window.ResourcesV2 && ResourcesV2.create) ResourcesV2.create();
+          else if (window.showToast) showToast('Rooms engine still loading — try again', true);
+        }).catch(function () { if (window.showToast) showToast('Could not load rooms', true); });
+      }
+    },
     search: function (v) { V2.q = v || ''; render(); },
     // Generate sessions from the class schedule — the SAME materializer legacy
     // saveClass runs (duplicate-safe), via ClassesBridge.generateSessions.
@@ -672,7 +721,9 @@
     routes: {
       'classes-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'catalog'; ensureTab(); render(); load(); } },
       // Class Reports deep link — same hub, Reports lens (route picks the lens).
-      'book-reports-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'reports'; ensureTab(); render(); load(); } }
+      'book-reports-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'reports'; ensureTab(); render(); load(); } },
+      // Rooms & Equipment deep link (#resources remaps here) — Rooms lens.
+      'classes-rooms-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'rooms'; ensureTab(); render(); load(); } }
     }
   });
 })();
