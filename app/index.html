@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260611-121957-0f081d5"></script>
+  <script src="../shared/customer-filters.js?v=20260611-130808-1d45653"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260611-121957-0f081d5"></script>
+  <script src="../shared/variant-reconcile.js?v=20260611-130808-1d45653"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260611-121957-0f081d5"></script>
-  <script src="../shared/mast-io.js?v=20260611-121957-0f081d5"></script>
-  <script src="../shared/mast-entity.js?v=20260611-121957-0f081d5"></script>
+  <script src="../shared/mast-ui.js?v=20260611-130808-1d45653"></script>
+  <script src="../shared/mast-io.js?v=20260611-130808-1d45653"></script>
+  <script src="../shared/mast-entity.js?v=20260611-130808-1d45653"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260611-121957-0f081d5"></script>
+  <script src="../shared/product-readiness.core.js?v=20260611-130808-1d45653"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22212,7 +22212,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260611-121957-0f081d5';
+var MAST_MODULES_V = '20260611-130808-1d45653';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -26327,8 +26327,45 @@ async function trialDeleteNow() {
 }
 window.trialDeleteNow = trialDeleteNow;
 
-function trialExportData() {
-  mastAlert('To export all of your data, contact support and we\'ll send a complete export within 48 hours. Your data stays safe until your scheduled deletion date.', { title: 'Export my data' });
+// Real data export: calls the exportTrialData CF (Bearer-authed), receives a
+// JSON bundle (orders/products/customers/contacts/config), and saves it as a
+// file client-side. A plain browser download can't carry the auth header, so we
+// fetch with the token and build a Blob. Available even in the read-only cancel
+// window — it's a read, not an edit.
+async function trialExportData() {
+  var statusEl = document.getElementById('trialDecisionStatus');
+  if (statusEl) statusEl.textContent = 'Preparing your export…';
+  try {
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('Sign in first');
+    var idToken = await user.getIdToken();
+    var resp = await fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/exportTrialData', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ tenantId: MastDB.tenantId() })
+    });
+    var data = await resp.json();
+    if (!resp.ok) throw new Error((data && data.error) || 'Export failed');
+
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var stamp = new Date().toISOString().slice(0, 10);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'mast-export-' + MastDB.tenantId() + '-' + stamp + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 0);
+
+    var counts = (data._meta && data._meta.counts) || {};
+    var summary = Object.keys(counts).map(function(k) { return counts[k] + ' ' + k; }).join(', ');
+    if (statusEl) statusEl.textContent = '';
+    showToast('Your data export downloaded' + (summary ? ' (' + summary + ').' : '.'));
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">' + esc(err.message || String(err)) + '</span>';
+    showToast('Export failed: ' + (err && err.message ? err.message : err), true);
+  }
 }
 window.trialExportData = trialExportData;
 window.renderTrialDecisionPanel = renderTrialDecisionPanel;
