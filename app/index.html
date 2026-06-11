@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260611-113449-839f0db"></script>
+  <script src="../shared/customer-filters.js?v=20260611-121957-0f081d5"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260611-113449-839f0db"></script>
+  <script src="../shared/variant-reconcile.js?v=20260611-121957-0f081d5"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260611-113449-839f0db"></script>
-  <script src="../shared/mast-io.js?v=20260611-113449-839f0db"></script>
-  <script src="../shared/mast-entity.js?v=20260611-113449-839f0db"></script>
+  <script src="../shared/mast-ui.js?v=20260611-121957-0f081d5"></script>
+  <script src="../shared/mast-io.js?v=20260611-121957-0f081d5"></script>
+  <script src="../shared/mast-entity.js?v=20260611-121957-0f081d5"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260611-113449-839f0db"></script>
+  <script src="../shared/product-readiness.core.js?v=20260611-121957-0f081d5"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11195,6 +11195,7 @@
         <h2>Subscription</h2>
       </div>
       <div id="subscriptionBillingInfo" style="margin-bottom:24px;"></div>
+      <div id="subscriptionTrialPanel" style="margin-bottom:24px;"></div>
       <div id="subscriptionUpgradeOfferBanner" style="margin-bottom:24px;"></div>
       <div id="subscriptionTierCard" style="margin-bottom:24px;"></div>
       <div id="subscriptionUsageCard" style="margin-bottom:24px;"></div>
@@ -22211,7 +22212,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260611-113449-839f0db';
+var MAST_MODULES_V = '20260611-121957-0f081d5';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -26070,6 +26071,7 @@ function v1PickActiveSub(platformTenant) {
 function renderSubscriptionSettings() {
   var sub = getTenantSubscription();
   renderSubscriptionBillingInfo(sub);
+  renderTrialDecisionPanel(sub);
   _v1PlatformTenantCache = null; // refresh each render
   v1LoadPlatformTenant().then(function(platformTenant) {
     renderV1UpgradeOfferBanner(platformTenant);
@@ -26135,6 +26137,201 @@ async function dismissUpgradeOfferBanner() {
 }
 window.upgradeFreeTenant = upgradeFreeTenant;
 window.dismissUpgradeOfferBanner = dismissUpgradeOfferBanner;
+
+// ============ FREE-TRIAL DECISION PANEL ============
+// Surfaces on the Subscription page during the 90-day free trial and the
+// post-trial 30-day cancel/read-only window. The three choices map to deployed
+// platform CFs: Go Paid -> createTrialUpgradeCheckout (Stripe Checkout), and Go
+// Free / Cancel / Delete-now -> recordTrialDecision. State is read from the
+// admin/subscription mirror (status, trialEndsAt, deletionScheduledAt,
+// trialDecision) written by the trialLifecycle cron + recorder.
+var _TRIAL_TIER_ORDER = ['free', 'starter', 'growth', 'scale'];
+var _trialFloorKey = 'starter';       // server-authoritative; raised on a below-floor reject
+var _trialBillingInterval = 'month';
+
+function _trialDaysLeft(iso) {
+  var ms = new Date(iso).getTime() - Date.now();
+  if (isNaN(ms)) return 0;
+  return Math.max(0, Math.ceil(ms / 86400000));
+}
+function _trialFmtDate(iso) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+}
+// Lifecycle state from the subscription mirror: 'trialing' | 'cancel-window' | null.
+function _trialState(sub) {
+  if (!sub) return null;
+  var now = Date.now();
+  var del = sub.deletionScheduledAt ? new Date(sub.deletionScheduledAt).getTime() : 0;
+  if (del && !isNaN(del) && del > now && sub.status !== 'active') return 'cancel-window';
+  if (sub.status === 'trialing' && sub.trialEndsAt) {
+    var end = new Date(sub.trialEndsAt).getTime();
+    if (!isNaN(end) && end > now) return 'trialing';
+  }
+  return null;
+}
+
+function renderTrialDecisionPanel(sub) {
+  var el = document.getElementById('subscriptionTrialPanel');
+  if (!el) return;
+  var state = _trialState(sub);
+  if (!state) { el.innerHTML = ''; return; }
+
+  var canEdit = true;
+  try { if (typeof canEditModule === 'function') canEdit = canEditModule('subscription'); } catch (e) {}
+  var h = '';
+
+  if (state === 'trialing') {
+    var daysLeft = _trialDaysLeft(sub.trialEndsAt);
+    var endDate = _trialFmtDate(sub.trialEndsAt);
+    h += '<div style="background:rgba(196,133,60,0.10);border:1px solid rgba(196,133,60,0.35);border-radius:8px;padding:18px 20px;">';
+    h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' left in your free trial</div>';
+    h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Your trial runs at full Starter capability through <strong>' + esc(endDate) + '</strong>. Choose how to continue — your choice takes effect when the trial ends, and you keep full access until then.</div>';
+    var pending = sub.trialDecision && sub.trialDecision.choice;
+    if (pending === 'free' || pending === 'cancel') {
+      h += '<div style="font-size:0.85rem;color:var(--text-primary);background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;padding:8px 12px;margin-bottom:14px;">You\'ve chosen to <strong>' + (pending === 'free' ? 'move to the Free plan' : 'cancel') + '</strong> when your trial ends. You can change this any time below.</div>';
+    }
+    h += _trialPaidGridHtml(canEdit, 'Continue on a paid plan');
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center;">';
+    h += '<button class="btn btn-secondary"' + (canEdit ? '' : ' disabled') + ' onclick="trialChooseFree()">Move to Free plan</button>';
+    h += '<button class="btn btn-secondary"' + (canEdit ? '' : ' disabled') + ' onclick="trialCancelAccount()">Cancel account</button>';
+    h += '<span id="trialDecisionStatus" style="font-size:0.85rem;color:var(--warm-gray);"></span>';
+    h += '</div>';
+    if (!canEdit) h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">Only an account owner can change the plan.</div>';
+    h += '</div>';
+  } else if (state === 'cancel-window') {
+    var delDate = _trialFmtDate(sub.deletionScheduledAt);
+    var delDays = _trialDaysLeft(sub.deletionScheduledAt);
+    h += '<div style="background:rgba(198,40,40,0.08);border:1px solid rgba(198,40,40,0.35);border-radius:8px;padding:18px 20px;">';
+    h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:600;color:var(--danger);margin-bottom:4px;">Your account is scheduled to close</div>';
+    h += '<div style="font-size:0.85rem;color:var(--text-primary);margin-bottom:14px;">Your free trial ended without a plan selection, so your account will be deleted on <strong>' + esc(delDate) + '</strong> (' + delDays + ' day' + (delDays === 1 ? '' : 's') + '). Your data is safe until then. Your admin is <strong>read-only</strong> — you can export your data or reactivate by choosing a plan.</div>';
+    h += _trialPaidGridHtml(canEdit, 'Reactivate on a paid plan');
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center;">';
+    h += '<button class="btn btn-secondary"' + (canEdit ? '' : ' disabled') + ' onclick="trialChooseFree()">Reactivate on Free</button>';
+    h += '<button class="btn btn-secondary" onclick="trialExportData()">Export my data</button>';
+    h += '<button class="btn btn-danger"' + (canEdit ? '' : ' disabled') + ' onclick="trialDeleteNow()">Delete now</button>';
+    h += '<span id="trialDecisionStatus" style="font-size:0.85rem;color:var(--warm-gray);"></span>';
+    h += '</div>';
+    if (!canEdit) h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">Only an account owner can manage the account.</div>';
+    h += '</div>';
+  }
+  el.innerHTML = h;
+}
+
+// Paid tier grid (Starter/Growth/Scale) with a monthly/annual toggle. Tiers
+// below the revenue floor are shown disabled (the floor is server-authoritative:
+// createTrialUpgradeCheckout returns floorTier on a below-floor attempt).
+function _trialPaidGridHtml(canEdit, heading) {
+  var floorIdx = _TRIAL_TIER_ORDER.indexOf(_trialFloorKey);
+  var h = '<div style="font-size:0.78rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;color:var(--warm-gray);margin-bottom:8px;">' + esc(heading) + '</div>';
+  h += '<div style="display:inline-flex;border:1px solid var(--cream-dark);border-radius:6px;overflow:hidden;margin-bottom:10px;">';
+  h += '<button class="btn btn-small ' + (_trialBillingInterval === 'month' ? 'btn-primary' : 'btn-secondary') + '" style="border-radius:0;" onclick="trialSetInterval(\'month\')">Monthly</button>';
+  h += '<button class="btn btn-small ' + (_trialBillingInterval === 'year' ? 'btn-primary' : 'btn-secondary') + '" style="border-radius:0;" onclick="trialSetInterval(\'year\')">Annual</button>';
+  h += '</div>';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">';
+  V1_TIERS.forEach(function(t) {
+    if (t.key === 'free') return;
+    var belowFloor = _TRIAL_TIER_ORDER.indexOf(t.key) < floorIdx;
+    var priceM = Math.round(t.priceMonthly / 100);
+    var priceLabel = _trialBillingInterval === 'year' ? ('$' + (priceM * 10) + '/yr') : ('$' + priceM + '/mo');
+    h += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px;opacity:' + (belowFloor ? '0.5' : '1') + ';">';
+    h += '<div style="font-weight:600;font-size:1.0rem;color:var(--text-primary);">' + esc(t.label) + '</div>';
+    h += '<div style="font-size:1.15rem;font-weight:700;color:var(--text-primary);margin:2px 0;">' + esc(priceLabel) + '</div>';
+    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:10px;">' + t.tokens.toLocaleString() + ' tokens/mo · ' + t.bonusPct + '% coin bonus</div>';
+    if (belowFloor) {
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);">Your sales qualify you for a higher tier.</div>';
+    } else {
+      h += '<button class="btn btn-primary btn-small" style="width:100%;"' + (canEdit ? '' : ' disabled') + ' onclick="trialGoPaid(\'' + t.key + '\')">Choose ' + esc(t.label) + '</button>';
+    }
+    h += '</div>';
+  });
+  h += '</div>';
+  if (_trialBillingInterval === 'year') h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">Annual billing — two months free.</div>';
+  return h;
+}
+
+function trialSetInterval(interval) {
+  _trialBillingInterval = (interval === 'year') ? 'year' : 'month';
+  renderSubscriptionSettings();
+}
+window.trialSetInterval = trialSetInterval;
+
+async function trialGoPaid(tierKey) {
+  var statusEl = document.getElementById('trialDecisionStatus');
+  if (statusEl) statusEl.textContent = 'Opening Checkout…';
+  try {
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('Sign in first');
+    var idToken = await user.getIdToken();
+    var resp = await fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/createTrialUpgradeCheckout', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ tenantId: MastDB.tenantId(), plan: tierKey, billingInterval: _trialBillingInterval })
+    });
+    var data = await resp.json();
+    if (!resp.ok || !data.sessionUrl) {
+      // Below-floor: the server returns the minimum tier — disable lower ones + re-render.
+      if (data && data.floorTier) { _trialFloorKey = data.floorTier; renderSubscriptionSettings(); }
+      throw new Error((data && data.error) || 'Checkout failed');
+    }
+    window.location.href = data.sessionUrl;
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">' + esc(err.message || String(err)) + '</span>';
+  }
+}
+window.trialGoPaid = trialGoPaid;
+
+async function _trialRecordDecision(choice) {
+  var user = firebase.auth().currentUser;
+  if (!user) throw new Error('Sign in first');
+  var idToken = await user.getIdToken();
+  var resp = await fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/recordTrialDecision', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+    body: JSON.stringify({ tenantId: MastDB.tenantId(), choice: choice })
+  });
+  var data = await resp.json();
+  if (!resp.ok || !data.success) throw new Error((data && data.error) || 'Could not save your choice');
+  return data;
+}
+
+async function _trialAfterDecision(choice, toast) {
+  var statusEl = document.getElementById('trialDecisionStatus');
+  if (statusEl) statusEl.textContent = 'Saving…';
+  try {
+    await _trialRecordDecision(choice);
+    if (typeof loadTenantSubscription === 'function') await loadTenantSubscription();
+    showToast(toast);
+    renderSubscriptionSettings();
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">' + esc(err.message || String(err)) + '</span>';
+  }
+}
+
+async function trialChooseFree() {
+  var ok = await mastConfirm('Move to the Free plan when your trial ends? Free-plan limits will apply. You can upgrade any time.', { title: 'Move to Free', confirmLabel: 'Move to Free' });
+  if (ok) await _trialAfterDecision('free', 'You\'ll move to the Free plan when your trial ends.');
+}
+window.trialChooseFree = trialChooseFree;
+
+async function trialCancelAccount() {
+  var ok = await mastConfirm('Cancel your account? When your trial ends, your admin becomes read-only and your data is deleted 30 days later. You can reactivate any time before then.', { title: 'Cancel account', confirmLabel: 'Cancel account', danger: true });
+  if (ok) await _trialAfterDecision('cancel', 'Your account will close when the trial ends. You can reactivate before then.');
+}
+window.trialCancelAccount = trialCancelAccount;
+
+async function trialDeleteNow() {
+  var ok = await mastConfirm('Delete your account now? This schedules immediate deletion of your account and all of its data. This cannot be undone.', { title: 'Delete account', confirmLabel: 'Delete now', danger: true });
+  if (ok) await _trialAfterDecision('delete-now', 'Your account is scheduled for deletion.');
+}
+window.trialDeleteNow = trialDeleteNow;
+
+function trialExportData() {
+  mastAlert('To export all of your data, contact support and we\'ll send a complete export within 48 hours. Your data stays safe until your scheduled deletion date.', { title: 'Export my data' });
+}
+window.trialExportData = trialExportData;
+window.renderTrialDecisionPanel = renderTrialDecisionPanel;
 
 function renderV1TierCard(platformTenant) {
   var el = document.getElementById('subscriptionTierCard');
