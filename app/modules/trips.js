@@ -1140,24 +1140,14 @@
   // Tax Report
   // ============================================================
 
-  function renderTaxReport(hostEl) {
-    // hostEl (classic burn-down Wave D): trips-v2 re-hosts the report in its
-    // own container; default stays the legacy static div.
+  function renderTaxReport(hostEl, rows) {
+    // hostEl + rows (classic burn-down Wave D): trips-v2 re-hosts the report
+    // in its own container and passes its OWN loaded rows — the legacy
+    // loadTrips read (orderByChild/limitToLast) drops rows in the Firestore
+    // compat layer (see trips-v2 load()), so self-loading here renders zeros.
     var container = hostEl || document.getElementById('taxReportContent');
     if (!container) return;
-    // Self-load when hosted cold (trips-v2 never runs the legacy tab's
-    // loadTrips) — render once the data is in.
-    if (!tripsLoaded) {
-      container.innerHTML = '<div class="loading">Loading report\u2026</div>';
-      loadTrips();
-      var tries = 0;
-      (function waitLoaded() {
-        if (tripsLoaded) return renderTaxReport(hostEl);
-        if (++tries > 20) { container.innerHTML = '<span class="mu-sub">Report unavailable — try again.</span>'; return; }
-        setTimeout(waitLoaded, 300);
-      })();
-      return;
-    }
+    if (Array.isArray(rows)) tripsData = rows;
 
     var currentYear = new Date().getFullYear();
     var completed = tripsData.filter(function(t) {
