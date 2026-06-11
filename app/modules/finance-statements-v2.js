@@ -10,10 +10,12 @@
  * stays in finance.js, exposed via the state-free window.FinanceBridge —
  * this module renders, it never re-implements finance arithmetic.
  *
- * Read-only by design (statements are reports). Writes live elsewhere:
+ * Read-only by design (statements are reports), with ONE scoped exception
+ * (classic burn-down 2026-06-10): the Tax lens hosts nexus-registration CRUD
+ * and the 1099 vendor-prep pane natively (via FinanceBridge.nexusList/
+ * nexusSave/nexusDelete + tax1099ForYear). Other writes live elsewhere:
  * expenses → finance-expenses-v2, AR/AP actions → open-items hub (Wave 2),
- * day/period close → close hub (Wave 3). Nexus registration editing and the
- * 1099 sections stay on the classic Tax page (debt register).
+ * day/period close → close hub (Wave 3).
  */
 (function () {
   'use strict';
@@ -40,7 +42,7 @@
   ];
   var MODES = [['mtd', 'MTD'], ['qtd', 'QTD'], ['fy', 'FYTD']];
 
-  var V2 = { lens: 'overview', horizon: 30, busy: false, csv: null };
+  var V2 = { lens: 'overview', horizon: 30, busy: false, csv: null, taxYear: new Date().getFullYear(), nexus: null, t1099: null };
 
   function bridge() { return window.FinanceBridge; }
   function period() { return bridge().resolvePeriod(); }
@@ -269,28 +271,98 @@
     });
   }
 
+  function canTaxEdit() { return (typeof window.can === 'function') ? window.can('finance-tax', 'edit') : true; }
+
+  var TAX_INPUT = 'background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);padding:5px 8px;font-size:0.85rem;';
+
+  function nexusCardHtml() {
+    var nexus = V2.nexus || {};
+    var states = Object.keys(nexus).sort();
+    var canEdit = canTaxEdit();
+    var rowsHtml = states.length ? table([
+      { label: 'State', render: function (k) { return '<strong>' + esc(k) + '</strong>'; } },
+      { label: 'Status', render: function (k) { return nexus[k] && nexus[k].registered ? U.badge('registered', 'teal') : U.badge('not registered', 'amber'); } },
+      { label: 'Registration #', render: function (k) { return esc((nexus[k] && nexus[k].registrationNumber) || '—'); } },
+      { label: '', align: 'right', render: function (k) {
+          if (!canEdit) return '';
+          var reg = nexus[k] && nexus[k].registered;
+          return '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 9px;" onclick="FinStatementsV2.nexusToggle(\'' + esc(k) + '\')">' + (reg ? 'Mark unregistered' : 'Mark registered') + '</button>' +
+            ' <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 9px;" onclick="FinStatementsV2.nexusRemove(\'' + esc(k) + '\')">Remove</button>';
+        } }
+    ], states) : '<div style="color:var(--warm-gray);font-size:0.85rem;">No state registrations on file yet.</div>';
+    var addForm = canEdit
+      ? '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px;">' +
+        '<input id="finStV2NexusState" maxlength="2" placeholder="State (e.g. OR)" style="' + TAX_INPUT + 'width:110px;text-transform:uppercase;">' +
+        '<input id="finStV2NexusNum" placeholder="Registration # (optional)" style="' + TAX_INPUT + 'width:200px;">' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;" onclick="FinStatementsV2.nexusAdd()">+ Add registered state</button>' +
+        '</div>'
+      : '';
+    return U.card('Nexus registrations', rowsHtml + addForm +
+      '<div style="margin-top:10px;font-size:0.72rem;color:var(--warm-gray);">Where this business is registered to collect sales tax. The By-state table flags collected states; verify thresholds with your CPA before registering.</div>', { fill: true });
+  }
+
+  function tax1099CardHtml() {
+    var list = V2.t1099;
+    var nowYear = new Date().getFullYear();
+    var yearPills = [];
+    for (var y = nowYear; y >= nowYear - 3; y--) {
+      var on = V2.taxYear === y;
+      yearPills.push('<button onclick="FinStatementsV2.set1099Year(' + y + ')" style="border:1px solid var(--border);' +
+        'background:' + (on ? 'color-mix(in srgb,var(--teal) 16%,transparent)' : 'transparent') + ';' +
+        'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;padding:3px 10px;font-size:0.72rem;cursor:pointer;margin-right:6px;">' + y + '</button>');
+    }
+    var inner = '<div style="margin-bottom:10px;">' + yearPills.join('') + '</div>';
+    if (!list) {
+      inner += '<div style="color:var(--warm-gray);font-size:0.85rem;">Loading…</div>';
+    } else if (!list.length) {
+      inner += '<div style="color:var(--warm-gray);font-size:0.85rem;">No contractors paid over $600 in ' + V2.taxYear + '. (1099-NEC threshold is $600.01+.)</div>';
+    } else {
+      var missing = list.filter(function (c) { return !c.hasTaxId; }).length;
+      if (missing) inner += '<div style="font-size:0.78rem;color:var(--amber);margin-bottom:8px;">' + missing + ' contractor' + (missing > 1 ? 's' : '') + ' missing a Tax ID — request a W-9 before filing.</div>';
+      inner += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">1099-NEC forms are due to contractors by January 31, ' + (V2.taxYear + 1) + '.</div>';
+      inner += table([
+        { label: 'Contractor', render: function (c) { return esc(c.name); } },
+        { label: 'Tax ID', render: function (c) { return c.hasTaxId ? '<span style="font-family:ui-monospace,monospace;font-size:0.78rem;">' + esc(c.maskedTaxId) + '</span>' : U.badge('missing W-9', 'amber'); } },
+        { label: 'Paid', align: 'right', render: function (c) { return m(c.totalPaid); } }
+      ], list);
+      inner += '<div style="display:flex;justify-content:flex-end;margin-top:10px;"><button class="btn btn-secondary" style="font-size:0.78rem;" onclick="FinStatementsV2.export1099()">↓ Export 1099 prep CSV</button></div>';
+    }
+    return U.card('1099 vendor prep — ' + V2.taxYear, inner, { fill: true });
+  }
+
+  function renderTaxBody(t) {
+    var el = body(); if (!el) return;
+    var states = Object.keys(t.byState).sort(function (a, b) { return t.byState[b].taxCollected - t.byState[a].taxCollected; });
+    var total = states.reduce(function (s, k) { return s + t.byState[k].taxCollected; }, 0);
+    var nexus = V2.nexus || t.nexus || {};
+    el.innerHTML =
+      U.tiles([
+        { k: 'Tax collected', v: m(total), hero: true },
+        { k: 'States', v: N.count(states.length) },
+        { k: 'Registered states', v: N.count(Object.keys(nexus).filter(function (k) { return nexus[k] && nexus[k].registered; }).length) }
+      ]) +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:14px;">' +
+      U.card('By state', states.length ? table([
+        { label: 'State', render: function (k) { return esc(k); } },
+        { label: 'Registered', render: function (k) { var r = nexus[k]; return (r && r.registered) ? U.badge('registered', 'teal') : U.badge('not registered', 'amber'); } },
+        { label: 'Orders', align: 'right', render: function (k) { return N.count(t.byState[k].orderCount); } },
+        { label: 'Collected', align: 'right', render: function (k) { return m(t.byState[k].taxCollected); } }
+      ], states) : '<div style="color:var(--warm-gray);font-size:0.85rem;">No taxed orders in the selected period.</div>', { fill: true }) +
+      nexusCardHtml() +
+      tax1099CardHtml() +
+      '</div>';
+    V2.csv = [['State', 'Registered', 'Orders', 'TaxCents']].concat(states.map(function (k) { return [k, !!(nexus[k] && nexus[k].registered), t.byState[k].orderCount, t.byState[k].taxCollected]; }));
+  }
+
   function loadTax() {
     var p = period();
-    return bridge().taxByState(p.start, p.end).then(function (t) {
-      var el = body(); if (!el) return;
-      var states = Object.keys(t.byState).sort(function (a, b) { return t.byState[b].taxCollected - t.byState[a].taxCollected; });
-      var total = states.reduce(function (s, k) { return s + t.byState[k].taxCollected; }, 0);
-      el.innerHTML =
-        U.tiles([
-          { k: 'Tax collected', v: m(total), hero: true },
-          { k: 'States', v: N.count(states.length) }
-        ]) +
-        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;margin-top:14px;">' +
-        U.card('By state', states.length ? table([
-          { label: 'State', render: function (k) { return esc(k); } },
-          { label: 'Registered', render: function (k) { var r = t.nexus && t.nexus[k]; return (r && r.registered) ? U.badge('registered', 'teal') : U.badge('not registered', 'amber'); } },
-          { label: 'Orders', align: 'right', render: function (k) { return N.count(t.byState[k].orderCount); } },
-          { label: 'Collected', align: 'right', render: function (k) { return m(t.byState[k].taxCollected); } }
-        ], states) : '<div style="color:var(--warm-gray);font-size:0.85rem;">No taxed orders in the selected period.</div>', { fill: true }) +
-        U.card('Compliance', '<div style="font-size:0.85rem;line-height:1.9;">Nexus registration management and 1099 vendor prep stay on the classic Tax page for now.<br>' +
-          '<a href="javascript:void(0)" onclick="FinStatementsV2.classicTax()" style="color:var(--teal);">Open classic Tax ↗</a></div>', { fill: true }) +
-        '</div>';
-      V2.csv = [['State', 'Registered', 'Orders', 'TaxCents']].concat(states.map(function (k) { return [k, !!(t.nexus && t.nexus[k] && t.nexus[k].registered), t.byState[k].orderCount, t.byState[k].taxCollected]; }));
+    return Promise.all([
+      bridge().taxByState(p.start, p.end),
+      bridge().nexusList().catch(function () { return {}; }),
+      bridge().tax1099ForYear(V2.taxYear).catch(function () { return []; })
+    ]).then(function (r) {
+      V2._tax = r[0]; V2.nexus = r[1]; V2.t1099 = r[2];
+      renderTaxBody(r[0]);
     });
   }
 
@@ -325,7 +397,50 @@
       bridge().downloadCsv('statements-' + V2.lens, V2.csv, 'Period ' + p.start + ' → ' + p.end);
     },
     dayClose: function () { if (window.navigateTo) navigateTo('finance-period-close'); },
-    classicTax: function () { if (window.navigateToClassic) navigateToClassic('finance-tax'); }
+    nexusToggle: function (state) {
+      if (!canTaxEdit()) { showToast('Finance write access required.', true); return; }
+      var cur = (V2.nexus && V2.nexus[state]) || {};
+      bridge().nexusSave(state, { registered: !cur.registered }).then(function () {
+        showToast(state + (cur.registered ? ' marked unregistered' : ' marked registered'));
+        refresh();
+      }).catch(function (e) { showToast('Save failed: ' + (e.message || e), true); });
+    },
+    nexusAdd: function () {
+      if (!canTaxEdit()) { showToast('Finance write access required.', true); return; }
+      var st = ((document.getElementById('finStV2NexusState') || {}).value || '').trim().toUpperCase();
+      var num = ((document.getElementById('finStV2NexusNum') || {}).value || '').trim();
+      if (!/^[A-Z]{2}$/.test(st)) { showToast('Enter a 2-letter state code.', true); return; }
+      bridge().nexusSave(st, { registered: true, registrationNumber: num || null }).then(function () {
+        showToast(st + ' added as registered');
+        refresh();
+      }).catch(function (e) { showToast('Save failed: ' + (e.message || e), true); });
+    },
+    nexusRemove: function (state) {
+      if (!canTaxEdit()) { showToast('Finance write access required.', true); return; }
+      mastConfirm('Remove the ' + state + ' nexus registration record? Tax reporting will show ' + state + ' as not registered.', { title: 'Remove registration', confirmLabel: 'Remove' }).then(function (ok) {
+        if (!ok) return;
+        bridge().nexusDelete(state).then(function () {
+          showToast(state + ' registration removed');
+          refresh();
+        }).catch(function (e) { showToast('Remove failed: ' + (e.message || e), true); });
+      });
+    },
+    set1099Year: function (y) {
+      V2.taxYear = y; V2.t1099 = null;
+      if (V2._tax) renderTaxBody(V2._tax);
+      bridge().tax1099ForYear(y).then(function (list) {
+        V2.t1099 = list;
+        if (V2.lens === 'tax' && V2._tax) renderTaxBody(V2._tax);
+      }).catch(function (e) { showToast('1099 load failed: ' + (e.message || e), true); });
+    },
+    export1099: function () {
+      var list = V2.t1099 || [];
+      if (!list.length) { showToast('Nothing to export', true); return; }
+      var rows = [['Contractor', 'Tax ID', 'Total Paid (USD)', '1099 Required']].concat(list.map(function (c) {
+        return [c.name, c.hasTaxId ? c.taxId : 'MISSING', (c.totalPaid / 100).toFixed(2), 'Yes'];
+      }));
+      bridge().downloadCsv('finance-tax-1099', rows, 'Tax year ' + V2.taxYear + ' · Basis: admin/vendors + admin/purchaseReceipts');
+    }
   };
 
   // All five routes land on the SAME page; the route only picks the entry lens.
