@@ -429,11 +429,29 @@
       }
       run();
     },
-    create: function () {
+    create: function (preset) {
       // Ensure the legacy Book module (and thus window.EnrollmentsBridge) is
       // loaded before opening the intake form — mirrors ClassesV2.create.
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
-      MastEntity.openRecord('enrollment-intake-v2', {}, 'create');
+      var open = function () {
+        MastEntity.openRecord('enrollment-intake-v2', {}, 'create');
+        // Walk-in entry point (session SO): pre-select the class + session.
+        if (preset && preset.classId) {
+          setTimeout(function () {
+            var cls = document.getElementById('enV2Class');
+            if (!cls) return;
+            cls.value = preset.classId;
+            EnrollmentsV2._intakeClassChanged(preset.classId);
+            if (preset.sessionId) {
+              var sess = document.getElementById('enV2Session');
+              if (sess) sess.value = preset.sessionId;
+            }
+          }, 0);
+        }
+      };
+      // The picker options come from the load()-built maps; a cold call (from
+      // the session SO before this module's route ever ran) loads them first.
+      if (V2.loaded) open(); else ensureLoaded().then(open);
     },
     // Intake form helpers — dependent session picker + student autofill.
     _intakeClassChanged: function (classId) {

@@ -4632,6 +4632,120 @@
   };
 
   // ── Check in a single student ──
+  // ── Run-session state-free cores ─────────────────────────────────────
+  // Shared by the legacy session-ops view and window.SessionsBridge (the
+  // sessions-v2 Run-session pane). No toasts, no view refreshes, no DOM reads;
+  // survey side effects resolve classId from the ENROLLMENT (not view state).
+  async function _sessCheckInCore(enrollId, opts) {
+    var uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+    await MastDB.enrollments.update(enrollId, {
+      status: 'checked-in',
+      checkedInAt: new Date().toISOString(),
+      checkedInBy: uid,
+      waiverStatus: (opts && opts.waiverStatus) || 'na',
+      materialsConfirmed: !!(opts && opts.materialsConfirmed)
+    });
+  }
+  async function _sessCheckInAllCore(sessionId) {
+    var enrollments = (await MastDB.enrollments.bySession(sessionId)) || {};
+    if (enrollments && typeof enrollments.val === 'function') enrollments = enrollments.val() || {};
+    var uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+    var now = new Date().toISOString();
+    var count = 0;
+    for (var id in enrollments) {
+      if (enrollments[id].status === 'confirmed') {
+        await MastDB.enrollments.update(id, {
+          status: 'checked-in', checkedInAt: now, checkedInBy: uid,
+          waiverStatus: 'na', materialsConfirmed: false
+        });
+        count++;
+      }
+    }
+    return count;
+  }
+  async function _sessStartCore(sessionId) {
+    var uid = firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
+    await MastDB.classSessions.update(sessionId, {
+      classStartedAt: new Date().toISOString(),
+      classStartedBy: uid
+    });
+  }
+  function _sessSurveyOnAttended(enrollment) {
+    var contactEmail = enrollment.studentEmail || enrollment.customerEmail;
+    if (!contactEmail) return;
+    var cid = enrollment.classId || '';
+    firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
+      tenantId: TENANT_ID,
+      classId: cid,
+      className: (allClassesMap[cid] || {}).name || cid || '',
+      contactEmail: contactEmail,
+      contactName: enrollment.studentName || enrollment.customerName || null
+    }).catch(function(_e) { console.warn('[book] triggerSurveyOnClassAttended failed:', _e); });
+  }
+  async function _sessCloseOutCore(enrollId, status) {
+    var enrollment = (await MastDB.enrollments.get(enrollId)) || {};
+    var finalStatus = status || 'completed';
+    // Soft waiver enforcement (mirrors _bookCloseOut)
+    if (finalStatus === 'completed' && enrollment.waiverStatus && enrollment.waiverStatus !== 'signed' && enrollment.waiverStatus !== 'na') {
+      finalStatus = 'attended-pending-waiver';
+    }
+    await MastDB.enrollments.update(enrollId, { status: finalStatus, completedAt: new Date().toISOString() });
+    if (finalStatus === 'completed' || finalStatus === 'attended-pending-waiver') _sessSurveyOnAttended(Object.assign({}, enrollment, { classId: enrollment.classId }));
+    return finalStatus;
+  }
+  // Auto-complete every open seat (checked-in/confirmed) — shared by
+  // close-out-all and the session close itself.
+  async function _sessCloseOutAllCore(sessionId) {
+    var enrollments = (await MastDB.enrollments.bySession(sessionId)) || {};
+    if (enrollments && typeof enrollments.val === 'function') enrollments = enrollments.val() || {};
+    var now = new Date().toISOString();
+    var count = 0;
+    for (var id in enrollments) {
+      var e = enrollments[id];
+      if (e.status === 'checked-in' || e.status === 'confirmed') {
+        var finalStatus = 'completed';
+        if (e.waiverStatus && e.waiverStatus !== 'signed' && e.waiverStatus !== 'na') finalStatus = 'attended-pending-waiver';
+        await MastDB.enrollments.update(id, { status: finalStatus, completedAt: now });
+        _sessSurveyOnAttended(e);
+        count++;
+      }
+    }
+    return count;
+  }
+  async function _sessCloseSessionCore(sessionId, notes) {
+    var autoCount = await _sessCloseOutAllCore(sessionId);
+    var now = new Date().toISOString();
+    await MastDB.classSessions.update(sessionId, {
+      status: 'completed',
+      classClosedAt: now,
+      sessionNotes: (notes || '').trim() || null,
+      completedAt: now
+    });
+    return autoCount;
+  }
+  async function _sessAddIncidentCore(enrollId, inc) {
+    if (!inc || !(inc.description || '').trim()) throw new Error('Description required');
+    var enrollment = (await MastDB.enrollments.get(enrollId)) || {};
+    var incidents = enrollment.incidents || [];
+    incidents.push({
+      type: inc.type || 'other',
+      severity: inc.severity || 'low',
+      description: inc.description.trim(),
+      createdAt: new Date().toISOString()
+    });
+    await MastDB.enrollments.update(enrollId, { incidents: incidents });
+  }
+  // Run-session verbs for the sessions-v2 twin (extends the Wave-2 bridge).
+  window.SessionsBridge = Object.assign(window.SessionsBridge || {}, {
+    checkIn: function (id, opts) { return _sessCheckInCore(id, opts); },
+    checkInAll: function (sessionId) { return _sessCheckInAllCore(sessionId); },
+    start: function (sessionId) { return _sessStartCore(sessionId); },
+    closeOut: function (id, status) { return _sessCloseOutCore(id, status); },
+    closeOutAll: function (sessionId) { return _sessCloseOutAllCore(sessionId); },
+    close: function (sessionId, notes) { return _sessCloseSessionCore(sessionId, notes); },
+    addIncident: function (id, inc) { return _sessAddIncidentCore(id, inc); }
+  });
+
   window._bookCheckIn = async function(enrollId) {
     var waiverEl = document.getElementById('waiver_' + enrollId);
     var matEl = document.getElementById('mat_' + enrollId);
