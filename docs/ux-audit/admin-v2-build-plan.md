@@ -304,12 +304,21 @@ clean.
 - Config docs: untouched (read-mostly directive). No sandbox/integration/alert
   toggles flipped.
 
-### Ratification status (operator decision needed — §5)
-- Q1 (suppressions item), Q2 (coins item), Q3 (about item), Q5 (ask-ai
-  visibility): **sidebar untouched pending sign-off.** Module-level work
-  shipped: remaps live under the flag; invisible items stay invisible.
-- Q4: orphan settings-v2 module **deleted in the holistic PR** (unreachable
-  dead code; trivially revertible).
+### Ratification status
+**RATIFIED 2026-06-10 (operator: all A-options, Q1–Q5) — shipped same day:**
+- Q1: Audit Suppressions sidebar item removed (rules live as the audit
+  queue's Muted-rules lens; the item was already soft-hidden).
+- Q2: Coins item removed; Subscription item relabeled **Plan & Billing**
+  (#coins remaps to the hub's Top-ups lens).
+- Q3: About item removed (About lens on Plan & Billing; #about stays
+  hash-reachable).
+- Q4: orphan settings-v2 module deleted in the holistic PR.
+- Q5: `ask-ai` gained a MODE_ROUTE_VISIBILITY entry (alwaysOn) — the item
+  is actually visible for the first time.
+- Plain-language sidebar labels beyond Q2 (Permissions→Team access, Audit
+  Log→Activity history, Analytics→Site traffic, Email Log→Email history)
+  were NOT in the Q1–Q5 ask and remain pending an explicit yes; the V2
+  page titles already use them.
 
 ### Debt added this round
 - Audit-log `time` is mixed-type (client ms numbers vs server Timestamps) —

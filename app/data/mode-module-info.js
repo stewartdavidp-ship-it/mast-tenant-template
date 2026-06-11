@@ -1410,6 +1410,18 @@
       setupDepth: "quick",
       preview: { url: ASSET_BASE + 'email-log.png', alt: "Outbound email log with recipient, subject, status, and resend action" },
       learnMoreUrl: HELP_BASE + 'email-log'
+    },
+    'ask-ai': {
+      label: 'Ask AI', section: 'admin',
+      tagline: 'Chat with Mast about your own store data.',
+      outcome: "Get a straight answer about your orders, products, or customers without digging through screens yourself.",
+      goodFitWhen: "you'd rather ask a question in plain words than learn where every report lives.",
+      automates: ["Hunting through tabs to answer a one-off question", "Exporting data just to eyeball a number"],
+      complementsTools: ["ChatGPT", "Claude"],
+      pairsWith: ["orders", "products", "customers", "analytics", "settings"],
+      setupDepth: "quick",
+      preview: { url: ASSET_BASE + 'ask-ai.png', alt: "Ask AI chat answering a question about recent orders" },
+      learnMoreUrl: HELP_BASE + 'ask-ai'
     }
     // Migration routes (migration, migration-confirm, migration-plan,
     // migration-import, historical-orders) are intentionally omitted —
