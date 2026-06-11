@@ -257,3 +257,65 @@ complete). Settings: navigation + read assertions ONLY — no toggle flips. Subs
 Coins: no checkout CTA clicks past the button render. Delete confirms scoped to
 `#mastDialogOK`; SO saves via `window.MastUI.slideOut._save()`; record ids stashed on
 `window.__vars`.
+
+---
+
+## 9 · Round outcome (post-walk, 2026-06-10)
+
+**Shipped:** plan #439… waves: Team access hub (#439), Activity history (#440),
+Plan & billing hub (#442, rebased after a cache-bust race with #438), Site
+traffic (#443), audit-pipeline consolidation (#444), tokenLog read fix (#445),
+holistic (this PR). All verified live on sgtest15 (dev), both themes, console
+clean.
+
+### CRUD parity
+
+| Surface | Create | Read | Update | Delete/Archive | Writes via |
+|---|---|---|---|---|---|
+| Team access · Members | n/a (members appear at first sign-in, by design) | ✓ | ✓ role change (walked) | ✓ archive/unarchive via CF (walked) | EmployeesBridge |
+| Team access · Roles | ✓ new custom role (walked) | ✓ | ✓ matrix Level pickers + sensitive actions (walked, read back through accessor) | — (role delete didn't exist in V1; debt) | EmployeesBridge |
+| Activity history | — (append-only) | ✓ + filters + pager | — | — (immutable by design) | n/a |
+| Plan & billing | — | ✓ all three lenses | — | — | CTA passthrough only (Stripe checkout NOT exercised) |
+| Site traffic | — | ✓ 4 lenses + range | — | — | n/a |
+| Audit · Muted rules | ✓ (suppress, via shared core — walked) | ✓ | — | ✓ unmute (walked, non-cascading) | AuditFeedback |
+| Email history | — | ✓ (12-email seed renders) | — | — | n/a |
+
+### Walk findings → fixes
+1. **tokenLog `.get()` TypeError** (subscription-v2 setup) — compat query has
+   `.once()` only; fixed in V2 AND in legacy `renderCoinsRecentList`, which had
+   been silently dead ("Could not load recent purchases") since the Firestore
+   migration. The wedge-audit lesson again: only the live walk caught it.
+2. Census uids truncated to 12 chars caused a false "member missing" scare —
+   automation error, not a bug (stash full ids on window.__vars).
+3. A user row carries role key `staff` with no role doc; renders as the raw key
+   and the Roles lens doesn't list it. Junk row (rbac-test@example.com); heal
+   or archive at the operator's discretion.
+
+### Scrub report (sgtest15)
+- **Seeded:** 12 realistic emails into `emails` (order/enrollment/RMA/newsletter
+  mix, one failed send, ISO timestamps, May 17–Jun 10).
+- **Created (kept as demo fixtures):** role `studio_assistant` ("Studio
+  assistant"); test4@test.com now holds it (was `user`); its archive flag was
+  cycled true→false via the CF during the walk.
+- **Created+deleted:** one tenant-wide `price-drift` suppression (suppress →
+  unmute cycle through the shared core).
+- **Hard deletes: NONE.** Audit history untouched (append-only); admin_users
+  junk left in place (auth-bound — archiving junk users is an operator call).
+- Config docs: untouched (read-mostly directive). No sandbox/integration/alert
+  toggles flipped.
+
+### Ratification status (operator decision needed — §5)
+- Q1 (suppressions item), Q2 (coins item), Q3 (about item), Q5 (ask-ai
+  visibility): **sidebar untouched pending sign-off.** Module-level work
+  shipped: remaps live under the flag; invisible items stay invisible.
+- Q4: orphan settings-v2 module **deleted in the holistic PR** (unreachable
+  dead code; trivially revertible).
+
+### Debt added this round
+- Audit-log `time` is mixed-type (client ms numbers vs server Timestamps) —
+  server-side ordering interleaves; both surfaces normalize client-side.
+  Durable fix: writer stamps one type.
+- Role delete doesn't exist (V1 parity); consider delete-with-member-check.
+- W2.5 Traffic-by-Source panel still legacy-DOM-bound (Sources & revenue
+  classic link from Site traffic).
+- Per-user permission overrides editing stays on classic (#employees detail).
