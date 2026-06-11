@@ -1145,6 +1145,19 @@
     // own container; default stays the legacy static div.
     var container = hostEl || document.getElementById('taxReportContent');
     if (!container) return;
+    // Self-load when hosted cold (trips-v2 never runs the legacy tab's
+    // loadTrips) — render once the data is in.
+    if (!tripsLoaded) {
+      container.innerHTML = '<div class="loading">Loading report\u2026</div>';
+      loadTrips();
+      var tries = 0;
+      (function waitLoaded() {
+        if (tripsLoaded) return renderTaxReport(hostEl);
+        if (++tries > 20) { container.innerHTML = '<span class="mu-sub">Report unavailable — try again.</span>'; return; }
+        setTimeout(waitLoaded, 300);
+      })();
+      return;
+    }
 
     var currentYear = new Date().getFullYear();
     var completed = tripsData.filter(function(t) {
