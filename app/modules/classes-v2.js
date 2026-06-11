@@ -203,9 +203,16 @@
         // sections + the Generate button below, all via ClassesBridge). What
         // still has NO V2 home: series pricing, skills/certs pickers, the waiver
         // template picker, and the class-image library — classic-linked.
-        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
-          (can('book', 'edit') ? '<button class="btn btn-primary btn-small" onclick="ClassesV2.generate(\'' + esc(c._key || c.id) + '\')">⚙ Generate sessions</button>' : '') +
-          '<button class="btn btn-secondary btn-small" onclick="ClassesV2.classic()">Skills, series pricing &amp; images in classic →</button></div>';
+        var manage = '';
+        if (can('book', 'edit')) {
+          var cid = esc(c._key || c.id), st0 = statusOf(c);
+          var pubBtn = (st0 === 'draft' || st0 === 'active')
+            ? '<button class="btn btn-secondary btn-small" onclick="ClassesV2.publish(\'' + cid + '\')">Publish to storefront</button>'
+            : (st0 === 'published'
+                ? '<button class="btn btn-secondary btn-small" onclick="ClassesV2.unpublish(\'' + cid + '\')">Unpublish</button>' : '');
+          manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="btn btn-primary btn-small" onclick="ClassesV2.generate(\'' + cid + '\')">⚙ Generate sessions</button>' + pubBtn + '</div>';
+        }
 
         // Sessions — upcoming first, then past (mirrors legacy detail ordering).
         var past = sessions.filter(function (s) {
@@ -232,7 +239,7 @@
         }
         var sessionsBody;
         if (!sessions.length) {
-          sessionsBody = '<span class="mu-sub">No sessions generated yet. Generate sessions in the classic view.</span>';
+          sessionsBody = '<span class="mu-sub">No sessions generated yet — use ⚙ Generate sessions above.</span>';
         } else {
           sessionsBody = '';
           if (upcoming.length) sessionsBody += '<div class="mu-sub" style="margin:0 0 6px;">Upcoming (' + upcoming.length + ')</div>' + UI.relatedTable(sessCols(), upcoming);
@@ -276,7 +283,7 @@
           fg('Name *', '<input class="form-input" id="clV2Name" value="' + esc(c.name || c.title || '') + '" style="width:100%;" placeholder="e.g. Wheel Throwing Basics">') +
           fg('Description', '<textarea class="form-input" id="clV2Desc" rows="3" style="width:100%;resize:vertical;" placeholder="Class description for students…">' + esc(c.description || '') + '</textarea>') +
           row3(
-            fg('Type *', '<select class="form-input" id="clV2Type" style="width:100%;">' + typeOpts + '</select>', true),
+            fg('Type *', '<select class="form-input" id="clV2Type" style="width:100%;" onchange="ClassesV2._typeChanged(this.value)">' + typeOpts + '</select>', true),
             fg('Category', '<input class="form-input" id="clV2Category" value="' + esc(c.category || '') + '" style="width:100%;" placeholder="e.g. pottery, glass">', true),
             fg('Status', '<select class="form-input" id="clV2Status" style="width:100%;">' + statusOpts + '</select>', true)
           ) +
@@ -333,9 +340,78 @@
                 fg('Room / equipment', '<select class="form-input" id="clV2Resource" style="width:100%;">' + resOpts + '</select>', true)
               );
           })() +
+          // ── Series details (shown when type = series; ClassesBridge.setExtras) ──
+          (function () {
+            var si = c.seriesInfo || {};
+            return '<div id="clV2SeriesSection" style="' + (classType(c) === 'series' ? '' : 'display:none;') + '">' +
+              '<div class="mu-editbar" style="margin-top:14px;"><span class="mu-editpill">SERIES</span>Series pricing &amp; rules</div>' +
+              row2(
+                fg('Total sessions', '<input class="form-input" type="number" min="1" id="clV2SeriesTotal" value="' + (si.totalSessions != null ? esc(si.totalSessions) : '') + '" style="width:100%;">', true),
+                fg('Series price ($)', '<input class="form-input" type="number" min="0" step="0.01" id="clV2SeriesPrice" value="' + (si.seriesPriceCents ? esc((si.seriesPriceCents / 100).toFixed(2)) : '') + '" style="width:100%;">', true)
+              ) +
+              row2(
+                fg('Allow drop-in', '<select class="form-input" id="clV2SeriesDropin" style="width:100%;"><option value="true"' + (si.allowDropIn !== false ? ' selected' : '') + '>Yes</option><option value="false"' + (si.allowDropIn === false ? ' selected' : '') + '>No</option></select>', true),
+                fg('Allow late enroll', '<select class="form-input" id="clV2SeriesLate" style="width:100%;"><option value="false"' + (si.allowLateEnroll !== true ? ' selected' : '') + '>No</option><option value="true"' + (si.allowLateEnroll === true ? ' selected' : '') + '>Yes</option></select>', true)
+              ) + '</div>';
+          })() +
+          // ── Policies (waiver / enrollment window) ──
+          (function () {
+            var rw = !!c.requiresWaiver;
+            var wtOpts = '<option value="">Select a waiver…</option>' + Object.keys(V2.waiverTemplates).map(function (k) {
+              var t = V2.waiverTemplates[k] || {};
+              if (t.status && t.status !== 'published' && c.waiverTemplateId !== k) return '';
+              return '<option value="' + esc(k) + '"' + (c.waiverTemplateId === k ? ' selected' : '') + '>' + esc(t.title || 'Untitled') + '</option>';
+            }).join('');
+            return '<div class="mu-editbar" style="margin-top:14px;"><span class="mu-editpill">POLICIES</span>Waiver &amp; enrollment window</div>' +
+              row2(
+                fg('Requires waiver', '<select class="form-input" id="clV2ReqWaiver" style="width:100%;" onchange="ClassesV2._waiverToggled(this.value)"><option value="false"' + (rw ? '' : ' selected') + '>No</option><option value="true"' + (rw ? ' selected' : '') + '>Yes</option></select>', true),
+                '<div class="form-group" id="clV2WaiverTplWrap" style="flex:1;min-width:150px;' + (rw ? '' : 'display:none;') + '"><label class="form-label">Waiver template</label><select class="form-input" id="clV2WaiverTpl" style="width:100%;">' + wtOpts + '</select></div>'
+              ) +
+              row2(
+                fg('Enrollment opens', '<input class="form-input" type="date" id="clV2EnrollOpen" value="' + esc(c.enrollmentOpenDate || '') + '" style="width:100%;">', true),
+                fg('Enrollment closes', '<input class="form-input" type="date" id="clV2EnrollClose" value="' + esc(c.enrollmentCloseDate || '') + '" style="width:100%;">', true)
+              ) +
+              // Required certifications — checkboxes over admin/certTypes.
+              (function () {
+                var existing = {};
+                (Array.isArray(c.requiredCertTypeIds) ? c.requiredCertTypeIds : []).forEach(function (t) { existing[t] = true; });
+                var ids = Object.keys(V2.certTypes).filter(function (k) { return !(V2.certTypes[k] || {}).archivedAt; });
+                var inner = ids.length
+                  ? ids.map(function (k) {
+                      return '<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0;font-size:0.85rem;"><input type="checkbox" class="clV2Cert" value="' + esc(k) + '"' + (existing[k] ? ' checked' : '') + '>' + esc((V2.certTypes[k] || {}).name || k) + '</label>';
+                    }).join('')
+                  : '<span class="mu-sub">No certification types defined yet (Classes → Settings).</span>';
+                return fg('Required certifications', '<div style="padding:6px 0;">' + inner + '</div>');
+              })();
+          })() +
+          // ── Required skills (admin/skillCatalog; add-new via bridge ensureSkill) ──
+          (function () {
+            var have = {};
+            (Array.isArray(c.requiredSkills) ? c.requiredSkills : []).forEach(function (sl) { have[sl] = true; });
+            var slugs = Object.keys(V2.skillCatalog);
+            Object.keys(have).forEach(function (sl) { if (slugs.indexOf(sl) < 0) slugs.push(sl); });
+            var boxes = slugs.map(function (sl) {
+              var label = (V2.skillCatalog[sl] && V2.skillCatalog[sl].label) || sl.replace(/-/g, ' ');
+              return '<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0;font-size:0.85rem;"><input type="checkbox" class="clV2Skill" value="' + esc(sl) + '"' + (have[sl] ? ' checked' : '') + '>' + esc(label) + '</label>';
+            }).join('') || '<span class="mu-sub">No skills in the catalog yet — add one below.</span>';
+            return '<div class="mu-editbar" style="margin-top:14px;"><span class="mu-editpill">SKILLS</span>Required instructor skills</div>' +
+              fg('Required skills', '<div id="clV2SkillBoxes" style="padding:6px 0;">' + boxes + '</div>' +
+                '<div style="display:flex;gap:8px;margin-top:4px;"><input class="form-input" id="clV2NewSkill" placeholder="Add a skill — e.g. Wheel Throwing" style="flex:1;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();ClassesV2._addSkill();}"><button type="button" class="btn btn-secondary btn-small" onclick="ClassesV2._addSkill()">Add</button></div>');
+          })() +
+          // ── Class image (storefront card; upload CF + shared library picker) ──
+          (function () {
+            V2.editImageUrl = (mode !== 'create' && Array.isArray(c.imageIds) && c.imageIds.length) ? c.imageIds[0] : null;
+            return '<div class="mu-editbar" style="margin-top:14px;"><span class="mu-editpill">IMAGE</span>Class image</div>' +
+              '<div id="clV2ImgPreview">' + (V2.editImageUrl ? '<img src="' + esc(V2.editImageUrl) + '" style="max-width:200px;max-height:120px;border-radius:8px;object-fit:cover;">' : '<span class="mu-sub">No image yet.</span>') + '</div>' +
+              '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">' +
+                '<button type="button" class="btn btn-secondary btn-small" onclick="ClassesV2._pickImage()">Select from library</button>' +
+                '<label class="btn btn-secondary btn-small" style="cursor:pointer;"><input type="file" accept="image/*" style="display:none;" onchange="ClassesV2._uploadImage(this)">Upload new</label>' +
+                '<button type="button" class="btn btn-secondary btn-small" onclick="ClassesV2._removeImage()">Remove</button>' +
+              '</div>';
+          })() +
           (mode === 'create'
-            ? '<div class="mu-sub" style="margin-top:8px;">After creating: “Generate sessions” on the class builds the schedule. Series pricing, skills/certs, waiver and the class image are set up in the classic view.</div>'
-            : '<div class="mu-sub" style="margin-top:8px;">Series pricing, skills/certs, waiver and the class image are edited in the classic view.</div>');
+            ? '<div class="mu-sub" style="margin-top:8px;">After creating: “Generate sessions” on the class builds the schedule.</div>'
+            : '');
       }
     },
     onSave: function (rec, mode) {
@@ -385,6 +461,25 @@
         };
       }
       var schedule = readSchedule(), assign = readAssign();
+      function readExtras() {
+        function v(id) { return ((document.getElementById(id) || {}).value || '').trim(); }
+        var certs = [], skills = [];
+        document.querySelectorAll('#mastSlideOut .clV2Cert:checked').forEach(function (el) { certs.push(el.value); });
+        document.querySelectorAll('#mastSlideOut .clV2Skill:checked').forEach(function (el) { skills.push(el.value); });
+        return {
+          type: data.type,
+          seriesTotal: v('clV2SeriesTotal'), seriesPrice: v('clV2SeriesPrice'),
+          seriesDropIn: v('clV2SeriesDropin'), seriesLateEnroll: v('clV2SeriesLate'),
+          requiresWaiver: v('clV2ReqWaiver') === 'true',
+          waiverTemplateId: v('clV2WaiverTpl') || null,
+          enrollmentOpenDate: v('clV2EnrollOpen') || null,
+          enrollmentCloseDate: v('clV2EnrollClose') || null,
+          requiredCertTypeIds: certs, requiredSkills: skills,
+          imageUrl: V2.editImageUrl || null
+        };
+      }
+      var extras = readExtras();
+      if (extras.requiresWaiver && !extras.waiverTemplateId) { if (window.showToast) showToast('Pick a waiver template (or set Requires waiver to No).', true); return false; }
 
       // Cents-shaped patch for the LIVE cache so the post-save read re-render
       // (which reads priceCents / materialsCostCents) reflects the edit at once.
@@ -408,12 +503,15 @@
         return Promise.resolve(window.ClassesBridge.create(data)).then(function (newId) {
           return window.ClassesBridge.setSchedule(newId, schedule)
             .then(function () { return window.ClassesBridge.assign(newId, assign); })
+            .then(function () { return window.ClassesBridge.setExtras(newId, extras); })
             .then(function () { if (window.showToast) showToast('Class created.'); reloadSoon(); return true; });
         }).catch(function (e) { console.error('[classes-v2] create', e); if (window.showToast) showToast('Error saving class.', true); return false; });
       }
       var id = rec._key || rec.id;
       return Promise.resolve(window.ClassesBridge.update(id, data)).then(function () {
-        return window.ClassesBridge.setSchedule(id, schedule).then(function () { return window.ClassesBridge.assign(id, assign); });
+        return window.ClassesBridge.setSchedule(id, schedule)
+          .then(function () { return window.ClassesBridge.assign(id, assign); })
+          .then(function () { return window.ClassesBridge.setExtras(id, extras); });
       }).then(function () {
         // Mutate the LIVE cached record (=== the slide-out's read closure, since
         // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
@@ -421,7 +519,16 @@
         // reloadSoon() then refreshes the cache for the next open.
         Object.assign(V2.byId[id] || rec, livePatch(), {
           schedule: schedule, instructorId: assign.instructorId, instructorName: assign.instructorName,
-          resourceId: assign.resourceId, resourceName: assign.resourceName
+          resourceId: assign.resourceId, resourceName: assign.resourceName,
+          requiresWaiver: extras.requiresWaiver, waiverTemplateId: extras.waiverTemplateId,
+          enrollmentOpenDate: extras.enrollmentOpenDate, enrollmentCloseDate: extras.enrollmentCloseDate,
+          requiredCertTypeIds: extras.requiredCertTypeIds, requiredSkills: extras.requiredSkills,
+          imageIds: extras.imageUrl ? [extras.imageUrl] : [],
+          seriesInfo: extras.type === 'series' ? {
+            totalSessions: parseInt(extras.seriesTotal, 10) || null,
+            seriesPriceCents: extras.seriesPrice ? Math.round(parseFloat(extras.seriesPrice) * 100) : null,
+            allowDropIn: extras.seriesDropIn !== 'false', allowLateEnroll: extras.seriesLateEnroll === 'true'
+          } : null
         });
         if (window.showToast) showToast('Class updated.'); reloadSoon(); return true;
       }).catch(function (e) { console.error('[classes-v2] update', e); if (window.showToast) showToast('Error updating class.', true); return false; });
@@ -433,7 +540,7 @@
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
-  var V2 = { rows: [], byId: {}, sessionsByClass: {}, instructors: {}, resources: {}, enrollments: [], today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', lens: 'catalog', loaded: false };
+  var V2 = { rows: [], byId: {}, sessionsByClass: {}, instructors: {}, resources: {}, enrollments: [], waiverTemplates: {}, certTypes: {}, skillCatalog: {}, editImageUrl: null, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', lens: 'catalog', loaded: false };
 
   // Run-once data load shared by route setup and cold drills (fetch gate).
   var _loadPromise = null;
@@ -456,7 +563,11 @@
       // Rosters for the assignment pickers; enrollments feed the Reports lens.
       Promise.resolve(MastDB.instructors.list(100)).catch(function () { return {}; }),
       Promise.resolve(MastDB.resources.list(100)).catch(function () { return {}; }),
-      Promise.resolve(MastDB.enrollments.list(2000)).catch(function () { return {}; })
+      Promise.resolve(MastDB.enrollments.list(2000)).catch(function () { return {}; }),
+      // Editor pickers (V1-removal: waiver/certs/skills are native now).
+      Promise.resolve(MastDB.get('settings/waiverTemplates')).catch(function () { return {}; }),
+      Promise.resolve(MastDB.get('admin/certTypes')).catch(function () { return {}; }),
+      Promise.resolve(MastDB.skillCatalog.list(200)).catch(function () { return {}; })
     ]).then(function (res) {
       var cv = res[0] || {}, sv = res[1] || {};
       function toMap(x) { return (x && typeof x.val === 'function') ? (x.val() || {}) : (x || {}); }
@@ -464,6 +575,9 @@
       V2.resources = toMap(res[3]);
       var ev = toMap(res[4]);
       V2.enrollments = Object.keys(ev).map(function (k) { return Object.assign({ _key: k }, ev[k]); });
+      V2.waiverTemplates = toMap(res[5]);
+      V2.certTypes = toMap(res[6]);
+      V2.skillCatalog = toMap(res[7]);
       var out = [];
       Object.keys(cv).forEach(function (k) {
         var c = cv[k];
@@ -688,6 +802,95 @@
         if (window.showToast) showToast('Error: ' + (e && e.message || 'could not generate sessions.'), true);
       });
     },
+    // Publish / unpublish — bridge cores (checklist errors surface in the toast).
+    publish: function (id) {
+      if (!can('book', 'edit')) { if (window.showToast) showToast('Classes write access required.', true); return; }
+      var ask = (typeof window.mastConfirm === 'function')
+        ? window.mastConfirm('Publish this class? It will appear on the public storefront.', { title: 'Publish Class' })
+        : Promise.resolve(true);
+      Promise.resolve(ask).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(window.ClassesBridge.publish(id)).then(function () {
+          if (window.showToast) showToast('Class published.');
+          var rec = V2.byId[id]; if (rec) { rec.status = 'published'; MastEntity.openRecord('classes-v2', rec, 'read'); }
+          reloadSoon();
+        });
+      }).catch(function (e) { if (window.showToast) showToast(e && e.message || 'Publish failed.', true); });
+    },
+    unpublish: function (id) {
+      if (!can('book', 'edit')) { if (window.showToast) showToast('Classes write access required.', true); return; }
+      var ask = (typeof window.mastConfirm === 'function')
+        ? window.mastConfirm('Unpublish this class? It will be hidden from the storefront.', { title: 'Unpublish Class' })
+        : Promise.resolve(true);
+      Promise.resolve(ask).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(window.ClassesBridge.unpublish(id)).then(function () {
+          if (window.showToast) showToast('Class unpublished — back to draft.');
+          var rec = V2.byId[id]; if (rec) { rec.status = 'draft'; MastEntity.openRecord('classes-v2', rec, 'read'); }
+          reloadSoon();
+        });
+      }).catch(function (e) { if (window.showToast) showToast(e && e.message || 'Unpublish failed.', true); });
+    },
+    // Edit-form helpers — series toggle, waiver toggle, skill add, image.
+    _typeChanged: function (type) {
+      var el = document.getElementById('clV2SeriesSection');
+      if (el) el.style.display = type === 'series' ? '' : 'none';
+    },
+    _waiverToggled: function (v) {
+      var el = document.getElementById('clV2WaiverTplWrap');
+      if (el) el.style.display = v === 'true' ? '' : 'none';
+    },
+    _addSkill: function () {
+      var input = document.getElementById('clV2NewSkill');
+      var label = input && input.value.trim();
+      if (!label) return;
+      if (!window.ClassesBridge || !window.ClassesBridge.ensureSkill) { if (window.showToast) showToast('Classes engine still loading — try again', true); return; }
+      Promise.resolve(window.ClassesBridge.ensureSkill(label)).then(function (slug) {
+        if (!slug) return;
+        V2.skillCatalog[slug] = V2.skillCatalog[slug] || { slug: slug, label: label };
+        var boxes = document.getElementById('clV2SkillBoxes');
+        if (boxes && !boxes.querySelector('input[value="' + slug + '"]')) {
+          var lbl = document.createElement('label');
+          lbl.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0;font-size:0.85rem;';
+          lbl.innerHTML = '<input type="checkbox" class="clV2Skill" value="' + esc(slug) + '" checked>' + esc(label);
+          boxes.appendChild(lbl);
+        } else if (boxes) {
+          boxes.querySelector('input[value="' + slug + '"]').checked = true;
+        }
+        input.value = '';
+      }).catch(function (e) { if (window.showToast) showToast('Could not add skill.', true); console.error('[classes-v2] addSkill', e); });
+    },
+    _pickImage: function () {
+      if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image picker unavailable', true); return; }
+      window.openImagePicker(function (imgId, url) { V2.editImageUrl = url; ClassesV2._refreshImg(); });
+    },
+    _uploadImage: function (fileInput) {
+      if (!fileInput.files || !fileInput.files[0]) return;
+      if (window.showToast) showToast('Uploading image…');
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        var base64 = e.target.result.split(',')[1];
+        window.auth.currentUser.getIdToken().then(function (token) {
+          return window.callCF('/uploadImage', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ image: base64, tags: ['class'], source: 'admin-upload' })
+          });
+        }).then(function (resp) { return resp.json(); }).then(function (result) {
+          if (!result.success) throw new Error(result.error || 'Upload failed');
+          V2.editImageUrl = result.url; ClassesV2._refreshImg();
+          if (window.showToast) showToast('Image uploaded.');
+        }).catch(function (err) { if (window.showToast) showToast('Upload failed: ' + (err && err.message || err), true); });
+      };
+      reader.readAsDataURL(fileInput.files[0]);
+    },
+    _removeImage: function () { V2.editImageUrl = null; ClassesV2._refreshImg(); },
+    _refreshImg: function () {
+      var el = document.getElementById('clV2ImgPreview');
+      if (el) el.innerHTML = V2.editImageUrl
+        ? '<img src="' + esc(V2.editImageUrl) + '" style="max-width:200px;max-height:120px;border-radius:8px;object-fit:cover;">'
+        : '<span class="mu-sub">No image yet.</span>';
+    },
     // Edit-form helper: toggle the recurring/once schedule sub-sections.
     _schedTypeChanged: function (type) {
       var rec = document.getElementById('clV2SchedRecurring'), once = document.getElementById('clV2SchedOnce');
@@ -704,15 +907,6 @@
       // before opening the create form — mirrors ContactsV2.create.
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
       MastEntity.openRecord('classes-v2', {}, 'create');
-    },
-    // The basic class record is created/edited NATIVELY here. The SESSION
-    // GENERATION sub-flow (schedule builder → materializeSessions), series
-    // pricing, instructor/resource assignment, skills/certs, waiver, and the
-    // image library have no V2 home → classic Classes catalog (route 'book').
-    // Use navigateToClassic so the V2 route remap doesn't loop back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('book');
-      else if (typeof navigateTo === 'function') navigateTo('book');
     },
     exportCsv: function () { return MastEntity.exportRows('classes-v2', visibleRows(), 'all'); }
   };
