@@ -307,8 +307,11 @@ byte-identical).
 - [ ] `cs_tickets` reads are bounded windows (50/200/2000) — no pagination.
 - [ ] `cs_review_responses` audit sink retire-with-V1 candidate.
 - [ ] engagement-inbox-v2 keeps its own thin readers of cs collections.
-- [ ] Survey bulk send-to-segment, VoC digest, response theme tags, trigger
-      full editor, anonymous-review policy card: classic, linked.
+- [x] Survey bulk send-to-segment, VoC digest, response theme tags, trigger
+      full editor, anonymous-review policy card, review social-draft +
+      photo-ask: ALL native as of the classic-dependency burn-down
+      (operator directive — V1 links were missing features, not debt).
+      `navigateToClassic` count in cs-* modules: 0.
 - [ ] Support→customer drill only when `customerId` is stamped (most manual
       tickets aren't email-resolved to a customer yet — resolver backfill
       candidate).

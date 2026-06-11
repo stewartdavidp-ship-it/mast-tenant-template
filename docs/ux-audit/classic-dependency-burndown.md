@@ -44,8 +44,39 @@ substantially less in practice (bridge cores already exist for most writes).
 
 See the audit table in this doc's source PR description and per-section plan debt
 registers; the authoritative live check is the grep above. Key per-section counts:
+<<<<<<< HEAD
 Sales 4 · Marketing 7 · Operations 2 · Customer Service 4 · ~~Classes 3~~ **Classes 0** (✅ 2026-06-10) · ~~Finance 9~~ **Finance 0** (✅ 2026-06-10, incl. the amendment-submit legacy-function reuse) ·
 Contacts 1 · Misc 5.
+=======
+<<<<<<< HEAD
+Sales 4 · Marketing 7 · Operations 2 · Customer Service 4 · ~~Classes 3~~ **Classes 0** (✅ 2026-06-10) · ~~Finance 9~~ **Finance 0** (✅ 2026-06-10, incl. the amendment-submit legacy-function reuse) ·
+Contacts 1 · Misc 5.
+=======
+Sales 4 · Marketing 7 · Operations 2 · **Customer Service 0 (✅ done 2026-06-10)** ·
+Classes 3 · Finance 9 · Contacts 1 · Misc 5 (+ legacy-function reuse: finance
+amendment submit modal).
+
+### Customer Service — COMPLETE (4 → 0)
+
+All four sites converted in one PR (`grep -c "navigateToClassic(" app/modules/cs-*.js` → 0):
+- **cs-surveys-v2**: native sending-rule editor (create/edit/delete via
+  CsSurveysBridge.saveTrigger/deleteTrigger cores), bulk send-to-a-saved-segment
+  (segment picker + member count + capped batches w/ progress), response theme
+  tags (inline editor, server-parity normalization in the bridge), and the VoC
+  digest (the legacy generator was already route-agnostic — exposed as
+  CsSurveysBridge.vocDigest).
+- **cs-reviews-v2**: Draft-social and Ask-for-photo as native SO actions
+  (CsReviewsBridge.draftSocial/askPhoto — both legacy helpers were
+  document.body modals, route-agnostic) + the anonymous-review policy card on
+  the page (cs_config/reviews + public mirror via the bridge).
+- **cs-members-v2**: classifier correction — the legacy CS Members tab was
+  ALSO read-only (no grant/revoke handlers exist in customer-service.js); the
+  lifecycle lives on the Membership program surface. The classic link was a
+  DELETE-LINK, replaced with a Membership cross-link. (Membership's own
+  burn-down items belong to its section, not CS.)
+- **cs-faqs-v2**: dead classic() handler deleted (its link died in CS Wave 4).
+>>>>>>> abce384 (feat(cs): classic-dependency burn-down — Customer Service 4 → 0)
+>>>>>>> 36fe251 (docs(finance): classic burn-down close-out — Finance 9 → 0, plan debt register, playbook lessons (#469))
 
 ## Standing rule for all future conversion work (playbook-enforced)
 

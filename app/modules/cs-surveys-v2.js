@@ -15,9 +15,10 @@
  * customer-service.js (which the legacy handlers also call) — write shapes,
  * incl. the survey tokenSecret mint, stay single-sourced.
  *
- * Stays classic (linked): bulk send-to-segment, VoC digest, response theme
- * tags, ask-for-photo. Send-to-one-customer and Preview live here natively
- * (generateSurveyLink CF via the bridge).
+ * Classic-dependency burn-down (operator directive): bulk send-to-segment,
+ * the VoC digest, response theme tags and the sending-rule editor all live
+ * HERE natively now — zero classic links remain. Send-to-one-customer and
+ * Preview were already native (generateSurveyLink CF via the bridge).
  * Flag-gated (?ui=1) at #cs-surveys-v2; legacy #cs-surveys untouched.
  */
 (function () {
@@ -120,7 +121,14 @@
                 '<button class="btn btn-primary btn-small" onclick="CsSurveysV2.sendOne(\'' + esc(s.id) + '\')">Send invite</button>' +
                 '<button class="btn btn-secondary btn-small" onclick="CsSurveysV2.preview(\'' + esc(s.id) + '\')" title="Open the survey as a customer would see it">Preview ↗</button>' +
               '</div>' +
-              '<div class="mu-sub" style="margin-top:8px;">Sending to a whole segment (and the VoC digest) lives in the <a href="javascript:void(0)" onclick="CsSurveysV2.classic()" style="color:var(--teal);">classic view</a> for now.</div>');
+              // Bulk send: pick a saved customer segment (options fill async),
+              // resolve the member count, send capped batches via the CF.
+              '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">' +
+                '<select id="csSvV2Segment" class="form-input" style="width:240px;font-size:0.85rem;" onchange="CsSurveysV2.segmentPicked(this.value)"><option value="">— Send to a saved group… —</option></select>' +
+                '<button class="btn btn-secondary btn-small" id="csSvV2SegBtn" onclick="CsSurveysV2.sendSegment(\'' + esc(s.id) + '\')" disabled>Send to group</button>' +
+              '</div>' +
+              '<div class="mu-sub" style="margin-top:6px;">Groups come from your saved customer segments. Sends go out in batches of 25 — re-run for larger groups (already-invited customers are skipped).</div>');
+            setTimeout(function () { fillSegmentOptions(); }, 0);
           }
           if (can('delete')) {
             h += '<div style="margin-top:14px;"><button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="CsSurveysV2.removeSurvey(\'' + esc(s.id) + '\')">Delete survey</button></div>';
@@ -177,7 +185,19 @@
             return '<div style="margin-bottom:10px;"><div class="mu-sub" style="font-size:0.78rem;">' + esc(label) + '</div>' +
               '<div style="font-size:0.9rem;">' + esc(val == null ? '—' : String(val)) + '</div></div>';
           }).join('') || '<span class="mu-sub">No answers yet — the customer hasn\'t opened the survey.</span>';
-          return U.card('Response', h) + U.card('Answers', answers);
+          // Theme tags (burn-down: was classic-only). Comma-separated input;
+          // the bridge normalizes (lowercase, dedupe, 16-cap — server parity).
+          var tags = Array.isArray(r.themeTags) ? r.themeTags : [];
+          var chips = tags.length
+            ? tags.map(function (t) { return '<span style="display:inline-block;font-size:0.72rem;padding:2px 8px;border-radius:999px;background:rgba(168,85,247,0.18);border:1px solid rgba(168,85,247,0.35);margin:1px 4px 1px 0;">' + esc(t) + '</span>'; }).join('')
+            : '<span class="mu-sub">No themes yet.</span>';
+          var themeEdit = can('edit')
+            ? '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;">' +
+              '<input id="csRespV2Themes" class="form-input" placeholder="packaging, shipping speed, color…" value="' + esc(tags.join(', ')) + '" style="flex:1;font-size:0.85rem;">' +
+              '<button class="btn btn-secondary btn-small" onclick="CsSurveysV2.saveThemes(\'' + esc(r.id || r.responseId) + '\')">Save themes</button>' +
+              '</div><div class="mu-sub" style="margin-top:6px;">Comma-separated; themes feed the VoC digest.</div>'
+            : '';
+          return U.card('Response', h) + U.card('Answers', answers) + U.card('Themes', chips + themeEdit);
         }
       }
     });
@@ -241,6 +261,32 @@
         var id = mode === 'create' ? null : rec.id;
         return bridge().saveGroup(id, { name: rec.name, eventType: rec.eventType, questionIds: qIds }).then(function () {
           showToast(id ? 'Question set updated' : 'Question set created');
+          return load().then(function () { return true; });
+        }).catch(function (e) { showToast('Save failed: ' + (e.message || e), true); return false; });
+      }
+    });
+
+    // Sending rules (burn-down: the trigger editor was classic-only).
+    MastEntity.define('cs-survey-rules-v2', {
+      label: 'Sending rule', size: 'md',
+      recordId: function (t) { return t.id || '_new'; },
+      fields: [
+        { name: 'eventType', label: 'Send after', type: 'select', required: true, group: 'Rule',
+          options: Object.keys(EVENT_LABELS).map(function (k) { return { value: k, label: EVENT_LABELS[k] }; }) },
+        { name: 'surveyId', label: 'Survey to send', type: 'select', required: true, group: 'Rule', options: [] /* filled per-open */ },
+        { name: 'delayHours', label: 'Wait (hours, 0 = immediately)', group: 'Rule' },
+        { name: 'activeSel', label: 'Rule is', type: 'select', group: 'Rule',
+          options: [{ value: 'yes', label: 'On' }, { value: 'no', label: 'Off' }] }
+      ],
+      fetch: function (id) { return ensureLoaded().then(function () { return prepRule(V2.triggers[id]) || null; }); },
+      onSave: function (rec, mode) {
+        if (!can('edit')) { showToast('Surveys write access required.', true); return false; }
+        var id = mode === 'create' ? null : rec.id;
+        return bridge().saveTrigger(id, {
+          eventType: rec.eventType, surveyId: rec.surveyId,
+          delayHours: Number(rec.delayHours) || 0, isActive: rec.activeSel !== 'no'
+        }).then(function () {
+          showToast(id ? 'Sending rule updated' : 'Sending rule created');
           return load().then(function () { return true; });
         }).catch(function (e) { showToast('Save failed: ' + (e.message || e), true); return false; });
       }
@@ -365,15 +411,20 @@
         '<span style="flex:1;">' + esc(EVENT_LABELS[t.eventType] || t.eventType || '—') +
           ' <span class="mu-sub">→ ' + esc(targetName) + (t.delayHours ? ' · after ' + t.delayHours + 'h' : '') + '</span></span>' +
         U.badge(on ? 'On' : 'Off', on ? 'success' : 'neutral') +
-        (canEdit ? '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;" onclick="CsSurveysV2.toggleTrigger(\'' + esc(t.id) + '\',' + (on ? 'false' : 'true') + ')">' + (on ? 'Turn off' : 'Turn on') + '</button>' : '') +
+        (canEdit
+          ? '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;" onclick="CsSurveysV2.toggleTrigger(\'' + esc(t.id) + '\',' + (on ? 'false' : 'true') + ')">' + (on ? 'Turn off' : 'Turn on') + '</button>' +
+            '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;" onclick="CsSurveysV2.editRule(\'' + esc(t.id) + '\')">Edit</button>' +
+            '<button class="btn btn-secondary btn-small" style="font-size:0.72rem;color:var(--danger);" onclick="CsSurveysV2.removeRule(\'' + esc(t.id) + '\')">Delete</button>'
+          : '') +
         '</div>';
-    }).join('') : '<span class="mu-sub">No sending rules yet — set them up in the classic view.</span>';
+    }).join('') : '<span class="mu-sub">No sending rules yet.</span>';
+    var addRule = canEdit ? '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="CsSurveysV2.newRule()">+ New sending rule</button></div>' : '';
     var master = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;font-size:0.9rem;">' +
       '<span style="flex:1;">Send surveys automatically after orders, classes and returns</span>' +
       U.badge(V2.automationEnabled ? 'On' : 'Off', V2.automationEnabled ? 'success' : 'neutral') +
       (canEdit ? '<button class="btn btn-secondary btn-small" onclick="CsSurveysV2.toggleAutomation(' + (V2.automationEnabled ? 'false' : 'true') + ')">' + (V2.automationEnabled ? 'Turn off' : 'Turn on') + '</button>' : '') +
       '</div>';
-    return U.card('Automatic sending', master + rows);
+    return U.card('Automatic sending', master + rows + addRule);
   }
 
   function render() {
@@ -389,7 +440,7 @@
       ['library', 'Question library', Object.keys(V2.questions).length]
     ], lens, 'CsSurveysV2.setLens');
 
-    var actions = '<button class="btn btn-secondary" onclick="CsSurveysV2.classic()" title="Bulk send to a segment, VoC digest, response themes">Classic view ↗</button>';
+    var actions = '<button class="btn btn-secondary" onclick="CsSurveysV2.vocDigest()" title="Aggregated themes, ticket categories, review sentiment and customer health — copy-paste-ready markdown">✨ VoC digest</button>';
     if (can('edit')) {
       if (lens === 'surveys') actions = '<button class="btn btn-primary" onclick="CsSurveysV2.newSurvey()">+ New survey</button>' + actions;
       if (lens === 'sets') actions = '<button class="btn btn-primary" onclick="CsSurveysV2.newGroup()">+ New question set</button>' + actions;
@@ -435,6 +486,32 @@
   }
 
   // ── Handlers ──────────────────────────────────────────────────────────────
+  // Pre-map virtual edit fields for the sending-rule SO.
+  function prepRule(t) {
+    if (!t) return t;
+    t.activeSel = (t.isActive !== false && t.enabled !== false) ? 'yes' : 'no';
+    t.delayHours = t.delayHours || 0;
+    // Legacy rules target a survey; CF-created rules target a question set —
+    // surface the survey select either way (a set-targeted rule keeps working
+    // server-side; editing it re-points it at a survey).
+    return t;
+  }
+  function fillRuleSurveyOptions() {
+    var sch = MastEntity.get('cs-survey-rules-v2'); if (!sch) return;
+    var f = sch.fields.filter(function (x) { return x.name === 'surveyId'; })[0]; if (!f) return;
+    f.options = [{ value: '', label: '— Choose a survey —' }].concat(
+      Object.values(V2.surveys).map(function (sv) { return { value: sv.id, label: sv.name || '(unnamed)' }; }));
+  }
+  function fillSegmentOptions() {
+    var sel = document.getElementById('csSvV2Segment');
+    if (!sel) return;
+    bridge().listSegments().then(function (segs) {
+      if (!document.getElementById('csSvV2Segment')) return;
+      sel.innerHTML = '<option value="">— Send to a saved group… —</option>' +
+        segs.map(function (g) { return '<option value="' + esc(g.id) + '">' + esc(g.name) + '</option>'; }).join('');
+    }).catch(function (e) { console.warn('[cs-surveys-v2] segments', e); });
+  }
+
   function fillGroupOptions() {
     var s = MastEntity.get('cs-surveys-v2'); if (!s) return;
     var f = s.fields.filter(function (x) { return x.name === 'groupId'; })[0]; if (!f) return;
@@ -444,9 +521,82 @@
 
   window.CsSurveysV2 = {
     setLens: function (l) { V2.lens = l; render(); },
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('cs-surveys');
-      else if (typeof navigateTo === 'function') navigateTo('cs-surveys');
+    vocDigest: function () { bridge().vocDigest(30); },
+
+    // ── Sending-rule editor (burn-down: was classic-only) ────────────────
+    newRule: function () {
+      if (!can('edit')) { showToast('Surveys write access required.', true); return; }
+      if (!Object.keys(V2.surveys).length) { showToast('Create a survey first — a rule needs one to send.', true); return; }
+      fillRuleSurveyOptions();
+      MastEntity.openRecord('cs-survey-rules-v2', { eventType: 'order_placed', delayHours: 0, activeSel: 'yes' }, 'create');
+    },
+    editRule: function (id) {
+      if (!can('edit')) { showToast('Surveys write access required.', true); return; }
+      var t = V2.triggers[id]; if (!t) return;
+      fillRuleSurveyOptions();
+      MastEntity.openRecord('cs-survey-rules-v2', prepRule(Object.assign({}, t)), 'edit');
+    },
+    removeRule: function (id) {
+      if (!can('delete')) { showToast('Surveys delete access required.', true); return; }
+      var t = V2.triggers[id]; if (!t) return;
+      mastConfirm('Delete this sending rule (' + (EVENT_LABELS[t.eventType] || t.eventType) + ')? Surveys already sent are unaffected.', { title: 'Delete sending rule', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        bridge().deleteTrigger(id).then(function () {
+          showToast('Sending rule deleted');
+          load();
+        }).catch(function (e) { showToast('Delete failed: ' + (e.message || e), true); });
+      });
+    },
+
+    // ── Bulk send to a saved segment (burn-down: was classic-only) ───────
+    segmentPicked: function (segId) {
+      var btn = document.getElementById('csSvV2SegBtn');
+      if (!btn) return;
+      if (!segId) { btn.disabled = true; btn.textContent = 'Send to group'; return; }
+      btn.disabled = true; btn.textContent = 'Counting…';
+      bridge().resolveSegmentMembers(segId).then(function (members) {
+        var sel = document.getElementById('csSvV2Segment');
+        if (!sel || sel.value !== segId) return;   // changed mid-flight
+        btn.textContent = members.length ? ('Send to group (' + members.length + ')') : 'No recipients in group';
+        btn.disabled = !members.length;
+      }).catch(function () { btn.textContent = 'Send to group'; btn.disabled = true; });
+    },
+    sendSegment: function (surveyId) {
+      if (!can('edit')) { showToast('Surveys write access required.', true); return; }
+      if (V2.busy) return;
+      var sel = document.getElementById('csSvV2Segment');
+      var segId = sel ? sel.value : '';
+      if (!segId) return;
+      var btn = document.getElementById('csSvV2SegBtn');
+      V2.busy = true;
+      bridge().sendToSegment(surveyId, segId, function (i, total) {
+        if (btn) btn.textContent = 'Sending ' + i + '/' + total + '…';
+      }).then(function (res) {
+        V2.busy = false;
+        if (btn) { btn.textContent = 'Send to group'; btn.disabled = true; }
+        if (sel) sel.value = '';
+        var msg = res.total === 0 ? 'No recipients matched the group.'
+          : 'Sent ' + res.sent + ' of ' + res.total + ' invite' + (res.total === 1 ? '' : 's') +
+            (res.failed ? ' (' + res.failed + ' failed)' : '') +
+            (res.remaining ? ' · ' + res.remaining + ' more in the group — re-run to send the next batch' : '');
+        showToast(msg, res.failed > 0);
+      }).catch(function (e) {
+        V2.busy = false;
+        if (btn) btn.textContent = 'Send to group';
+        showToast('Send failed: ' + (e.message || e), true);
+      });
+    },
+
+    // ── Response theme tags (burn-down: was classic-only) ────────────────
+    saveThemes: function (id) {
+      if (!can('edit')) { showToast('Surveys write access required.', true); return; }
+      var input = document.getElementById('csRespV2Themes');
+      bridge().setResponseThemes(id, input ? input.value : '').then(function (cleaned) {
+        if (V2.responses[id]) V2.responses[id].themeTags = cleaned;
+        showToast('Themes saved (' + cleaned.length + ')');
+        var r = V2.responses[id];
+        if (r) MastEntity.openRecord('cs-survey-responses-v2', r, 'read');
+      }).catch(function (e) { showToast('Failed: ' + (e.message || e), true); });
     },
 
     openSurvey: function (id) { fillGroupOptions(); var s = prepSurvey(V2.surveys[id]); if (s) MastEntity.openRecord('cs-surveys-v2', s, 'read'); },

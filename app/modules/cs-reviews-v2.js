@@ -30,7 +30,7 @@
  * review-adjacent content or have no V2 home — the public REPLY (Respond / Edit /
  * Delete response, with its cs_review_responses audit log), Draft Social Post,
  * Ask-for-photo (UGC upload link), and the anonymous-review POLICY settings card
- * — stay on legacy #cs-reviews via a single "More actions" link (navigateToClassic
+ * — were classic-only until the burn-down; all live natively now (no classic links
  * so the V2 route remap doesn't loop back here). Flag-gated (?ui=1) at
  * #cs-reviews-v2, side-by-side with legacy #cs-reviews.
  *
@@ -215,11 +215,20 @@
           ? '<div class="mu-sub" style="margin-top:8px;">' + UI.badge('Featured on site', 'success') + (r.featuredAt ? ' since ' + N.date(r.featuredAt) : '') + '</div>'
           : '';
 
-        // No-V2-home capabilities stay on legacy #cs-reviews: Draft Social
-        // Post, Ask-for-photo (UGC upload link), and the anonymous-review
-        // policy settings card. The public reply now lives HERE (Wave 2).
-        // navigateToClassic so the V2 route remap doesn't loop us back here.
-        var more = '<div style="margin-top:14px;"><button class="btn btn-secondary btn-small" onclick="CsReviewsV2.classic()" title="Draft a social post, ask for a photo, or change the review policy">More actions (social, photo, policy) &rarr;</button></div>';
+        // Classic-dependency burn-down: Draft Social and Ask-for-photo are
+        // native bridge actions now (both legacy helpers were already
+        // route-agnostic); the anonymous-review policy is a card on the page.
+        var more = '';
+        if (canCs('edit')) {
+          var extras = [];
+          if (bodyOf(r) || r.headline) {
+            extras.push('<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.draftSocial(\'' + eid0 + '\')" title="Open the social composer pre-filled with this review">Draft social post</button>');
+          }
+          if (emailOf(r)) {
+            extras.push('<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.askPhoto(\'' + eid0 + '\')" title="Email the customer a one-time photo upload link">📸 Ask for a photo</button>');
+          }
+          if (extras.length) more = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' + extras.join('') + '</div>';
+        }
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
@@ -234,7 +243,7 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, productIndex: {}, sortKey: 'createdAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false, busy: false, respondingId: null };
+  var V2 = { rows: [], byId: {}, productIndex: {}, sortKey: 'createdAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false, busy: false, respondingId: null, anonymousAllowed: false };
 
   function load() {
     // Reviews (one-shot keyed object) + a best-effort products read so a snapshot-
@@ -258,6 +267,10 @@
         V2.productIndex[pid] = { name: p.name || p.title || pid };
       });
       V2.loaded = true; render();
+      // Anonymous-review policy for the settings card (burn-down).
+      if (window.CsReviewsBridge && CsReviewsBridge.getPolicy) {
+        CsReviewsBridge.getPolicy().then(function (p) { V2.anonymousAllowed = !!p.anonymousAllowed; render(); });
+      }
     }).catch(function (e) { console.error('[cs-reviews-v2] load', e); render(); });
   }
 
@@ -289,6 +302,19 @@
     return el;
   }
 
+  // Anonymous-review policy (burn-down: the settings card was classic-only).
+  // Writes cs_config/reviews + the public/config mirror via the bridge.
+  function policyCard() {
+    var on = !!V2.anonymousAllowed;
+    var canEdit = canCs('edit');
+    return '<div style="margin:0 0 12px;">' + U.card('Review policy',
+      '<div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;">' +
+        '<span style="flex:1;">Allow reviews without signing in <span class="mu-sub">(off = customers must sign in, which marks reviews “verified”)</span></span>' +
+        U.badge(on ? 'Anonymous allowed' : 'Sign-in required', on ? 'amber' : 'success') +
+        (canEdit ? '<button class="btn btn-secondary btn-small" onclick="CsReviewsV2.setAnonPolicy(' + (on ? 'false' : 'true') + ')">' + (on ? 'Require sign-in' : 'Allow anonymous') + '</button>' : '') +
+      '</div>') + '</div>';
+  }
+
   function render() {
     var tab = ensureTab();
     var pending = V2.rows.filter(function (r) { return statusOf(r) === 'pending'; }).length;
@@ -304,6 +330,7 @@
         actionsHtml: '<button class="btn btn-secondary" onclick="CsReviewsV2.exportCsv()">&darr; Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
+      policyCard() +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search product, author or text…" value="' + esc(V2.q) +
         '" oninput="CsReviewsV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
       MastEntity.renderList('cs-reviews-v2', {
@@ -440,9 +467,22 @@
     // No-V2-home capabilities (reply + audit log, social draft, UGC photo ask,
     // anonymous-review policy) -> classic Reviews view. navigateToClassic so the
     // V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('cs-reviews');
-      else if (typeof navigateTo === 'function') navigateTo('cs-reviews');
+    draftSocial: function (id) {
+      if (!canCs('edit')) { showToast('Reviews write access required.', true); return; }
+      Promise.resolve(window.CsReviewsBridge.draftSocial(id))
+        .catch(function (e) { showToast('Failed: ' + (e && e.message || e), true); });
+    },
+    askPhoto: function (id) {
+      if (!canCs('edit')) { showToast('Reviews write access required.', true); return; }
+      Promise.resolve(window.CsReviewsBridge.askPhoto(id))
+        .catch(function (e) { showToast('Failed: ' + (e && e.message || e), true); });
+    },
+    setAnonPolicy: function (allowed) {
+      if (!canCs('edit')) { showToast('Reviews write access required.', true); return; }
+      Promise.resolve(window.CsReviewsBridge.setAnonymousAllowed(allowed)).then(function () {
+        V2.anonymousAllowed = !!allowed;
+        render();
+      }).catch(function (e) { showToast('Failed: ' + (e && e.message || e), true); });
     },
     // Cold-drill-safe product cross-link (Wave 4).
     openProduct: function (pid) {
