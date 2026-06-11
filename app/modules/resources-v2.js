@@ -71,7 +71,10 @@
     recordId: function (r) { return r._key || r.id; },
     fields: [
       // fields[0] (the slide-out title source) materializes a real name string.
-      { name: 'name', label: 'Name', type: 'text', list: true, required: true, group: 'Overview', get: resName },
+      // NOT required:true — custom editRender inputs have no name= attrs, so the
+      // engine's pre-validate would collect an empty record and block CREATE
+      // (the contacts-v2 gotcha); onSave validates the name itself.
+      { name: 'name', label: 'Name', type: 'text', list: true, group: 'Overview', get: resName },
       { name: 'type', label: 'Type', type: 'text', list: true, readOnly: true,
         get: function (r) { return cap(typeOf(r)) || '—'; } },
       { name: 'subType', label: 'Sub-type', type: 'text', list: true, readOnly: true,
