@@ -1934,45 +1934,55 @@
     });
   }
 
+  // State-free core of the roster status write — shared by the legacy roster
+  // buttons and window.EnrollmentsBridge (the enrollments-v2 twin). Status
+  // update + attended/cancelled stamps + survey/cert side effects + session
+  // seat-count bookkeeping; NO toast, NO view refresh (callers own their UI).
+  // Returns the pre-update enrollment record. Throws on failure.
+  async function _enrollSetStatusCore(enrollmentId, newStatus) {
+    var updateData = { status: newStatus };
+    if (newStatus === 'cancelled') updateData.cancelledAt = new Date().toISOString();
+    if (newStatus === 'completed') updateData.attendedAt = new Date().toISOString();
+    if (newStatus === 'no-show') updateData.attendedAt = null;
+
+    // Get enrollment to update session count
+    var enrollment = await MastDB.enrollments.get(enrollmentId);
+    if (!enrollment) throw new Error('Enrollment not found');
+
+    await MastDB.enrollments.update(enrollmentId, updateData);
+
+    if (newStatus === 'completed' && enrollment) {
+      var contactEmail = enrollment.studentEmail || enrollment.customerEmail;
+      if (contactEmail) {
+        firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
+          tenantId: TENANT_ID,
+          classId: enrollment.classId || '',
+          className: (allClassesMap[enrollment.classId] || {}).name || enrollment.classId || '',
+          contactEmail: contactEmail,
+          contactName: enrollment.studentName || enrollment.customerName || null
+        }).catch(function(_e) { console.warn('[book] triggerSurveyOnClassAttended failed:', _e); });
+      }
+      // Cert auto-grant prompt — fires if any cert type lists this class
+      // in autoGrantOnClassIds. Instructor confirms (not silent) per Decision 11.
+      _maybePromptGrantCertForEnrollment(enrollment)
+        .catch(function(e) { console.warn('[book] cert grant prompt failed:', e); });
+    }
+
+    // Update session enrolled count
+    if (enrollment && enrollment.sessionId) {
+      if (newStatus === 'cancelled' && enrollment.status === 'confirmed') {
+        await adjustSessionCount(enrollment.sessionId, 'enrolled', -1);
+      } else if (newStatus === 'confirmed' && enrollment.status === 'waitlisted') {
+        await adjustSessionCount(enrollment.sessionId, 'enrolled', 1);
+        await adjustSessionCount(enrollment.sessionId, 'waitlisted', -1);
+      }
+    }
+    return enrollment;
+  }
+
   async function updateEnrollmentStatus(enrollmentId, newStatus) {
     try {
-      var updateData = { status: newStatus };
-      if (newStatus === 'cancelled') updateData.cancelledAt = new Date().toISOString();
-      if (newStatus === 'completed') updateData.attendedAt = new Date().toISOString();
-      if (newStatus === 'no-show') updateData.attendedAt = null;
-
-      // Get enrollment to update session count
-      var enrollment = await MastDB.enrollments.get(enrollmentId);
-
-      await MastDB.enrollments.update(enrollmentId, updateData);
-
-      if (newStatus === 'completed' && enrollment) {
-        var contactEmail = enrollment.studentEmail || enrollment.customerEmail;
-        if (contactEmail) {
-          firebase.functions().httpsCallable('triggerSurveyOnClassAttended')({
-            tenantId: TENANT_ID,
-            classId: enrollment.classId || '',
-            className: (allClassesMap[enrollment.classId] || {}).name || enrollment.classId || '',
-            contactEmail: contactEmail,
-            contactName: enrollment.studentName || enrollment.customerName || null
-          }).catch(function(_e) { console.warn('[book] triggerSurveyOnClassAttended failed:', _e); });
-        }
-        // Cert auto-grant prompt — fires if any cert type lists this class
-        // in autoGrantOnClassIds. Instructor confirms (not silent) per Decision 11.
-        _maybePromptGrantCertForEnrollment(enrollment)
-          .catch(function(e) { console.warn('[book] cert grant prompt failed:', e); });
-      }
-
-      // Update session enrolled count
-      if (enrollment && enrollment.sessionId) {
-        if (newStatus === 'cancelled' && enrollment.status === 'confirmed') {
-          await adjustSessionCount(enrollment.sessionId, 'enrolled', -1);
-        } else if (newStatus === 'confirmed' && enrollment.status === 'waitlisted') {
-          await adjustSessionCount(enrollment.sessionId, 'enrolled', 1);
-          await adjustSessionCount(enrollment.sessionId, 'waitlisted', -1);
-        }
-      }
-
+      await _enrollSetStatusCore(enrollmentId, newStatus);
       MastAdmin.showToast('Enrollment updated');
       // Refresh current view
       var classFilter = (document.getElementById('enrollFilterClass') || {}).value;
@@ -2694,6 +2704,62 @@
       await MastDB.resources.set(id, rec);
       resourcesLoaded = false;
       return id;
+    }
+  };
+
+  // ── EnrollmentsBridge — additive shim for the enrollments-v2 twin ──────
+  // The twin delegates ALL its writes here so the roster status semantics
+  // (attended/cancelled stamps, survey + cert side effects, session seat and
+  // waitlist counters, renumbering, waitlist CS ticket) stay single-sourced
+  // with the legacy roster buttons — the twin never reimplements them. All
+  // methods are state-free cores: no toasts, no view refreshes, no confirm
+  // dialogs (the caller owns its UI and its confirm). Per-record actions
+  // fetch the doc fresh inside the core (no load-once cache → no miss no-op).
+  window.EnrollmentsBridge = {
+    // 'completed' | 'late' | 'no-show' | 'confirmed' — the roster verbs.
+    setStatus: function (id, status) { return _enrollSetStatusCore(id, status); },
+    promote: function (id) { return _enrollPromoteCore(id); },
+    cancel: function (id) { return _enrollCancelCore(id); },
+    // Admin-side enrollment intake (phone/walk-in). Mirrors the legacy walk-in
+    // write shape (_bookWalkinManual) + the seat-count bookkeeping the roster
+    // transitions maintain: confirmed seats bump session.enrolled; if the
+    // session is full the enrollment lands waitlisted with the next position.
+    create: async function (data) {
+      var classId = data.classId, sessionId = data.sessionId || null;
+      if (!classId) throw new Error('Class is required');
+      var name = (data.name || '').trim();
+      if (!name) throw new Error('Student name is required');
+      var email = (data.email || '').trim();
+      var session = sessionId ? ((await MastDB.classSessions.get(sessionId)) || {}) : {};
+      var status = 'confirmed', waitlistPosition = null;
+      if (sessionId && session.capacity && (session.enrolled || 0) >= session.capacity) {
+        status = 'waitlisted';
+        waitlistPosition = (session.waitlisted || 0) + 1;
+      }
+      var enrollId = MastDB.enrollments.newKey();
+      var now = new Date().toISOString();
+      var rec = {
+        classId: classId,
+        sessionId: sessionId,
+        studentId: data.studentId || null,
+        studentName: name,
+        studentEmail: email,
+        customerName: name,
+        customerEmail: email,
+        status: status,
+        enrollmentType: 'dropin',
+        pricePaidCents: parseInt(data.pricePaidCents, 10) || 0,
+        waiverStatus: 'na',
+        waitlistPosition: waitlistPosition,
+        notes: (data.notes || '').trim() || null,
+        enrolledAt: now,
+        createdAt: now
+      };
+      await MastDB.enrollments.set(enrollId, rec);
+      if (sessionId) {
+        await adjustSessionCount(sessionId, status === 'waitlisted' ? 'waitlisted' : 'enrolled', 1);
+      }
+      return { id: enrollId, status: status };
     }
   };
 
@@ -3606,34 +3672,42 @@
   window._bookMarkAttended = function(id) { updateEnrollmentStatus(id, 'completed'); };
   window._bookMarkLate = function(id) { updateEnrollmentStatus(id, 'late'); };
   window._bookMarkNoShow = function(id) { updateEnrollmentStatus(id, 'no-show'); };
+  // State-free cancel core — status write + waitlist counter decrement +
+  // renumbering. NO confirm dialog, NO toast, NO view refresh (callers own UI).
+  async function _enrollCancelCore(id) {
+    var enrollment = await _enrollSetStatusCore(id, 'cancelled');
+    if (enrollment && enrollment.status === 'waitlisted') {
+      // Decrement waitlist counter
+      var isSeries = enrollment.enrollmentType === 'series';
+      if (isSeries) {
+        await MastDB.transaction(MastDB.classes.PATH + '/' + enrollment.classId + '/seriesWaitlisted', function(c) { return Math.max(0, (c || 0) - 1); });
+      } else if (enrollment.sessionId) {
+        await adjustSessionCount(enrollment.sessionId, 'waitlisted', -1);
+      }
+      await renumberWaitlist(enrollment.classId, enrollment.sessionId, isSeries);
+    }
+  }
+
   window._bookCancelEnrollment = async function(id) {
     if (!await mastConfirm('Cancel this enrollment?', { title: 'Cancel Enrollment', danger: true })) return;
-    // Get enrollment to check if waitlisted (for renumbering)
     try {
-      var enrollment = await MastDB.enrollments.get(id);
-      await updateEnrollmentStatus(id, 'cancelled');
-      if (enrollment && enrollment.status === 'waitlisted') {
-        // Decrement waitlist counter
-        var isSeries = enrollment.enrollmentType === 'series';
-        if (isSeries) {
-          await MastDB.transaction(MastDB.classes.PATH + '/' + enrollment.classId + '/seriesWaitlisted', function(c) { return Math.max(0, (c || 0) - 1); });
-        } else if (enrollment.sessionId) {
-          await adjustSessionCount(enrollment.sessionId, 'waitlisted', -1);
-        }
-        await renumberWaitlist(enrollment.classId, enrollment.sessionId, isSeries);
-      }
+      await _enrollCancelCore(id);
+      MastAdmin.showToast('Enrollment updated');
+      var classFilter = (document.getElementById('enrollFilterClass') || {}).value;
+      loadEnrollments(null, classFilter);
     } catch (err) {
       MastAdmin.showToast('Failed: ' + err.message, true);
     }
   };
   window._bookConfirmEnrollment = function(id) { updateEnrollmentStatus(id, 'confirmed'); };
 
-  window._bookPromoteWaitlist = async function(enrollmentId) {
-    try {
+  // State-free promote core — capacity check, seat/waitlist counters, status
+  // write, renumbering, waitlist CS-ticket side effect. NO toast, NO view
+  // refresh. Throws Error with a user-presentable message on any blocker.
+  async function _enrollPromoteCore(enrollmentId) {
       var enrollment = await MastDB.enrollments.get(enrollmentId);
       if (!enrollment || enrollment.status !== 'waitlisted') {
-        MastAdmin.showToast('Enrollment not found or not waitlisted', true);
-        return;
+        throw new Error('Enrollment not found or not waitlisted');
       }
 
       // Check capacity
@@ -3644,8 +3718,7 @@
       if (isSeries) {
         var cls = await MastDB.classes.get(classId);
         if (cls && (cls.seriesEnrolled || 0) >= (cls.capacity || 0)) {
-          MastAdmin.showToast('No series spots available. Increase capacity first.', true);
-          return;
+          throw new Error('No series spots available. Increase capacity first.');
         }
         // Increment series enrolled, decrement series waitlisted
         await MastDB.transaction(MastDB.classes.PATH + '/' + classId + '/seriesEnrolled', function(c) { return (c || 0) + 1; });
@@ -3654,8 +3727,7 @@
         if (sessionId) {
           var sess = await MastDB.classSessions.get(sessionId);
           if (sess && (sess.enrolled || 0) >= (sess.capacity || 0)) {
-            MastAdmin.showToast('No spots available in this session. Increase capacity first.', true);
-            return;
+            throw new Error('No spots available in this session. Increase capacity first.');
           }
           await adjustSessionCount(sessionId, 'enrolled', 1);
           await adjustSessionCount(sessionId, 'waitlisted', -1);
@@ -3675,7 +3747,11 @@
       // Auto-create CS ticket so the offer is tracked and the student has a reply path
       bookCreateWaitlistTicket(enrollment, classId, isSeries, cls, sess)
         .catch(function(e) { console.warn('[book] waitlist ticket creation failed:', e); });
+  }
 
+  window._bookPromoteWaitlist = async function(enrollmentId) {
+    try {
+      await _enrollPromoteCore(enrollmentId);
       MastAdmin.showToast('Promoted to confirmed');
       var classFilter = (document.getElementById('enrollFilterClass') || {}).value;
       loadEnrollments(null, classFilter);

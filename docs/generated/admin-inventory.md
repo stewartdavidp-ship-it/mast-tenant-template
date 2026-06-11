@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,058** lines
-- **Feature modules:** **116** files in `app/modules/` (**107** routed), **122,325** lines combined
+- **Feature modules:** **116** files in `app/modules/` (**107** routed), **122,569** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -18,7 +18,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit.js` | 1,721 | audit |
 | `modules/blog-v2.js` | 403 | blog-v2 |
 | `modules/blog.js` | 2,359 | blog |
-| `modules/book.js` | 6,073 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
+| `modules/book.js` | 6,149 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand-v2.js` | 308 | brand-v2 |
 | `modules/brand.js` | 668 | brand |
 | `modules/calendar-v2.js` | 119 | calendar-v2 |
@@ -52,7 +52,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/email-log.js` | 561 | email-log |
 | `modules/engagement-inbox-v2.js` | 383 | engagement-inbox-v2 |
 | `modules/engagement-inbox.js` | 515 | engagement-inbox |
-| `modules/enrollments-v2.js` | 288 | enrollments-v2 |
+| `modules/enrollments-v2.js` | 456 | enrollments-v2 |
 | `modules/events.js` | 1,937 | events-shows, events-settings |
 | `modules/finance-close-v2.js` | 294 | finance-period-close-v2, finance-amendments-v2 |
 | `modules/finance-expenses-v2.js` | 325 | finance-expenses-v2 |
