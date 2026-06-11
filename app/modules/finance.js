@@ -4891,44 +4891,74 @@ function loadTax1099() {
 
 window.fin1099ChangeYear = function(year) { _1099Year = parseInt(year); loadTax1099Data(); };
 
+// State-free 1099 core — both the classic Tax sub-view and the V2 statements
+// hub call this. Returns the >$600 contractor list for a calendar year,
+// sorted by total paid (paid receipts of vendorType/payeeType 'contractor').
+async function _tax1099ForYearCore(year) {
+  var startISO = year + '-01-01T00:00:00Z';
+  var endISO   = year + '-12-31T23:59:59Z';
+  var [vendorsRaw, receiptsRaw] = await Promise.all([
+    MastDB.get('admin/vendors'),
+    MastDB.query('admin/purchaseReceipts').orderByChild('receivedAt').startAt(startISO).endAt(endISO).limitToLast(2000).once()
+  ]);
+  var vendors = vendorsRaw || {};
+  var receipts = Object.values(receiptsRaw || {});
+  var totals = {};
+  receipts.forEach(function(r) {
+    var v = vendors[r.vendorId];
+    if (!v) return;
+    var vType = v.vendorType || v.payeeType;
+    if (vType !== 'contractor') return;
+    if (r.paymentStatus !== 'paid') return;
+    if (!totals[r.vendorId]) totals[r.vendorId] = 0;
+    totals[r.vendorId] += r.amountCents || 0;
+  });
+  var contractors = [];
+  Object.keys(totals).forEach(function(vid) {
+    var total = totals[vid];
+    if (total <= 60000) return; // > $600 threshold (exclusive)
+    var v = vendors[vid];
+    var taxId = v.taxId;
+    var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
+    contractors.push({
+      name: v.name || 'Unknown', taxId: taxId,
+      maskedTaxId: hasTaxId ? 'XXX-XX-' + String(taxId).replace(/[^0-9]/g,'').slice(-4) : null,
+      hasTaxId: hasTaxId, totalPaid: total
+    });
+  });
+  contractors.sort(function(a,b) { return b.totalPaid - a.totalPaid; });
+  return contractors;
+}
+
+// State-free nexus-registration cores (admin_nexusRegistrations is a per-state
+// collection: one doc per state, read in bulk by MastDB.get's collection
+// scan). The classic Tax page only ever READ these docs — the V2 statements
+// hub is the first in-admin editor.
+async function _nexusListCore() {
+  return (await MastDB.get('admin/nexusRegistrations')) || {};
+}
+async function _nexusSaveCore(state, patch) {
+  var st = String(state || '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(st)) throw new Error('State must be a 2-letter code');
+  var existing = (await MastDB.get('admin/nexusRegistrations/' + st).catch(function() { return null; })) || {};
+  var doc = Object.assign({}, existing, patch, { updatedAt: new Date().toISOString() });
+  await MastDB.set('admin/nexusRegistrations/' + st, doc);
+  try { if (typeof writeAudit === 'function') await writeAudit(existing && Object.keys(existing).length ? 'update' : 'create', 'nexusRegistration', st); } catch (_) {}
+  return doc;
+}
+async function _nexusDeleteCore(state) {
+  var st = String(state || '').trim().toUpperCase();
+  await MastDB.remove('admin/nexusRegistrations/' + st);
+  try { if (typeof writeAudit === 'function') await writeAudit('delete', 'nexusRegistration', st); } catch (_) {}
+}
+
 window.loadTax1099Data = async function() {
   var el = document.getElementById('f1099Content');
   if (!el) return;
   el.innerHTML = skeletonTable(5,4);
   var year = _1099Year;
-  var startISO = year + '-01-01T00:00:00Z';
-  var endISO   = year + '-12-31T23:59:59Z';
   try {
-    var [vendorsRaw, receiptsRaw] = await Promise.all([
-      MastDB.get('admin/vendors'),
-      MastDB.query('admin/purchaseReceipts').orderByChild('receivedAt').startAt(startISO).endAt(endISO).limitToLast(2000).once()
-    ]);
-    var vendors = vendorsRaw || {};
-    var receipts = Object.values(receiptsRaw || {});
-    var totals = {};
-    receipts.forEach(function(r) {
-      var v = vendors[r.vendorId];
-      if (!v) return;
-      var vType = v.vendorType || v.payeeType;
-      if (vType !== 'contractor') return;
-      if (r.paymentStatus !== 'paid') return;
-      if (!totals[r.vendorId]) totals[r.vendorId] = 0;
-      totals[r.vendorId] += r.amountCents || 0;
-    });
-    var contractors = [];
-    Object.keys(totals).forEach(function(vid) {
-      var total = totals[vid];
-      if (total <= 60000) return; // > $600 threshold (exclusive)
-      var v = vendors[vid];
-      var taxId = v.taxId;
-      var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
-      contractors.push({
-        name: v.name || 'Unknown', taxId: taxId,
-        maskedTaxId: hasTaxId ? 'XXX-XX-' + String(taxId).replace(/[^0-9]/g,'').slice(-4) : null,
-        hasTaxId: hasTaxId, totalPaid: total
-      });
-    });
-    contractors.sort(function(a,b) { return b.totalPaid - a.totalPaid; });
+    var contractors = await _tax1099ForYearCore(year);
     _1099ContractorData = contractors;
     el.innerHTML = render1099(contractors, year);
   } catch (err) {
@@ -8329,6 +8359,10 @@ window.FinanceBridge = {
   },
   cashSnapshot: _computeCashSnapshot,
   taxByState: _computeTaxByState,
+  tax1099ForYear: _tax1099ForYearCore,
+  nexusList: _nexusListCore,
+  nexusSave: _nexusSaveCore,
+  nexusDelete: _nexusDeleteCore,
   openItemsTotals: _loadOpenItemsTotals,
   downloadCsv: _finDownloadCsv,
   // Wave 2 — open-items hub cores:
