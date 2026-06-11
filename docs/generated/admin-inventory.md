@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,058** lines
-- **Feature modules:** **116** files in `app/modules/` (**107** routed), **123,143** lines combined
+- **Feature modules:** **116** files in `app/modules/` (**107** routed), **123,149** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -67,7 +67,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/homepage-v2.js` | 351 | homepage-v2 |
 | `modules/homepage.js` | 718 | homepage |
 | `modules/inquiries-v2.js` | 225 | inquiries-v2 |
-| `modules/instructors-v2.js` | 375 | instructors-v2 |
+| `modules/instructors-v2.js` | 378 | instructors-v2 |
 | `modules/jobs-v2.js` | 987 | jobs-v2 |
 | `modules/lookbooks-v2.js` | 333 | lookbooks-v2 |
 | `modules/lookbooks.js` | 822 | lookbooks |
@@ -93,7 +93,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
 | `modules/receipts-v2.js` | 219 | receipts-v2 |
-| `modules/resources-v2.js` | 342 | resources-v2 |
+| `modules/resources-v2.js` | 345 | resources-v2 |
 | `modules/rma-v2.js` | 219 | rma-v2 |
 | `modules/sales-events-v2.js` | 351 | sales-events-v2 |
 | `modules/sales.js` | 3,257 | pos, receipts, events, salesEvents, terms |
