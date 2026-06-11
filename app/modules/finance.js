@@ -7079,6 +7079,34 @@ window.renderAmendments = renderAmendments;
 // the right error to the operator). Gate matches Agent A's CF
 // (_assertAdminOrStaff). The Approve perm is checked separately.
 
+// State-free submit core — both the classic modal and the V2 close hub call
+// this. Stamps submittedByName, invokes the routeAmendment CF, enforces the
+// explicit ok===true contract (R2-F1), and writes the client audit row.
+// Throws on any failure; resolves with the CF response ({amendmentId, periodId}).
+async function _amendSubmitCore(args) {
+  var subName = (firebase.auth().currentUser && (firebase.auth().currentUser.displayName || firebase.auth().currentUser.email)) || null;
+  var json = await _closeV3Call('routeAmendment', {
+    targetCollection: args.targetCollection,
+    targetId: args.targetId,
+    after: args.after,
+    reason: args.reason,
+    submittedByName: subName
+  });
+  // R2-F1: require explicit ok===true. Previously `ok === false` let
+  // CF responses with no ok flag (or empty {}) silently pass through to the
+  // success path — Sky observed Submit silently doing nothing on real order
+  // -Op4nx9IgSynIRi89VZx. Surface non-ok responses as throws; console.error
+  // the raw payload for diagnosis.
+  if (!json || json.ok !== true) {
+    console.error('[close-v3] routeAmendment returned non-ok response:', json);
+    var err = new Error((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console');
+    err.response = json;
+    throw err;
+  }
+  try { await writeAudit('create', 'amendment', json.amendmentId + ':submitted'); } catch (xerr) {}
+  return json;
+}
+
 window.finAmendmentOpenSubmit = function() {
   // Permission check matches the CF gate (admin OR staff).
   // We don't have a sync `isAdmin` check separate from hasPermission, so
@@ -7137,27 +7165,7 @@ window.finAmendmentOpenSubmit = function() {
       errEl.textContent = 'Proposed shape must be a JSON object.'; return;
     }
     try {
-      var subName = (firebase.auth().currentUser && (firebase.auth().currentUser.displayName || firebase.auth().currentUser.email)) || null;
-      var json = await _closeV3Call('routeAmendment', {
-        targetCollection: col,
-        targetId: id,
-        after: afterObj,
-        reason: reason,
-        submittedByName: subName
-      });
-      // R2-F1: require explicit ok===true. Previously `ok === false` let
-      // CF responses with no ok flag (or empty {}) silently pass through to the
-      // success path — Sky observed Submit silently doing nothing on real order
-      // -Op4nx9IgSynIRi89VZx. Now surface non-ok responses in BOTH inline error
-      // and toast, and console.error the raw payload for diagnosis.
-      if (!json || json.ok !== true) {
-        console.error('[close-v3] routeAmendment returned non-ok response:', json);
-        var smsg = (json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console';
-        errEl.textContent = 'Submit failed: ' + smsg;
-        showToast('Amendment submit failed: ' + smsg, true);
-        return;
-      }
-      try { await writeAudit('create', 'amendment', json.amendmentId + ':submitted'); } catch (xerr) {}
+      var json = await _amendSubmitCore({ targetCollection: col, targetId: id, after: afterObj, reason: reason });
       showToast('Amendment submitted for period ' + json.periodId);
       close();
       renderAmendments();
@@ -8301,7 +8309,7 @@ window.FinanceBridge = {
   closePeriod: _closePeriodCore,
   amendApprove: _amendApproveCore,
   amendReject: _amendRejectCore,
-  openSubmitAmendment: function() { if (typeof window.finAmendmentOpenSubmit === 'function') window.finAmendmentOpenSubmit(); },
+  submitAmendment: _amendSubmitCore,
   // Wave 4 — portfolio core:
   portfolioCompute: _portfolioCompute,
   portfolioClassify: portfolioClassify

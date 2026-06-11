@@ -34,10 +34,13 @@
   function bridge() { return window.FinanceBridge; }
   function canClose() { return (typeof window.can === 'function') ? window.can('finance-period-close', 'edit') : true; }
   function canApprove() { return (typeof window.hasPermission === 'function') ? window.hasPermission('finance', 'approveAmendment') : false; }
+  function canSubmitAmend() { return (typeof window.can === 'function') ? window.can('finance-amendments', 'edit') : true; }
 
   var V2 = { lens: 'periods', month: null, months: [], periods: {}, days: {}, amendments: [], openPeriod: null, busy: false,
     // Native day-close drawer-count form (null = lens shows the list).
-    dayForm: null };
+    dayForm: null,
+    // Native submit-amendment form (null = Amendments lens shows the queue).
+    amendForm: false };
 
   function ensureTab() {
     var el = document.getElementById('financeCloseV2Tab');
@@ -358,8 +361,41 @@
       '<th style="text-align:left;padding:3px 8px;color:var(--warm-gray);">Field</th><th style="text-align:left;padding:3px 8px;color:var(--warm-gray);">Current</th><th style="text-align:left;padding:3px 8px;color:var(--warm-gray);">Proposed</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
+  // Native submit-amendment form (classic burn-down 2026-06-10): replaces the
+  // legacy window.finAmendmentOpenSubmit modal. Validation mirrors the classic
+  // form (and the routeAmendment CF re-validates server-side); the write goes
+  // through the state-free FinanceBridge.submitAmendment core.
+  var AMEND_TARGETS = [['orders', 'Order'], ['refunds', 'Refund'], ['expenses', 'Expense'], ['vendorBills', 'Vendor bill']];
+
+  function renderAmendForm() {
+    var el = body(); if (!el) return;
+    var opts = AMEND_TARGETS.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + ' (' + t[0] + ')</option>'; }).join('');
+    var h = '<div style="max-width:720px;">';
+    h += '<a href="javascript:void(0)" onclick="FinCloseV2.amendCancel()" style="color:var(--teal);font-size:0.85rem;text-decoration:none;">&larr; Back to amendments</a>';
+    h += U.card('Submit amendment',
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:14px;">Closed-period records cannot be edited directly. Submitting an amendment routes a proposed change to the approval queue; approval writes a dated counter-entry in the next open period.</div>' +
+      '<div style="display:grid;grid-template-columns:150px 1fr;gap:10px 12px;align-items:center;margin-bottom:12px;">' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);">Target collection</label>' +
+      '<select id="fcv2AmCol" style="' + INPUT_CSS + '">' + opts + '</select>' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);">Target doc ID</label>' +
+      '<input id="fcv2AmId" type="text" placeholder="Firestore document id" style="' + INPUT_CSS + '">' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);align-self:start;padding-top:6px;">Reason (&ge; 10 chars)</label>' +
+      '<textarea id="fcv2AmReason" rows="2" placeholder="Why this change?" style="' + INPUT_CSS + '"></textarea>' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);align-self:start;padding-top:6px;">Proposed shape (JSON)</label>' +
+      '<textarea id="fcv2AmAfter" rows="6" placeholder=\'{"amountCents": 12345, "memo": "corrected"}\' style="' + INPUT_CSS + 'font-family:ui-monospace,Menlo,Monaco,Consolas,monospace;font-size:0.78rem;"></textarea>' +
+      '</div>' +
+      '<div id="fcv2AmErr" style="font-size:0.78rem;color:var(--danger);margin-bottom:10px;min-height:14px;"></div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;">' +
+      '<button class="btn btn-secondary" onclick="FinCloseV2.amendCancel()">Cancel</button>' +
+      '<button class="btn btn-primary" ' + (V2.busy ? 'disabled ' : '') + 'onclick="FinCloseV2.amendSubmit()">Submit</button>' +
+      '</div>');
+    h += '</div>';
+    el.innerHTML = h;
+  }
+
   function renderAmendmentsLens() {
     var el = body(); if (!el) return;
+    if (V2.amendForm) { renderAmendForm(); return; }
     if (!V2.amendments.length) {
       el.innerHTML = '<div style="color:var(--warm-gray);font-size:0.85rem;padding:14px 0;">No amendments in the last 12 months. Submit one to correct a record in a closed period.</div>';
       return;
@@ -399,7 +435,7 @@
   function findAmendment(id) { return V2.amendments.filter(function (a) { return a.id === id; })[0]; }
 
   window.FinCloseV2 = {
-    setLens: function (l) { V2.lens = l; V2.dayForm = null; render(); },
+    setLens: function (l) { V2.lens = l; V2.dayForm = null; V2.amendForm = false; render(); },
     setMonth: function (mo) { V2.month = mo; V2.dayForm = null; render(); },
     refresh: refresh,
     openMonth: function (mo) { V2.month = mo; V2.lens = 'days'; V2.dayForm = null; render(); },
@@ -446,7 +482,41 @@
         showToast('Save failed: ' + msg, true);
       });
     },
-    submitAmendment: function () { bridge().openSubmitAmendment(); },
+    submitAmendment: function () {
+      if (!canSubmitAmend()) { showToast('Finance write access required.', true); return; }
+      V2.lens = 'amendments'; V2.amendForm = true; V2.dayForm = null;
+      render();
+    },
+    amendCancel: function () { V2.amendForm = false; render(); },
+    amendSubmit: function () {
+      var errEl = document.getElementById('fcv2AmErr');
+      if (errEl) errEl.textContent = '';
+      function fail(msg) { if (errEl) errEl.textContent = msg; }
+      var col = (document.getElementById('fcv2AmCol') || {}).value;
+      var id = ((document.getElementById('fcv2AmId') || {}).value || '').trim();
+      var reason = ((document.getElementById('fcv2AmReason') || {}).value || '').trim();
+      var afterStr = ((document.getElementById('fcv2AmAfter') || {}).value || '').trim();
+      if (!id) { fail('Target doc ID required.'); return; }
+      if (reason.length < 10) { fail('Reason must be at least 10 characters.'); return; }
+      var afterObj;
+      try { afterObj = JSON.parse(afterStr); }
+      catch (perr) { fail('Proposed shape is not valid JSON: ' + perr.message); return; }
+      if (!afterObj || typeof afterObj !== 'object' || Array.isArray(afterObj)) { fail('Proposed shape must be a JSON object.'); return; }
+      V2.busy = true; renderAmendForm();
+      bridge().submitAmendment({ targetCollection: col, targetId: id, after: afterObj, reason: reason }).then(function (json) {
+        V2.busy = false; V2.amendForm = false;
+        showToast('Amendment submitted for period ' + json.periodId);
+        refresh();
+      }).catch(function (err) {
+        V2.busy = false;
+        var msg = (err && err.message) || (err && err.code) || String(err) || 'unknown error';
+        if (err && err.details && err.details.code) msg += ' (' + err.details.code + ')';
+        renderAmendForm();
+        var e2 = document.getElementById('fcv2AmErr');
+        if (e2) e2.textContent = 'Submit failed: ' + msg;
+        showToast('Amendment submit failed: ' + msg, true);
+      });
+    },
 
     closePeriod: function (mo) {
       if (!canClose()) { showToast('Finance write access required.', true); return; }
