@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-210046-f7e4f34"></script>
+  <script src="../shared/customer-filters.js?v=20260610-213600-b6cb51b"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-210046-f7e4f34"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-213600-b6cb51b"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-210046-f7e4f34"></script>
-  <script src="../shared/mast-io.js?v=20260610-210046-f7e4f34"></script>
-  <script src="../shared/mast-entity.js?v=20260610-210046-f7e4f34"></script>
+  <script src="../shared/mast-ui.js?v=20260610-213600-b6cb51b"></script>
+  <script src="../shared/mast-io.js?v=20260610-213600-b6cb51b"></script>
+  <script src="../shared/mast-entity.js?v=20260610-213600-b6cb51b"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-210046-f7e4f34"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-213600-b6cb51b"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11479,6 +11479,7 @@
     <!-- Admin: Customers Tab — rendered entirely from app/modules/customers.js -->
     <div id="customersTab" style="display:none;"></div>
     <div id="ordersV2Tab" class="tab-content" style="display:none;"></div>
+    <div id="employeesV2Tab" class="tab-content" style="display:none;"></div><!-- employees-v2 (scaffolded) -->
     <div id="studioV2Tab" class="tab-content" style="display:none;"></div><!-- studio-v2 (scaffolded) -->
     <div id="auditV2Tab" class="tab-content" style="display:none;"></div><!-- audit-v2 (scaffolded) -->
     <div id="mappingV2Tab" class="tab-content" style="display:none;"></div><!-- mapping-v2 (scaffolded) -->
@@ -20881,7 +20882,8 @@ var MAST_V2_ROUTE_MAP = {
   'finance-period-close': 'finance-period-close-v2',
   'finance-amendments': 'finance-amendments-v2',
   'customer-portfolio': 'customer-portfolio-v2',
-  'finance-reports': 'finance-reports-v2'
+  'finance-reports': 'finance-reports-v2',
+  'employees': 'employees-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -22119,7 +22121,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-210046-f7e4f34';
+var MAST_MODULES_V = '20260610-213600-b6cb51b';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22251,6 +22253,7 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   'mapping-v2': { src: 'modules/mapping-v2.js', routes: ['mapping-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'audit-v2': { src: 'modules/audit-v2.js', routes: ['audit-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'studio-v2': { src: 'modules/studio-v2.js', routes: ['studio-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
+  'employees-v2': { src: 'modules/employees-v2.js', routes: ['employees-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   workflowEngine: { src: 'modules/workflows/workflow-engine.js', routes: [] },
   commissionsWorkflow: { src: 'modules/workflows/commissions.workflow.js', routes: [] },
   pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', routes: [] },
@@ -51328,14 +51331,12 @@ async function changeUserRole(uid, newRole) {
   }
 
   try {
-    await MastDB.adminUsers.update(uid, { role: newRole });
-    adminUsers[uid].role = newRole;
-    await writeAudit('update', 'users', uid);
+    await EmployeesBridge.changeRole(uid, newRole);
     showToast('Role changed to ' + (ROLE_DISPLAY_NAMES[newRole] || newRole) + '.');
     renderUsersList();
   } catch (err) {
     console.error('Role change failed:', err);
-    showToast('Failed to change role.', true);
+    showToast((err && err.message) || 'Failed to change role.', true);
     renderUsersList();
   }
 }
@@ -51360,12 +51361,7 @@ async function archiveUser(uid, archived) {
     if (!ok) return;
   }
   try {
-    await firebase.functions().httpsCallable('setUserArchived')({
-      tenantId: MastDB.tenantId(),
-      uid: uid,
-      archived: archived
-    });
-    if (adminUsers[uid]) adminUsers[uid].archived = archived;
+    await EmployeesBridge.setArchived(uid, archived);
     showToast(name + (archived ? ' archived — they can no longer sign in.' : ' unarchived.'));
     renderUsersList();
   } catch (err) {
@@ -51374,6 +51370,97 @@ async function archiveUser(uid, archived) {
   }
 }
 window.archiveUser = archiveUser;
+
+// ── EmployeesBridge — state-free RBAC write cores shared by legacy + V2 ──
+// Every core fresh-reads what it validates against (no reliance on a surface's
+// load-once cache: bridge actions must work on records created after either
+// surface loaded), writes through the accessor, and stamps writeAudit. UI
+// (confirm dialogs, toasts, re-renders) stays with the caller.
+window.EmployeesBridge = {
+  listUsers: function() {
+    return Promise.resolve(MastDB.adminUsers.list()).then(function(t) { return t || {}; });
+  },
+  listRoles: function() {
+    return Promise.resolve(MastDB.roles.list()).then(function(t) { return t || {}; });
+  },
+  // Effective role config: stored doc layered over the built-in defaults —
+  // role docs can be PARTIAL (a doc holding only the perm maps, no name).
+  effectiveRole: function(key, doc) {
+    var base = DEFAULT_ROLES[key] || {};
+    return Object.assign({ key: key }, base, doc || {});
+  },
+  changeRole: async function(uid, newRole) {
+    if (!can('employees', 'edit')) throw new Error('You do not have permission to change user roles.');
+    if (!isKnownRole(newRole) && !(rolesData && rolesData[newRole])) {
+      // Custom roles may not be in the in-memory cache yet — fresh-read.
+      var roleDoc = await MastDB.roles.get(newRole);
+      if (!roleDoc) throw new Error('Refusing to assign unrecognized role "' + newRole + '".');
+    }
+    var users = await this.listUsers();
+    var user = users[uid];
+    if (!user) throw new Error('User not found.');
+    if (user.role === newRole) return { ok: true, unchanged: true };
+    if (user.role === 'admin') {
+      var admins = Object.keys(users).filter(function(k) { return users[k] && users[k].role === 'admin'; });
+      if (admins.length <= 1) throw new Error('Cannot change role — this is the only admin account.');
+    }
+    await MastDB.adminUsers.update(uid, { role: newRole });
+    if (adminUsers[uid]) adminUsers[uid].role = newRole;
+    await writeAudit('update', 'users', uid);
+    return { ok: true };
+  },
+  setArchived: async function(uid, archived) {
+    if (!can('employees', 'edit')) throw new Error('You do not have permission to archive users.');
+    if (currentUser && uid === currentUser.uid) throw new Error('You cannot archive your own account.');
+    await firebase.functions().httpsCallable('setUserArchived')({
+      tenantId: MastDB.tenantId(), uid: uid, archived: archived
+    });
+    if (adminUsers[uid]) adminUsers[uid].archived = archived;
+    return { ok: true };
+  },
+  saveRoleMatrix: async function(roleKey, modulePermissions, sensitiveActions) {
+    if (!can('employees', 'edit')) throw new Error('You do not have permission to edit roles.');
+    if (roleKey === 'admin') throw new Error('The Admin role always has full access.');
+    await MastDB.roles.setModulePermissions(roleKey, modulePermissions);
+    await MastDB.roles.setSensitiveActions(roleKey, sensitiveActions);
+    if (!rolesData[roleKey]) rolesData[roleKey] = {};
+    rolesData[roleKey].modulePermissions = modulePermissions;
+    rolesData[roleKey].sensitiveActions = sensitiveActions;
+    await writeAudit('update', 'roles', roleKey);
+    // If editing own role, re-apply per-module gates live.
+    if (roleKey === currentUserRole) {
+      currentRoleConfig.modulePermissions = modulePermissions;
+      currentRoleConfig.sensitiveActions = sensitiveActions;
+      applyModuleFilter();
+      applyModuleWriteGate(currentRoute);
+    }
+    return { ok: true };
+  },
+  createRole: async function(key, name, desc) {
+    if (!can('employees', 'edit')) throw new Error('You do not have permission to create roles.');
+    key = String(key || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+    name = String(name || '').trim();
+    if (!key || !name) throw new Error('Role key and name are required.');
+    var existing = (rolesData && rolesData[key]) || await MastDB.roles.get(key);
+    if (existing) throw new Error('A role with key "' + key + '" already exists.');
+    // New custom roles start locked down (every module None, no sensitive
+    // actions); the operator builds access up in the matrix.
+    var modulePermissions = {};
+    getModulePermRegistry().forEach(function(g) {
+      g.routes.forEach(function(m) { modulePermissions[m.route] = levelToTriad('none'); });
+    });
+    var sensitiveActions = {};
+    FUNCTION_PERMISSIONS.forEach(function(fp) { sensitiveActions[_sensitiveKey(fp.entity, fp.action)] = false; });
+    var roleData = {
+      name: name, description: String(desc || '').trim(), isDefault: false,
+      navSections: null, modulePermissions: modulePermissions, sensitiveActions: sensitiveActions
+    };
+    await MastDB.roles.set(key, roleData);
+    rolesData[key] = roleData;
+    await writeAudit('create', 'roles', key);
+    return { ok: true, key: key, role: roleData };
+  }
+};
 
 window.toggleShowArchivedUsers = function(checked) {
   showArchivedUsers = !!checked;
@@ -52648,24 +52735,11 @@ async function savePermissionMatrix() {
   if (!roleKey) return;
 
   try {
-    await MastDB.roles.setModulePermissions(roleKey, editingModulePermissions);
-    await MastDB.roles.setSensitiveActions(roleKey, editingSensitiveActions);
-    if (!rolesData[roleKey]) rolesData[roleKey] = {};
-    rolesData[roleKey].modulePermissions = editingModulePermissions;
-    rolesData[roleKey].sensitiveActions = editingSensitiveActions;
-    await writeAudit('update', 'roles', roleKey);
-    showToast('Permissions saved for ' + (rolesData[roleKey].name || roleKey) + '.');
-
-    // If editing own role, reload config + re-apply per-module gates live.
-    if (roleKey === currentUserRole) {
-      currentRoleConfig.modulePermissions = editingModulePermissions;
-      currentRoleConfig.sensitiveActions = editingSensitiveActions;
-      applyModuleFilter();
-      applyModuleWriteGate(currentRoute);
-    }
+    await EmployeesBridge.saveRoleMatrix(roleKey, editingModulePermissions, editingSensitiveActions);
+    showToast('Permissions saved for ' + ((rolesData[roleKey] && rolesData[roleKey].name) || roleKey) + '.');
   } catch (err) {
     console.error('Save permissions failed:', err);
-    showToast('Failed to save permissions.', true);
+    showToast((err && err.message) || 'Failed to save permissions.', true);
   }
 }
 
@@ -52707,49 +52781,20 @@ function openCreateRoleModal() {
 }
 
 async function saveNewRole() {
-  var key = (document.getElementById('newRoleKey').value || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+  var key = (document.getElementById('newRoleKey').value || '').trim();
   var name = (document.getElementById('newRoleName').value || '').trim();
   var desc = (document.getElementById('newRoleDesc').value || '').trim();
 
-  if (!key || !name) {
-    showToast('Role key and name are required.', true);
-    return;
-  }
-  if (rolesData[key]) {
-    showToast('A role with key "' + key + '" already exists.', true);
-    return;
-  }
-
-  // New custom roles start locked down (every module None, no sensitive
-  // actions); the operator builds access up in the matrix.
-  var modulePermissions = {};
-  getModulePermRegistry().forEach(function(g) {
-    g.routes.forEach(function(m) { modulePermissions[m.route] = levelToTriad('none'); });
-  });
-  var sensitiveActions = {};
-  FUNCTION_PERMISSIONS.forEach(function(fp) { sensitiveActions[_sensitiveKey(fp.entity, fp.action)] = false; });
-
-  var roleData = {
-    name: name,
-    description: desc,
-    isDefault: false,
-    navSections: null,
-    modulePermissions: modulePermissions,
-    sensitiveActions: sensitiveActions
-  };
-
   try {
-    await MastDB.roles.set(key, roleData);
-    rolesData[key] = roleData;
-    await writeAudit('create', 'roles', key);
+    var res = await EmployeesBridge.createRole(key, name, desc);
     closeModal();
     populateRoleSelector();
-    document.getElementById('roleSelector').value = key;
+    document.getElementById('roleSelector').value = res.key;
     renderPermissionMatrix();
     showToast('Role "' + name + '" created. Set permissions below.');
   } catch (err) {
     console.error('Create role failed:', err);
-    showToast('Failed to create role.', true);
+    showToast((err && err.message) || 'Failed to create role.', true);
   }
 }
 
