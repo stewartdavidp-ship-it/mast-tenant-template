@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260611-002949-cc0ebda"></script>
+  <script src="../shared/customer-filters.js?v=20260611-111217-7f85822"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260611-002949-cc0ebda"></script>
+  <script src="../shared/variant-reconcile.js?v=20260611-111217-7f85822"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260611-002949-cc0ebda"></script>
-  <script src="../shared/mast-io.js?v=20260611-002949-cc0ebda"></script>
-  <script src="../shared/mast-entity.js?v=20260611-002949-cc0ebda"></script>
+  <script src="../shared/mast-ui.js?v=20260611-111217-7f85822"></script>
+  <script src="../shared/mast-io.js?v=20260611-111217-7f85822"></script>
+  <script src="../shared/mast-entity.js?v=20260611-111217-7f85822"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260611-002949-cc0ebda"></script>
+  <script src="../shared/product-readiness.core.js?v=20260611-111217-7f85822"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -18592,6 +18592,47 @@ function completeEmailLinkSignInIfPresent() {
   }
 }
 
+// ── Shopify install session bridge (companion to the email-link / reset-link
+// boot handlers). The App-Store install callback (shopifyAppInstallCallback)
+// mints a short-lived Firebase custom token for the store owner and redirects
+// into the app with ?bootstrapToken=… . The merchant has no Mast credentials
+// yet, so without this they'd hit a dead-end login (App-Store-review req 2.1.1).
+// Sign them in with the token, strip it from the URL so it isn't re-used or
+// logged, then let the normal onAuthStateChanged funnel grant admin (pendingOwner
+// → claimTenant) and load the app. On failure, fall back to the login screen.
+function completeBootstrapTokenSignInIfPresent() {
+  if (typeof auth === 'undefined' || !auth) return false;
+  var token = null;
+  try { token = new URLSearchParams(window.location.search).get('bootstrapToken'); } catch (e) { return false; }
+  if (!token) return false;
+  // Suppress the login flash while the token exchange is in flight — the
+  // onAuthStateChanged(!user) branch shows the loading screen instead.
+  window.__bootstrapTokenPending = true;
+  window.__lastAuthMethod = 'bootstrap-token';
+  // Strip the token from the URL up front so a refresh / back-nav can't re-use
+  // or leak it, independent of how the sign-in resolves.
+  try {
+    var url = new URL(window.location.href);
+    url.searchParams.delete('bootstrapToken');
+    window.history.replaceState({}, document.title, url.pathname + (url.search || '') + url.hash);
+  } catch (e) { /* ignore */ }
+  auth.signInWithCustomToken(token).then(function() {
+    // Success: onAuthStateChanged funnel takes over (tenant resolution, RBAC,
+    // pending-owner claim, app load) unchanged.
+    window.__bootstrapTokenPending = false;
+  }).catch(function(err) {
+    console.warn('Bootstrap-token sign-in failed:', err && err.code, err && err.message);
+    // Expired/invalid token → fall back to the normal login screen. Clear the
+    // pending flag so onAuthStateChanged(null) renders the login as usual.
+    window.__bootstrapTokenPending = false;
+    var prevAuthScreen = document.getElementById('authScreen');
+    var prevLoading = document.getElementById('loadingScreen');
+    if (prevAuthScreen) prevAuthScreen.style.display = '';
+    if (prevLoading) prevLoading.style.display = 'none';
+  });
+  return true;
+}
+
 // ── Same-origin password reset / first-time setup (companion to
 // completeEmailLinkSignInIfPresent). If the URL carries
 // ?mode=resetPassword&oobCode=…, verify the code and show a "Set your password"
@@ -18929,10 +18970,19 @@ auth.getRedirectResult().then(function(result) {
 var __resetLinkHandled = false;
 try { __resetLinkHandled = completePasswordResetIfPresent(); } catch (e) { console.warn('Password-reset completion check failed:', e); }
 
+// Shopify install session bridge: if this page load carries ?bootstrapToken=…
+// (minted by shopifyAppInstallCallback for the just-installed store owner),
+// sign them in with it before the login gate renders. On success the
+// onAuthStateChanged funnel below grants admin and loads the app unchanged.
+var __bootstrapHandled = false;
+if (!__resetLinkHandled) {
+  try { __bootstrapHandled = completeBootstrapTokenSignInIfPresent(); } catch (e) { console.warn('Bootstrap-token completion check failed:', e); }
+}
+
 // Email-link (passwordless) admin login: if this page load is the return from
 // a sign-in link, complete it now. On success, onAuthStateChanged fires below
 // and drives the rest (tenant resolution, RBAC, app load) unchanged.
-if (!__resetLinkHandled) {
+if (!__resetLinkHandled && !__bootstrapHandled) {
   try { completeEmailLinkSignInIfPresent(); } catch (e) { console.warn('Email-link completion check failed:', e); }
 }
 
@@ -18977,6 +19027,16 @@ auth.onAuthStateChanged(async function(user) {
   const header = authScreenEl('header');
 
   if (!user) {
+    // A Shopify bootstrap-token sign-in is in flight — show the loading screen,
+    // not the login, so the merchant doesn't see a credential prompt flash
+    // before signInWithCustomToken resolves. The success/failure paths clear
+    // __bootstrapTokenPending and onAuthStateChanged fires again.
+    if (window.__bootstrapTokenPending) {
+      authScreen.style.display = 'none';
+      loadingScreen.style.display = '';
+      deniedScreen.style.display = 'none';
+      return;
+    }
     authScreen.style.display = '';
     loadingScreen.style.display = 'none';
     deniedScreen.style.display = 'none';
@@ -22136,7 +22196,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260611-002949-cc0ebda';
+var MAST_MODULES_V = '20260611-111217-7f85822';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
