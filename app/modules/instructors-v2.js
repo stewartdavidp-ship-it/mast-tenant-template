@@ -135,7 +135,7 @@
         // What still has NO V2 home: the skills picker (catalog-coupled) — that
         // stays bespoke on legacy #instructors. navigateToClassic so the V2 route
         // remap doesn't loop back here.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="InstructorsV2.classic()">Edit skills in classic view →</button></div>';
+        var manage = '';
 
         // Classes — active first, then other (mirrors legacy detail grouping).
         var active = classes.filter(function (c) { return c.status === 'active'; });
@@ -197,7 +197,19 @@
             fg('Photo URL', '<input class="form-input" type="url" id="inV2Photo" value="' + esc(i.photoUrl || '') + '" style="width:100%;" placeholder="https://...">', true)
           ) +
           fg('Internal notes', '<textarea class="form-input" id="inV2Notes" rows="2" style="width:100%;resize:vertical;" placeholder="Notes visible to admin only...">' + esc(i.notes || '') + '</textarea>') +
-          '<div class="mu-sub" style="margin-top:8px;">Skills are managed in the classic Instructors view.</div>';
+          // ── Skills (admin/skillCatalog; add-new via InstructorsBridge.ensureSkill) ──
+          (function () {
+            var have = {};
+            (Array.isArray(i.skills) ? i.skills : []).forEach(function (sl) { have[sl] = true; });
+            var slugs = Object.keys(V2.skillCatalog);
+            Object.keys(have).forEach(function (sl) { if (slugs.indexOf(sl) < 0) slugs.push(sl); });
+            var boxes = slugs.map(function (sl) {
+              var label = (V2.skillCatalog[sl] && V2.skillCatalog[sl].label) || sl.replace(/-/g, ' ');
+              return '<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0;font-size:0.85rem;"><input type="checkbox" class="inV2Skill" value="' + esc(sl) + '"' + (have[sl] ? ' checked' : '') + '>' + esc(label) + '</label>';
+            }).join('') || '<span class="mu-sub">No skills in the catalog yet — add one below.</span>';
+            return fg('Skills', '<div id="inV2SkillBoxes" style="padding:6px 0;">' + boxes + '</div>' +
+              '<div style="display:flex;gap:8px;margin-top:4px;"><input class="form-input" id="inV2NewSkill" placeholder="Add a skill — e.g. Glass Fusing" style="flex:1;" onkeydown="if(event.key===\'Enter\'){event.preventDefault();InstructorsV2._addSkill();}"><button type="button" class="btn btn-secondary btn-small" onclick="InstructorsV2._addSkill()">Add</button></div>');
+          })();
       }
     },
     onSave: function (rec, mode) {
@@ -215,12 +227,22 @@
       if (!data.name.trim()) { if (window.showToast) showToast('Instructor name is required.', true); return false; }
 
       if (mode === 'create') {
-        return Promise.resolve(window.InstructorsBridge.create(data)).then(function () {
+        return Promise.resolve(window.InstructorsBridge.create(data)).then(function (newId) {
+          return window.InstructorsBridge.setSkills(newId, readSkills());
+        }).then(function () {
           if (window.showToast) showToast('Instructor created.'); reloadSoon(); return true;
         }).catch(function (e) { console.error('[instructors-v2] create', e); if (window.showToast) showToast('Error saving instructor.', true); return false; });
       }
+      function readSkills() {
+        var out = [];
+        document.querySelectorAll('#mastSlideOut .inV2Skill:checked').forEach(function (el) { out.push(el.value); });
+        return out;
+      }
+      var skills = readSkills();
       var id = rec._key || rec.id;
       return Promise.resolve(window.InstructorsBridge.update(id, data)).then(function () {
+        return window.InstructorsBridge.setSkills(id, skills);
+      }).then(function () {
         // Mutate the LIVE cached record (=== the slide-out's read closure, since
         // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
         // the edited fields immediately on the post-save read re-render;
@@ -232,7 +254,8 @@
           bio: data.bio.trim() || null, email: data.email.trim() || null,
           phone: data.phone.trim() || null, photoUrl: data.photoUrl.trim() || null,
           notes: data.notes.trim() || null,
-          payRateCents: isNaN(pr) ? null : Math.round(pr * 100)
+          payRateCents: isNaN(pr) ? null : Math.round(pr * 100),
+          skills: skills
         });
         if (window.showToast) showToast('Instructor updated.'); reloadSoon(); return true;
       }).catch(function (e) { console.error('[instructors-v2] update', e); if (window.showToast) showToast('Error updating instructor.', true); return false; });
@@ -365,9 +388,24 @@
     // Skills editing (catalog-coupled picker) stays bespoke on legacy
     // #instructors (no V2 home). Profile create/edit is native. navigateToClassic
     // so the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('instructors');
-      else if (typeof navigateTo === 'function') navigateTo('instructors');
+    _addSkill: function () {
+      var input = document.getElementById('inV2NewSkill');
+      var label = input && input.value.trim();
+      if (!label) return;
+      if (!window.InstructorsBridge || !window.InstructorsBridge.ensureSkill) { if (window.showToast) showToast('Instructors engine still loading — try again', true); return; }
+      Promise.resolve(window.InstructorsBridge.ensureSkill(label)).then(function (slug) {
+        if (!slug) return;
+        V2.skillCatalog[slug] = V2.skillCatalog[slug] || { slug: slug, label: label };
+        var boxes = document.getElementById('inV2SkillBoxes');
+        var existing = boxes && boxes.querySelector('input[value="' + slug + '"]');
+        if (boxes && !existing) {
+          var lbl = document.createElement('label');
+          lbl.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0;font-size:0.85rem;';
+          lbl.innerHTML = '<input type="checkbox" class="inV2Skill" value="' + esc(slug) + '" checked>' + esc(label);
+          boxes.appendChild(lbl);
+        } else if (existing) { existing.checked = true; }
+        input.value = '';
+      }).catch(function (e) { if (window.showToast) showToast('Could not add skill.', true); console.error('[instructors-v2] addSkill', e); });
     },
     exportCsv: function () { return MastEntity.exportRows('instructors-v2', visibleRows(), 'all'); }
   };
