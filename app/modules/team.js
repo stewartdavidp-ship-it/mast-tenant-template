@@ -273,8 +273,8 @@
   // --- Load ---
   async function loadTeam() {
     var container = document.getElementById('teamTab');
-    if (!container) return;
-    container.innerHTML = '<div class="loading">Loading team\u2026</div>';
+    if (!container && !(v2PanelHost && v2PanelHost.container)) return;
+    if (container) container.innerHTML = '<div class="loading">Loading team\u2026</div>';
 
     try {
       var results = await Promise.all([
@@ -297,10 +297,10 @@
       });
 
       teamLoaded = true;
-      renderTeam(container);
+      rerenderHost();
     } catch (err) {
       console.error('Error loading team:', err);
-      container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Error loading team data.</div>';
+      if (container) container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Error loading team data.</div>';
     }
   }
 
@@ -310,8 +310,67 @@
     return typeof can === 'function' ? can('team', 'edit') : true;
   }
 
+  // ── V2 panel host (classic burn-down Wave B) ─────────────────────────
+  // team-v2 re-hosts the legacy sub-surfaces (Time Clock / PTO / Labor Burden /
+  // Documents / Onboarding) INSIDE the V2 page — same battle-tested panels,
+  // one implementation, no classic link. The panels' own window.team* handlers
+  // keep working because they getElementById within the rendered HTML; while a
+  // V2 host is active we blank #teamTab so those ids stay unique.
+  var v2PanelHost = null;   // { view, container } when a panel is shown in team-v2
+
+  function panelHtml(view) {
+    if (view === 'timeclock') return renderTimeClock();
+    if (view === 'pto') return renderPto();
+    if (view === 'burden') return renderLaborBurden();
+    if (view === 'docs') return renderComplianceDocs();
+    if (view === 'onboarding') return renderOnboarding();
+    return '';
+  }
+
+  // Re-render whichever host (legacy tab or V2 panel container) is active.
+  function rerenderHost() {
+    if (v2PanelHost && v2PanelHost.container && document.body.contains(v2PanelHost.container)) {
+      currentView = v2PanelHost.view;
+      v2PanelHost.container.innerHTML = panelHtml(v2PanelHost.view);
+      if (window.mastInitFilterPills) window.mastInitFilterPills(v2PanelHost.container);
+      return;
+    }
+    var c = document.getElementById('teamTab');
+    if (c) renderTeam(c);
+  }
+
+  window.TeamPanels = {
+    // Show a legacy sub-surface in a V2 container. Manager gating mirrors
+    // renderTeam (docs/onboarding/burden are manager-only).
+    show: async function (view, container) {
+      if (!container) return;
+      if (!canManageTeam() && (view === 'docs' || view === 'onboarding' || view === 'burden')) view = 'timeclock';
+      v2PanelHost = { view: view, container: container };
+      var legacyTab = document.getElementById('teamTab');
+      if (legacyTab) legacyTab.innerHTML = '';   // keep panel ids unique (legacy re-renders on next visit)
+      if (!teamLoaded) {
+        container.innerHTML = '<div class="loading">Loading team\u2026</div>';
+        try {
+          var results = await Promise.all([MastDB.get('admin/employees'), MastDB.get('admin/documents')]);
+          var empVal = results[0] || {};
+          employeesData = Object.entries(empVal).map(function (entry) { var emp = entry[1]; emp._key = entry[0]; return emp; });
+          var docsVal = results[1] || {};
+          tenantDocs = Object.entries(docsVal).map(function (entry) { var doc = entry[1]; doc._key = entry[0]; return doc; });
+          teamLoaded = true;
+        } catch (err) {
+          container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--danger);">Error loading team data.</div>';
+          return;
+        }
+      }
+      rerenderHost();
+    },
+    // team-v2 calls this when leaving the panel lenses (back to its roster).
+    release: function () { v2PanelHost = null; }
+  };
+
   // --- Main Render ---
   function renderTeam(container) {
+    v2PanelHost = null;   // legacy render claims the host (release any V2 panel)
     var mgr = canManageTeam();
     // Restrict manager-only tabs
     if (!mgr && (currentView === 'docs' || currentView === 'onboarding' || currentView === 'burden')) {
@@ -962,8 +1021,7 @@
       await MastDB.update('admin/employees/' + empId + '/onboardingChecklist', patch);
       emp.onboardingChecklist = emp.onboardingChecklist || {};
       emp.onboardingChecklist[key] = newVal;
-      var container = document.getElementById('teamTab');
-      if (container) renderTeam(container);
+      rerenderHost();
     } catch (err) { showToast('Error: ' + esc(err.message), true); }
   }
 
@@ -1158,8 +1216,7 @@
   }
   function teamBurdenSetSubView(v) {
     burdenSubView = v;
-    var container = document.getElementById('teamTab');
-    if (container) renderTeam(container);
+    rerenderHost();
   }
 
   // ---- Wages estimation from time-clock ----
@@ -3090,8 +3147,7 @@
     if (view === 'docs') { docFilterEmployee = ''; docFilterStatus = ''; }
     if (view === 'onboarding') { onboardingFilter = 'all'; }
     if (view === 'burden') { burdenSubView = 'entries'; }
-    var container = document.getElementById('teamTab');
-    if (container) renderTeam(container);
+    rerenderHost();
   };
 
   // Time Clock exports
@@ -3104,8 +3160,8 @@
   window.teamTcClockOut = tcClockOut;
 
   // PTO exports
-  window.teamPtoSelectEmp = function(id) { ptoSelectedEmployeeId = id; var wrap = document.getElementById('ptoBoardWrap'); if (wrap) { wrap.innerHTML = '<div class="loading">Loading&hellip;</div>'; } var container = document.getElementById('teamTab'); if (container) renderTeam(container); };
-  window.teamPtoBack = function() { ptoSelectedEmployeeId = null; var container = document.getElementById('teamTab'); if (container) renderTeam(container); };
+  window.teamPtoSelectEmp = function(id) { ptoSelectedEmployeeId = id; var wrap = document.getElementById('ptoBoardWrap'); if (wrap) { wrap.innerHTML = '<div class="loading">Loading&hellip;</div>'; } rerenderHost(); };
+  window.teamPtoBack = function() { ptoSelectedEmployeeId = null; rerenderHost(); };
   window.teamPtoEditPolicy = function(empId) { openPtoPolicyForm(empId); };
   window.teamPtoSavePolicy = savePtoPolicy;
   window.teamPtoRecordUsage = function(empId) { openPtoUsageForm(empId, false); };
@@ -3122,13 +3178,12 @@
   };
 
   // Onboarding exports
-  window.teamObFilter = function(f) { onboardingFilter = f; var container = document.getElementById('teamTab'); if (container) renderTeam(container); };
+  window.teamObFilter = function(f) { onboardingFilter = f; rerenderHost(); };
   window.teamObToggle = toggleObItem;
   window.teamViewEmployee = function(id) {
     selectedEmployeeId = id;
     currentView = 'detail';
-    var container = document.getElementById('teamTab');
-    if (container) renderTeam(container);
+    rerenderHost();
   };
   window.teamAddEmployee = function() { openAddEmployeeForm(null); };
   window.teamEditEmployee = function(id) { openAddEmployeeForm(id); };
