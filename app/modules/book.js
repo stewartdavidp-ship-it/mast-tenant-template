@@ -2423,6 +2423,12 @@
       instructorsLoaded = false;
       return id;
     },
+    // Native V2 skills picker writes (V1-removal directive).
+    ensureSkill: function (label) { return ensureSkillInCatalog(label, 'instructor'); },
+    setSkills: async function (id, slugs) {
+      await MastDB.instructors.update(id, { skills: Array.isArray(slugs) ? slugs : [], updatedAt: new Date().toISOString() });
+      instructorsLoaded = false;
+    },
     // Hard delete (the twin confirms + checks class assignments first).
     remove: async function (id) {
       await MastDB.instructors.remove(id);
@@ -2527,6 +2533,39 @@
       });
       classesLoaded = false;
     },
+    // The remaining editor fields the V2 form now owns natively (V1-removal
+    // directive: no classic escape hatches). PATCH-style; shapes mirror
+    // saveClass exactly (seriesInfo null for non-series, imageIds single-entry).
+    setExtras: async function (id, x) {
+      var requiresWaiver = !!x.requiresWaiver;
+      var patch = {
+        requiresWaiver: requiresWaiver,
+        waiverTemplateId: requiresWaiver ? (x.waiverTemplateId || null) : null,
+        enrollmentOpenDate: x.enrollmentOpenDate || null,
+        enrollmentCloseDate: x.enrollmentCloseDate || null,
+        requiredCertTypeIds: Array.isArray(x.requiredCertTypeIds) ? x.requiredCertTypeIds : [],
+        requiredSkills: Array.isArray(x.requiredSkills) ? x.requiredSkills : [],
+        imageIds: x.imageUrl ? [x.imageUrl] : [],
+        updatedAt: new Date().toISOString()
+      };
+      if (x.type === 'series') {
+        var sp = parseFloat(x.seriesPrice);
+        patch.seriesInfo = {
+          totalSessions: parseInt(x.seriesTotal, 10) || null,
+          seriesPriceCents: isNaN(sp) ? null : Math.round(sp * 100),
+          allowDropIn: x.seriesDropIn !== false && x.seriesDropIn !== 'false',
+          allowLateEnroll: x.seriesLateEnroll === true || x.seriesLateEnroll === 'true'
+        };
+      } else {
+        patch.seriesInfo = null;
+      }
+      await MastDB.classes.update(id, patch);
+      classesLoaded = false;
+    },
+    publish: function (id) { return _classPublishCore(id); },
+    unpublish: function (id) { return _classUnpublishCore(id); },
+    // Skill catalog (admin/skillCatalog) — shared with InstructorsBridge users.
+    ensureSkill: function (label) { return ensureSkillInCatalog(label, 'class'); },
     // Fresh-reads the class, then runs the SAME materializer legacy saveClass
     // uses (duplicate-date-safe; no-op without a schedule). Returns the class.
     generateSessions: async function (id) {
@@ -3715,9 +3754,12 @@
     if (cls) materializeSessions(id, cls).then(function() { loadClassDetail(id); });
   };
 
-  window._bookPublishClass = async function(id) {
-    var cls = classesData.find(function(c) { return c.id === id; });
-    if (!cls) return;
+  // State-free publish core — fresh-reads the class, runs the pre-publish
+  // checklist (throws a user-presentable Error listing the gaps), then flips
+  // status. Shared by the legacy button and ClassesBridge (classes-v2 twin).
+  async function _classPublishCore(id) {
+    var cls = await MastDB.classes.get(id);
+    if (!cls) throw new Error('Class not found');
 
     // Pre-publish checklist
     var issues = [];
@@ -3730,30 +3772,37 @@
     var sessVal = await MastDB.classSessions.byClass(id);
     if (!sessVal || Object.keys(sessVal).length === 0) issues.push('No sessions generated');
 
-    if (issues.length > 0) {
-      MastAdmin.showToast('Cannot publish:\n• ' + issues.join('\n• '), true);
-      return;
-    }
+    if (issues.length > 0) throw new Error('Cannot publish:\n• ' + issues.join('\n• '));
 
-    if (!await mastConfirm('Publish this class? It will appear on the public storefront.', { title: 'Publish Class' })) return;
+    await MastDB.classes.update(id, { status: 'published', publishedAt: new Date().toISOString() });
+    classesLoaded = false;
+  }
+  async function _classUnpublishCore(id) {
+    await MastDB.classes.update(id, { status: 'draft' });
+    classesLoaded = false;
+  }
 
+  window._bookPublishClass = async function(id) {
     try {
-      await MastDB.classes.update(id, { status: 'published', publishedAt: new Date().toISOString() });
+      // Checklist runs FIRST so the confirm only appears for a publishable class
+      // (mirrors the original early-return ordering).
+      var cls = await MastDB.classes.get(id);
+      if (!cls) return;
+      if (!await mastConfirm('Publish this class? It will appear on the public storefront.', { title: 'Publish Class' })) return;
+      await _classPublishCore(id);
       MastAdmin.showToast('Class published!');
-      classesLoaded = false;
       await loadClasses();
       loadClassDetail(id);
     } catch (err) {
-      MastAdmin.showToast('Failed: ' + err.message, true);
+      MastAdmin.showToast(err.message.indexOf('Cannot publish') === 0 ? err.message : ('Failed: ' + err.message), true);
     }
   };
 
   window._bookUnpublishClass = async function(id) {
     if (!await mastConfirm('Unpublish this class? It will be hidden from the storefront.', { title: 'Unpublish Class' })) return;
     try {
-      await MastDB.classes.update(id, { status: 'draft' });
+      await _classUnpublishCore(id);
       MastAdmin.showToast('Class unpublished — back to draft');
-      classesLoaded = false;
       await loadClasses();
       loadClassDetail(id);
     } catch (err) {
