@@ -112,6 +112,33 @@
         return out;
       },
       notes: function (r) { return r.notes || ''; },
+      // Classic burn-down Wave E — write affordances over CustomersBridge.
+      overviewActions: function (r) {
+        if (typeof window.can === 'function' && !window.can('customers', 'edit')) return '';
+        var id = r._key || r.id;
+        var esc2 = window.MastUI._esc;
+        var tags = (r.tags || []).map(function (t) {
+          return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.78rem;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--warm-gray);margin:2px 4px 2px 0;">' + esc2(t) +
+            '<button style="background:none;border:none;color:var(--warm-gray);cursor:pointer;padding:0;font-size:0.78rem;" onclick="CustomersV2.removeTag(\'' + esc2(id) + '\',\'' + esc2(t) + '\')">&times;</button></span>';
+        }).join('');
+        return window.MastUI.card('Tags & notes',
+          '<div style="margin-bottom:8px;">' + (tags || '<span class="mu-sub">No tags.</span>') + '</div>' +
+          '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
+            '<input class="form-input" id="custV2NewTag" placeholder="Add a tag…" style="max-width:200px;font-size:0.85rem;">' +
+            '<button class="btn btn-secondary btn-small" onclick="CustomersV2.addTag(\'' + esc2(id) + '\')">Add</button>' +
+          '</div>' +
+          '<textarea class="form-input" id="custV2Notes" rows="3" style="width:100%;resize:vertical;" placeholder="Notes…">' + esc2(r.notes || '') + '</textarea>' +
+          '<div style="margin-top:8px;"><button class="btn btn-secondary btn-small" onclick="CustomersV2.saveNotes(\'' + esc2(id) + '\')">Save notes</button></div>');
+      },
+      walletActions: function (r) {
+        if (typeof window.can === 'function' && !window.can('customers', 'edit')) return '';
+        var id = r._key || r.id;
+        var esc2 = window.MastUI._esc;
+        return '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          [['credit', '+ Adjust credits'], ['pass', '+ Grant pass'], ['membership', 'Change tier'], ['loyalty', 'Adjust loyalty']].map(function (k) {
+            return '<button class="btn btn-secondary btn-small" onclick="CustomersV2.adjustWallet(\'' + k[0] + '\',\'' + esc2(id) + '\')">' + k[1] + '</button>';
+          }).join('') + '</div>';
+      },
       classes: function (r) {
         var N = window.MastUI.Num;
         return (r._enrollments || []).map(function (e) {
@@ -176,7 +203,26 @@
     });
   }
 
-  var V2 = { rows: [], byId: {}, sortKey: 'displayName', sortDir: 'asc', off: null, q: '' };
+  var V2 = { rows: [], byId: {}, sortKey: 'displayName', sortDir: 'asc', off: null, q: '', segments: [], segmentId: null };
+
+  // Bridge gate + post-write SO refresh (mirror contacts-v2 Wave A).
+  function withBridge(fn) {
+    if (window.CustomersBridge) return fn(window.CustomersBridge);
+    MastAdmin.loadModule('customers').then(function () {
+      if (window.CustomersBridge) fn(window.CustomersBridge);
+      else if (window.showToast) showToast('Customers engine still loading — try again', true);
+    }).catch(function () { if (window.showToast) showToast('Customers engine unavailable', true); });
+  }
+  function refreshOpen(id) {
+    MastEntity.get('customers-v2').fetch(id).then(function (rec) {
+      if (!rec) return;
+      V2.byId[id] = rec;
+      var i = V2.rows.findIndex(function (r) { return (r._key || r.id) === id; });
+      if (i >= 0) V2.rows[i] = rec;
+      MastEntity.openRecord('customers-v2', rec, 'read', true);
+      render();
+    }).catch(function () {});
+  }
 
   function toRows(tree) {
     var out = []; tree = tree || {};
@@ -195,10 +241,23 @@
     } else if (window.MastDB && MastDB.list) {
       MastDB.list('admin/customers').then(apply).catch(function (e) { console.error('[customers-v2] list', e); });
     }
+    // Saved segments for the header picker (shared schema with legacy + CS).
+    withBridge(function (b) {
+      Promise.resolve(b.listSegments()).then(function (segs) { V2.segments = segs || []; render(); }).catch(function () {});
+    });
   }
 
   function visibleRows() {
     var rows = V2.rows;
+    // Active saved segment — the SHARED matcher (customer-filters.js), the
+    // same one legacy list/export and the CS survey bulk-send use.
+    if (V2.segmentId && window.MastCustomerFilters) {
+      var seg = V2.segments.filter(function (g) { return g.id === V2.segmentId; })[0];
+      if (seg && seg.filters) {
+        var isWs = (window.CustomersBridge && CustomersBridge.isWholesale) || function () { return false; };
+        rows = rows.filter(function (r) { return MastCustomerFilters.matches(r, seg.filters, { isWholesale: isWs }); });
+      }
+    }
     if (V2.q) {
       var q = V2.q.toLowerCase();
       rows = rows.filter(function (r) {
@@ -223,10 +282,21 @@
   function render() {
     var tab = ensureTab();
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
+      '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
         '<h1 style="font-size:1.6rem;margin:0;">Customers</h1>' +
         '<span style="color:var(--warm-gray);font-size:0.9rem;">' + window.MastUI.Num.count(V2.rows.length) + ' total</span>' +
-        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="CustomersV2.exportCsv()">↓ Export</button>' +
+        '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+          '<select class="form-input" style="font-size:0.85rem;max-width:200px;" onchange="CustomersV2.applySegment(this.value)">' +
+            '<option value="">All customers</option>' +
+            V2.segments.map(function (g) {
+              return '<option value="' + window.MastUI._esc(g.id) + '"' + (V2.segmentId === g.id ? ' selected' : '') + '>' + window.MastUI._esc(g.name) + '</option>';
+            }).join('') +
+          '</select>' +
+          '<button class="btn btn-secondary" onclick="CustomersV2.saveSegment()">Save segment</button>' +
+          '<button class="btn btn-secondary" onclick="navigateTo(\'duplicates-v2\')">Duplicates →</button>' +
+          '<button class="btn btn-secondary" onclick="CustomersV2.recompute()">Recompute stats</button>' +
+          '<button class="btn btn-secondary" onclick="CustomersV2.exportCsv()">↓ Export</button>' +
+        '</span>' +
       '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name or email…" value="' +
         (window.MastUI._esc(V2.q)) + '" oninput="CustomersV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
@@ -244,6 +314,72 @@
       render();
     },
     search: function (v) { V2.q = v || ''; render(); },
+    // ── Classic burn-down Wave E: segments / tags / notes / wallet / stats ──
+    applySegment: function (segId) { V2.segmentId = segId || null; render(); },
+    saveSegment: function () {
+      withBridge(function (b) {
+        Promise.resolve(window.mastPrompt ? mastPrompt('Name this segment:', { title: 'Save segment', confirmLabel: 'Save' }) : null).then(function (name) {
+          if (!name || !name.trim()) return;
+          // V2's list filter vocabulary today is the search box; segments saved
+          // here capture it in the SHARED filter schema (customer-filters.js),
+          // so legacy + CS bulk-send read them identically.
+          var filters = {};
+          if (V2.q) filters.search = V2.q;
+          return Promise.resolve(b.saveSegment(name, filters)).then(function (rec) {
+            V2.segments.push(rec); V2.segmentId = rec.id;
+            if (window.showToast) showToast('Segment saved');
+            render();
+          });
+        }).catch(function (e) { if (window.showToast) showToast(e && e.message || 'Could not save segment', true); });
+      });
+    },
+    recompute: function () {
+      if (typeof window.can === 'function' && !window.can('customers', 'edit')) { if (window.showToast) showToast('You don\u2019t have permission', true); return; }
+      withBridge(function (b) {
+        if (window.showToast) showToast('Recomputing customer stats\u2026');
+        Promise.resolve(b.recomputeStats()).then(function () {
+          if (window.showToast) showToast('Customer stats recomputed');
+          load();
+        }).catch(function (e) { if (window.showToast) showToast('Recompute failed: ' + (e && e.message || e), true); });
+      });
+    },
+    addTag: function (id) {
+      var inp = document.getElementById('custV2NewTag');
+      var t = ((inp && inp.value) || '').trim();
+      if (!t) return;
+      withBridge(function (b) {
+        var rec = V2.byId[id] || {};
+        var tags = (rec.tags || []).slice();
+        if (tags.indexOf(t) === -1) tags.push(t);
+        Promise.resolve(b.setTags(id, tags)).then(function () { refreshOpen(id); });
+      });
+    },
+    removeTag: function (id, tag) {
+      withBridge(function (b) {
+        var rec = V2.byId[id] || {};
+        var tags = (rec.tags || []).filter(function (x) { return x !== tag; });
+        Promise.resolve(b.setTags(id, tags)).then(function () { refreshOpen(id); });
+      });
+    },
+    saveNotes: function (id) {
+      var v = ((document.getElementById('custV2Notes') || {}).value || '');
+      withBridge(function (b) {
+        Promise.resolve(b.saveNotes(id, v)).then(function () {
+          if (window.showToast) showToast('Notes saved');
+          refreshOpen(id);
+        });
+      });
+    },
+    adjustWallet: function (kind, id) {
+      // The wallet adjust modal is a body-level legacy modal over the
+      // adjustCustomerWallet CF — same implementation, V2 entry point.
+      var rec = V2.byId[id] || {};
+      var uid = rec._walletUid || (rec.linkedIds && rec.linkedIds.uids && rec.linkedIds.uids[0]) || '';
+      MastAdmin.loadModule('customers').then(function () {
+        if (window.customersOpenWalletAdjust) customersOpenWalletAdjust(kind, id, uid);
+        else if (window.showToast) showToast('Wallet tools still loading — try again', true);
+      });
+    },
     open: function (id) {
       // Go through the schema fetch so the linked-contact location + recent
       // orders are loaded before the Party detail renders.

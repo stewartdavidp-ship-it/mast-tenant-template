@@ -3247,6 +3247,48 @@
   window.customersToggleNewsletter = function(id, on) { return toggleNewsletter(id, on); };
   window.customersSaveNotes = saveNotes;
   window.customersMerge = mergeCustomers;
+
+  // ── V2 bridge (classic burn-down Wave E) — state-free cores shared with
+  // customers-v2; the twin never re-implements a write. Merge stays
+  // single-sourced on mergeCustomers (already consumed by duplicates-v2).
+  window.CustomersBridge = {
+    saveField: saveCustomerField,
+    setTags: function (customerId, tags) { return saveCustomerField(customerId, 'tags', Array.isArray(tags) ? tags : []); },
+    saveNotes: function (customerId, value) { return saveCustomerField(customerId, 'notes', value || ''); },
+    listSegments: async function () {
+      var raw = await MastDB.get('admin/customerSegments') || {};
+      return Object.keys(raw).map(function (k) { return Object.assign({ _key: k }, raw[k]); })
+        .filter(function (x) { return x && x.name; });
+    },
+    saveSegment: async function (name, filters) {
+      name = (name || '').trim();
+      if (!name) throw new Error('Segment name required');
+      var id = 'seg_' + Date.now().toString(36);
+      var now = new Date().toISOString();
+      var record = {
+        id: id, name: name, filters: filters || {},
+        createdBy: (window.currentUser && window.currentUser.uid) || null,
+        createdAt: now, updatedAt: now
+      };
+      await MastDB.set('admin/customerSegments/' + id, record);
+      segmentsData.push(record);
+      return record;
+    },
+    deleteSegment: async function (segId) {
+      await MastDB.remove('admin/customerSegments/' + segId);
+      segmentsData = segmentsData.filter(function (x) { return x.id !== segId; });
+      return true;
+    },
+    recomputeStats: async function () {
+      var fn = firebase.functions().httpsCallable('recomputeAllCustomerStats');
+      var res = await fn({ tenantId: MastDB.tenantId() });
+      var data = (res && res.data) || {};
+      if (data.ok !== true) throw new Error(data.message || 'Recompute failed');
+      return data;
+    },
+    merge: mergeCustomers,
+    isWholesale: isWholesaleCustomer
+  };
   window.customersOpenContact = openContactFromCustomer;
   window.customersBackFromDetail = backFromDetail;
 

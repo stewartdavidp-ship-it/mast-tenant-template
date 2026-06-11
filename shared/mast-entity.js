@@ -336,7 +336,11 @@
     // render only when the schema supplies their data fn — so a sparse party
     // record stays simple. Notes is always last.
     var tabs = [{ key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders' }];
-    var panes = '<div class="mu-pane" data-pane="ov">' + U.card('Contact', contactHtml) + U.card('Segments', chips(d.segments ? d.segments(r) : [])) + '</div>' +
+    // Optional per-pane action hooks (operations classic burn-down Wave E):
+    // schemas append write affordances (tag/notes editors, wallet adjustments)
+    // without forking the template.
+    var ovExtra = (typeof d.overviewActions === 'function') ? (d.overviewActions(r) || '') : '';
+    var panes = '<div class="mu-pane" data-pane="ov">' + U.card('Contact', contactHtml) + U.card('Segments', chips(d.segments ? d.segments(r) : [])) + ovExtra + '</div>' +
       '<div class="mu-pane" data-pane="orders" hidden>' + U.cardTable('Orders (' + orders.length + ')', ordersTable) + '</div>';
 
     if (typeof d.activity === 'function') {
@@ -361,6 +365,7 @@
       var walletInner = w.linked
         ? U.kv([{ k: 'Store credit', v: w.credit }, { k: 'Passes', v: w.passes }, { k: 'Membership', v: w.membership }, { k: 'Loyalty points', v: w.loyalty }])
         : '<span class="mu-sub">No linked account — wallet, passes, membership and loyalty live on a customer-facing account. This customer hasn\'t signed in yet.</span>';
+      if (w.linked && typeof d.walletActions === 'function') walletInner += d.walletActions(r) || '';
       panes += '<div class="mu-pane" data-pane="wallet" hidden>' + U.card('Wallet', walletInner) + '</div>';
     }
 
