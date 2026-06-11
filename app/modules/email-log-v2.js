@@ -214,7 +214,7 @@
 
     tab.innerHTML =
       U.pageHeader({
-        title: 'Email Log',
+        title: 'Email history',
         count: N.count(V2.rows.length) + ' emails',
         actionsHtml: '<button class="btn btn-secondary" onclick="EmailLogV2.exportCsv()">↓ Export</button>'
       }) +
