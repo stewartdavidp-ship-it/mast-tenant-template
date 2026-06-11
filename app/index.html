@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-213949-ef3407a"></script>
+  <script src="../shared/customer-filters.js?v=20260610-214208-4f6beca"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-213949-ef3407a"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-214208-4f6beca"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-213949-ef3407a"></script>
-  <script src="../shared/mast-io.js?v=20260610-213949-ef3407a"></script>
-  <script src="../shared/mast-entity.js?v=20260610-213949-ef3407a"></script>
+  <script src="../shared/mast-ui.js?v=20260610-214208-4f6beca"></script>
+  <script src="../shared/mast-io.js?v=20260610-214208-4f6beca"></script>
+  <script src="../shared/mast-entity.js?v=20260610-214208-4f6beca"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-213949-ef3407a"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-214208-4f6beca"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22123,7 +22123,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-213949-ef3407a';
+var MAST_MODULES_V = '20260610-214208-4f6beca';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -32290,8 +32290,25 @@ function _wizardApplyProgress(progress) {
   if (wizardProgress._bizSubStep) _wizardBizSubStep = wizardProgress._bizSubStep;
   showWizardStep(wizardProgress.currentStep || '0');
 }
+// Shopify App Store origin detection. A tenant that installed Mast from the
+// Shopify App Store must NEVER be offered "Mast as your storefront" — Mast is a
+// complementary back-office that works WITH Shopify, never a replacement. We read
+// config/shopify.installSource early so the engagement-mode step (4) can suppress
+// the storefront option before the user ever reaches it.
+window.wizardIsShopifyOrigin = false;
+function _wizardDetectShopifyOrigin() {
+  try {
+    return MastDB.get('config/shopify').then(function(cfg) {
+      window.wizardIsShopifyOrigin = !!(cfg && cfg.installSource === 'shopify-app-store');
+      return window.wizardIsShopifyOrigin;
+    }).catch(function() { return false; });
+  } catch (e) { return Promise.resolve(false); }
+}
+
 function initSetupWizard() {
   window._wizardOnboardingDepth = window._wizardOnboardingDepth || 'quick';
+  // Resolve Shopify-origin early (async); step 4 render reads window.wizardIsShopifyOrigin.
+  _wizardDetectShopifyOrigin();
   // Try localStorage first — survives browser back/forward without a network round trip
   var lsProgress = _wizardLsLoad();
   if (lsProgress.currentStep) {
@@ -32649,8 +32666,13 @@ function renderWizardEngagement() {
   // - integrate: mode is sync-channels OR back-office; surface is unknown.
   // - no intent: ask everything.
   var unlockMode = !!window._wizardUnlockMode;
+  var shopifyOrigin = !!window.wizardIsShopifyOrigin;
   if (headingEl && subheadEl) {
-    if (intent === 'migrate' && !unlockMode) {
+    if (shopifyOrigin) {
+      // Shopify App Store install: Mast is the back-office, not the storefront.
+      headingEl.textContent = 'How should Mast work with your Shopify store?';
+      subheadEl.textContent = 'Mast syncs your catalog and runs the back-office alongside Shopify. Pick the role it plays — you can change this later.';
+    } else if (intent === 'migrate' && !unlockMode) {
       headingEl.textContent = 'How do you want to work with Mast day-to-day?';
       subheadEl.textContent = 'You’re moving' + (platformLabel ? ' from ' + platformLabel : '') + ' to Mast as your storefront. Pick how you’ll run things.';
     } else if (intent === 'integrate' && !unlockMode) {
@@ -32665,7 +32687,8 @@ function renderWizardEngagement() {
   // Initialize in-memory selection state. Pre-select mode from site intent if not yet chosen.
   if (!window._wizardEngagement) {
     var _intentToMode = { 'migrate': 'storefront', 'integrate': 'sync-channels' };
-    var _defaultMode = _intentToMode[window._wizardSiteIntent] || null;
+    // Shopify-origin tenants never default to storefront — they default to channel sync.
+    var _defaultMode = shopifyOrigin ? 'sync-channels' : (_intentToMode[window._wizardSiteIntent] || null);
     window._wizardEngagement = {
       mode: _defaultMode,
       surfaceByMode: {},   // { storefront: 'hybrid', ... } so switching modes remembers per-mode surface
@@ -32677,9 +32700,23 @@ function renderWizardEngagement() {
   }
   var state = window._wizardEngagement;
 
+  // Shopify-origin guard: storefront is never a valid selection for an App-Store
+  // install, so coerce any leftover storefront state (e.g. an intent default that
+  // resolved before the async Shopify check) to channel sync.
+  if (shopifyOrigin && state.mode === 'storefront') {
+    state.mode = 'sync-channels';
+    if (!state.surfaceByMode['sync-channels']) {
+      state.surfaceByMode['sync-channels'] = defaultSurfaceByMode['sync-channels'] || 'ui-first';
+    }
+  }
+
   // Filter visible cards by intent (Option 1: tie steps 3 + 4 together).
   var visibleCards = cards;
-  if (intent === 'migrate' && !unlockMode) {
+  if (shopifyOrigin) {
+    // Shopify App Store install: drop "Build a Mast storefront" entirely. They only
+    // ever see channel-sync (recommended) and back-office.
+    visibleCards = cards.filter(function(c) { return c.value !== 'storefront'; });
+  } else if (intent === 'migrate' && !unlockMode) {
     visibleCards = []; // mode is fixed at storefront; render a compact badge instead
   } else if (intent === 'integrate' && !unlockMode) {
     visibleCards = cards.filter(function(c) { return c.value === 'sync-channels' || c.value === 'back-office'; });
@@ -32717,7 +32754,8 @@ function renderWizardEngagement() {
     cardsEl.innerHTML = '';
 
     // Migrate-path: mode is fixed at storefront. Render compact badge + standalone surface picker.
-    if (intent === 'migrate' && !unlockMode) {
+    // Never taken for a Shopify-origin install (storefront is suppressed for them).
+    if (intent === 'migrate' && !unlockMode && !shopifyOrigin) {
       // Make sure state.mode is locked in (for confirm).
       if (state.mode !== 'storefront') {
         state.mode = 'storefront';
@@ -32787,6 +32825,13 @@ async function wizardConfirmEngagement() {
   var BEC = window.BusinessEntityConstants || {};
   var state = window._wizardEngagement || {};
   var mode = state.mode;
+  // Shopify-origin tenants can never commit to storefront mode — coerce to channel
+  // sync so the storefront branch (applyStorefrontConfig / full-storefront / fork)
+  // is unreachable even if a stale selection slipped through.
+  if (window.wizardIsShopifyOrigin && mode === 'storefront') {
+    mode = 'sync-channels';
+    state.mode = 'sync-channels';
+  }
   if (!mode) { showToast('Pick a mode to continue.', true); return; }
   // Reset the "Change mode" override so future re-entries to step 4 re-lock to intent.
   window._wizardUnlockMode = false;
@@ -34628,18 +34673,32 @@ function wizardShowSitePathPicker(data) {
   var picker = document.getElementById('wizardSitePathPicker');
   if (!picker) return;
 
+  // Shopify App Store install: Mast is the complementary back-office, never a
+  // storefront replacement — so don't offer the "Move to Mast / Mast becomes your
+  // storefront" path at all. Keep Shopify out front; Mast runs ops behind it.
+  var shopifyOrigin = !!window.wizardIsShopifyOrigin;
+  var migrateCardHtml = shopifyOrigin ? '' :
+    '<div class="wizard-feature-card" style="border:1px solid var(--wiz-border,#ddd);border-radius:10px;padding:18px;cursor:pointer;background:var(--wiz-input,#fff);" onclick="wizardChooseSiteIntent(\'migrate\')">' +
+      '<div style="font-weight:700;font-size:1rem;margin-bottom:4px;">Move to Mast</div>' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">Import your products and content. Mast becomes your storefront.</div>' +
+    '</div>';
+  var integrateLabel = shopifyOrigin ? 'Keep Shopify, use Mast for ops' : keepLabel;
+  var pickerHeading = shopifyOrigin
+    ? 'How should Mast work with Shopify?'
+    : 'What do you want to do with ' + esc(platformLabel) + '?';
+  var pickerSubhead = shopifyOrigin
+    ? 'Mast runs the back-office alongside your Shopify store. Confirm and we’ll sync your catalog in.'
+    : 'We scanned your site — now tell us how Mast fits in.';
+
   picker.style.display = '';
   picker.innerHTML =
-    '<h2 style="font-size:1.6rem;margin-bottom:6px;">What do you want to do with ' + esc(platformLabel) + '?</h2>' +
-    '<p style="color:var(--warm-gray);margin-bottom:16px;font-size:0.9rem;">We scanned your site — now tell us how Mast fits in.</p>' +
+    '<h2 style="font-size:1.6rem;margin-bottom:6px;">' + esc(pickerHeading) + '</h2>' +
+    '<p style="color:var(--warm-gray);margin-bottom:16px;font-size:0.9rem;">' + esc(pickerSubhead) + '</p>' +
     foundHtml +
     '<div style="display:grid;gap:10px;margin-bottom:20px;">' +
-      '<div class="wizard-feature-card" style="border:1px solid var(--wiz-border,#ddd);border-radius:10px;padding:18px;cursor:pointer;background:var(--wiz-input,#fff);" onclick="wizardChooseSiteIntent(\'migrate\')">' +
-        '<div style="font-weight:700;font-size:1rem;margin-bottom:4px;">Move to Mast</div>' +
-        '<div style="font-size:0.85rem;color:var(--warm-gray);">Import your products and content. Mast becomes your storefront.</div>' +
-      '</div>' +
+      migrateCardHtml +
       '<div class="wizard-feature-card" style="border:1px solid var(--wiz-border,#ddd);border-radius:10px;padding:18px;cursor:pointer;background:var(--wiz-input,#fff);" onclick="wizardChooseSiteIntent(\'integrate\')">' +
-        '<div style="font-weight:700;font-size:1rem;margin-bottom:4px;">' + esc(keepLabel) + '</div>' +
+        '<div style="font-weight:700;font-size:1rem;margin-bottom:4px;">' + esc(integrateLabel) + '</div>' +
         '<div style="font-size:0.85rem;color:var(--warm-gray);">Stay on your current storefront. Mast syncs products and handles orders, inventory, and production behind the scenes.</div>' +
       '</div>' +
     '</div>' +
