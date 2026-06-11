@@ -109,8 +109,14 @@
           { k: 'Status', v: UI.badge(statusLabel(statusOf(p)), statusTone(statusOf(p))) }
         ]);
         var tabsBar = UI.paneTabsBar([
-          { key: 'ov', label: 'Overview' }, { key: 'sales', label: 'Sales' }
+          { key: 'ov', label: 'Overview' }, { key: 'sales', label: 'Sales' },
+          { key: 'holders', label: 'Holders' }
         ], 'ov');
+        // Holders — per-instance cohorts (V1-removal: the legacy cohort
+        // drill-down lives here now). Async fill via PassesBridge (one
+        // indexed query per detail open, mirroring legacy).
+        var holdersBody = '<div id="pv2Holders"><span class="mu-sub">Loading holders…</span></div>';
+        setTimeout(function () { window.PassesV2 && PassesV2._fillHolders(p._key || p.id); }, 0);
 
         // Overview — definition + pricing/terms + options + scope + description.
         var definition = UI.kv([
@@ -147,7 +153,7 @@
             { k: 'Used', v: N.count(a.used || 0) },
             { k: 'Expired', v: N.count(a.expired || 0) },
             { k: 'Revoked', v: N.count(a.revoked || 0) }
-          ]) + '<div class="mu-sub" style="margin-top:10px;">Per-holder cohorts (expiring, lapsed, unused) and pass issuing/redeeming have no V2 home yet — <button class="btn btn-small btn-secondary" onclick="PassesV2.classic()">open classic Passes →</button></div>';
+          ]);
         } else if (p.__aggLoading) {
           salesBody = '<span class="mu-sub">Loading sales…</span>';
         } else {
@@ -166,7 +172,8 @@
             UI.card('Class scope', scope) +
             UI.card('Description', descBody) +
           '</div>' +
-          '<div class="mu-pane" data-pane="sales" hidden>' + UI.card('Instance counts', salesBody) + '</div>' + dangerZone;
+          '<div class="mu-pane" data-pane="sales" hidden>' + UI.card('Instance counts', salesBody) + '</div>' +
+          '<div class="mu-pane" data-pane="holders" hidden>' + UI.cardTable('Holders', holdersBody) + '</div>' + dangerZone;
       },
       // Native edit/create form — the legacy showPassDefForm section set, grouped:
       // Basic Info (name*, type*, status, description), Pricing & Terms (price* in
@@ -443,10 +450,48 @@
     // Per-instance issuing/redeeming + per-holder cohort tooling have no V2 home
     // yet, so the Sales tab keeps a deep-link to classic #passes. navigateToClassic
     // so the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('passes');
-      else if (typeof navigateTo === 'function') navigateTo('passes');
+    // Holders facet — cohort pills + instances table (PassesBridge single-
+    // sources the defs/matcher/query with the legacy cohort block).
+    _holdersState: {},
+    _fillHolders: function (passDefId, cohortKey) {
+      var el = document.getElementById('pv2Holders');
+      if (!el) return;
+      if (!window.PassesBridge || !window.PassesBridge.loadInstances) {
+        if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
+        setTimeout(function () { PassesV2._fillHolders(passDefId, cohortKey); }, 600);
+        return;
+      }
+      var st = PassesV2._holdersState;
+      var renderTbl = function (instances) {
+        var defs = window.PassesBridge.cohortDefs();
+        var sel = cohortKey || st.cohort || 'active';
+        st.cohort = sel; st.instances = instances; st.defId = passDefId;
+        var pills = defs.map(function (c) {
+          var n = instances.filter(function (i) { return window.PassesBridge.instanceMatches(i, c.key); }).length;
+          return '<button class="btn btn-small ' + (c.key === sel ? 'btn-primary' : 'btn-secondary') + '" onclick="PassesV2._cohort(\'' + c.key + '\')">' + esc(c.label) + ' (' + n + ')</button>';
+        }).join(' ');
+        var rows = instances.filter(function (i) { return window.PassesBridge.instanceMatches(i, sel); });
+        var tbl = rows.length
+          ? U.relatedTable([
+              { label: 'Holder', render: function (i) { return esc(i.customerName || i.customerEmail || i.uid || '—'); } },
+              { label: 'Status', render: function (i) { return U.badge(i.status || '—', i.status === 'active' ? 'success' : 'neutral'); } },
+              { label: 'Visits left', align: 'right', render: function (i) { return i.visitsRemaining != null ? N.count(i.visitsRemaining) : '—'; } },
+              { label: 'Expires', render: function (i) { return i.expiresAt ? N.date(i.expiresAt) : '—'; } },
+              { label: 'Last used', render: function (i) { return i.lastUsedAt ? N.date(i.lastUsedAt) : '—'; } }
+            ], rows)
+          : '<span class="mu-sub">No holders in this cohort.</span>';
+        var el2 = document.getElementById('pv2Holders');
+        if (el2) el2.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + pills + '</div>' + tbl;
+      };
+      if (st.defId === passDefId && st.instances && cohortKey) { renderTbl(st.instances); return; }
+      Promise.resolve(window.PassesBridge.loadInstances(passDefId)).then(renderTbl)
+        .catch(function (e) {
+          console.error('[passes-v2] holders', e);
+          var el3 = document.getElementById('pv2Holders');
+          if (el3) el3.innerHTML = '<span class="mu-sub">Could not load holders.</span>';
+        });
     },
+    _cohort: function (key) { PassesV2._fillHolders(PassesV2._holdersState.defId, key); },
     exportCsv: function () { return MastEntity.exportRows('passes-v2', visibleRows(), 'all'); }
   };
 

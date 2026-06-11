@@ -3429,6 +3429,15 @@
     };
   }
   window.PassesBridge = {
+    // Per-holder cohorts for the passes-v2 Holders facet (V1-removal): the
+    // SAME defs/matcher/query the legacy cohort block uses.
+    cohortDefs: function () { return PASS_COHORTS.slice(); },
+    instanceMatches: function (inst, key) { return _passInstanceMatches(inst, key); },
+    loadInstances: async function (passDefId) {
+      var snap = await MastDB.query('admin/passInstances').orderByChild('passDefId').equalTo(passDefId).once();
+      var val = (snap && typeof snap.val === 'function') ? (snap.val() || {}) : (snap || {});
+      return Object.keys(val).map(function (k) { return Object.assign({ _key: k }, val[k]); });
+    },
     create: async function (data) {
       var rec = _passBridgeData(data);
       var id = MastDB.passDefinitions.newKey();
@@ -5925,6 +5934,49 @@
       footerHtml: '<button class="btn btn-primary" onclick="window._certTypeSave(\'' + typeId.replace(/'/g, "\\'") + '\')">Save</button>',
       onClose: function() {}
     });
+  };
+
+  // ── ClassSettingsBridge — the legacy Book→Settings tab's writes, state-free
+  // (V1-removal: the V2 home is the classes hub's Settings lens). Shapes mirror
+  // _saveBookSettings / _certTypeSave / _certTypeArchive exactly.
+  window.ClassSettingsBridge = {
+    getConfig: function () { return MastDB.get('admin/config/booking'); },
+    setCancellationWindow: async function (hours) {
+      var h = parseInt(hours, 10);
+      if (isNaN(h) || h < 0 || h > 720) throw new Error('Enter a valid number of hours (0-720).');
+      await MastDB.update('admin/config/booking', { cancellationWindowHours: h });
+    },
+    listCertTypes: function () { return MastDB.get('admin/certTypes'); },
+    saveCertType: async function (typeId, data) {
+      var name = (data.name || '').trim();
+      if (!name) throw new Error('Name is required');
+      var validity = null;
+      if (data.validityDays !== '' && data.validityDays != null && !isNaN(parseInt(data.validityDays, 10))) {
+        validity = Math.max(1, parseInt(data.validityDays, 10));
+      }
+      var autoGrantIds = Array.isArray(data.autoGrantOnClassIds) ? data.autoGrantOnClassIds : [];
+      var now = new Date().toISOString();
+      if (typeId) {
+        await MastDB.update('admin/certTypes/' + typeId, {
+          name: name, description: (data.description || '').trim() || null,
+          validityDays: validity, autoGrantOnClassIds: autoGrantIds, updatedAt: now
+        });
+        return typeId;
+      }
+      var newId = 'cert_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      await MastDB.set('admin/certTypes/' + newId, {
+        id: newId, name: name, description: (data.description || '').trim() || null,
+        validityDays: validity, autoGrantOnClassIds: autoGrantIds,
+        expiryNoticeDays: [30, 7, 0], archivedAt: null, createdAt: now, updatedAt: now
+      });
+      return newId;
+    },
+    archiveCertType: async function (typeId) {
+      await MastDB.update('admin/certTypes/' + typeId, { archivedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    },
+    unarchiveCertType: async function (typeId) {
+      await MastDB.update('admin/certTypes/' + typeId, { archivedAt: null, updatedAt: new Date().toISOString() });
+    }
   };
 
   window._certTypeSave = async function(typeId) {

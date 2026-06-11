@@ -632,7 +632,14 @@
     var lensPills = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' +
       '<button class="btn btn-small ' + (V2.lens === 'catalog' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'catalog\')">Catalog</button> ' +
       '<button class="btn btn-small ' + (V2.lens === 'rooms' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'rooms\')">Rooms &amp; equipment</button> ' +
-      '<button class="btn btn-small ' + (V2.lens === 'reports' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'reports\')">Reports</button></div>';
+      '<button class="btn btn-small ' + (V2.lens === 'reports' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'reports\')">Reports</button> ' +
+      '<button class="btn btn-small ' + (V2.lens === 'settings' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'settings\')">Settings</button></div>';
+    if (V2.lens === 'settings') {
+      tab.innerHTML =
+        U.pageHeader({ title: 'Classes', count: 'booking settings' }) + lensPills + renderSettings();
+      ClassesV2._loadSettings();
+      return;
+    }
     if (V2.lens === 'rooms') {
       tab.innerHTML =
         U.pageHeader({
@@ -668,6 +675,22 @@
         onSortFnName: 'ClassesV2.sort', onRowClickFnName: 'ClassesV2.open',
         empty: { title: 'No classes', message: V2.loaded ? 'Add a class to get started.' : 'Loading…' }
       });
+  }
+
+  // ── Settings lens — the legacy Book→Settings tab's V2 home (V1-removal):
+  // cancellation window (admin/config/booking) + certification types CRUD
+  // (admin/certTypes), all writes via ClassSettingsBridge.
+  function renderSettings() {
+    return U.card('Cancellation policy',
+      '<div class="form-group"><label class="form-label">Cancellation review window (hours)</label>' +
+      '<input class="form-input" type="number" min="0" max="720" id="clV2CancelWindow" style="max-width:120px;" value="">' +
+      '<div class="mu-sub" style="margin-top:4px;">Cancellations within this window before class start require review; outside it refunds are automatic (store credit, or pass restore).</div></div>' +
+      (can('book', 'edit') ? '<button class="btn btn-primary btn-small" onclick="ClassesV2.saveSettings()">Save</button>' : '')) +
+      U.cardTable('Certification types',
+        '<div class="mu-sub" style="margin-bottom:8px;">Credentials your studio grants — instructor-attested or auto-granted on class completion. Archived types stay valid on existing student records.</div>' +
+        '<div id="clV2CertList"><span class="mu-sub">Loading…</span></div>' +
+        (can('book', 'edit') ? '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="ClassesV2.certForm(null)">+ New type</button></div>' : '') +
+        '<div id="clV2CertForm" style="display:none;margin-top:10px;border:1px solid var(--border,rgba(127,127,127,0.3));border-radius:8px;padding:10px;"></div>');
   }
 
   // ── Rooms & equipment lens — the resources roster, hosted as a hub lens
@@ -770,7 +793,7 @@
     },
     filter: function (f) { V2.statusFilter = f; render(); },
     lens: function (l) {
-      V2.lens = (l === 'reports' || l === 'rooms') ? l : 'catalog';
+      V2.lens = (l === 'reports' || l === 'rooms' || l === 'settings') ? l : 'catalog';
       // Rooms can change via drilled SOs (create/edit/delete on resources-v2);
       // refresh the hub's copy when entering the lens so the roster is current.
       if (V2.lens === 'rooms') { load(); }
@@ -830,6 +853,113 @@
           reloadSoon();
         });
       }).catch(function (e) { if (window.showToast) showToast(e && e.message || 'Unpublish failed.', true); });
+    },
+    // ── Settings lens handlers (ClassSettingsBridge) ──
+    _loadSettings: function () {
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
+      var go = function (tries) {
+        if (!window.ClassSettingsBridge) {
+          if (tries > 10) return;
+          setTimeout(function () { go(tries + 1); }, 400);
+          return;
+        }
+        Promise.all([
+          Promise.resolve(window.ClassSettingsBridge.getConfig()).catch(function () { return {}; }),
+          Promise.resolve(window.ClassSettingsBridge.listCertTypes()).catch(function () { return {}; })
+        ]).then(function (res) {
+          var cfg = res[0] || {};
+          var el = document.getElementById('clV2CancelWindow');
+          if (el) el.value = cfg.cancellationWindowHours != null ? cfg.cancellationWindowHours : 48;
+          V2.certTypes = res[1] || {};
+          ClassesV2._renderCertList();
+        });
+      };
+      go(0);
+    },
+    _renderCertList: function () {
+      var el = document.getElementById('clV2CertList');
+      if (!el) return;
+      var ids = Object.keys(V2.certTypes);
+      if (!ids.length) { el.innerHTML = '<span class="mu-sub">No certification types yet.</span>'; return; }
+      el.innerHTML = U.relatedTable([
+        { label: 'Name', render: function (t) { return esc(t.name || t._key); } },
+        { label: 'Validity', render: function (t) { return t.validityDays ? (t.validityDays + ' days') : 'No expiry'; } },
+        { label: 'Auto-grant', align: 'right', render: function (t) { return N.count((t.autoGrantOnClassIds || []).length); } },
+        { label: 'Status', render: function (t) { return U.badge(t.archivedAt ? 'Archived' : 'Active', t.archivedAt ? 'neutral' : 'success'); } },
+        { label: '', render: function (t) {
+            if (!can('book', 'edit')) return '';
+            var id = esc(t._key);
+            return '<div style="display:flex;gap:4px;justify-content:flex-end;">' +
+              '<button class="btn btn-secondary btn-small" onclick="ClassesV2.certForm(\'' + id + '\')">Edit</button>' +
+              (t.archivedAt
+                ? '<button class="btn btn-secondary btn-small" onclick="ClassesV2.certRestore(\'' + id + '\')">Restore</button>'
+                : '<button class="btn btn-secondary btn-small" onclick="ClassesV2.certArchive(\'' + id + '\')">Archive</button>') +
+              '</div>';
+        } }
+      ], ids.map(function (k) { return Object.assign({ _key: k }, V2.certTypes[k]); }));
+    },
+    certForm: function (typeId) {
+      var wrap = document.getElementById('clV2CertForm');
+      if (!wrap) return;
+      var t = typeId ? (V2.certTypes[typeId] || {}) : {};
+      var grants = {};
+      (t.autoGrantOnClassIds || []).forEach(function (cid) { grants[cid] = true; });
+      var classBoxes = V2.rows.map(function (c) {
+        return '<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 10px 2px 0;font-size:0.85rem;"><input type="checkbox" class="clV2CertGrant" value="' + esc(c._key) + '"' + (grants[c._key] ? ' checked' : '') + '>' + esc(className(c)) + '</label>';
+      }).join('') || '<span class="mu-sub">No classes yet.</span>';
+      wrap.style.display = '';
+      wrap.innerHTML =
+        '<input type="hidden" id="clV2CertId" value="' + esc(typeId || '') + '">' +
+        '<div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="clV2CertName" value="' + esc(t.name || '') + '" style="width:100%;" placeholder="e.g. Torch Safety"></div>' +
+        '<div class="form-group"><label class="form-label">Description</label><input class="form-input" id="clV2CertDesc" value="' + esc(t.description || '') + '" style="width:100%;"></div>' +
+        '<div class="form-group"><label class="form-label">Validity (days, blank = no expiry)</label><input class="form-input" type="number" min="1" id="clV2CertValidity" value="' + (t.validityDays != null ? esc(t.validityDays) : '') + '" style="max-width:120px;"></div>' +
+        '<div class="form-group"><label class="form-label">Auto-grant on completing</label><div style="padding:4px 0;">' + classBoxes + '</div></div>' +
+        '<div style="display:flex;gap:8px;"><button class="btn btn-primary btn-small" onclick="ClassesV2.certSave()">' + (typeId ? 'Save' : 'Create') + '</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="document.getElementById(\'clV2CertForm\').style.display=\'none\'">Cancel</button></div>';
+    },
+    certSave: function () {
+      if (!can('book', 'edit')) { if (window.showToast) showToast('Classes write access required.', true); return; }
+      var grants = [];
+      document.querySelectorAll('#clV2CertForm .clV2CertGrant:checked').forEach(function (el) { grants.push(el.value); });
+      var typeId = ((document.getElementById('clV2CertId') || {}).value || '') || null;
+      var data = {
+        name: ((document.getElementById('clV2CertName') || {}).value || ''),
+        description: ((document.getElementById('clV2CertDesc') || {}).value || ''),
+        validityDays: ((document.getElementById('clV2CertValidity') || {}).value || ''),
+        autoGrantOnClassIds: grants
+      };
+      Promise.resolve(window.ClassSettingsBridge.saveCertType(typeId, data)).then(function () {
+        if (window.showToast) showToast(typeId ? 'Cert type updated.' : 'Cert type created.');
+        var wrap = document.getElementById('clV2CertForm'); if (wrap) wrap.style.display = 'none';
+        return Promise.resolve(window.ClassSettingsBridge.listCertTypes()).then(function (v) { V2.certTypes = v || {}; ClassesV2._renderCertList(); });
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'save failed.'), true); });
+    },
+    certArchive: function (typeId) {
+      if (!can('book', 'edit')) return;
+      var ask = (typeof window.mastConfirm === 'function')
+        ? window.mastConfirm('Archive this cert type? Existing student certs remain valid; the type hides from new grants.', { title: 'Archive Cert Type' })
+        : Promise.resolve(true);
+      Promise.resolve(ask).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(window.ClassSettingsBridge.archiveCertType(typeId)).then(function () {
+          if (V2.certTypes[typeId]) V2.certTypes[typeId].archivedAt = new Date().toISOString();
+          ClassesV2._renderCertList();
+        });
+      }).catch(function (e) { if (window.showToast) showToast('Archive failed.', true); });
+    },
+    certRestore: function (typeId) {
+      if (!can('book', 'edit')) return;
+      Promise.resolve(window.ClassSettingsBridge.unarchiveCertType(typeId)).then(function () {
+        if (V2.certTypes[typeId]) V2.certTypes[typeId].archivedAt = null;
+        ClassesV2._renderCertList();
+      }).catch(function (e) { if (window.showToast) showToast('Restore failed.', true); });
+    },
+    saveSettings: function () {
+      if (!can('book', 'edit')) { if (window.showToast) showToast('Classes write access required.', true); return; }
+      var hours = ((document.getElementById('clV2CancelWindow') || {}).value || '');
+      Promise.resolve(window.ClassSettingsBridge.setCancellationWindow(hours)).then(function () {
+        if (window.showToast) showToast('Settings saved.');
+      }).catch(function (e) { if (window.showToast) showToast(e && e.message || 'Save failed.', true); });
     },
     // Edit-form helpers — series toggle, waiver toggle, skill add, image.
     _typeChanged: function (type) {
@@ -917,7 +1047,9 @@
       // Class Reports deep link — same hub, Reports lens (route picks the lens).
       'book-reports-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'reports'; ensureTab(); render(); load(); } },
       // Rooms & Equipment deep link (#resources remaps here) — Rooms lens.
-      'classes-rooms-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'rooms'; ensureTab(); render(); load(); } }
+      'classes-rooms-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'rooms'; ensureTab(); render(); load(); } },
+      // Booking settings deep link (#book-settings remaps here) — Settings lens.
+      'classes-settings-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'settings'; ensureTab(); render(); load(); } }
     }
   });
 })();
