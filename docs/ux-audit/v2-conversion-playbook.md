@@ -24,7 +24,9 @@ PRs #399–#405 — the first CONSOLIDATION round: 12 routes → 3 hub modules +
   `shared/mast-entity.js` WITH a unit test, immediately — never a per-module copy. Existing
   primitives: `pageHeader` (every page header, no exceptions), `repeatRows`, `validate.email/.phone`,
   `tiles`, `relatedTable`, `badge`, `slideOut`; `MastEntity.define/renderList/openRecord/drill`;
-  guided process header is the default for any `detail.flow`.
+  guided process header is the default for any `detail.flow`; `MastUI.list`
+  opt-in `selectable` rows (checkbox column + select-all, finance burn-down #463)
+  is the standard for bulk actions — it unblocked expenses bulk-approve.
 - **Demo-data rules (sgtest15 / Shir Glassworks).** Realistic names/content only — no
   test/demo/harness strings anywhere customer-visible, including `source`-type fields. Seed via
   paths that stamp production-shaped values (the platform MCP's `create_test` stamps
@@ -422,6 +424,8 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 | Conflict resolution with `checkout --ours index.html` | Discards the wave's WHOLE index.html side (route map/manifest/tab div), not just the version-suffix hunks — and ship-check stays green with the module unwired. Resolve hunk-by-hunk or re-apply + grep the wiring after |
 | Truncated record ids in recon dumps | A sliced uid read back as "record missing" in the walk. Keep ids whole; stash them on window.__vars in-page |
 | `slideOut._opts` after requestClose() | Stale — reports a closed SO as open/edit. Gate probes on the SO body's offsetParent first |
+| Conflict markers committed in app/index.html | `<<<<<<<` in the INLINE script is a boot-killing SyntaxError for every tenant, and `lint-syntax` parses `app/modules/*.js` ONLY — four ship-check runs and CI stayed green while dev was down (finance burn-down #468). After ANY conflict resolution, `grep -rn '<<<<<<<' .` the resolved files; a mid-rebase commit can capture markers even when both sides are identical |
+| `bash scripts/ship-check.sh \| tail` | The pipe masks the exit code — a FAILED gauntlet reads as success and the commit goes up. Run it bare (or capture `$?` from the script, not the pipe) before chaining `&& git commit` |
 
 ## 8 · Helper scripts
 
@@ -441,3 +445,6 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
       four twins have now shipped with dead CREATE from this exact pairing.
 - [ ] Lint or smoke-test: any legacy `MastDB.update('' | '<coll>', {multi-path fanout})` —
       two such writes sat silently dead in book.js since the Firestore migration.
+- [ ] CI parse of app/index.html's inline scripts + a repo-wide conflict-marker grep —
+      lint-syntax only covers app/modules/*.js, so committed `<<<<<<<` markers in
+      index.html shipped a tenant-wide boot failure with every check green (#468).

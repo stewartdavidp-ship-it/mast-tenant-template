@@ -216,16 +216,21 @@ Every delete: `mastConfirm` + `writeAudit` + RBAC `can(route,'delete')`.
       sgtest15: `rejectAmendment` without periodId returns `not-found`, not INTERNAL.
       Prod rides the normal release pipeline (dirty bit set). The template's periodId
       threading stays as the fast path.
-- [ ] Amendments lens refresh after classic-modal submit is manual (Refresh button) —
-      the classic modal's success callback re-renders the legacy tab, not the hub.
+- [x] Amendments lens refresh after classic-modal submit — CLOSED by the native V2
+      submit form (classic burn-down #456); the hub refreshes itself on success.
 
 - [x] `app/modules/financials.js` deleted (holistic PR).
-- [ ] Bulk approve / multi-select on expenses stays legacy (engine lacks row checkboxes).
-- [ ] AR dunning-settings + AR audit-log sub-views stay legacy (linked).
+- [ ] Bulk approve on expenses stays legacy — but the engine row-checkbox primitive
+      now EXISTS (`MastUI.list` selectable, burn-down #463); wiring expenses to it is
+      a small follow-up.
+- [x] AR dunning-settings + AR audit-log — native Reminders lens in
+      finance-openitems-v2 (burn-down #459).
 - [ ] Bank-sync (Plaid) status cards + Reconnect/Retry stay legacy (infrastructure UI).
-- [ ] Tax Nexus registration *editing* stays legacy; V2 lens is read-only.
-- [ ] Report *generation* internals (loan report, tax package) stay legacy behind the
-      thin V2 launcher.
+- [x] Tax Nexus registration editing + 1099 prep — native panes in the statements
+      Tax lens (burn-down #466); first in-admin nexus editor (legacy was read-only).
+- [x] Report generators — all six native in finance-reports-v2 (burn-down #467):
+      AR/AP aging, customer statement (+share link), 1099 prep, loan/investor,
+      year-end package.
 - [ ] No `shared/finance-*.js` — helpers exposed via FinanceBridge on finance.js; if a
       second consumer outside the admin app appears, promote to shared/ with tests.
 - [ ] `paidAmount` on purchaseReceipts lacks a `Cents` suffix though it holds cents —

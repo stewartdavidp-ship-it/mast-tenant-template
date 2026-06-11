@@ -29,8 +29,13 @@ substantially less in practice (bridge cores already exist for most writes).
 
 1. **Quick wins + S-tier per section** rides each section's NEXT touch (Customer
    Service round picks up its 4 sites as in-scope work, not debt).
-2. **Finance burn-down session**: day-close form, amendment-modal rehome, dunning
-   settings, AR detail, tax export, then the reports generators (largest single item).
+2. **Finance burn-down session**: ✅ **DONE 2026-06-10** (PRs #454, #456, #459,
+   #463, #466, #467 + boot hotfix #468) — day-close drawer form, amendment-modal
+   rehome, dunning settings + reminder audit log, portfolio bulk tagging (new
+   engine selectable-rows primitive), nexus registration CRUD + 1099 prep panes,
+   and all six report generators native. The amendment-modal legacy-function
+   reuse (`FinanceBridge.openSubmitAmendment`) is also retired (state-free
+   `submitAmendment` core).
 3. **Marketing**: blog editor (largest single surface — needs its own session).
 4. **Classes**: ~~schedule generator session~~ — ✅ DONE 2026-06-10 (#457 editor completion incl. publish, #461 run-session runtime, #462 instructors skills + Settings lens + pass Holders, #464 selector walk-fix). Classes-domain classic links: **0**.
 5. **Ops/Sales sweep**: channels wizard, Shippo labels, consignments, contacts sync.
@@ -39,8 +44,8 @@ substantially less in practice (bridge cores already exist for most writes).
 
 See the audit table in this doc's source PR description and per-section plan debt
 registers; the authoritative live check is the grep above. Key per-section counts:
-Sales 4 · Marketing 7 · Operations 2 · Customer Service 4 · ~~Classes 3~~ **Classes 0** (✅ 2026-06-10) · Finance 9 ·
-Contacts 1 · Misc 5 (+ legacy-function reuse: finance amendment submit modal).
+Sales 4 · Marketing 7 · Operations 2 · Customer Service 4 · ~~Classes 3~~ **Classes 0** (✅ 2026-06-10) · ~~Finance 9~~ **Finance 0** (✅ 2026-06-10, incl. the amendment-submit legacy-function reuse) ·
+Contacts 1 · Misc 5.
 
 ## Standing rule for all future conversion work (playbook-enforced)
 
