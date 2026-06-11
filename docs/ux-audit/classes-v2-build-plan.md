@@ -335,9 +335,8 @@ Sidebar reordered around the operator's process (classes → schedule → enroll
 students → instructors → rooms → passes → reports) with plain-language labels
 (**Schedule**, **Rooms & Equipment**, **Class Passes** — registry labels updated to
 match). The **8 → 6 consolidation** (Class Reports folds into Classes, Rooms &
-Equipment folds under Classes setup) is PROPOSED for ratification — both surfaces
-already live as hub lenses/records, so the merge is a sidebar-only change when
-ratified (CS `data-route-alt` precedent).
+Equipment folds under Classes setup) was **RATIFIED same-day (Option B: Rooms as a hub lens)** and shipped in the
+follow-up PR (CS `data-route-alt` precedent).
 
 ## Debt register — close-out
 
@@ -354,4 +353,4 @@ ratified (CS `data-route-alt` precedent).
 - [ ] `classes.resourceName` name-string pseudo-FK — backfill candidate (resourceId now stamped by the V2 assignment picker).
 - [ ] Enrollment list reads are bounded windows (500/1000/2000) — no pagination.
 - [ ] Pass INSTANCE admin (per-user wallet passes) — out of scope; definitions only.
-- [ ] 8→6 sidebar merge — pending operator ratification.
+- [x] 8→6 sidebar merge — **RATIFIED + SHIPPED 2026-06-10 (Option B)**: Class Reports + Rooms & Equipment fold into the Classes hub (Catalog · Rooms & equipment · Reports lenses); one "Classes" item claims `book-reports` + `resources` via `data-route-alt`; legacy keeps all eight items byte-identical (`.classes-merged-v1/-v2`).
