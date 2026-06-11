@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260611-130808-1d45653"></script>
+  <script src="../shared/customer-filters.js?v=20260611-163957-59cd40f"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260611-130808-1d45653"></script>
+  <script src="../shared/variant-reconcile.js?v=20260611-163957-59cd40f"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260611-130808-1d45653"></script>
-  <script src="../shared/mast-io.js?v=20260611-130808-1d45653"></script>
-  <script src="../shared/mast-entity.js?v=20260611-130808-1d45653"></script>
+  <script src="../shared/mast-ui.js?v=20260611-163957-59cd40f"></script>
+  <script src="../shared/mast-io.js?v=20260611-163957-59cd40f"></script>
+  <script src="../shared/mast-entity.js?v=20260611-163957-59cd40f"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260611-130808-1d45653"></script>
+  <script src="../shared/product-readiness.core.js?v=20260611-163957-59cd40f"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22212,7 +22212,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260611-130808-1d45653';
+var MAST_MODULES_V = '20260611-163957-59cd40f';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -34664,6 +34664,29 @@ function renderWizardFastSummary() {
   }
 }
 
+// _wizardActivateTenant: flip the tenant onboarding→active via the
+// completeOnboarding CF. The registry doc platform_tenants/{id} is
+// platform-admin-only under Firestore rules, so a real tenant owner cannot
+// write status/tenantStatus directly (it failed with "Missing or insufficient
+// permissions"). The CF does it server-side after verifying the caller is this
+// tenant's admin. See mast-architecture exports.completeOnboarding.
+async function _wizardActivateTenant() {
+  var cfBase = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase) || '';
+  if (!cfBase) throw new Error('Cloud Functions base not configured');
+  var token = await auth.currentUser.getIdToken();
+  var resp = await fetch(cfBase + '/completeOnboarding', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify({ tenantId: MastDB.tenantId() })
+  });
+  if (!resp.ok) {
+    var d = {};
+    try { d = await resp.json(); } catch (e) { /* non-JSON error body */ }
+    throw new Error((d && d.error) || ('Activation failed (' + resp.status + ')'));
+  }
+  return resp.json();
+}
+
 // wizardCompleteFast: DPA activation for fast-path (non-storefront + fast-exit).
 // Shares all Firebase write logic with wizardComplete but reads -Fast DPA elements.
 async function wizardCompleteFast() {
@@ -34722,8 +34745,7 @@ async function wizardCompleteFast() {
     var depth = window._wizardOnboardingDepth || 'quick';
     await MastDB.businessEntity.update('presence', { onboardingDepth: depth }).catch(function() {});
 
-    await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/status', 'active');
-    await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig/tenantStatus', 'active');
+    await _wizardActivateTenant();
     await MastDB.config.set('setupProgress/completed', true);
     await MastDB.config.set('setupProgress/completedAt', new Date().toISOString());
     await updateConfigChecklist('brand', true);
@@ -37020,8 +37042,7 @@ async function wizardComplete() {
     }
 
     // Legacy registry bookkeeping retained for backward compat with non-entity consumers.
-    await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/status', 'active');
-    await MastDB.platform.set('mast-platform/tenants/' + MastDB.tenantId() + '/publicConfig/tenantStatus', 'active');
+    await _wizardActivateTenant();
     await MastDB.config.set('setupProgress/completed', true);
     await MastDB.config.set('setupProgress/completedAt', new Date().toISOString());
     await updateConfigChecklist('brand', true);
