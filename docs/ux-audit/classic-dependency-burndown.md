@@ -86,6 +86,26 @@ legacy" pattern is deleted as of this PR.
 
 ## Progress
 
+- **2026-06-11 — Operations section: 0 classic sites remaining (incl. silent
+  gaps).** Five PRs: contacts (interaction log / inquiry respond / Google sync
+  native over ContactsBridge cores); team (the five sub-surfaces — Time Clock,
+  PTO, Labor Burden, Documents, Onboarding — re-hosted INSIDE team-v2 as page
+  lenses via a container-agnostic `TeamPanels` host with host-aware post-write
+  refresh); channels (create / OAuth connect / product assignment native over
+  ChannelsBridge cores; recon note: autoMatchSources + inventoryModel have no
+  legacy editor and no disconnect flow exists — nothing to port); trips
+  (SILENT gap — no link existed: flow modals are body-level and now reachable
+  from trips-v2, + a re-hosted Tax-report lens); customers (SILENT gap:
+  segments over the shared customer-filters matcher, tags/notes editors,
+  wallet-adjust entry points, recompute; merge was already V2-homed in
+  duplicates-v2). Party template gained additive `overviewActions` /
+  `walletActions` hooks. **Carve-outs (operator-ratified):** `advisor.js` is
+  PARKED — it is the current implementation (soft-hidden, awaiting Entity
+  Phase 2 streams); Phase 2 V1-deletion must NOT sweep it. The mapping guided
+  wizard is generation-agnostic (boot-trigger overlay) and already token-clean
+  — it stays. NOTE for the gate: silent gaps don't show in the
+  `navigateToClassic` grep — each section close-out should also assert
+  "every legacy-only WRITE capability has a V2 entry point".
 - **2026-06-10 — Admin section: 0 classic sites remaining.** Both admin hatches
   retired in one PR: (1) Site Traffic's "Sources & revenue" classic launcher →
   native Sources lens on analytics-v2 over the new shared

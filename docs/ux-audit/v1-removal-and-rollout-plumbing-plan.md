@@ -64,6 +64,13 @@ sanctioned. Every classic link is a missing V2 feature. The full audited invento
 - Legacy render code in the per-section modules (keep each module's bridge cores).
   By Phase-2 time the burn-down (Phase 1.5) has rebuilt every formerly-linked classic
   surface, so nothing in V1 render code is load-bearing.
+  **Keep-list (operator-ratified carve-outs, 2026-06-11):** `advisor.js` (parked —
+  current implementation, soft-hidden, awaiting Entity Phase 2); `mapping.js`'s
+  guided-matching interstitial + MappingBridge (generation-agnostic boot overlay);
+  the team sub-surface panels in `team.js` (`TeamPanels` — re-hosted INTO team-v2,
+  now shared UI like AuditFeedbackUI, not dead render code); the trips flow modals
+  in `trips.js` (body-level, hosted by trips-v2); the customers wallet-adjust modal
+  (`customersOpenWalletAdjust`) + `duplicates-v2`'s `customersMerge` dependency.
 - Dual sidebar item sets (e.g. finance `.fin-merged-v1` / `.fin-merged-v2` →
   collapse to the merged set), dual tab divs, `data-route-alt` stays (generic).
 - `mastLegacyUI` flag + "Legacy UI" avatar-menu entry → superseded by the
