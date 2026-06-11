@@ -3,8 +3,8 @@
 **Status:** Canonical process, distilled from the Sales conversion (2026-06-10, PRs #360–#378),
 amended after the Marketing conversion (2026-06-10, PRs #380–#384), the Operations
 conversion (2026-06-10, PRs #387–#396), the Finance conversion (2026-06-10,
-PRs #399–#405 — the first CONSOLIDATION round: 12 routes → 3 hub modules + 3 twins), and the Customer Service conversion (2026-06-10, PRs #413–#422). Run this end-to-end for each remaining section
-(Site, Retention, Shows, Bookings, Admin). Worked examples: `sales-v2-build-plan.md` /
+PRs #399–#405 — the first CONSOLIDATION round: 12 routes → 3 hub modules + 3 twins), the Customer Service conversion (2026-06-10, PRs #413–#422), and the Classes conversion (2026-06-10, PRs #426–#433 — six pre-existing twins audited-in-place rather than rebuilt). Run this end-to-end for each remaining section
+(Site, Retention, Shows, Admin). Worked examples: `sales-v2-build-plan.md` /
 `marketing-v2-build-plan.md` (plan shape) and `standard-record-ui.md` §10 (the four archetypes).
 
 ## 0 · Ground rules
@@ -106,6 +106,50 @@ same hour they shipped.
 - Engine-first pays inside one round, not just across rounds: the textarea
   control and status format labels added for Wave 1 were reused by Wave 3
   unchanged.
+
+## 0d · Classes-round retro (2026-06-10, PRs #426–#433) — process lessons
+
+**What worked (keep doing):** auditing existing twins against the CURRENT standard
+instead of assuming the CS "pre-standard twin needs a rebuild" prior — all six
+classes twins were post-standard in chrome (pageHeader, bridges, define-at-load,
+static tab divs) and the real gaps were write-depth, so the round was bridge
+extraction + lens consolidation, not rebuilds; verifying recon claims caught a
+flat-wrong "MAST_V2_ROUTE_MAP doesn't exist" and surfaced a fully built ORPHAN
+module (sessions-v2: manifest-wired, route-mapped nowhere, drilled-to by nothing)
+that became the Schedule List lens for free; the walk again out-performed static
+review — it found FOUR real bugs, two of them broken in LEGACY for months.
+
+**What cost cycles (new gotchas below):**
+1. Two legacy writes (`materializeSessions`, `renumberWaitlist`) used RTDB-style
+   multi-path `MastDB.update('', {'<path>/<id>': …}})` / wrong-collection fan-out —
+   silently dead since the Firestore migration ("path requires doc ID"). Session
+   generation did not work in V1 AT ALL; only the walk's Generate click caught it.
+   Treat any legacy multi-path MastDB.update as suspect BEFORE bridging it.
+2. The required:true + name-less-editRender CREATE blocker (contacts-v2 gotcha)
+   claimed its THIRD and FOURTH victims (resources-v2, instructors-v2) — dead
+   CREATE since their conversion. When auditing an existing twin, grep its field
+   defs for `required: true` and check the editRender inputs for `name=` attrs.
+3. The Wave-0 seed wrote resources to `public/resources`; the accessor reads
+   `admin/resources` — invisible docs, caught only when the assignment picker
+   came up empty. Verify the accessor PATH in scripts/rewrite-entities.js before
+   seeding, even when the collection name "obviously" matches the recon.
+4. A calendar twin existed, was manifest-wired, and was UNREACHABLE — `calendar`
+   was never added to MAST_V2_ROUTE_MAP. Twin-exists ≠ twin-reachable: check the
+   route map for every twin during recon (extends the §1 visibility rule).
+
+**Session-process notes (cheap wins to repeat):**
+- Live-data status census beat code reading: enrollments carried THREE
+  storefront-CF statuses (`checked-in`, `attended-pending-waiver`,
+  `cancelled_by_session`) absent from the legacy module's vocab (§0c-5 again) —
+  a 10-line field-shape census over the Wave-0 audit dump found them instantly.
+- Walk automation: the mastConfirm dialog's confirm button is `#mastDialogOK` —
+  scope delete confirmations there. The slide-out footer is
+  `#mastSlideOutFooter` and its primary action calls
+  `window.MastUI.slideOut._save()`.
+- Identity heals can CREATE docs, not just rename: kept records referenced
+  instructor/resource ids whose docs had been deleted — recreating the doc at
+  the referenced id (David Stewart, Sarah Chen, Main Studio) healed 21+ dangling
+  FKs without touching the referencing records.
 
 ## 1 · Recon (Explore agent, very thorough)
 
@@ -271,6 +315,11 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 | Per-record bridge action over a load-once cache | Fresh-read the doc into the cache on miss, or actions on post-load records silently no-op |
 | Boot-failure screen ("We couldn't load the admin") | It WIPES the DOM — all later console errors are unrelated noise; reload before diagnosing |
 | CF/MCP-written config rows vs legacy admin rows | Same collection, different FK fields (triggers: surveyGroupId vs surveyId) — resolve both |
+| Legacy multi-path `MastDB.update('' or '<coll>', {fanout})` | Silently dead on Firestore ("path requires doc ID") — session generation was broken in V1 for months. Convert to per-doc accessor writes before bridging |
+| Twin exists + manifest-wired but NOT in MAST_V2_ROUTE_MAP | Unreachable under V2 (calendar-v2); recon must check the route map per twin, not just MODULE_MANIFEST |
+| Accessor PATH ≠ the "obvious" collection | `MastDB.resources` reads `admin/resources`, not `public/resources` — seed via the accessor path from rewrite-entities.js or docs land invisible |
+| `required:true` on a twin with custom editRender | 3rd + 4th occurrence (resources-v2, instructors-v2): CREATE dead since conversion. Audit existing twins for this pairing, don't just trust them |
+| Kept records referencing DELETED docs (instructor/resource ids) | Recreate the doc AT the referenced id (identity heal works for creates too), don't rewrite the referencing records |
 
 ## 8 · Helper scripts
 
