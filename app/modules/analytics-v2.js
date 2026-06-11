@@ -8,10 +8,10 @@
  * legacy (7/30/90 days). No writes, no slide-out records.
  *
  * Reuses the legacy vocabulary helpers when present (PAGE_LABELS,
- * analyticsActionLabel) so click/page names can't drift. The W2.5
- * "Traffic & Revenue by Source" panel stays on legacy for now — its renderer
- * is hard-wired to legacy DOM ids (debt-registered in the plan doc); a
- * "Sources & revenue" launcher lens deep-links there via classic nav.
+ * analyticsActionLabel) so click/page names can't drift. The Sources lens
+ * (Traffic & Revenue by Source) renders natively over the shared
+ * window.AnalyticsSources compute core (state-free roll-up in index.html,
+ * same data path the legacy W2.5 panel uses) — NO classic escape hatch.
  */
 (function () {
   'use strict';
@@ -27,7 +27,7 @@
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
 
-  var V2 = { hits: [], lens: 'pages', rangeDays: 30, loaded: false };
+  var V2 = { hits: [], lens: 'pages', rangeDays: 30, loaded: false, campFilter: '', sourcesLoaded: false };
 
   function pageLabel(p) { return (window.PAGE_LABELS && PAGE_LABELS[p]) || p || '(unknown)'; }
   function actionLabel(a) {
@@ -104,6 +104,39 @@
     return U.card('Last 30 hits', rows || '<div style="color:var(--warm-gray);font-size:0.85rem;">No traffic recorded yet.</div>');
   }
 
+  function sourcesPane() {
+    var core = window.AnalyticsSources;
+    if (!core) return U.card('Sources & revenue', '<div style="color:var(--warm-gray);font-size:0.85rem;">Source data engine unavailable.</div>');
+    if (!V2.sourcesLoaded) {
+      core.load().then(function () { V2.sourcesLoaded = true; render(); });
+      return U.card('Sources & revenue', '<div style="color:var(--warm-gray);font-size:0.85rem;">Loading source data…</div>');
+    }
+    var entries = core.rollup(V2.rangeDays, V2.campFilter);
+    var campOpts = core.campaignOptions().map(function (c) {
+      return '<option value="' + esc(c.value) + '"' + (V2.campFilter === c.value ? ' selected' : '') + '>' + esc(c.label) + '</option>';
+    }).join('');
+    var campSel = '<select class="form-input" style="font-size:0.85rem;padding:6px 10px;max-width:240px;margin-bottom:10px;" onchange="AnalyticsV2.setCampaign(this.value)">' +
+      '<option value="">All campaigns</option>' + campOpts + '</select>';
+    if (!entries.length) {
+      return U.card('Sources & revenue', campSel +
+        '<div style="color:var(--warm-gray);font-size:0.85rem;">No traffic sources captured in this range yet — UTMs appear here once visitors land with utm_source params.</div>');
+    }
+    var chips = entries.slice(0, 3).map(function (e) {
+      return '<span style="background:var(--cream);padding:4px 10px;border-radius:4px;font-size:0.85rem;margin-right:8px;"><strong>' + esc(e[0]) + '</strong> $' + (e[1].revenueCents / 100).toFixed(2) + ' (' + e[1].orderCount + ' order' + (e[1].orderCount !== 1 ? 's' : '') + ')</span>';
+    }).join('');
+    var rows = entries.map(function (e) {
+      return '<div style="display:flex;gap:12px;padding:6px 0;border-bottom:1px solid var(--cream-dark);font-size:0.85rem;align-items:baseline;">' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(e[0]) + '</span>' +
+        '<span style="flex:0 0 80px;text-align:right;">' + N.count(e[1].hits) + ' hits</span>' +
+        '<span style="flex:0 0 80px;text-align:right;">' + N.count(e[1].orderCount) + ' orders</span>' +
+        '<span style="flex:0 0 100px;text-align:right;font-weight:600;">$' + (e[1].revenueCents / 100).toFixed(2) + '</span></div>';
+    }).join('');
+    return U.card('Sources & revenue',
+      campSel +
+      '<div style="margin-bottom:10px;">' + chips + '</div>' + rows +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">Source = utm_source, else the referrer site, else direct. Revenue joins orders on their attribution.</div>');
+  }
+
   function ensureTab() {
     var el = document.getElementById('analyticsV2Tab');
     if (el) return el;
@@ -151,16 +184,16 @@
     var pane = V2.lens === 'clicks' ? clicksPane(inRange)
       : V2.lens === 'visitors' ? visitorsPane(inRange)
       : V2.lens === 'recent' ? recentPane()
+      : V2.lens === 'sources' ? sourcesPane()
       : pagesPane(inRange);
 
     tab.innerHTML =
       U.pageHeader({
         title: 'Site traffic',
-        subtitle: 'Who\'s visiting your storefront and what they do there',
-        actionsHtml: '<button class="btn btn-secondary" onclick="AnalyticsV2.sources()">Sources &amp; revenue →</button>'
+        subtitle: 'Who\'s visiting your storefront and what they do there'
       }) +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0;">' +
-        lensPill('pages', 'Pages') + lensPill('clicks', 'Clicks') + lensPill('visitors', 'Visitors') + lensPill('recent', 'Recent') +
+        lensPill('pages', 'Pages') + lensPill('clicks', 'Clicks') + lensPill('visitors', 'Visitors') + lensPill('recent', 'Recent') + lensPill('sources', 'Sources & revenue') +
         rangeSel +
       '</div>' +
       tiles + pane;
@@ -179,13 +212,7 @@
   window.AnalyticsV2 = {
     setLens: function (l) { V2.lens = l; render(); },
     setRange: function (v) { V2.rangeDays = parseInt(v, 10) || 30; render(); },
-    // The Traffic & Revenue by Source panel lives on the legacy page (its
-    // renderer is bound to legacy DOM ids) — classic nav reaches it under
-    // the flag (navigateToClassic bypasses the V2 remap).
-    sources: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('analytics');
-      else if (typeof navigateTo === 'function') navigateTo('analytics');
-    }
+    setCampaign: function (v) { V2.campFilter = v || ''; render(); }
   };
 
   MastAdmin.registerModule('analytics-v2', {

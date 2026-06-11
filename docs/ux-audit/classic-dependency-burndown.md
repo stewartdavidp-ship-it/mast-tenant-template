@@ -47,3 +47,16 @@ Contacts 1 · Misc 5 (+ legacy-function reuse: finance amendment submit modal).
 **No new classic escape hatches, ever.** A wave that can't rebuild a sub-surface
 re-scopes the wave — it does not link to V1. The playbook's "single-sourced on
 legacy" pattern is deleted as of this PR.
+
+## Progress
+
+- **2026-06-10 — Admin section: 0 classic sites remaining.** Both admin hatches
+  retired in one PR: (1) Site Traffic's "Sources & revenue" classic launcher →
+  native Sources lens on analytics-v2 over the new shared
+  `window.AnalyticsSources` compute core (the W2.5 roll-up extracted state-free;
+  legacy panel re-uses it); (2) Team Access's "classic Permissions page" link →
+  per-user override editing (per-area Level pickers + sensitive grants + access
+  expiry) on the member edit form via `EmployeesBridge.saveUserOverrides`
+  (legacy saveUserPermissionOverrides delegates to the same core).
+  `grep -c "navigateToClassic(" app/modules/*.js` now counts the other
+  sections' sites only.

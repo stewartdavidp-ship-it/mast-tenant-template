@@ -5,14 +5,14 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **60,192** lines
-- **Feature modules:** **118** files in `app/modules/` (**109** routed), **124,153** lines combined
+- **Core shell:** `app/index.html` — **60,217** lines
+- **Feature modules:** **118** files in `app/modules/` (**109** routed), **124,259** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
 | `modules/accounting.js` | 1,551 | — |
 | `modules/advisor.js` | 1,401 | advisor |
-| `modules/analytics-v2.js` | 194 | analytics-v2 |
+| `modules/analytics-v2.js` | 221 | analytics-v2 |
 | `modules/audit-feedback.js` | 849 | suppressions |
 | `modules/audit-v2.js` | 414 | audit-v2, audit-muted-v2 |
 | `modules/audit.js` | 1,721 | audit |
@@ -51,7 +51,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
 | `modules/email-log-v2.js` | 252 | email-log-v2 |
 | `modules/email-log.js` | 561 | email-log |
-| `modules/employees-v2.js` | 502 | employees-v2 |
+| `modules/employees-v2.js` | 581 | employees-v2 |
 | `modules/engagement-inbox-v2.js` | 383 | engagement-inbox-v2 |
 | `modules/engagement-inbox.js` | 515 | engagement-inbox |
 | `modules/enrollments-v2.js` | 474 | enrollments-v2 |

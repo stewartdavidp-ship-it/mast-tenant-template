@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-224224-7d44ab5"></script>
+  <script src="../shared/customer-filters.js?v=20260610-225056-dc4415c"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-224224-7d44ab5"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-225056-dc4415c"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-224224-7d44ab5"></script>
-  <script src="../shared/mast-io.js?v=20260610-224224-7d44ab5"></script>
-  <script src="../shared/mast-entity.js?v=20260610-224224-7d44ab5"></script>
+  <script src="../shared/mast-ui.js?v=20260610-225056-dc4415c"></script>
+  <script src="../shared/mast-io.js?v=20260610-225056-dc4415c"></script>
+  <script src="../shared/mast-entity.js?v=20260610-225056-dc4415c"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-224224-7d44ab5"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-225056-dc4415c"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22133,7 +22133,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-224224-7d44ab5';
+var MAST_MODULES_V = '20260610-225056-dc4415c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -49740,6 +49740,51 @@ async function _w25LoadData() {
   }
 }
 
+// State-free W2.5 compute core, shared by the legacy panel and the V2 Site
+// Traffic "Sources" lens (escape-hatch retirement, admin-v2-build-plan.md):
+// load once, then pure roll-up over the cached hits/orders.
+window.AnalyticsSources = {
+  load: function() { return _w25LoadData(); },
+  // [{value, label}] for the campaign filter (campaigns with a utmCampaign).
+  campaignOptions: function() {
+    var out = [];
+    Object.keys(_w25Campaigns || {}).forEach(function(cid) {
+      var c = _w25Campaigns[cid];
+      if (!c || !c.utmCampaign) return;
+      out.push({ value: c.utmCampaign, label: (c.name || c.utmCampaign) + ' (' + c.utmCampaign + ')' });
+    });
+    return out;
+  },
+  // Sorted [[source, {hits, orderCount, revenueCents}], …] by revenue desc.
+  // Source key = utm_source || referrer-host || 'direct'; orders join on
+  // `attribution` (or legacy `utm`).
+  rollup: function(rangeDays, campFilter) {
+    var cutoff = Date.now() - (rangeDays * 86400000);
+    var bySource = {};
+    (_w25Hits || []).forEach(function(h) {
+      if (!h || (h.ts || 0) < cutoff) return;
+      if (campFilter && h.uc !== campFilter) return;
+      var src = String(h.us || _hostFromRef(h.r) || 'direct').toLowerCase();
+      if (!bySource[src]) bySource[src] = { hits: 0, orderCount: 0, revenueCents: 0 };
+      bySource[src].hits++;
+    });
+    (_w25Orders || []).forEach(function(o) {
+      if (!o) return;
+      var ts = o.createdAt ? new Date(o.createdAt).getTime() : 0;
+      if (ts < cutoff) return;
+      var attr = o.attribution || o.utm || {};
+      if (campFilter && attr.campaign !== campFilter && attr.utm_campaign !== campFilter) return;
+      var src = String(attr.source || attr.utm_source || _hostFromRef(attr.referrer) || 'direct').toLowerCase();
+      if (!bySource[src]) bySource[src] = { hits: 0, orderCount: 0, revenueCents: 0 };
+      bySource[src].orderCount++;
+      bySource[src].revenueCents += (o.totalCents || o.total || 0);
+    });
+    var entries = Object.entries(bySource);
+    entries.sort(function(a, b) { return b[1].revenueCents - a[1].revenueCents; });
+    return entries;
+  }
+};
+
 async function renderTrafficBySource() {
   await _w25LoadData();
   var rangeEl = document.getElementById('trafficSourceRange');
@@ -49749,49 +49794,15 @@ async function renderTrafficBySource() {
 
   // Populate campaign dropdown if not yet populated.
   if (campEl && campEl.options.length <= 1) {
-    Object.keys(_w25Campaigns).forEach(function(cid) {
-      var c = _w25Campaigns[cid];
-      if (!c || !c.utmCampaign) return;
+    AnalyticsSources.campaignOptions().forEach(function(c) {
       var opt = document.createElement('option');
-      opt.value = c.utmCampaign;
-      opt.textContent = c.name + ' (' + c.utmCampaign + ')';
+      opt.value = c.value;
+      opt.textContent = c.label;
       campEl.appendChild(opt);
     });
   }
 
-  var cutoff = Date.now() - (rangeDays * 86400000);
-  var hits = (_w25Hits || []).filter(function(h) {
-    if (!h || (h.ts || 0) < cutoff) return false;
-    if (campFilter && h.uc !== campFilter) return false;
-    return true;
-  });
-
-  // Group hits by source. Source key = utm_source || referrer-host || 'direct'.
-  var bySource = {};
-  hits.forEach(function(h) {
-    var src = h.us || _hostFromRef(h.r) || 'direct';
-    src = String(src).toLowerCase();
-    if (!bySource[src]) bySource[src] = { hits: 0, orderCount: 0, revenueCents: 0 };
-    bySource[src].hits++;
-  });
-
-  // Join orders. Orders carry `attribution` (or legacy `utm`) — read both.
-  (_w25Orders || []).forEach(function(o) {
-    if (!o) return;
-    var ts = o.createdAt ? new Date(o.createdAt).getTime() : 0;
-    if (ts < cutoff) return;
-    var attr = o.attribution || o.utm || {};
-    if (campFilter && attr.campaign !== campFilter && attr.utm_campaign !== campFilter) return;
-    var src = attr.source || attr.utm_source || _hostFromRef(attr.referrer) || 'direct';
-    src = String(src).toLowerCase();
-    if (!bySource[src]) bySource[src] = { hits: 0, orderCount: 0, revenueCents: 0 };
-    bySource[src].orderCount++;
-    bySource[src].revenueCents += (o.totalCents || o.total || 0);
-  });
-
-  // Top-3 row by revenue
-  var entries = Object.entries(bySource);
-  entries.sort(function(a, b) { return b[1].revenueCents - a[1].revenueCents; });
+  var entries = AnalyticsSources.rollup(rangeDays, campFilter);
   var top3El = document.getElementById('trafficSourceTop3');
   if (top3El) {
     if (!entries.length) {
@@ -52225,9 +52236,15 @@ function resetUserOverrides(uid) {
   openUserPermissionsPanel(uid, 'defaults');
 }
 
-async function saveUserPermissionOverrides(uid) {
-  var u = adminUsers[uid];
-  if (!u) return;
+// State-free user-overrides write core (shared with employees-v2 — the
+// escape-hatch retirement). Takes the EFFECTIVE per-module levels and
+// sensitive grants, builds minimal diffs vs the user's role defaults, and
+// saves via CF updateUserPermissions (server validates + persists).
+// accessExpiry: undefined = leave untouched, '' / null = clear, ISO date = set.
+EmployeesBridge.saveUserOverrides = async function(uid, moduleLevels, sensitiveMap, accessExpiry) {
+  if (!can('employees', 'edit')) throw new Error('You do not have permission to edit user permissions.');
+  var u = adminUsers[uid] || await MastDB.adminUsers.get(uid);
+  if (!u) throw new Error('User not found.');
   var role = u.role || 'guest';
   var roleConfig = rolesData[role] || DEFAULT_ROLES[role];
 
@@ -52236,7 +52253,7 @@ async function saveUserPermissionOverrides(uid) {
   getModulePermRegistry().forEach(function(g) {
     g.routes.forEach(function(m) {
       var def = roleDefaultModuleLevel(role, roleConfig, m.route);
-      var cur = editingUserModuleLevels[m.route];
+      var cur = moduleLevels[m.route];
       if (cur && cur !== 'custom' && cur !== def) moduleOverrides[m.route] = levelToTriad(cur);
     });
   });
@@ -52244,29 +52261,37 @@ async function saveUserPermissionOverrides(uid) {
   FUNCTION_PERMISSIONS.forEach(function(fp) {
     var k = _sensitiveKey(fp.entity, fp.action);
     var def = roleDefaultSensitive(role, roleConfig, k);
-    if (editingUserSensitive[k] !== def) sensitiveOverrides[k] = editingUserSensitive[k] === true;
+    if (sensitiveMap[k] !== undefined && sensitiveMap[k] !== def) sensitiveOverrides[k] = sensitiveMap[k] === true;
   });
 
-  var accessExpiry;
-  var expiryInput = document.getElementById('userPanelExpiry');
-  if (expiryInput) accessExpiry = expiryInput.value ? expiryInput.value : null;
+  var body = { targetUid: uid, moduleOverrides: moduleOverrides, sensitiveOverrides: sensitiveOverrides };
+  if (accessExpiry !== undefined) body.accessExpiry = accessExpiry ? accessExpiry : null;
 
-  try {
-    var token = await auth.currentUser.getIdToken();
-    var resp = await callCF('/updateUserPermissions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ targetUid: uid, moduleOverrides: moduleOverrides, sensitiveOverrides: sensitiveOverrides, accessExpiry: accessExpiry })
-    });
-    var result = await resp.json();
-    if (!resp.ok) {
-      showToast((result && result.error) || 'Failed to save permissions.', true);
-      return;
-    }
-    // Update local cache with validated values returned from the CF.
+  var token = await auth.currentUser.getIdToken();
+  var resp = await callCF('/updateUserPermissions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+    body: JSON.stringify(body)
+  });
+  var result = await resp.json();
+  if (!resp.ok) throw new Error((result && result.error) || 'Failed to save permissions.');
+  // Update local cache with validated values returned from the CF.
+  if (adminUsers[uid]) {
     adminUsers[uid].moduleOverrides = result.moduleOverrides || moduleOverrides;
     adminUsers[uid].permissionOverrides = result.sensitiveOverrides || sensitiveOverrides;
-    if (expiryInput) adminUsers[uid].accessExpiry = result.accessExpiry !== undefined ? result.accessExpiry : accessExpiry;
+    if (accessExpiry !== undefined) adminUsers[uid].accessExpiry = result.accessExpiry !== undefined ? result.accessExpiry : (accessExpiry || null);
+  }
+  return { ok: true, result: result };
+};
+
+async function saveUserPermissionOverrides(uid) {
+  var u = adminUsers[uid];
+  if (!u) return;
+  var expiryInput = document.getElementById('userPanelExpiry');
+  var accessExpiry = expiryInput ? (expiryInput.value ? expiryInput.value : null) : undefined;
+
+  try {
+    await EmployeesBridge.saveUserOverrides(uid, editingUserModuleLevels, editingUserSensitive, accessExpiry);
     closeModal();
     var displayName = u.displayName || u.email || 'User';
     var diffCount = userOverrideCount(adminUsers[uid]);
@@ -52276,7 +52301,7 @@ async function saveUserPermissionOverrides(uid) {
     renderUsersList();
   } catch (err) {
     console.error('Save user overrides failed:', err);
-    showToast('Failed to save permissions.', true);
+    showToast((err && err.message) || 'Failed to save permissions.', true);
   }
 }
 
