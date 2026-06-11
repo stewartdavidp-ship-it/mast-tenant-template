@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-214208-4f6beca"></script>
+  <script src="../shared/customer-filters.js?v=20260610-215301-8d49859"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-214208-4f6beca"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-215301-8d49859"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-214208-4f6beca"></script>
-  <script src="../shared/mast-io.js?v=20260610-214208-4f6beca"></script>
-  <script src="../shared/mast-entity.js?v=20260610-214208-4f6beca"></script>
+  <script src="../shared/mast-ui.js?v=20260610-215301-8d49859"></script>
+  <script src="../shared/mast-io.js?v=20260610-215301-8d49859"></script>
+  <script src="../shared/mast-entity.js?v=20260610-215301-8d49859"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-214208-4f6beca"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-215301-8d49859"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11480,6 +11480,7 @@
     <div id="customersTab" style="display:none;"></div>
     <div id="ordersV2Tab" class="tab-content" style="display:none;"></div>
     <div id="auditlogV2Tab" class="tab-content" style="display:none;"></div><!-- auditlog-v2 (scaffolded) -->
+    <div id="subscriptionV2Tab" class="tab-content" style="display:none;"></div><!-- subscription-v2: Plan & billing hub (Plan + Top-ups + About lenses) -->
     <div id="employeesV2Tab" class="tab-content" style="display:none;"></div><!-- employees-v2 (scaffolded) -->
     <div id="studioV2Tab" class="tab-content" style="display:none;"></div><!-- studio-v2 (scaffolded) -->
     <div id="auditV2Tab" class="tab-content" style="display:none;"></div><!-- audit-v2 (scaffolded) -->
@@ -20885,7 +20886,12 @@ var MAST_V2_ROUTE_MAP = {
   'customer-portfolio': 'customer-portfolio-v2',
   'finance-reports': 'finance-reports-v2',
   'employees': 'employees-v2',
-  'auditlog': 'auditlog-v2'
+  'auditlog': 'auditlog-v2',
+  // ONE Plan & billing hub: Subscription + Coins are two lenses of the same
+  // billing object (admin/subscription + platform tenant + token wallet) —
+  // the route picks the entry lens (admin-v2-build-plan.md, finance-hub precedent).
+  'subscription': 'subscription-v2',
+  'coins': 'plan-billing-coins-v2'
 };
 function mastLegacyUiOn() {
   try { return localStorage.getItem('mastLegacyUI') !== '0'; } catch (e) { return true; }
@@ -22123,7 +22129,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-214208-4f6beca';
+var MAST_MODULES_V = '20260610-215301-8d49859';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22257,6 +22263,7 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   'studio-v2': { src: 'modules/studio-v2.js', routes: ['studio-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'employees-v2': { src: 'modules/employees-v2.js', routes: ['employees-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'auditlog-v2': { src: 'modules/auditlog-v2.js', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'subscription-v2': { src: 'modules/subscription-v2.js', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
   workflowEngine: { src: 'modules/workflows/workflow-engine.js', routes: [] },
   commissionsWorkflow: { src: 'modules/workflows/commissions.workflow.js', routes: [] },
   pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', routes: [] },
