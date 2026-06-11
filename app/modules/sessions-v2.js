@@ -272,7 +272,7 @@
       MastEntity.renderList('sessions-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'SessionsV2.sort', onRowClickFnName: 'SessionsV2.open',
-        empty: { title: 'No sessions', message: V2.loaded ? 'Generate sessions from a class schedule in the classic Classes / calendar view.' : 'Loading…' }
+        empty: { title: 'No sessions', message: V2.loaded ? 'Generate sessions from a class — open it in Classes and use ⚙ Generate sessions.' : 'Loading…' }
       });
   }
 
