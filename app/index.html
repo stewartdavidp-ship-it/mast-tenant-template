@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260610-215816-b42dbfd"></script>
+  <script src="../shared/customer-filters.js?v=20260610-220340-22df41c"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260610-215816-b42dbfd"></script>
+  <script src="../shared/variant-reconcile.js?v=20260610-220340-22df41c"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260610-215816-b42dbfd"></script>
-  <script src="../shared/mast-io.js?v=20260610-215816-b42dbfd"></script>
-  <script src="../shared/mast-entity.js?v=20260610-215816-b42dbfd"></script>
+  <script src="../shared/mast-ui.js?v=20260610-220340-22df41c"></script>
+  <script src="../shared/mast-io.js?v=20260610-220340-22df41c"></script>
+  <script src="../shared/mast-entity.js?v=20260610-220340-22df41c"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260610-215816-b42dbfd"></script>
+  <script src="../shared/product-readiness.core.js?v=20260610-220340-22df41c"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11548,7 +11548,6 @@
     <div id="emailLogV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: email log (read-only) -->
     <div id="marketingCalendarV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: marketing calendar (index control) -->
     <div id="channelsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: sales channels (read-focused) -->
-    <div id="auditSuppressionsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: audit suppressions (read-only) -->
 
     <!-- Admin: Procurement Tab — rendered entirely from app/modules/procurement.js -->
     <div id="procurementTab" style="display:none;"></div>
@@ -20860,7 +20859,9 @@ var MAST_V2_ROUTE_MAP = {
   'gift-cards': 'gift-cards-v2', coupons: 'coupons-v2', book: 'classes-v2', calendar: 'calendar-v2', 'book-reports': 'book-reports-v2', membership: 'membership-v2',
   'cs-reviews': 'cs-reviews-v2', 'cs-faqs': 'cs-faqs-v2', loyalty: 'loyalty-v2', stories: 'stories-v2', 'cs-members': 'cs-members-v2',
   blog: 'blog-v2', salesEvents: 'sales-events-v2', inquiries: 'inquiries-v2', jobs: 'jobs-v2',
-  campaigns: 'campaigns-v2', 'email-log': 'email-log-v2', 'marketing-calendar': 'marketing-calendar-v2', channels: 'channels-v2', suppressions: 'audit-suppressions-v2',
+  // suppressions → the audit queue's Muted-rules lens (audit-suppressions-v2
+  // was retired into audit-v2 — one audit pipeline, admin-v2-build-plan.md Q1).
+  campaigns: 'campaigns-v2', 'email-log': 'email-log-v2', 'marketing-calendar': 'marketing-calendar-v2', channels: 'channels-v2', suppressions: 'audit-muted-v2',
   pack: 'pack-v2', ship: 'ship-v2', rma: 'rma-v2',
   pos: 'pos-v2', 'commission-terms': 'commission-terms-v2',
   receipts: 'receipts-v2', lookbooks: 'lookbooks-v2',
@@ -22131,7 +22132,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260610-215816-b42dbfd';
+var MAST_MODULES_V = '20260610-220340-22df41c';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22207,7 +22208,6 @@ var MODULE_MANIFEST = {
   'email-log-v2': { src: 'modules/email-log-v2.js', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
   'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', routes: ['marketing-calendar-v2'] }, // UI-redesign conversion: marketing calendar (index control)
   'channels-v2': { src: 'modules/channels-v2.js', routes: ['channels-v2'] }, // UI-redesign conversion: sales channels read detail (flag-gated, side-by-side)
-  'audit-suppressions-v2': { src: 'modules/audit-suppressions-v2.js', routes: ['audit-suppressions-v2'] }, // UI-redesign conversion: audit suppressions (read-only Flat Record)
   'contacts-v2': { src: 'modules/contacts-v2.js', routes: ['contacts-v2'] }, // UI-redesign conversion: contacts (CRM) read detail (flag-gated, side-by-side)
   'enrollments-v2': { src: 'modules/enrollments-v2.js', routes: ['enrollments-v2'] }, // UI-redesign conversion: enrollments roster read detail (read-focused Faceted Record)
   'passes-v2': { src: 'modules/passes-v2.js', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)
@@ -22261,7 +22261,7 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   'composer-v2': { src: 'modules/composer-v2.js', routes: ['composer-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'engagement-inbox-v2': { src: 'modules/engagement-inbox-v2.js', routes: ['engagement-inbox-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'mapping-v2': { src: 'modules/mapping-v2.js', routes: ['mapping-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
-  'audit-v2': { src: 'modules/audit-v2.js', routes: ['audit-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'audit-v2': { src: 'modules/audit-v2.js', routes: ['audit-v2', 'audit-muted-v2'] }, // audit queue + Muted-rules lens (absorbed audit-suppressions-v2)
   'studio-v2': { src: 'modules/studio-v2.js', routes: ['studio-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'employees-v2': { src: 'modules/employees-v2.js', routes: ['employees-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'auditlog-v2': { src: 'modules/auditlog-v2.js', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)

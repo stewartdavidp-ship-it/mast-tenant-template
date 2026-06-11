@@ -45,7 +45,10 @@
   var STATE_TONE = { active: 'amber', snoozed: 'neutral', 'resolved-pending-recheck': 'teal' };
   var CHANNEL_TONE = { shopify: 'teal', etsy: 'amber', square: 'info' };
 
-  var BUCKETS = [['open', 'Open'], ['snoozed', 'Snoozed'], ['recheck', 'Rechecking'], ['suppressed', 'Suppressed'], ['all', 'All']];
+  // 'muted' is a RULES lens, not a findings bucket: it lists the
+  // rule_suppressions causing the Suppressed bucket, with per-row un-suppress
+  // (absorbed from the retired audit-suppressions-v2 twin — one pipeline).
+  var BUCKETS = [['open', 'Open'], ['snoozed', 'Snoozed'], ['recheck', 'Rechecking'], ['suppressed', 'Suppressed'], ['muted', 'Muted rules'], ['all', 'All']];
 
   var V2 = {
     rows: [], byId: {}, suppressions: [], productsById: {},
@@ -202,7 +205,41 @@
   function counts() {
     var c = { all: V2.rows.length, open: 0, snoozed: 0, recheck: 0, suppressed: 0 };
     V2.rows.forEach(function (v) { c[bucketOf(v)]++; });
+    c.muted = V2.suppressions.length;
     return c;
+  }
+
+  // ── Muted rules lens (absorbed suppression-rules manager) ───────────
+  function reasonLabel(id) {
+    var list = (core() && core().SUPPRESSION_REASONS) || [];
+    var r = list.filter(function (x) { return x.id === id; })[0];
+    return r ? r.label : (id || '—');
+  }
+  function scopeLabel(s) {
+    var list = (core() && core().SUPPRESSION_SCOPES) || [];
+    var r = list.filter(function (x) { return x.id === s.scope; })[0];
+    var base = r ? r.label : (s.scope || '—');
+    return s.scope !== 'tenant' && s.scopeId ? base + ': ' + s.scopeId : base;
+  }
+  function mutedPane() {
+    if (!V2.suppressions.length) {
+      return '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:24px;text-align:center;color:var(--warm-gray);font-size:0.85rem;">' +
+        'No muted rules. Suppressing a finding from its record adds a rule here.</div>';
+    }
+    var rows = V2.suppressions.slice().sort(function (a, b) {
+      return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+    }).map(function (s) {
+      return '<div style="display:flex;gap:12px;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--cream-dark);font-size:0.85rem;">' +
+        '<span style="flex:0 0 220px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(s.ruleId || '(unnamed rule)') + '</span>' +
+        '<span style="flex:1;color:var(--warm-gray);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(scopeLabel(s)) + ' · ' + esc(reasonLabel(s.reason)) +
+          (s.reasonText ? ' — “' + esc(s.reasonText) + '”' : '') + '</span>' +
+        '<span style="flex:0 0 110px;color:var(--warm-gray);">' + (s.createdAt ? N.date(s.createdAt) : '—') + '</span>' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px;" onclick="AuditV2.unsuppress(\'' + esc(s.id) + '\')">Unmute</button>' +
+        '</div>';
+    }).join('');
+    return '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:14px 18px;">' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">Muted rules hide matching findings from the Open queue. Unmuting one rule leaves its batch siblings alone; the findings return on the next audit run.</div>' +
+      rows + '</div>';
   }
   function visibleRows() {
     var rows = V2.rows;
@@ -240,16 +277,16 @@
 
     tab.innerHTML =
       U.pageHeader({ title: 'Channel Audit', count: N.count(c.open) + ' open finding' + (c.open === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="AuditV2.suppressions()">Suppression rules ↗</button>' +
-          '<button class="btn btn-secondary" onclick="AuditV2.exportCsv()">↓ Export</button>' }) +
+        actionsHtml: '<button class="btn btn-secondary" onclick="AuditV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin:14px 0;">' + pills + '</div>' +
+      (V2.bucket === 'muted' ? mutedPane() :
       MastEntity.renderList('audit-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'AuditV2.sort', onRowClickFnName: 'AuditV2.open',
         empty: V2.bucket === 'open'
           ? { title: 'No open findings', message: 'The audit job scans your channels for price drift, sync gaps, and listing-quality issues — findings land here.' }
           : { title: 'Nothing here', message: 'No findings in this view.' }
-      });
+      }));
   }
 
   // ── actions — all writes via AuditFeedback (RBAC-gated) ─────────────
@@ -335,20 +372,43 @@
       });
     },
     suppressions: function () {
-      // The J12 suppression-rules manager (audit-suppressions-v2) owns
-      // suppression CRUD; deep-link rather than duplicating it here.
-      if (typeof window.navigateTo === 'function') navigateTo('suppressions');
+      // Suppression-rule CRUD is the Muted-rules lens of THIS queue (the
+      // standalone audit-suppressions-v2 twin was retired into it).
+      V2.bucket = 'muted'; render();
+    },
+    unsuppress: function (id) {
+      gated(function (c) {
+        Promise.resolve(mastConfirm('Unmute this rule? Findings it was hiding come back on the next audit run. Other rules from the same batch are unaffected.', { title: 'Unmute rule', danger: true })).then(function (ok) {
+          if (!ok) return;
+          c.removeSuppression(id).then(function () {
+            if (window.showToast) showToast('Rule unmuted — findings return on the next audit run.');
+            load();
+          }).catch(function (e) {
+            console.error('[audit-v2] unsuppress', e);
+            if (window.showToast) showToast('Could not unmute: ' + (e && e.message || e), true);
+          });
+        });
+      });
     },
     exportCsv: function () { return MastEntity.exportRows('audit-v2', visibleRows(), V2.bucket); }
   };
 
-  MastAdmin.registerModule('audit-v2', {
-    routes: { 'audit-v2': { tab: 'auditV2Tab', setup: function () {
+  function setupRoute(entryBucket) {
+    return function () {
       ensureTab();
+      if (entryBucket) V2.bucket = entryBucket;
       // Shared core first so suppression matching + actions are live; render
       // doesn't block on it (counts re-render after load()).
       MastAdmin.loadModule('auditFeedback').then(function () { render(); load(); })
         .catch(function () { render(); load(); });
-    } } }
+    };
+  }
+  MastAdmin.registerModule('audit-v2', {
+    routes: {
+      'audit-v2': { tab: 'auditV2Tab', setup: setupRoute(null) },
+      // Entry route for the absorbed suppression-rules surface: legacy
+      // #suppressions remaps here and lands on the Muted-rules lens.
+      'audit-muted-v2': { tab: 'auditV2Tab', setup: setupRoute('muted') }
+    }
   });
 })();
