@@ -41,6 +41,7 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+  function can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
 
   // Status semantics mirror book.js (CLASS_STATUSES reused for passes):
   // active is the "live/sellable" state; everything else is non-live.
@@ -94,7 +95,10 @@
         get: statusOf,
         tone: statusTone }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return ensureLoaded().then(function () { return V2.byId[id] || null; });
+    },
     detail: {
       render: function (UI, p) {
         var price = priceVal(p);
@@ -150,6 +154,11 @@
           salesBody = '<span class="mu-sub">No instance counts computed yet for this pass.</span>';
         }
 
+        // Danger zone — hard delete via the bridge (RBAC + mastConfirm + FK
+        // warn in the remove() handler; writeAudit in the bridge core).
+        var dangerZone = can('passes', 'delete')
+          ? UI.card('Danger zone', '<button class="btn btn-danger btn-small" onclick="PassesV2.remove(\'' + esc(p._key || p.id) + '\')">Delete pass</button>')
+          : '';
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
             UI.card('Definition', definition) +
@@ -157,7 +166,7 @@
             UI.card('Class scope', scope) +
             UI.card('Description', descBody) +
           '</div>' +
-          '<div class="mu-pane" data-pane="sales" hidden>' + UI.card('Instance counts', salesBody) + '</div>';
+          '<div class="mu-pane" data-pane="sales" hidden>' + UI.card('Instance counts', salesBody) + '</div>' + dangerZone;
       },
       // Native edit/create form — the legacy showPassDefForm section set, grouped:
       // Basic Info (name*, type*, status, description), Pricing & Terms (price* in
@@ -277,13 +286,21 @@
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, classes: [], sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', typeFilter: 'all', loaded: false };
 
-  function load() {
+  // Run-once data load shared by route setup and cold drills (fetch gate).
+  var _loadPromise = null;
+  function ensureLoaded() {
+    if (V2.loaded) return Promise.resolve();
+    if (!_loadPromise) _loadPromise = loadData();
+    return _loadPromise;
+  }
+  function load() { _loadPromise = null; loadData().then(render); }
+  function loadData() {
     // Ensure the legacy book module is loaded so window.PassesBridge (the
     // delegated write path) exists — mirrors contacts-v2 / students-v2.
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
     // Pass definitions + the class catalog (for the scope picker) load together;
     // both one-shot keyed-object reads (no listeners).
-    Promise.all([
+    return Promise.all([
       Promise.resolve(MastDB.passDefinitions.list(100)).catch(function () { return null; }),
       Promise.resolve(MastDB.classes.list(200)).catch(function () { return null; })
     ]).then(function (res) {
@@ -298,10 +315,10 @@
       var csnap = res[1];
       var cval = (csnap && typeof csnap.val === 'function') ? csnap.val() : csnap;
       V2.classes = Object.keys(cval || {}).map(function (k) { return Object.assign({ id: k }, cval[k]); });
-      V2.loaded = true; render();
-    }).catch(function (e) { console.error('[passes-v2] load', e); render(); });
+      V2.loaded = true;
+    }).catch(function (e) { console.error('[passes-v2] load', e); });
   }
-  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
+  function reloadSoon() { V2.loaded = false; _loadPromise = null; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   // One-shot aggregate read for the open pass (cheap keyed doc; mirrors legacy
   // _kickPassDetailLoad's aggregate fetch). Re-opens the panel once it lands so
@@ -382,6 +399,22 @@
   }
 
   window.PassesV2 = {
+    remove: function (id) {
+      if (!can('passes', 'delete')) { if (window.showToast) showToast('Delete access required.', true); return; }
+      if (!window.PassesBridge || !window.PassesBridge.remove) { if (window.showToast) showToast('Engine still loading — try again', true); return; }
+      var rec = V2.byId[id];
+      var msg = 'Delete the pass "' + ((rec && rec.name) || '') + '"? Archived passes only — sold passes in customer wallets keep working from their own copies. This cannot be undone.';
+      mastConfirm(msg, { title: 'Delete Pass', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(window.PassesBridge.remove(id)).then(function () {
+          delete V2.byId[id];
+          V2.rows = V2.rows.filter(function (x) { return (x._key || x.id) !== id; });
+          if (window.showToast) showToast('Pass deleted');
+          try { U.slideOut.requestClose(); } catch (_) {}
+          render();
+        }).catch(function (e) { if (window.showToast) showToast('Delete failed: ' + (e && e.message || e), true); });
+      });
+    },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = (key === 'price' ? 'desc' : 'asc'); }

@@ -38,6 +38,7 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+  function can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
 
   // Status vocabularies mirror students.js (WAIVER_STATUSES / PHOTO_WAIVER_STATUSES).
   var WAIVER_STATUSES = ['pending', 'signed', 'expired'];
@@ -97,7 +98,10 @@
         get: function (s) { return s.status || 'active'; },
         tone: function (v) { return v === 'inactive' ? 'neutral' : 'success'; } }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return ensureLoaded().then(function () { return V2.byId[id] || null; });
+    },
     detail: {
       render: function (UI, s) {
         var waiverOk = s.waiverStatus === 'signed';
@@ -109,9 +113,31 @@
           { k: 'Minor', v: s.isMinor ? 'Yes (under 18)' : 'No' }
         ]);
         var tabsBar = UI.paneTabsBar([
-          { key: 'ov', label: 'Overview' }, { key: 'clearances', label: 'Clearances' },
+          { key: 'ov', label: 'Overview' }, { key: 'enrollments', label: 'Enrollments' },
+          { key: 'clearances', label: 'Clearances' },
           { key: 'documents', label: 'Documents' }, { key: 'notes', label: 'Notes' }
         ], 'ov');
+
+        // Enrollments — joined by studentId OR email (the storefront writes
+        // customerEmail, not studentId); rows drill to the enrollment record.
+        var sid = s._key || s.id, sem = String(s.email || '').toLowerCase();
+        var myEnrolls = V2.enrollments.filter(function (e) {
+          return e.studentId === sid || (sem && String(e.studentEmail || e.customerEmail || '').toLowerCase() === sem);
+        }).sort(function (a, b) { return String(b.enrolledAt || '').localeCompare(String(a.enrolledAt || '')); });
+        var EN_LABEL = { confirmed: 'Confirmed', waitlisted: 'Waitlist', cancelled: 'Cancelled', 'no-show': 'No-show', completed: 'Attended', late: 'Late', 'checked-in': 'Checked in', 'attended-pending-waiver': 'Attended (waiver pending)', cancelled_by_session: 'Session cancelled' };
+        var EN_TONE = { confirmed: 'success', waitlisted: 'amber', cancelled: 'neutral', 'no-show': 'danger', completed: 'teal', late: 'warning', 'checked-in': 'teal', 'attended-pending-waiver': 'amber', cancelled_by_session: 'neutral' };
+        var enrollsBody = myEnrolls.length
+          ? UI.relatedTable([
+              { label: 'Class', render: function (e) {
+                  var c = e.classId && V2.classMap[e.classId];
+                  var nm = (c && c.name) || e.classId || '—';
+                  return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'enrollments-v2\',\'' + esc(e._key) + '\')">' + esc(nm) + '</button>';
+              } },
+              { label: 'Enrolled', render: function (e) { return e.enrolledAt ? N.date(e.enrolledAt) : '—'; } },
+              { label: 'Paid', align: 'right', render: function (e) { return N.money(N.moneyVal(e, 'pricePaidCents', 'pricePaid')) || '—'; } },
+              { label: 'Status', render: function (e) { var st = e.status || '—'; return UI.badge(EN_LABEL[st] || st, EN_TONE[st] || 'neutral'); } }
+            ], myEnrolls)
+          : '<span class="mu-sub">No enrollments yet.</span>';
 
         // Overview — profile + onboarding + emergency contact.
         var profile = UI.kv([
@@ -180,14 +206,21 @@
         if (s.instructorNotes) noteParts.push('<div style="margin-top:' + (noteParts.length ? '12px' : '0') + ';">' + noteBlock('Instructor notes', s.instructorNotes) + '</div>');
         var notesBody = noteParts.length ? noteParts.join('') : '<span class="mu-sub">No notes.</span>';
 
+        // Danger zone — hard delete via the bridge (RBAC + mastConfirm + FK
+        // warn in the remove() handler; writeAudit in the bridge core).
+        var dangerZone = can('students', 'delete')
+          ? UI.card('Danger zone', '<button class="btn btn-danger btn-small" onclick="StudentsV2.remove(\'' + esc(s._key || s.id) + '\')">Delete student</button>')
+          : '';
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
             UI.card('Profile', profile) + UI.card('Onboarding', onboarding + waiverLinkBtn) + UI.card('Emergency contact', emergency) + '</div>' +
+          '<div class="mu-pane" data-pane="enrollments" hidden>' +
+            UI.cardTable('Enrollments (' + myEnrolls.length + ')', enrollsBody) + '</div>' +
           '<div class="mu-pane" data-pane="clearances" hidden>' +
             UI.cardTable('Clearances (' + activeClearances(s).length + ' active · ' + clr.length + ' total)', clearancesBody) + '</div>' +
           '<div class="mu-pane" data-pane="documents" hidden>' +
             UI.cardTable('Documents (' + docs.length + ')', documentsBody) + '</div>' +
-          '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>';
+          '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>' + dangerZone;
       },
       // Native edit form — the legacy openStudentForm field set, grouped
       // (Identity / Profile / Emergency / Medical / Onboarding / Internal).
@@ -291,23 +324,42 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'displayName', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
+  var V2 = { rows: [], byId: {}, enrollments: [], classMap: {}, sortKey: 'displayName', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
 
-  function load() {
+  // Run-once data load shared by route setup and cold drills (fetch gate).
+  var _loadPromise = null;
+  function ensureLoaded() {
+    if (V2.loaded) return Promise.resolve();
+    if (!_loadPromise) _loadPromise = loadData();
+    return _loadPromise;
+  }
+  function load() { _loadPromise = null; loadData().then(render); }
+  function loadData() {
     // Ensure the legacy students module is loaded so window.StudentsBridge
     // (the delegated write path) exists — mirrors contacts-v2.
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('students'); } catch (e) {} }
-    Promise.resolve(MastDB.get('students')).then(function (val) {
+    // Enrollments load alongside for the Enrollments facet (joins by studentId
+    // or email — the storefront writes customerEmail, not studentId).
+    return Promise.all([
+      Promise.resolve(MastDB.get('students')).catch(function () { return {}; }),
+      Promise.resolve(MastDB.enrollments.list(2000)).catch(function () { return {}; }),
+      Promise.resolve(MastDB.classes.list(200)).catch(function () { return {}; })
+    ]).then(function (res) {
+      var val = res[0] || {};
+      function toMap(x) { return (x && typeof x.val === 'function') ? (x.val() || {}) : (x || {}); }
+      var ev = toMap(res[1]);
+      V2.enrollments = Object.keys(ev).map(function (k) { return Object.assign({ _key: k }, ev[k]); });
+      V2.classMap = toMap(res[2]);
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
         var s = val[k];
         if (s && typeof s === 'object') { s = Object.assign({ _key: k }, s); s.status = s.status || 'active'; out.push(s); }
       });
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
-      V2.loaded = true; render();
-    }).catch(function (e) { console.error('[students-v2] load', e); render(); });
+      V2.loaded = true;
+    }).catch(function (e) { console.error('[students-v2] load', e); });
   }
-  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
+  function reloadSoon() { V2.loaded = false; _loadPromise = null; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -358,6 +410,24 @@
   }
 
   window.StudentsV2 = {
+    remove: function (id) {
+      if (!can('students', 'delete')) { if (window.showToast) showToast('Delete access required.', true); return; }
+      if (!window.StudentsBridge || !window.StudentsBridge.remove) { if (window.showToast) showToast('Engine still loading — try again', true); return; }
+      var rec = V2.byId[id];
+      var em = ((rec && rec.email) || '').toLowerCase();
+      var refs = V2.enrollments.filter(function (e) { return e.studentId === id || (em && String(e.studentEmail || e.customerEmail || '').toLowerCase() === em); }).length;
+      var msg = 'Delete the student "' + ((rec && rec.displayName) || '') + '"?' + (refs ? ' They have ' + refs + ' enrollment' + (refs === 1 ? '' : 's') + ' — enrollment history keeps the name but loses the profile (waivers, clearances, documents).' : '') + ' This cannot be undone.';
+      mastConfirm(msg, { title: 'Delete Student', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(window.StudentsBridge.remove(id)).then(function () {
+          delete V2.byId[id];
+          V2.rows = V2.rows.filter(function (x) { return (x._key || x.id) !== id; });
+          if (window.showToast) showToast('Student deleted');
+          try { U.slideOut.requestClose(); } catch (_) {}
+          render();
+        }).catch(function (e) { if (window.showToast) showToast('Delete failed: ' + (e && e.message || e), true); });
+      });
+    },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = 'asc'; }
