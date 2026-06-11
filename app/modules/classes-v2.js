@@ -46,6 +46,7 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+  function can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
 
   // Label / tone maps mirror book.js TYPE_BADGE_COLORS / STATUS_BADGE_COLORS
   // (kept local — read-only display lookups, mapped to v2 tone tokens).
@@ -198,12 +199,13 @@
         var descBody = c.description
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(c.description) + '</div>'
           : '<span class="mu-sub">No description.</span>';
-        // Basic-record editing is NATIVE now (the Edit button on this slide-out).
-        // What still has NO V2 home: the SESSION GENERATION sub-flow (schedule
-        // builder → materializeSessions), series pricing, instructor/resource
-        // assignment, skills/certs, waiver, and the image library — those stay
-        // bespoke on legacy #book. navigateToClassic avoids looping back here.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ClassesV2.classic()">Schedule &amp; sessions in classic view →</button></div>';
+        // Schedule + assignment + session generation are NATIVE now (edit form
+        // sections + the Generate button below, all via ClassesBridge). What
+        // still has NO V2 home: series pricing, skills/certs pickers, the waiver
+        // template picker, and the class-image library — classic-linked.
+        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          (can('book', 'edit') ? '<button class="btn btn-primary btn-small" onclick="ClassesV2.generate(\'' + esc(c._key || c.id) + '\')">⚙ Generate sessions</button>' : '') +
+          '<button class="btn btn-secondary btn-small" onclick="ClassesV2.classic()">Skills, series pricing &amp; images in classic →</button></div>';
 
         // Sessions — upcoming first, then past (mirrors legacy detail ordering).
         var past = sessions.filter(function (s) {
@@ -292,9 +294,48 @@
             fg('Materials cost ($)', '<input class="form-input" type="number" min="0" step="0.01" id="clV2MatCost" value="' + (matCostD != null ? esc(matCostD.toFixed(2)) : '') + '" style="width:100%;" placeholder="0.00">', true)
           ) +
           fg('Materials note', '<input class="form-input" id="clV2MatNote" value="' + esc(c.materialsNote || '') + '" style="width:100%;" placeholder="e.g. 25lbs of clay + glazes">') +
+          // ── Schedule (delegated to ClassesBridge.setSchedule on save) ──
+          (function () {
+            var sc = c.schedule || {};
+            var isOnce = sc.type === 'once';
+            var DAYS = [['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat'], ['sun', 'Sun']];
+            var dayBoxes = DAYS.map(function (d) {
+              var on = Array.isArray(sc.days) && sc.days.indexOf(d[0]) >= 0;
+              return '<label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;font-size:0.85rem;"><input type="checkbox" class="clV2Day" value="' + d[0] + '"' + (on ? ' checked' : '') + '>' + d[1] + '</label>';
+            }).join('');
+            return '<div class="mu-editbar" style="margin-top:14px;"><span class="mu-editpill">SCHEDULE</span>When this class runs (used by Generate sessions)</div>' +
+              row2(
+                fg('Repeats', '<select class="form-input" id="clV2SchedType" style="width:100%;" onchange="ClassesV2._schedTypeChanged(this.value)"><option value="recurring"' + (isOnce ? '' : ' selected') + '>Weekly (recurring)</option><option value="once"' + (isOnce ? ' selected' : '') + '>One time</option></select>', true),
+                fg('Start time', '<input class="form-input" type="time" id="clV2SchedTime" value="' + esc(sc.startTime || '') + '" style="width:100%;">', true)
+              ) +
+              '<div id="clV2SchedRecurring"' + (isOnce ? ' style="display:none;"' : '') + '>' +
+                fg('Days of the week', '<div style="padding:6px 0;">' + dayBoxes + '</div>') +
+                row2(
+                  fg('First day', '<input class="form-input" type="date" id="clV2SchedStart" value="' + esc(sc.startDate || '') + '" style="width:100%;">', true),
+                  fg('Last day', '<input class="form-input" type="date" id="clV2SchedEnd" value="' + esc(sc.endDate || '') + '" style="width:100%;">', true)
+                ) + '</div>' +
+              '<div id="clV2SchedOnce"' + (isOnce ? '' : ' style="display:none;"') + '>' +
+                fg('Date', '<input class="form-input" type="date" id="clV2SchedDate" value="' + esc(sc.date || sc.startDate || '') + '" style="width:100%;">') + '</div>';
+          })() +
+          // ── Assignment (delegated to ClassesBridge.assign on save) ──
+          (function () {
+            var instOpts = '<option value="">— No instructor —</option>' + Object.keys(V2.instructors).map(function (k) {
+              var i = V2.instructors[k];
+              return '<option value="' + esc(k) + '"' + (c.instructorId === k ? ' selected' : '') + '>' + esc(i.name || k) + '</option>';
+            }).join('');
+            var resOpts = '<option value="">— No room/equipment —</option>' + Object.keys(V2.resources).map(function (k) {
+              var r = V2.resources[k];
+              return '<option value="' + esc(k) + '"' + (c.resourceId === k || (!c.resourceId && c.resourceName && c.resourceName === r.name) ? ' selected' : '') + '>' + esc(r.name || k) + '</option>';
+            }).join('');
+            return '<div class="mu-editbar" style="margin-top:14px;"><span class="mu-editpill">ASSIGNMENT</span>Who teaches it, where it happens</div>' +
+              row2(
+                fg('Instructor', '<select class="form-input" id="clV2Instructor" style="width:100%;">' + instOpts + '</select>', true),
+                fg('Room / equipment', '<select class="form-input" id="clV2Resource" style="width:100%;">' + resOpts + '</select>', true)
+              );
+          })() +
           (mode === 'create'
-            ? '<div class="mu-sub" style="margin-top:8px;">Schedule, sessions, series pricing, assignment, skills/certs, waiver and the class image are set up in the classic view after creating.</div>'
-            : '<div class="mu-sub" style="margin-top:8px;">Schedule &amp; sessions, series pricing, assignment, skills/certs, waiver and the class image are edited in the classic view.</div>');
+            ? '<div class="mu-sub" style="margin-top:8px;">After creating: “Generate sessions” on the class builds the schedule. Series pricing, skills/certs, waiver and the class image are set up in the classic view.</div>'
+            : '<div class="mu-sub" style="margin-top:8px;">Series pricing, skills/certs, waiver and the class image are edited in the classic view.</div>');
       }
     },
     onSave: function (rec, mode) {
@@ -320,6 +361,31 @@
       if (!data.name.trim()) { if (window.showToast) showToast('Class name is required.', true); return false; }
       if (priceRaw === '' || isNaN(parseFloat(priceRaw))) { if (window.showToast) showToast('Drop-in price is required.', true); return false; }
 
+      // Schedule + assignment from the form sections (PATCHed via the bridge
+      // after the record write so the shapes stay single-sourced in book.js).
+      function readSchedule() {
+        var type = ((document.getElementById('clV2SchedType') || {}).value) || 'recurring';
+        if (type === 'once') {
+          return { type: 'once', date: (document.getElementById('clV2SchedDate') || {}).value || null,
+                   startTime: (document.getElementById('clV2SchedTime') || {}).value || '' };
+        }
+        var days = [];
+        document.querySelectorAll('#mastSlideOut .clV2Day:checked').forEach(function (el) { days.push(el.value); });
+        return { type: 'recurring', days: days,
+                 startTime: (document.getElementById('clV2SchedTime') || {}).value || '',
+                 startDate: (document.getElementById('clV2SchedStart') || {}).value || '',
+                 endDate: (document.getElementById('clV2SchedEnd') || {}).value || '' };
+      }
+      function readAssign() {
+        var iid = (document.getElementById('clV2Instructor') || {}).value || null;
+        var rid = (document.getElementById('clV2Resource') || {}).value || null;
+        return {
+          instructorId: iid, instructorName: iid && V2.instructors[iid] ? (V2.instructors[iid].name || null) : null,
+          resourceId: rid, resourceName: rid && V2.resources[rid] ? (V2.resources[rid].name || null) : null
+        };
+      }
+      var schedule = readSchedule(), assign = readAssign();
+
       // Cents-shaped patch for the LIVE cache so the post-save read re-render
       // (which reads priceCents / materialsCostCents) reflects the edit at once.
       function livePatch() {
@@ -339,17 +405,24 @@
       }
 
       if (mode === 'create') {
-        return Promise.resolve(window.ClassesBridge.create(data)).then(function () {
-          if (window.showToast) showToast('Class created.'); reloadSoon(); return true;
+        return Promise.resolve(window.ClassesBridge.create(data)).then(function (newId) {
+          return window.ClassesBridge.setSchedule(newId, schedule)
+            .then(function () { return window.ClassesBridge.assign(newId, assign); })
+            .then(function () { if (window.showToast) showToast('Class created.'); reloadSoon(); return true; });
         }).catch(function (e) { console.error('[classes-v2] create', e); if (window.showToast) showToast('Error saving class.', true); return false; });
       }
       var id = rec._key || rec.id;
       return Promise.resolve(window.ClassesBridge.update(id, data)).then(function () {
+        return window.ClassesBridge.setSchedule(id, schedule).then(function () { return window.ClassesBridge.assign(id, assign); });
+      }).then(function () {
         // Mutate the LIVE cached record (=== the slide-out's read closure, since
         // fetch returns V2.byId[id]); the engine passes a copy to onSave. Shows
         // the edited fields immediately on the post-save read re-render;
         // reloadSoon() then refreshes the cache for the next open.
-        Object.assign(V2.byId[id] || rec, livePatch());
+        Object.assign(V2.byId[id] || rec, livePatch(), {
+          schedule: schedule, instructorId: assign.instructorId, instructorName: assign.instructorName,
+          resourceId: assign.resourceId, resourceName: assign.resourceName
+        });
         if (window.showToast) showToast('Class updated.'); reloadSoon(); return true;
       }).catch(function (e) { console.error('[classes-v2] update', e); if (window.showToast) showToast('Error updating class.', true); return false; });
     }
@@ -360,7 +433,7 @@
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
-  var V2 = { rows: [], byId: {}, sessionsByClass: {}, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false };
+  var V2 = { rows: [], byId: {}, sessionsByClass: {}, instructors: {}, resources: {}, enrollments: [], today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', lens: 'catalog', loaded: false };
 
   // Run-once data load shared by route setup and cold drills (fetch gate).
   var _loadPromise = null;
@@ -379,9 +452,18 @@
     // reads (mirrors book.js loadClassDetail + calendar-v2 load).
     return Promise.all([
       Promise.resolve(MastDB.get('public/classes')).catch(function () { return null; }),
-      Promise.resolve(MastDB.get('public/classSessions')).catch(function () { return null; })
+      Promise.resolve(MastDB.get('public/classSessions')).catch(function () { return null; }),
+      // Rosters for the assignment pickers; enrollments feed the Reports lens.
+      Promise.resolve(MastDB.instructors.list(100)).catch(function () { return {}; }),
+      Promise.resolve(MastDB.resources.list(100)).catch(function () { return {}; }),
+      Promise.resolve(MastDB.enrollments.list(2000)).catch(function () { return {}; })
     ]).then(function (res) {
       var cv = res[0] || {}, sv = res[1] || {};
+      function toMap(x) { return (x && typeof x.val === 'function') ? (x.val() || {}) : (x || {}); }
+      V2.instructors = toMap(res[2]);
+      V2.resources = toMap(res[3]);
+      var ev = toMap(res[4]);
+      V2.enrollments = Object.keys(ev).map(function (k) { return Object.assign({ _key: k }, ev[k]); });
       var out = [];
       Object.keys(cv).forEach(function (k) {
         var c = cv[k];
@@ -429,6 +511,19 @@
 
   function render() {
     var tab = ensureTab();
+    // One classes hub, two lenses (Catalog · Reports) — Class Reports is a
+    // computed lens over the same classes/sessions/enrollments, not a separate
+    // surface (plan: classes-v2-build-plan.md CONSOLIDATION; finance-statements
+    // route-picks-the-lens precedent). #book-reports deep-links to Reports.
+    var lensPills = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' +
+      '<button class="btn btn-small ' + (V2.lens === 'catalog' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'catalog\')">Catalog</button> ' +
+      '<button class="btn btn-small ' + (V2.lens === 'reports' ? 'btn-primary' : 'btn-secondary') + '" onclick="ClassesV2.lens(\'reports\')">Reports</button></div>';
+    if (V2.lens === 'reports') {
+      tab.innerHTML =
+        U.pageHeader({ title: 'Classes', count: 'attendance & revenue' }) +
+        lensPills + renderReports();
+      return;
+    }
     var filters = [['all', 'All'], ['draft', 'Draft'], ['active', 'Active'], ['published', 'Published'], ['completed', 'Completed'], ['archived', 'Archived']]
       .map(function (f) {
         var on = V2.statusFilter === f[0];
@@ -438,9 +533,10 @@
       U.pageHeader({
         title: 'Classes',
         count: N.count(V2.rows.length) + ' class' + (V2.rows.length === 1 ? '' : 'es'),
-        actionsHtml: '<button class="btn btn-primary" onclick="ClassesV2.create()">+ New class</button>' +
+        actionsHtml: (can('book', 'edit') ? '<button class="btn btn-primary" onclick="ClassesV2.create()">+ New class</button>' : '') +
           '<button class="btn btn-secondary" onclick="ClassesV2.exportCsv()">↓ Export</button>'
       }) +
+      lensPills +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name, category, type or instructor…" value="' + esc(V2.q) +
         '" oninput="ClassesV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
@@ -451,6 +547,75 @@
       });
   }
 
+  // ── Reports lens — attendance / revenue / fill, computed from the loaded
+  // classes + sessions + enrollments. Revenue = SUM(enrollment pricePaidCents)
+  // (seat revenue; the legacy tab's order-line join, sessionLogs depth and
+  // incidents stay classic — debt register). Read-only.
+  function renderReports() {
+    var sessions = [];
+    Object.keys(V2.sessionsByClass).forEach(function (cid) { sessions = sessions.concat(V2.sessionsByClass[cid]); });
+    var completedSessions = sessions.filter(function (s) { return String(s.status || '').toLowerCase() === 'completed'; });
+    var en = V2.enrollments;
+    var attended = en.filter(function (e) { return e.status === 'completed' || e.status === 'checked-in' || e.status === 'attended-pending-waiver' || e.status === 'late'; }).length;
+    var noShow = en.filter(function (e) { return e.status === 'no-show'; }).length;
+    var attRate = (attended + noShow) ? Math.round(attended / (attended + noShow) * 100) : null;
+    var active = en.filter(function (e) { return e.status === 'confirmed' || e.status === 'waitlisted' || e.status === 'checked-in'; }).length;
+    var revenueCents = en.reduce(function (sum, e) {
+      if (e.status === 'cancelled' || e.status === 'cancelled_by_session') return sum;
+      return sum + (parseInt(e.pricePaidCents, 10) || 0);
+    }, 0);
+
+    var tiles = U.tiles([
+      { k: 'Seat revenue', v: N.money(revenueCents / 100) || '$0.00', hero: true },
+      { k: 'Attendance rate', v: attRate == null ? '—' : (attRate + '%') },
+      { k: 'Active enrollments', v: N.count(active) },
+      { k: 'Sessions completed', v: N.count(completedSessions.length) }
+    ]);
+
+    // Per-class: enrollments, fill rate (confirmed seats vs capacity over
+    // non-cancelled sessions), seat revenue. Sorted by revenue.
+    var perClass = V2.rows.map(function (c) {
+      var cid = c._key;
+      var cEn = en.filter(function (e) { return e.classId === cid && e.status !== 'cancelled' && e.status !== 'cancelled_by_session'; });
+      var cRev = cEn.reduce(function (s, e) { return s + (parseInt(e.pricePaidCents, 10) || 0); }, 0);
+      var cSess = (V2.sessionsByClass[cid] || []).filter(function (s) { return String(s.status || '').toLowerCase() !== 'cancelled'; });
+      var seatCap = cSess.reduce(function (s, x) { return s + (parseInt(x.capacity, 10) || 0); }, 0);
+      var seatFilled = cSess.reduce(function (s, x) { return s + sessEnrolled(x); }, 0);
+      return { c: c, enrolls: cEn.length, rev: cRev, fill: seatCap ? Math.round(seatFilled / seatCap * 100) : null };
+    }).filter(function (r) { return r.enrolls > 0 || (V2.sessionsByClass[r.c._key] || []).length > 0; })
+      .sort(function (a, b) { return b.rev - a.rev; });
+
+    var table = U.relatedTable([
+      { label: 'Class', render: function (r) {
+          return '<button type="button" class="mu-link" onclick="ClassesV2.open(\'' + esc(r.c._key) + '\')">' + esc(className(r.c)) + '</button>';
+      } },
+      { label: 'Enrollments', align: 'right', render: function (r) { return N.count(r.enrolls); } },
+      { label: 'Fill rate', align: 'right', render: function (r) { return r.fill == null ? '—' : (r.fill + '%'); } },
+      { label: 'Seat revenue', align: 'right', render: function (r) { return N.money(r.rev / 100) || '—'; } }
+    ], perClass);
+
+    // Repeat students — students with 2+ non-cancelled seats (email-keyed).
+    var byEmail = {};
+    en.forEach(function (e) {
+      if (e.status === 'cancelled' || e.status === 'cancelled_by_session') return;
+      var em = (e.studentEmail || e.customerEmail || '').toLowerCase();
+      if (!em) return;
+      (byEmail[em] = byEmail[em] || { name: e.studentName || e.customerName || em, n: 0 }).n++;
+    });
+    var repeats = Object.keys(byEmail).map(function (k) { return byEmail[k]; })
+      .filter(function (r) { return r.n >= 2; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 10);
+    var repeatBody = repeats.length
+      ? U.relatedTable([
+          { label: 'Student', render: function (r) { return esc(r.name); } },
+          { label: 'Enrollments', align: 'right', render: function (r) { return N.count(r.n); } }
+        ], repeats)
+      : '<span class="mu-sub">No repeat students yet.</span>';
+
+    return tiles +
+      U.cardTable('By class', perClass.length ? table : '<span class="mu-sub">No class activity yet.</span>') +
+      U.cardTable('Repeat students', repeatBody);
+  }
+
   window.ClassesV2 = {
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
@@ -458,7 +623,28 @@
       render();
     },
     filter: function (f) { V2.statusFilter = f; render(); },
+    lens: function (l) { V2.lens = l === 'reports' ? 'reports' : 'catalog'; render(); },
     search: function (v) { V2.q = v || ''; render(); },
+    // Generate sessions from the class schedule — the SAME materializer legacy
+    // saveClass runs (duplicate-safe), via ClassesBridge.generateSessions.
+    generate: function (id) {
+      if (!can('book', 'edit')) { if (window.showToast) showToast('Classes write access required.', true); return; }
+      if (!window.ClassesBridge || !window.ClassesBridge.generateSessions) { if (window.showToast) showToast('Classes engine still loading — try again', true); return; }
+      Promise.resolve(window.ClassesBridge.generateSessions(id)).then(function () {
+        reloadSoon();
+        // Re-open after the refresh so the Sessions facet shows the new rows.
+        setTimeout(function () { ClassesV2.open(id); }, 600);
+      }).catch(function (e) {
+        console.error('[classes-v2] generate', e);
+        if (window.showToast) showToast('Error: ' + (e && e.message || 'could not generate sessions.'), true);
+      });
+    },
+    // Edit-form helper: toggle the recurring/once schedule sub-sections.
+    _schedTypeChanged: function (type) {
+      var rec = document.getElementById('clV2SchedRecurring'), once = document.getElementById('clV2SchedOnce');
+      if (rec) rec.style.display = type === 'once' ? 'none' : '';
+      if (once) once.style.display = type === 'once' ? '' : 'none';
+    },
     open: function (id) {
       MastEntity.get('classes-v2').fetch(id).then(function (rec) {
         if (rec) MastEntity.openRecord('classes-v2', rec, 'read');
@@ -483,6 +669,10 @@
   };
 
   MastAdmin.registerModule('classes-v2', {
-    routes: { 'classes-v2': { tab: 'classesV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: {
+      'classes-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'catalog'; ensureTab(); render(); load(); } },
+      // Class Reports deep link — same hub, Reports lens (route picks the lens).
+      'book-reports-v2': { tab: 'classesV2Tab', setup: function () { V2.lens = 'reports'; ensureTab(); render(); load(); } }
+    }
   });
 })();
