@@ -34,7 +34,7 @@
  * cs_policies set (the Sales -> Policies route owns kind='policy').
  *
  * Authoring that has NO V2 home — the storefront publish/hide toggle and delete
- * — stays single-sourced on legacy #cs-faqs via a "Manage in classic view"
+ * — fully native as of Wave 4 + the burn-down (no classic links remain
  * link (storefrontEnabled IS settable from the create/edit form here; the
  * one-click toggle + delete are not yet re-hosted). Flag-gated (?ui=1) at
  * #cs-faqs-v2, side-by-side.
@@ -299,10 +299,6 @@
       // before opening the create form — mirrors ContactsV2.create.
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('customer-service'); } catch (e) {} }
       MastEntity.openRecord('cs-faqs-v2', {}, 'create');
-    },
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('cs-faqs');
-      else if (typeof navigateTo === 'function') navigateTo('cs-faqs');
     },
     // ── Wave 4: native publish/hide + delete (bridge cores, RBAC, confirm) ──
     setStorefront: function (id, enabled) {

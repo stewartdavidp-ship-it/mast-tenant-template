@@ -1964,29 +1964,9 @@
   async function csSaveResponseTheme(id) {
     var input = document.getElementById('csRespThemeInput-' + id);
     if (!input) return;
-    var raw = (input.value || '').split(',');
-    var seen = {};
-    var cleaned = [];
-    raw.forEach(function (t) {
-      var v = String(t || '').trim().toLowerCase();
-      if (!v) return;
-      if (seen[v]) return;
-      seen[v] = true;
-      cleaned.push(v);
-    });
-    cleaned = cleaned.slice(0, 16); // matches server-side cap
     try {
-      var now = nowIso();
-      await MastDB.update('cs_survey_responses/' + id, {
-        themeTags: cleaned,
-        themedAt: now,
-        themedBy: (window.currentUser && currentUser.uid) || null,
-        updatedAt: now
-      });
-      if (responsesData[id]) {
-        responsesData[id].themeTags = cleaned;
-        responsesData[id].themedAt = now;
-      }
+      // Delegate to the shared normalization core (lowercase/dedupe/16-cap).
+      var cleaned = await window.CsSurveysBridge.setResponseThemes(id, input.value || '');
       responsesEditingThemeId = null;
       if (typeof showToast === 'function') showToast('Themes saved (' + cleaned.length + ').');
       renderSurveys();
@@ -2250,17 +2230,17 @@
     var svId = (document.getElementById('csTSurveyId') || {}).value || '';
     var delay = Number((document.getElementById('csTDelay') || {}).value) || 0;
     var active = !!((document.getElementById('csTActive') || {}).checked);
-    if (!et) { showToast('Event type is required', true); return; }
-    if (!svId) { showToast('Please select a survey', true); return; }
     try {
-      if (id) { await MastDB.update('cs_survey_triggers/' + id, { eventType: et, surveyId: svId, delayHours: delay, isActive: active, updatedAt: nowIso() }); if (triggersData[id]) Object.assign(triggersData[id], { eventType: et, surveyId: svId, delayHours: delay, isActive: active }); triggerEditId = null; showToast('Trigger updated'); }
-      else { var nk = MastDB.newKey('cs_survey_triggers'); var doc = { id: nk, eventType: et, surveyId: svId, delayHours: delay, isActive: active, createdAt: nowIso(), updatedAt: nowIso() }; await MastDB.set('cs_survey_triggers/' + nk, doc); triggersData[nk] = doc; showAddTrigger = false; showToast('Trigger added'); }
+      // Delegate to the shared state-free core (single-sourced write shape).
+      await window.CsSurveysBridge.saveTrigger(id || null, { eventType: et, surveyId: svId, delayHours: delay, isActive: active });
+      if (id) { triggerEditId = null; showToast('Trigger updated'); }
+      else { showAddTrigger = false; showToast('Trigger added'); }
       renderSurveys();
     } catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
   async function deleteTrigger(id) {
     if (!confirm('Delete this trigger?')) return;
-    try { await MastDB.remove('cs_survey_triggers/' + id); delete triggersData[id]; showToast('Trigger deleted'); renderSurveys(); }
+    try { await window.CsSurveysBridge.deleteTrigger(id); showToast('Trigger deleted'); renderSurveys(); }
     catch (err) { showToast('Failed: ' + (err && err.message), true); }
   }
 
@@ -2876,6 +2856,25 @@
       if (window.writeAudit) writeAudit('update', 'cs-review', id);
       return reviewsData[id] || null;
     },
+    // ── Classic-dependency burn-down (operator directive): the remaining
+    // "More actions" flows get first-class bridge entry points. Both legacy
+    // helpers are already route-agnostic (document.body modals / #social
+    // prefill); they only need the review + customer/product indexes loaded.
+    draftSocial: function (id) {
+      return ensureReviewInCache(id).then(function () { return draftSocialFromReview(id); });
+    },
+    askPhoto: function (id) {
+      return ensureReviewInCache(id).then(function () { return askForUgcPhoto(id); });
+    },
+    // Anonymous-review policy (cs_config/reviews + public/config mirror).
+    getPolicy: function () {
+      return Promise.resolve(MastDB.get('cs_config/reviews')).then(function (d) {
+        return { anonymousAllowed: !!(d && d.anonymousAllowed) };
+      }).catch(function () { return { anonymousAllowed: false }; });
+    },
+    setAnonymousAllowed: function (allowed) {
+      return setReviewsAnonymousAllowed(!!allowed);
+    },
     // Hard-delete a review. CASCADES the public/testimonials mirror (the
     // legacy delete leaks it — a deleted review must not keep quoting itself
     // on the homepage). Caller owns the confirm dialog.
@@ -3015,6 +3014,100 @@
       var fn = firebase.functions().httpsCallable('generateSurveyLink');
       return fn({ tenantId: window.TENANT_ID, surveyId: surveyId, preview: true })
         .then(function (result) { return result && result.data && result.data.surveyUrl; });
+    },
+
+    // ── Classic-dependency burn-down (operator directive) — the four flows
+    // that used to hide behind the "Classic view ↗" link.
+
+    // VoC digest: the legacy generator is already route-agnostic (it renders
+    // its own document.body overlay + copy/download controls) — expose it.
+    vocDigest: function (windowDays) { return csGenerateVocDigest(windowDays || 30); },
+
+    // Response theme tags — normalization core (lowercase, dedupe, 16-cap;
+    // mirrors server-side cs_tag_response_theme). Legacy csSaveResponseTheme
+    // now delegates here.
+    setResponseThemes: async function (id, rawCsv) {
+      var seen = {}, cleaned = [];
+      String(rawCsv || '').split(',').forEach(function (t) {
+        var v = String(t || '').trim().toLowerCase();
+        if (!v || seen[v]) return;
+        seen[v] = true; cleaned.push(v);
+      });
+      cleaned = cleaned.slice(0, 16);
+      var now = nowIso();
+      await MastDB.update('cs_survey_responses/' + id, {
+        themeTags: cleaned, themedAt: now,
+        themedBy: (window.currentUser && currentUser.uid) || null,
+        updatedAt: now
+      });
+      if (responsesData[id]) { responsesData[id].themeTags = cleaned; responsesData[id].themedAt = now; }
+      if (window.writeAudit) writeAudit('update', 'cs-survey-response', id);
+      return cleaned;
+    },
+
+    // Saved segments + bulk send (port of csSendLinkSegmentSubmit, minus the
+    // DOM: resolves members, loops the CF with the same cap/delay, reports
+    // progress via the optional callback). Re-sends are CF-idempotent.
+    listSegments: function () {
+      return Promise.resolve(csLoadSendSegments()).then(function () {
+        return Object.keys(sendSegmentsData).map(function (k) {
+          var s = sendSegmentsData[k] || {};
+          return { id: k, name: s.name || '(unnamed segment)' };
+        }).sort(function (a, b) { return a.name < b.name ? -1 : 1; });
+      });
+    },
+    resolveSegmentMembers: function (segmentId) {
+      return Promise.resolve(csLoadSendSegments()).then(function () {
+        return csResolveSegmentMembers(segmentId);
+      });
+    },
+    sendToSegment: async function (surveyId, segmentId, onProgress) {
+      await csLoadSendSegments();
+      var members = await csResolveSegmentMembers(segmentId);
+      if (members.length === 0) return { total: 0, sent: 0, failed: 0, remaining: 0 };
+      var batch = members.slice(0, SEND_BATCH_CAP);
+      var fn = firebase.functions().httpsCallable('generateSurveyLink');
+      var sent = 0, failed = 0;
+      for (var i = 0; i < batch.length; i++) {
+        var m = batch[i];
+        if (typeof onProgress === 'function') { try { onProgress(i + 1, batch.length, m.email); } catch (_e) {} }
+        try {
+          await fn({ tenantId: window.TENANT_ID, surveyId: surveyId, contactEmail: m.email, contactName: m.name });
+          sent++;
+        } catch (e) {
+          console.warn('[csBulkSend] recipient #' + (i + 1) + ' failed:', e && e.message);
+          failed++;
+        }
+        if (i < batch.length - 1) await new Promise(function (r) { setTimeout(r, SEND_DELAY_MS); });
+      }
+      if (window.writeAudit) writeAudit('update', 'cs-survey', surveyId);
+      return { total: batch.length, sent: sent, failed: failed, remaining: Math.max(0, members.length - SEND_BATCH_CAP) };
+    },
+
+    // Sending-rule (trigger) CRUD cores — parameterized saveTrigger/deleteTrigger
+    // (legacy handlers now delegate). data: {eventType*, surveyId*, delayHours, isActive}.
+    saveTrigger: async function (id, data) {
+      var et = (data.eventType || '').trim();
+      if (!et) throw new Error('Event type is required');
+      if (!data.surveyId) throw new Error('Please select a survey');
+      var patch = { eventType: et, surveyId: data.surveyId, delayHours: Number(data.delayHours) || 0, isActive: data.isActive !== false, updatedAt: nowIso() };
+      if (id) {
+        await MastDB.update('cs_survey_triggers/' + id, patch);
+        if (triggersData[id]) Object.assign(triggersData[id], patch);
+      } else {
+        id = MastDB.newKey('cs_survey_triggers');
+        var doc = Object.assign({ id: id, createdAt: nowIso() }, patch);
+        await MastDB.set('cs_survey_triggers/' + id, doc);
+        triggersData[id] = doc;
+      }
+      if (window.writeAudit) writeAudit('update', 'cs-survey-trigger', id);
+      return triggersData[id] || null;
+    },
+    deleteTrigger: async function (id) {
+      await MastDB.remove('cs_survey_triggers/' + id);
+      delete triggersData[id];
+      if (window.writeAudit) writeAudit('delete', 'cs-survey-trigger', id);
+      return true;
     }
   };
 

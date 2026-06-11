@@ -32,7 +32,7 @@
  * legacy "At Risk" framing.
  *
  * Read-focused: granting / revoking / reactivating a membership, and editing the
- * program config, stay single-sourced on legacy via a "manage in classic view"
+ * program config, live on the Membership program surface (cross-linked
  * link to the CS Members tab. This twin re-hosts the VIEW only — no onSave, no
  * edit form, no Grant/Revoke button.
  */
@@ -149,11 +149,12 @@
           { k: 'Last updated', v: m.updatedAt ? N.date(m.updatedAt) : '—' }
         ]);
 
-        // Grant / revoke / reactivate + program config editing stay on the legacy
-        // CS Members tab. Use navigateToClassic so the V2 route remap doesn't loop
-        // us back to this twin.
+        // Burn-down note: the legacy CS Members tab was ALSO read-only (no
+        // grant/revoke handlers exist in customer-service.js) — the lifecycle
+        // lives on the Membership program surface. Cross-link there instead
+        // of to V1.
         var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<button class="btn btn-secondary" onclick="CsMembersV2.classic()">Manage in classic view &rarr;</button>' +
+          '<button class="btn btn-secondary" onclick="CsMembersV2.openMembership()">Membership program &rarr;</button>' +
           (memberEmail(m) ? '<button class="btn btn-secondary" onclick="CsMembersV2.viewContact(' + JSON.stringify(memberEmail(m)) + ')">View contact &rarr;</button>' : '') +
           '</div>';
 
@@ -265,7 +266,7 @@
       MastEntity.renderList('cs-members-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'CsMembersV2.sort', onRowClickFnName: 'CsMembersV2.open',
-        empty: { title: 'No members', message: V2.loaded ? 'Grant a membership in the classic Members view.' : 'Loading…' }
+        empty: { title: 'No members', message: V2.loaded ? 'Grant memberships from the Membership program page.' : 'Loading…' }
       });
   }
 
@@ -282,11 +283,10 @@
         if (rec) MastEntity.openRecord('cs-members-v2', rec, 'read');
       });
     },
-    // Grant/revoke + program config editing → classic CS Members view. Use
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('cs-members');
-      else if (typeof navigateTo === 'function') navigateTo('cs-members');
+    // Membership lifecycle (grant/revoke/config) lives on the Membership
+    // program surface — navigate there (remaps to its V2 under the flag).
+    openMembership: function () {
+      if (typeof navigateTo === 'function') navigateTo('membership');
     },
     // Drill to the member's contact record (mirrors the legacy "View Contact").
     viewContact: function (email) {
