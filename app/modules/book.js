@@ -1371,13 +1371,15 @@
       };
     });
 
-    // Write all sessions under public/classSessions
-    var multiUpdates = {};
-    Object.keys(updates).forEach(function(id) {
-      multiUpdates[MastDB.classSessions.PATH + '/' + id] = updates[id];
-    });
-
-    await MastDB.update('', multiUpdates);
+    // Write each session under public/classSessions. Per-doc writes — the old
+    // RTDB-style root multi-path update ({path/id: data} via MastDB.update(''))
+    // throws "path requires doc ID: _root" on Firestore MastDB, so generation
+    // had been silently dead since the migration (caught by the classes-v2
+    // walk, 2026-06-10).
+    var newIds = Object.keys(updates);
+    for (var wi = 0; wi < newIds.length; wi++) {
+      await MastDB.classSessions.set(newIds[wi], updates[newIds[wi]]);
+    }
     MastAdmin.showToast(sessionsToCreate.length + ' session(s) generated');
   }
 
@@ -3875,14 +3877,14 @@
         return (a.waitlistPosition || 999) - (b.waitlistPosition || 999);
       });
 
-      var updates = {};
-      waitlisted.forEach(function(e, i) {
-        if (e.waitlistPosition !== i + 1) {
-          updates[e._id + '/waitlistPosition'] = i + 1;
+      // Per-doc writes — the old multi-path update against 'admin/enrollments'
+      // (wrong collection AND RTDB-style fan-out) threw "path requires doc ID"
+      // on every renumber, so positions silently never compacted (caught by
+      // the classes-v2 walk, 2026-06-10).
+      for (var ri = 0; ri < waitlisted.length; ri++) {
+        if (waitlisted[ri].waitlistPosition !== ri + 1) {
+          await MastDB.enrollments.update(waitlisted[ri]._id, { waitlistPosition: ri + 1 });
         }
-      });
-      if (Object.keys(updates).length > 0) {
-        await MastDB.update('admin/enrollments', updates);
       }
     } catch (err) {
       console.warn('[Book] Waitlist renumbering failed:', err);
