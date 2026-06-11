@@ -206,7 +206,8 @@
           }));
     if (V2.lens === 'report') {
       withTrips(function () {
-        if (typeof window.renderTaxReport === 'function') renderTaxReport(document.getElementById('tripsV2Report'));
+        // Pass OUR rows — the legacy loader drops rows in the compat layer.
+        if (typeof window.renderTaxReport === 'function') renderTaxReport(document.getElementById('tripsV2Report'), V2.rows);
       });
     }
   }
