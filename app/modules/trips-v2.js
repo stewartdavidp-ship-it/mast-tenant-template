@@ -104,7 +104,7 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'date', sortDir: 'desc', q: '', loaded: false };
+  var V2 = { rows: [], byId: {}, sortKey: 'date', sortDir: 'desc', q: '', loaded: false, lens: 'history' };
 
   function currentUid() {
     try { return (window.firebase && firebase.auth().currentUser && firebase.auth().currentUser.uid) || null; } catch (e) { return null; }
@@ -169,22 +169,52 @@
     var tab = ensureTab();
     var rows = visibleRows();
     var s = summary(rows);
+    // Classic burn-down Wave D: the trip FLOWS (start/end live tracking, the
+    // retroactive multi-leg wizard, previous-trips picker) are body-level
+    // modals exported by trips.js — generation-agnostic; this page is their V2
+    // home. Mileage settings (IRS rates + locations) live on the Settings page.
+    var lensPills = [['history', 'History'], ['report', 'Tax report']].map(function (p) {
+      var on = V2.lens === p[0];
+      return '<button onclick="TripsV2.setLens(\'' + p[0] + '\')" style="border:1px solid var(--border);' +
+        'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
+        'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
+        'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' + p[1] + '</button>';
+    }).join('');
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:6px;">' +
+      '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
         '<h1 style="font-size:1.6rem;margin:0;">Trips</h1>' +
         '<span style="color:var(--warm-gray);font-size:0.9rem;">' + N.count(V2.rows.length) + ' trips</span>' +
-        '<button class="btn btn-secondary" style="margin-left:auto;" onclick="TripsV2.exportCsv()">↓ Export</button>' +
+        '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-primary" onclick="TripsV2.startTrip()">Start trip</button>' +
+          '<button class="btn btn-secondary" onclick="TripsV2.addPastTrip()">Add past trip</button>' +
+          '<button class="btn btn-secondary" onclick="TripsV2.previousTrips()">Previous trips</button>' +
+          '<button class="btn btn-secondary" onclick="TripsV2.exportCsv()">↓ Export</button>' +
+        '</span>' +
       '</div>' +
-      '<div style="display:flex;gap:12px;margin:12px 0;flex-wrap:wrap;">' +
-        tile(N.count(s.count), 'Trips') + tile(s.miles.toFixed(1), 'Miles') + tile(N.money(s.ded) || '$0.00', 'Deductible') +
-      '</div>' +
-      '<div style="margin:14px 0;"><input class="form-input" placeholder="Search destination, origin, purpose…" value="' + esc(V2.q) +
-        '" oninput="TripsV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
-      MastEntity.renderList('trips-v2', {
-        rows: rows, sortKey: V2.sortKey, sortDir: V2.sortDir,
-        onSortFnName: 'TripsV2.sort', onRowClickFnName: 'TripsV2.open',
-        empty: { title: 'No trips yet', message: V2.loaded ? 'Completed trips will appear here.' : 'Loading…' }
+      '<div style="margin:10px 0;">' + lensPills + '</div>' +
+      (V2.lens === 'report'
+        ? '<div id="tripsV2Report" class="mu-sub">Loading report…</div>'
+        : '<div style="display:flex;gap:12px;margin:12px 0;flex-wrap:wrap;">' +
+            tile(N.count(s.count), 'Trips') + tile(s.miles.toFixed(1), 'Miles') + tile(N.money(s.ded) || '$0.00', 'Deductible') +
+          '</div>' +
+          '<div style="margin:14px 0;"><input class="form-input" placeholder="Search destination, origin, purpose…" value="' + esc(V2.q) +
+            '" oninput="TripsV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
+          MastEntity.renderList('trips-v2', {
+            rows: rows, sortKey: V2.sortKey, sortDir: V2.sortDir,
+            onSortFnName: 'TripsV2.sort', onRowClickFnName: 'TripsV2.open',
+            empty: { title: 'No trips yet', message: V2.loaded ? 'Start a trip or add a past one to get going.' : 'Loading…' }
+          }));
+    if (V2.lens === 'report') {
+      withTrips(function () {
+        if (typeof window.renderTaxReport === 'function') renderTaxReport(document.getElementById('tripsV2Report'));
       });
+    }
+  }
+
+  // Load trips.js (the flow modals + report renderer) before invoking it.
+  function withTrips(fn) {
+    MastAdmin.loadModule('trips').then(function () { fn(); })
+      .catch(function () { if (window.showToast) showToast('Trips engine unavailable', true); });
   }
 
   function tile(value, label) {
@@ -199,6 +229,11 @@
       else { V2.sortKey = key; V2.sortDir = (key === 'date' ? 'desc' : 'asc'); }
       render();
     },
+    setLens: function (l) { V2.lens = l; render(); },
+    // The flows are trips.js body-level modals — same implementation, V2 home.
+    startTrip: function () { withTrips(function () { if (window.openStartTripModal) openStartTripModal(); }); },
+    addPastTrip: function () { withTrips(function () { if (window.startRetroactiveManual) startRetroactiveManual(); }); },
+    previousTrips: function () { withTrips(function () { if (window.openPreviousTripsModal) openPreviousTripsModal(); }); },
     search: function (v) { V2.q = v || ''; render(); },
     open: function (id) {
       MastEntity.get('trips-v2').fetch(id).then(function (rec) {
@@ -209,6 +244,14 @@
   };
 
   MastAdmin.registerModule('trips-v2', {
-    routes: { 'trips-v2': { tab: 'tripsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'trips-v2': { tab: 'tripsV2Tab', setup: function () {
+      ensureTab(); render(); load();
+      // Trip flows + the active-trip pulse banner come from trips.js; load it
+      // and surface any open trip (the banner is body-level, works everywhere).
+      withTrips(function () {
+        if (typeof window.initTripsModule === 'function') { try { initTripsModule(); } catch (e) {} }
+        if (typeof window.checkForActiveTrip === 'function') { try { checkForActiveTrip(); } catch (e) {} }
+      });
+    } } }
   });
 })();

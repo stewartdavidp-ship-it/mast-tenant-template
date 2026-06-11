@@ -1140,8 +1140,10 @@
   // Tax Report
   // ============================================================
 
-  function renderTaxReport() {
-    var container = document.getElementById('taxReportContent');
+  function renderTaxReport(hostEl) {
+    // hostEl (classic burn-down Wave D): trips-v2 re-hosts the report in its
+    // own container; default stays the legacy static div.
+    var container = hostEl || document.getElementById('taxReportContent');
     if (!container) return;
 
     var currentYear = new Date().getFullYear();
