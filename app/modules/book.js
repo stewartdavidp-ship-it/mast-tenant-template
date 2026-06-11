@@ -1385,10 +1385,20 @@
   // Session Actions
   // ============================================================
 
+  // State-free session-op cores — shared by the legacy buttons and
+  // window.SessionsBridge (the sessions-v2 / calendar-v2 schedule surface).
+  // NO confirm dialog, NO toast, NO view refresh (callers own their UI).
+  async function _sessionCancelCore(sessionId, reason) {
+    await MastDB.classSessions.update(sessionId, { status: 'cancelled', cancelReason: reason || 'Admin cancelled' });
+  }
+  async function _sessionCompleteCore(sessionId) {
+    await MastDB.classSessions.update(sessionId, { status: 'completed' });
+  }
+
   async function cancelSession(sessionId) {
     if (!await mastConfirm('Cancel this session? Students will need to be notified.', { title: 'Cancel Session', danger: true })) return;
     try {
-      await MastDB.classSessions.update(sessionId, { status: 'cancelled', cancelReason: 'Admin cancelled' });
+      await _sessionCancelCore(sessionId);
       MastAdmin.showToast('Session cancelled');
       if (selectedClassId) loadClassDetail(selectedClassId);
     } catch (err) {
@@ -1398,13 +1408,21 @@
 
   async function completeSession(sessionId) {
     try {
-      await MastDB.classSessions.update(sessionId, { status: 'completed' });
+      await _sessionCompleteCore(sessionId);
       MastAdmin.showToast('Session marked complete');
       if (selectedClassId) loadClassDetail(selectedClassId);
     } catch (err) {
       MastAdmin.showToast('Failed: ' + err.message, true);
     }
   }
+
+  // ── SessionsBridge — additive shim for the sessions-v2 / calendar-v2
+  // schedule surface. Same contract as EnrollmentsBridge: state-free cores,
+  // caller owns confirm/toast/refresh.
+  window.SessionsBridge = {
+    cancel: function (id, reason) { return _sessionCancelCore(id, reason); },
+    complete: function (id) { return _sessionCompleteCore(id); }
+  };
 
   // ============================================================
   // Enrollments

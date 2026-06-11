@@ -135,7 +135,12 @@
         format: function (v) { return STATUS_LABEL[v] || v; },
         tone: function (v) { return STATUS_TONE[v] || 'neutral'; } }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    // Cold drills (session roster rows) reach this fetch before route setup —
+    // gate on a run-once ensureLoaded() so the class/session name joins exist.
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return ensureLoaded().then(function () { return V2.byId[id] || null; });
+    },
     detail: {
       render: function (UI, e) {
         var sess = sessionOf(e);
@@ -287,14 +292,22 @@
     return val || {};
   }
 
-  function load() {
+  // Run-once data load shared by route setup and cold drills (fetch gate).
+  var _loadPromise = null;
+  function ensureLoaded() {
+    if (V2.loaded) return Promise.resolve();
+    if (!_loadPromise) _loadPromise = loadData();
+    return _loadPromise;
+  }
+  function load() { _loadPromise = null; loadData().then(render); }
+  function loadData() {
     // Class + session maps (for name joins) load alongside the enrollments — all
     // cheap one-shot reads, mirroring book.js loadEnrollments + allClassesMap/
     // allSessionsMap. Detail.render is synchronous, so these must be ready first.
     // Ensure the legacy Book module is loaded so window.EnrollmentsBridge (the
     // delegated write path) exists — mirrors classes-v2 / contacts-v2.
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
-    Promise.all([
+    return Promise.all([
       Promise.resolve(MastDB.enrollments.list(500)),
       Promise.resolve(MastDB.classes.list(200)).catch(function () { return {}; }),
       Promise.resolve(MastDB.classSessions.list(1000)).catch(function () { return {}; }),
@@ -310,8 +323,8 @@
         if (e && typeof e === 'object') { e = Object.assign({ _key: k }, e); out.push(e); }
       });
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
-      V2.loaded = true; render();
-    }).catch(function (err) { console.error('[enrollments-v2] load', err); render(); });
+      V2.loaded = true;
+    }).catch(function (err) { console.error('[enrollments-v2] load', err); });
   }
 
   function visibleRows() {

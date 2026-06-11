@@ -68,35 +68,22 @@
   }
   function render() {
     var tab = ensureTab();
+    // One schedule surface, two lenses (Month · List) — this grid and the
+    // sessions-v2 flat list are two views of the same occurrences (plan:
+    // classes-v2-build-plan.md CONSOLIDATION).
+    var lensPills =
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' +
+        '<button class="btn btn-small btn-primary">Month</button> ' +
+        '<button class="btn btn-small btn-secondary" onclick="navigateTo(\'sessions-v2\')">List</button></div>';
     tab.innerHTML =
-      '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:16px;">' +
-        '<h1 style="font-size:1.6rem;margin:0;">Schedule</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + N.count(CAL.sessions.length) + ' sessions</span></div>' +
+      U.pageHeader({
+        title: 'Schedule',
+        count: N.count(CAL.sessions.length) + ' session' + (CAL.sessions.length === 1 ? '' : 's')
+      }) + lensPills +
       U.calendar({
         year: CAL.year, month: CAL.month, entriesByDate: entriesByDate(),
         onEntryFnName: 'CalendarV2.openSession', onNavFnName: 'CalendarV2.nav'
       });
-  }
-
-  // ── Detail: clicking an occurrence OUTPUTS the session (parent linked) ──
-  function openSession(s) {
-    var cls = className(s.classId);
-    var cap = s.capacity ? (' / ' + s.capacity) : '';
-    var body = U.card('Session', U.kv([
-      { k: 'Class', v: esc(cls) },
-      { k: 'Date', v: s.date ? N.date(s.date) : '—' },
-      { k: 'Time', v: esc(s.startTime || '—') + (s.endTime ? ('–' + esc(s.endTime)) : '') },
-      { k: 'Status', v: U.badge(s.status || 'scheduled', statusTone(s.status)) },
-      { k: 'Enrolled', v: N.count(enrolledCount(s)) + cap },
-      { k: 'Instructor', v: esc(s.instructorName || '—') }
-    ])) +
-    '<div style="margin-top:8px;"><button class="btn btn-secondary" onclick="CalendarV2.openClass(\'' + esc(s.classId) + '\')">View full class &rarr;</button></div>';
-    U.slideOut.open({
-      id: 'sess-' + s.id, size: 'md', mode: 'read',
-      title: cls + ' — session',
-      badges: [{ label: s.status || 'scheduled', tone: statusTone(s.status) }],
-      render: function () { return body; }
-    });
   }
 
   window.CalendarV2 = {
@@ -106,10 +93,12 @@
       else { CAL.month++; if (CAL.month > 11) { CAL.month = 0; CAL.year++; } }
       render();
     },
-    openSession: function (id) { var s = CAL.byId[id]; if (s) openSession(s); },
-    openClass: function (classId) {
-      try { U.slideOut.requestClose(); } catch (e) {}
-      if (typeof navigateTo === 'function') navigateTo('book-detail', { id: classId });
+    // Clicking an occurrence OUTPUTS the session — one detail surface for the
+    // whole schedule: the sessions-v2 entity SO (roster, session ops, class
+    // drill). MastEntity.drill lazy-loads the module; its fetch is cold-safe.
+    openSession: function (id) {
+      if (window.MastEntity && typeof MastEntity.drill === 'function') { MastEntity.drill('sessions-v2', id); return; }
+      console.warn('[calendar-v2] MastEntity unavailable; cannot open session', id);
     }
   };
 
