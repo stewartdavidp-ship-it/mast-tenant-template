@@ -140,7 +140,10 @@
       // Opt-in expandable rows (additive — see MastUI.list).
       expandable: opts.expandable, hasChildren: opts.hasChildren,
       expandedIds: opts.expandedIds, onToggleFnName: opts.onToggleFnName,
-      childRowsHtml: opts.childRowsHtml, rowActions: opts.rowActions
+      childRowsHtml: opts.childRowsHtml, rowActions: opts.rowActions,
+      // Opt-in selectable rows (bulk actions — see MastUI.list).
+      selectable: opts.selectable, selectedIds: opts.selectedIds,
+      onSelectFnName: opts.onSelectFnName, onSelectAllFnName: opts.onSelectAllFnName
     });
   }
 

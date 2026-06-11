@@ -183,6 +183,20 @@
     var cols = cfg.columns || [];
     var rowId = cfg.rowId || function (r) { return r && r.id; };
     var th = '';
+    // Opt-in selectable rows (bulk actions): reserve a leading checkbox column
+    // with an engine-owned select-all header. cfg.selectedIds is a {id:true}
+    // map; cfg.onSelectFnName(id, checked) and cfg.onSelectAllFnName(checked)
+    // are the module's handlers. Lists that don't set cfg.selectable render
+    // exactly as before (operator-ratified engine-first pattern).
+    var selCount = 0;
+    if (cfg.selectable) {
+      rows.forEach(function (r) { if (cfg.selectedIds && cfg.selectedIds[rowId(r)]) selCount++; });
+      th += '<th style="width:34px;padding:8px 4px;text-align:center;border-bottom:1px solid var(--border,rgba(255,255,255,0.06));">' +
+        (cfg.onSelectAllFnName
+          ? '<input type="checkbox" class="mast-select-all" aria-label="Select all"' + (rows.length && selCount === rows.length ? ' checked' : '') +
+            ' onclick="event.stopPropagation();' + cfg.onSelectAllFnName + '(this.checked)">'
+          : '') + '</th>';
+    }
     // Opt-in expandable rows (e.g. a product → its variants): reserve a leading
     // toggle column. Lists that don't set cfg.expandable render exactly as before.
     if (cfg.expandable) th += '<th style="width:34px;border-bottom:1px solid var(--border,rgba(255,255,255,0.06));"></th>';
@@ -209,6 +223,14 @@
           ' tabindex="0" role="button" style="cursor:pointer;"'
         : '';
       body += '<tr class="mast-row"' + click + '>';
+      if (cfg.selectable) {
+        var _sel = !!(cfg.selectedIds && cfg.selectedIds[id]);
+        body += '<td style="padding:14px 4px;text-align:center;width:34px;' +
+                'border-bottom:1px solid var(--border,rgba(255,255,255,0.06));">' +
+                '<input type="checkbox" class="mast-row-select" aria-label="Select row"' + (_sel ? ' checked' : '') +
+                ' onclick="event.stopPropagation();' + (cfg.onSelectFnName || '') + '(\'' + esc(id) + '\', this.checked)">' +
+                '</td>';
+      }
       var _canExp = !!(cfg.expandable && cfg.hasChildren && cfg.hasChildren(r));
       var _open = !!(_canExp && cfg.expandedIds && cfg.expandedIds[id]);
       if (cfg.expandable) {
