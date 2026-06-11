@@ -18,9 +18,12 @@
  * matrix lock), writes through accessors and stamps writeAudit — this twin
  * never re-implements a write.
  *
- * Out of scope (classic escape, debt-registered): per-user permission
- * OVERRIDES editing (CF updateUserPermissions) — the SO shows the override
- * count read-only and links to the classic page.
+ * Per-user permission OVERRIDES are edited HERE (no classic escape hatch):
+ * the member edit form carries per-area Level pickers + sensitive grants +
+ * access expiry, seeded with the user's EFFECTIVE values (override if set,
+ * else role default). onSave passes the effective maps to
+ * EmployeesBridge.saveUserOverrides, which diffs vs role defaults and saves
+ * via CF updateUserPermissions (server-validated).
  *
  * Flag-gated (?ui=1) at #employees-v2, side-by-side with legacy #employees.
  */
@@ -98,7 +101,7 @@
         var ovNote = overrides
           ? UI.card('Personal overrides', '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' +
               N.count(overrides) + ' permission override' + (overrides === 1 ? '' : 's') + ' on top of the ' +
-              esc(roleDisplay(r.role)) + ' role. Overrides are edited on the <a href="javascript:void(0)" onclick="EmployeesV2.classic()" style="color:var(--teal);">classic Permissions page</a>.</div>')
+              esc(roleDisplay(r.role)) + ' role. Use Edit to change them.</div>')
           : '';
         var archBtn = '';
         if (canEdit() && !isSelf(r._key)) {
@@ -115,11 +118,60 @@
         var opts = V2.roles.map(function (ro) {
           return '<option value="' + esc(ro.key) + '"' + (record.role === ro.key ? ' selected' : '') + '>' + esc(ro.name || ro.key) + '</option>';
         }).join('');
-        return '<div class="form-group" style="max-width:380px;">' +
+        var html = '<div class="form-group" style="max-width:380px;">' +
           '<label style="font-size:0.85rem;font-weight:600;">Role</label>' +
           '<select name="role" class="form-input" style="width:100%;font-size:0.9rem;">' + opts + '</select>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">What ' + esc(record.name || 'this member') + ' can see and do. Open the role under the Roles view for the full access list.</div>' +
           '</div>';
+        html += '<div class="form-group" style="max-width:380px;">' +
+          '<label style="font-size:0.85rem;font-weight:600;">Access expires</label>' +
+          '<input type="date" name="accessExpiry" class="form-input" style="width:100%;font-size:0.9rem;" value="' + esc(record.accessExpiry ? String(record.accessExpiry).slice(0, 10) : '') + '">' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">Leave empty for no expiry.</div>' +
+          '</div>';
+
+        // Personal overrides — per-area Level pickers seeded with the
+        // member's EFFECTIVE access (override if set, else the role default).
+        // Picks that differ from the role default become overrides on save;
+        // picks matching the default clear any old override (bridge diffs).
+        var role = record.role || 'guest';
+        var roleConfig = V2.rolesByKey[role] || record._roleConfig || null;
+        var modOv = record.moduleOverrides || {};
+        var senOv = record.permissionOverrides || {};
+        html += '<div style="font-weight:600;font-size:0.9rem;margin:14px 0 4px;">Personal overrides</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">On top of the ' + esc(roleDisplay(role)) + ' role. Changing the role above re-bases these on the new role\'s defaults.</div>';
+        html += getModulePermRegistry().map(function (g) {
+          var ovCount = 0;
+          var rows = g.routes.map(function (m) {
+            var def = roleDefaultModuleLevel(role, roleConfig, m.route);
+            var cur = modOv[m.route] ? triadToLevel(modOv[m.route]) : def;
+            if (cur !== def) ovCount++;
+            var opts2 = ['none', 'view', 'edit', 'full'].map(function (l) {
+              var lbl = { none: 'No access', view: 'View', edit: 'View & edit', full: 'Full' }[l];
+              if (l === def) lbl += ' (role)';
+              return '<option value="' + l + '"' + (cur === l ? ' selected' : '') + '>' + lbl + '</option>';
+            }).join('');
+            if (cur === 'custom') opts2 = '<option value="custom" selected>Custom</option>' + opts2;
+            return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0;">' +
+              '<span style="font-size:0.85rem;">' + esc(m.label) + '</span>' +
+              '<select name="ov_' + esc(m.route) + '" class="form-input" style="width:160px;font-size:0.85rem;padding:4px 8px;">' + opts2 + '</select></div>';
+          }).join('');
+          return '<details style="margin-bottom:10px;border:1px solid var(--cream-dark);border-radius:8px;padding:10px 14px;">' +
+            '<summary style="font-weight:600;font-size:0.9rem;cursor:pointer;">' + esc(g.label) +
+            (ovCount ? ' <span style="color:var(--amber);font-size:0.72rem;font-weight:600;">(' + ovCount + ' override' + (ovCount > 1 ? 's' : '') + ')</span>' : '') +
+            '</summary><div style="margin-top:8px;">' + rows + '</div></details>';
+        }).join('');
+        html += '<div style="font-weight:600;font-size:0.9rem;margin:14px 0 6px;">Sensitive actions</div>';
+        html += FUNCTION_PERMISSIONS.map(function (fp) {
+          var k = _sensitiveKey(fp.entity, fp.action);
+          var def = roleDefaultSensitive(role, roleConfig, k);
+          var cur = senOv[k] !== undefined ? senOv[k] === true : def;
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 0;">' +
+            '<span style="font-size:0.85rem;" title="' + esc(fp.description || '') + '">' + esc(fp.label) + '</span>' +
+            '<select name="sv_' + esc(k) + '" class="form-input" style="width:160px;font-size:0.85rem;padding:4px 8px;">' +
+            '<option value="no"' + (cur ? '' : ' selected') + '>Not allowed' + (def === false ? ' (role)' : '') + '</option>' +
+            '<option value="yes"' + (cur ? ' selected' : '') + '>Allowed' + (def === true ? ' (role)' : '') + '</option></select></div>';
+        }).join('');
+        return html;
       }
     },
     onSave: function (rec, mode) {
@@ -127,20 +179,51 @@
       var uid = rec._key;
       var live = V2.usersById[uid];
       var oldRole = live ? live.role : rec.role;
-      if (rec.role === oldRole) return true;  // nothing changed
+      var roleChanged = rec.role !== oldRole;
+
+      // Effective maps from the collected ov_/sv_ selects; the bridge diffs
+      // them against the (possibly new) role's defaults server-side shape.
+      var moduleLevels = {};
+      getModulePermRegistry().forEach(function (g) {
+        g.routes.forEach(function (m) {
+          var v = rec['ov_' + m.route];
+          if (v !== undefined) moduleLevels[m.route] = v;
+        });
+      });
+      var sensitiveMap = {};
+      FUNCTION_PERMISSIONS.forEach(function (fp) {
+        var k = _sensitiveKey(fp.entity, fp.action);
+        var v = rec['sv_' + k];
+        if (v !== undefined) sensitiveMap[k] = v === 'yes';
+      });
+      var accessExpiry = rec.accessExpiry !== undefined ? (rec.accessExpiry || null) : undefined;
+
       var doIt = function () {
-        return Promise.resolve(EmployeesBridge.changeRole(uid, rec.role)).then(function () {
-          if (live) { live.role = rec.role; }
-          if (window.showToast) showToast('Role changed to ' + roleDisplay(rec.role) + '.');
+        var p = roleChanged ? Promise.resolve(EmployeesBridge.changeRole(uid, rec.role)) : Promise.resolve();
+        return p.then(function () {
+          if (roleChanged && live) live.role = rec.role;
+          return EmployeesBridge.saveUserOverrides(uid, moduleLevels, sensitiveMap, accessExpiry);
+        }).then(function (res) {
+          var validated = (res && res.result) || {};
+          if (live) {
+            live.moduleOverrides = validated.moduleOverrides || {};
+            live.permissionOverrides = validated.sensitiveOverrides || {};
+            if (accessExpiry !== undefined) live.accessExpiry = validated.accessExpiry !== undefined ? validated.accessExpiry : accessExpiry;
+          }
+          var ovCount = Object.keys((live && live.moduleOverrides) || {}).length + Object.keys((live && live.permissionOverrides) || {}).length;
+          if (window.showToast) {
+            showToast((roleChanged ? 'Role changed to ' + roleDisplay(rec.role) + '. ' : '') +
+              (ovCount ? ovCount + ' personal override' + (ovCount === 1 ? '' : 's') + ' in effect.' : 'Access matches the role defaults.'));
+          }
           render();
           return true;
         }).catch(function (e) {
-          console.error('[employees-v2] changeRole', e);
-          if (window.showToast) showToast((e && e.message) || 'Failed to change role.', true);
+          console.error('[employees-v2] member save', e);
+          if (window.showToast) showToast((e && e.message) || 'Failed to save member access.', true);
           return false;
         });
       };
-      if (oldRole === 'admin') {
+      if (roleChanged && oldRole === 'admin') {
         // Downgrading an admin needs the same explicit confirm as legacy.
         return Promise.resolve(mastConfirm('Change ' + (rec.name || rec.email || 'this member') + ' from ' + roleDisplay('admin') + ' to ' + roleDisplay(rec.role) + '? They will lose admin access on next login.', { title: 'Change Role', danger: true }))
           .then(function (ok) { return ok ? doIt() : false; });
@@ -489,10 +572,6 @@
         Promise.resolve(mastConfirm('Archive ' + name + '? They will be signed out and can no longer log in. Their history is kept, and you can unarchive them anytime.', { title: 'Archive User', danger: true }))
           .then(function (ok) { if (ok) go(); });
       } else { go(); }
-    },
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('employees');
-      else if (typeof navigateTo === 'function') navigateTo('employees');
     }
   };
 
