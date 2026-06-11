@@ -50,6 +50,37 @@ t('list renders rows with row-click + right-align numerics', () => {
 });
 t('list loading state', () => assert.ok(list({ loading: true }).includes('Loading')));
 
+// list — opt-in selectable rows (bulk actions)
+t('list without selectable has no checkboxes', () => {
+  const h = list({ columns: [{ key: 'n', label: 'N' }], rows: [{ id: 'a', n: 1 }] });
+  assert.ok(!h.includes('mast-row-select') && !h.includes('mast-select-all'));
+});
+t('list selectable renders row checkbox + select-all, wires handlers, stops propagation', () => {
+  const h = list({
+    columns: [{ key: 'n', label: 'N' }],
+    rows: [{ id: 'a', n: 1 }, { id: 'b', n: 2 }],
+    selectable: true, selectedIds: { a: true },
+    onSelectFnName: 'P.sel', onSelectAllFnName: 'P.selAll',
+    onRowClickFnName: 'P.open'
+  });
+  assert.ok(h.includes('mast-select-all'));
+  assert.ok(h.includes("P.selAll(this.checked)"));
+  assert.ok(h.includes("P.sel('a', this.checked)") && h.includes("P.sel('b', this.checked)"));
+  assert.ok(h.includes('event.stopPropagation()'));
+  // a is checked, b is not; not all rows selected so select-all unchecked
+  assert.strictEqual((h.match(/mast-row-select" aria-label="Select row" checked/g) || []).length, 1);
+  assert.ok(!/mast-select-all" aria-label="Select all" checked/.test(h));
+});
+t('list selectable select-all checked when every row selected', () => {
+  const h = list({
+    columns: [{ key: 'n', label: 'N' }],
+    rows: [{ id: 'a', n: 1 }],
+    selectable: true, selectedIds: { a: true },
+    onSelectFnName: 'P.sel', onSelectAllFnName: 'P.selAll'
+  });
+  assert.ok(/mast-select-all" aria-label="Select all" checked/.test(h));
+});
+
 // moneyVal — canonical dollar amount (the P0 fix): cents wins, dollar fallback,
 // genuine zero kept, absent → null (so the UI can render an em-dash not $0.00).
 t('moneyVal prefers cents field when present', () => assert.strictEqual(Num.moneyVal({ totalCents: 102000, total: 5 }, 'totalCents', 'total'), 1020));

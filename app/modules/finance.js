@@ -6328,6 +6328,31 @@ function portfolioUpdateBulkBar() {
     '<a href="#" onclick="event.preventDefault();portfolioBulkTag(\'deprioritize\')" style="color:var(--teal);text-decoration:underline;">deprioritize</a>';
 }
 
+// State-free bulk-tag core — both the classic view and customer-portfolio-v2
+// call this. Reads each customer doc fresh (no dependence on a loaded list),
+// merges/removes the tag, writes back. opts.remove=true removes the tag
+// instead of adding it. Returns { changed, errors }.
+async function _portfolioBulkTagCore(ids, tag, opts) {
+  var remove = !!(opts && opts.remove);
+  var now = new Date().toISOString();
+  var changed = 0, errors = 0;
+  for (var i = 0; i < ids.length; i++) {
+    try {
+      var cust = (await MastDB.get('admin/customers/' + ids[i])) || {};
+      var existingTags = Array.isArray(cust.tags) ? cust.tags : [];
+      var has = existingTags.indexOf(tag) !== -1;
+      if (remove ? has : !has) {
+        var newTags = remove
+          ? existingTags.filter(function(t) { return t !== tag; })
+          : existingTags.concat([tag]);
+        await MastDB.update('admin/customers/' + ids[i], { tags: newTags, updatedAt: now });
+        changed++;
+      }
+    } catch (e) { errors++; }
+  }
+  return { changed: changed, errors: errors };
+}
+
 async function portfolioBulkTag(tag) {
   var checked = Array.from(document.querySelectorAll('.pf-row-check:checked'));
   if (checked.length === 0) return;
@@ -6336,20 +6361,9 @@ async function portfolioBulkTag(tag) {
     ? mastConfirm('Apply tag "' + tag + '" to ' + ids.length + ' customer' + (ids.length === 1 ? '' : 's') + '?', { title: 'Bulk tag' })
     : Promise.resolve(window.confirm('Apply tag "' + tag + '" to ' + ids.length + ' customers?')));
   if (!confirmed) return;
-  var now = new Date().toISOString();
-  var errCount = 0;
-  for (var i = 0; i < ids.length; i++) {
-    try {
-      var cust = portfolioState.rows.find(function(r) { return r.customerId === ids[i]; });
-      var existingTags = (cust && cust.tags) || [];
-      if (existingTags.indexOf(tag) === -1) {
-        var newTags = existingTags.concat([tag]);
-        await MastDB.update('admin/customers/' + ids[i], { tags: newTags, updatedAt: now });
-      }
-    } catch (e) { errCount++; }
-  }
+  var res = await _portfolioBulkTagCore(ids, tag);
   if (typeof showToast === 'function') {
-    showToast('Tagged ' + (ids.length - errCount) + (errCount > 0 ? ' (' + errCount + ' errored)' : '') + ' customer(s) as "' + tag + '".');
+    showToast('Tagged ' + res.changed + (res.errors > 0 ? ' (' + res.errors + ' errored)' : '') + ' customer(s) as "' + tag + '".');
   }
   renderCustomerPortfolio();
 }
@@ -8345,7 +8359,8 @@ window.FinanceBridge = {
   amendApprove: _amendApproveCore,
   amendReject: _amendRejectCore,
   submitAmendment: _amendSubmitCore,
-  // Wave 4 — portfolio core:
+  // Wave 4 — portfolio cores:
+  portfolioBulkTag: _portfolioBulkTagCore,
   portfolioCompute: _portfolioCompute,
   portfolioClassify: portfolioClassify
 };

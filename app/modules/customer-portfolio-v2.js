@@ -5,8 +5,10 @@
  * concentration risk). All math lives in finance.js (_portfolioCompute),
  * exposed via FinanceBridge — this module renders and drills.
  *
- * Writes live on customers-v2 (rows drill to the standard customer SO).
- * Bulk tagging stays on the classic page (linked).
+ * Writes live on customers-v2 (rows drill to the standard customer SO),
+ * except bulk tagging (classic burn-down 2026-06-10): row checkboxes via the
+ * engine's selectable-list primitive + a bulk bar whose tag/untag actions go
+ * through the state-free FinanceBridge.portfolioBulkTag core.
  */
 (function () {
   'use strict';
@@ -25,7 +27,7 @@
 
   var QUADS = [['all', 'All'], ['grow', 'Grow'], ['maintain', 'Maintain'], ['reprice', 'Reprice'], ['deprioritize', 'Deprioritize'], ['unclassified', 'Unclassified']];
   var QTONE = { grow: 'teal', maintain: 'info', reprice: 'amber', deprioritize: 'neutral', unclassified: 'neutral' };
-  var V2 = { data: null, quad: 'all', sortKey: 'revenueCents', sortDir: 'desc' };
+  var V2 = { data: null, quad: 'all', sortKey: 'revenueCents', sortDir: 'desc', selected: {} };
 
   function ensureTab() {
     var el = document.getElementById('customerPortfolioV2Tab');
@@ -51,6 +53,22 @@
       return;
     }
     var conc = { top5: d.top5, top10: d.top10, hhi: d.hhi, hhiBand: d.hhiBand };
+    var canTag = (typeof window.can === 'function') ? window.can('customer-portfolio', 'edit') : true;
+    var selIds = Object.keys(V2.selected);
+    var bulkBar = '';
+    if (canTag && selIds.length) {
+      var tagBtn = function (tag) {
+        return '<button class="btn btn-secondary" style="font-size:0.78rem;" onclick="PortfolioV2.bulkTag(\'' + tag + '\')">' + tag + '</button>';
+      };
+      bulkBar = '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border:1px solid var(--border);border-radius:10px;">' +
+        '<span style="font-size:0.85rem;font-weight:600;">' + selIds.length + ' selected</span>' +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);">Tag:</span>' +
+        tagBtn('white-glove') + tagBtn('renegotiate') + tagBtn('deprioritize') +
+        '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:6px;">Remove:</span>' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;" onclick="PortfolioV2.bulkUntag()">Remove a tag…</button>' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;margin-left:auto;" onclick="PortfolioV2.clearSelection()">Clear</button>' +
+        '</div>';
+    }
     var pills = QUADS.map(function (q) {
       var on = V2.quad === q[0];
       var n = q[0] === 'all' ? d.rows.length : (d.qCounts[q[0]] || 0);
@@ -64,8 +82,7 @@
       U.pageHeader({
         title: 'Customer Portfolio',
         count: N.count(d.rows.length) + ' customers · trailing 12m · cost-to-serve $' + (d.c2s.perTicketCents / 100).toFixed(0) + '/ticket, $' + (d.c2s.perReturnCents / 100).toFixed(0) + '/return',
-        actionsHtml: '<button class="btn btn-secondary" onclick="PortfolioV2.exportCsv()">↓ Export</button>' +
-          '<button class="btn btn-secondary" onclick="PortfolioV2.classic()">Bulk tagging (classic) ↗</button>'
+        actionsHtml: '<button class="btn btn-secondary" onclick="PortfolioV2.exportCsv()">↓ Export</button>'
       }) +
       U.tiles([
         { k: 'Top-5 share', v: (conc.top5.sharePct * 100).toFixed(1) + '%', hero: true },
@@ -73,8 +90,10 @@
         { k: 'HHI', v: N.count(conc.hhi) + ' ' + U.badge(conc.hhiBand, conc.hhiBand === 'high' ? 'amber' : 'neutral') },
         { k: '12m revenue (ranked)', v: m(d.totalRev) }
       ]) +
-      '<div style="margin:14px 0;">' + pills + '</div>' +
+      '<div style="margin:14px 0;">' + pills + '</div>' + bulkBar +
       MastEntity.renderList('customers-v2', {
+        selectable: canTag, selectedIds: V2.selected,
+        onSelectFnName: 'PortfolioV2.select', onSelectAllFnName: 'PortfolioV2.selectAll',
         columns: [
           { key: 'displayName', label: 'Customer', render: function (r) { return esc(r.displayName) + (r.primaryEmail ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(r.primaryEmail) + '</span>' : ''); } },
           { key: 'quadrant', label: 'Quadrant', render: function (r) { return U.badge(r.quadrant, QTONE[r.quadrant] || 'neutral'); } },
@@ -124,8 +143,44 @@
         .concat(visibleRows().map(function (r) { return [r.displayName, r.primaryEmail || '', r.quadrant, r.revenueCents, r.grossMarginCents, r.netMarginPct == null ? '' : r.netMarginPct, r.costToServeCents, r.netContributionCents, r.lapseStatus || '']; }));
       window.FinanceBridge.downloadCsv('customer-portfolio', rows, 'Trailing 12 months');
     },
-    classic: function () { if (window.navigateToClassic) navigateToClassic('customer-portfolio'); }
+    select: function (id, checked) {
+      if (checked) V2.selected[id] = true; else delete V2.selected[id];
+      render();
+    },
+    selectAll: function (checked) {
+      V2.selected = {};
+      if (checked) visibleRows().forEach(function (r) { V2.selected[r.customerId] = true; });
+      render();
+    },
+    clearSelection: function () { V2.selected = {}; render(); },
+    bulkTag: function (tag) { applyBulk(tag, false); },
+    bulkUntag: function () {
+      var ask = window.mastPrompt
+        ? mastPrompt('Tag to remove from the selected customers:', { title: 'Remove tag', confirmLabel: 'Remove' })
+        : Promise.resolve(window.prompt('Tag to remove:'));
+      ask.then(function (tag) {
+        if (!tag) return;
+        applyBulk(String(tag).trim(), true);
+      });
+    }
   };
+
+  function applyBulk(tag, remove) {
+    if (!(typeof window.can !== 'function' || window.can('customer-portfolio', 'edit'))) { showToast('Finance write access required.', true); return; }
+    var ids = Object.keys(V2.selected);
+    if (!ids.length || !tag) return;
+    var verb = remove ? 'Remove tag "' + tag + '" from ' : 'Apply tag "' + tag + '" to ';
+    mastConfirm(verb + ids.length + ' customer' + (ids.length === 1 ? '' : 's') + '?', { title: remove ? 'Remove tag' : 'Bulk tag' }).then(function (ok) {
+      if (!ok) return;
+      MastAdmin.loadModule('finance').then(function () {
+        return window.FinanceBridge.portfolioBulkTag(ids, tag, { remove: remove });
+      }).then(function (res) {
+        showToast((remove ? 'Untagged ' : 'Tagged ') + res.changed + (res.errors ? ' (' + res.errors + ' errored)' : '') + ' customer(s)' + (remove ? '' : ' as "' + tag + '"') + '.');
+        V2.selected = {};
+        load();
+      }).catch(function (e) { showToast('Bulk tag failed: ' + (e.message || e), true); });
+    });
+  }
 
   MastAdmin.registerModule('customer-portfolio-v2', {
     routes: {
