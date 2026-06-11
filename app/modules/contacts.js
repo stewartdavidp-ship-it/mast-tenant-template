@@ -1090,14 +1090,17 @@ function openLogInteractionModal(contactId) {
   openModal(html);
 }
 
-async function saveInteraction(contactId) {
-  var date = document.getElementById('interactionDateInput').value;
-  var type = document.getElementById('interactionTypeInput').value;
-  var notes = document.getElementById('interactionNotesInput').value.trim();
-  var driveUrl = document.getElementById('interactionDriveUrlInput').value.trim();
-
-  if (!notes) { showToast('Notes are required.', true); return; }
-  if (!date) { showToast('Date is required.', true); return; }
+// State-free core — shared with contacts-v2 via ContactsBridge.logInteraction
+// (classic burn-down: the twin never re-implements a write). Throws on
+// validation failure; returns the written interaction record.
+async function logInteractionCore(contactId, input) {
+  input = input || {};
+  var date = (input.date || '').trim();
+  var type = input.type || 'Other';
+  var notes = (input.notes || '').trim();
+  var driveUrl = (input.driveUrl || '').trim();
+  if (!notes) throw new Error('Notes are required.');
+  if (!date) throw new Error('Date is required.');
 
   var documents = [];
   if (driveUrl) {
@@ -1121,10 +1124,20 @@ async function saveInteraction(contactId) {
     documents: documents,
     createdAt: new Date().toISOString()
   };
+  await MastDB.contacts.setInteraction(contactId, interactionId, interactionData);
+  await writeAudit('create', 'contacts', contactId);
+  contactsLoaded = false;
+  return interactionData;
+}
 
+async function saveInteraction(contactId) {
   try {
-    await MastDB.contacts.setInteraction(contactId, interactionId, interactionData);
-    await writeAudit('create', 'contacts', contactId);
+    await logInteractionCore(contactId, {
+      date: document.getElementById('interactionDateInput').value,
+      type: document.getElementById('interactionTypeInput').value,
+      notes: document.getElementById('interactionNotesInput').value,
+      driveUrl: document.getElementById('interactionDriveUrlInput').value
+    });
     showToast('Interaction logged.');
     emitTestingEvent('logInteraction', {});
     closeModal();
@@ -1139,72 +1152,82 @@ async function saveInteraction(contactId) {
 // Inquiry Response — Reply to web inquiries from admin
 // ============================================================
 
+// State-free prepare core — builds the response template (to/subject/body)
+// from the contact + latest-or-direct inquiry + an optional specific
+// interaction. Shared with contacts-v2 via ContactsBridge.prepareInquiryResponse.
+// Throws when the contact or a usable email is missing.
+async function prepareInquiryResponseCore(contactId, directInquiryId, specificInteraction) {
+  // Load contact
+  var contact = await MastDB.contacts.get(contactId);
+  if (!contact) throw new Error('Contact not found.');
+
+  // Find the inquiry record — use direct ID if provided, else query by contactId
+  var inquiry = null;
+  if (directInquiryId) {
+    inquiry = await MastDB.get('inquiries/' + directInquiryId);
+  }
+  if (!inquiry) {
+    var iqVal = await MastDB.query('inquiries').orderByChild('contactId').equalTo(contactId).limitToLast(1).once();
+    if (iqVal) {
+      var keys = Object.keys(iqVal);
+      inquiry = iqVal[keys[keys.length - 1]];
+    }
+  }
+
+  // Use contact email, fall back to inquiry email
+  var toEmail = contact.email || (inquiry && inquiry.email) || '';
+  if (!toEmail) throw new Error('No email address found for this contact.');
+
+  var brandName = (TENANT_CONFIG && TENANT_CONFIG.brand && TENANT_CONFIG.brand.name) || 'Our Shop';
+  var brandEmail = (TENANT_CONFIG && TENANT_CONFIG.email && TENANT_CONFIG.email.from) || '';
+  var brandPhone = '';
+  try {
+    brandPhone = (await MastDB.get('config/brand/phone')) || '';
+  } catch (e) { /* no phone */ }
+
+  var firstName = (contact.name || '').split(' ')[0] || 'there';
+
+  // Build subject and quoted content from the specific interaction or inquiry
+  var replyContext = '';
+  var subjectRef = '';
+  if (specificInteraction) {
+    subjectRef = specificInteraction.type || 'your message';
+    replyContext = specificInteraction.notes || '';
+  } else if (inquiry) {
+    subjectRef = inquiry.type || 'your inquiry';
+    replyContext = inquiry.message || '';
+  } else {
+    subjectRef = 'your message';
+  }
+  var originalDate = specificInteraction ? (specificInteraction.date || '') : (inquiry ? (inquiry.createdAt || '').slice(0, 10) : '');
+  var inquiryId = inquiry ? (inquiry.id || '') : '';
+  var subject = 'Re: ' + subjectRef + ' — ' + brandName;
+
+  // Build signature
+  var sigParts = [brandName];
+  if (brandEmail) sigParts.push(brandEmail);
+  if (brandPhone) sigParts.push(brandPhone);
+  var signature = sigParts.join('\n');
+
+  // Build default body template
+  var bodyTemplate = 'Hi ' + firstName + ',\n\n' +
+    'Thank you for reaching out to ' + brandName + '!\n\n' +
+    '\n\n' +
+    'Best regards,\n' + signature;
+
+  if (replyContext) {
+    bodyTemplate += '\n\n---\nOriginal message' + (originalDate ? ' (' + originalDate + ')' : '') + ':\n' + replyContext;
+  }
+
+  return { toEmail: toEmail, subject: subject, bodyTemplate: bodyTemplate, inquiryId: inquiryId };
+}
+
 async function openInquiryResponseModal(contactId, interactionKey, directInquiryId) {
   try {
-    // Load contact
-    var contact = await MastDB.contacts.get(contactId);
-    if (!contact) { showToast('Contact not found.', true); return; }
-
     // Get the specific interaction if provided
     var specificInteraction = interactionKey ? window[interactionKey] : null;
-
-    // Find the inquiry record — use direct ID if provided, else query by contactId
-    var inquiry = null;
-    if (directInquiryId) {
-      inquiry = await MastDB.get('inquiries/' + directInquiryId);
-    }
-    if (!inquiry) {
-      var iqVal = await MastDB.query('inquiries').orderByChild('contactId').equalTo(contactId).limitToLast(1).once();
-      if (iqVal) {
-        var keys = Object.keys(iqVal);
-        inquiry = iqVal[keys[keys.length - 1]];
-      }
-    }
-
-    // Use contact email, fall back to inquiry email
-    var toEmail = contact.email || (inquiry && inquiry.email) || '';
-    if (!toEmail) { showToast('No email address found for this contact.', true); return; }
-
-    var brandName = (TENANT_CONFIG && TENANT_CONFIG.brand && TENANT_CONFIG.brand.name) || 'Our Shop';
-    var brandEmail = (TENANT_CONFIG && TENANT_CONFIG.email && TENANT_CONFIG.email.from) || '';
-    var brandPhone = '';
-    try {
-      brandPhone = (await MastDB.get('config/brand/phone')) || '';
-    } catch (e) { /* no phone */ }
-
-    var firstName = (contact.name || '').split(' ')[0] || 'there';
-
-    // Build subject and quoted content from the specific interaction or inquiry
-    var replyContext = '';
-    var subjectRef = '';
-    if (specificInteraction) {
-      subjectRef = specificInteraction.type || 'your message';
-      replyContext = specificInteraction.notes || '';
-    } else if (inquiry) {
-      subjectRef = inquiry.type || 'your inquiry';
-      replyContext = inquiry.message || '';
-    } else {
-      subjectRef = 'your message';
-    }
-    var originalDate = specificInteraction ? (specificInteraction.date || '') : (inquiry ? (inquiry.createdAt || '').slice(0, 10) : '');
-    var inquiryId = inquiry ? (inquiry.id || '') : '';
-    var subject = 'Re: ' + subjectRef + ' — ' + brandName;
-
-    // Build signature
-    var sigParts = [brandName];
-    if (brandEmail) sigParts.push(brandEmail);
-    if (brandPhone) sigParts.push(brandPhone);
-    var signature = sigParts.join('\n');
-
-    // Build default body template
-    var bodyTemplate = 'Hi ' + firstName + ',\n\n' +
-      'Thank you for reaching out to ' + brandName + '!\n\n' +
-      '\n\n' +
-      'Best regards,\n' + signature;
-
-    if (replyContext) {
-      bodyTemplate += '\n\n---\nOriginal message' + (originalDate ? ' (' + originalDate + ')' : '') + ':\n' + replyContext;
-    }
+    var prep = await prepareInquiryResponseCore(contactId, directInquiryId, specificInteraction);
+    var toEmail = prep.toEmail, subject = prep.subject, bodyTemplate = prep.bodyTemplate, inquiryId = prep.inquiryId;
 
     var html = '' +
       '<div class="modal-header"><h3>Respond to Inquiry</h3></div>' +
@@ -1237,55 +1260,68 @@ async function openInquiryResponseModal(contactId, interactionKey, directInquiry
   }
 }
 
+// State-free send core — CF email + interaction record + inquiry status.
+// Shared with contacts-v2 via ContactsBridge.respondToInquiry. Throws on
+// validation/CF failure.
+async function respondToInquiryCore(contactId, input) {
+  input = input || {};
+  var subject = (input.subject || '').trim();
+  var body = (input.body || '').trim();
+  var toEmail = input.toEmail;
+  var inquiryId = input.inquiryId || '';
+  if (!subject) throw new Error('Subject is required.');
+  if (!body) throw new Error('Message body is required.');
+  if (!toEmail) throw new Error('Recipient email is required.');
+
+  // Convert plain text body to HTML (preserve line breaks)
+  var bodyHtml = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+
+  // Call Cloud Function to send email
+  await firebase.functions().httpsCallable('sendInquiryResponse')({
+    tenantId: MastDB.tenantId(),
+    contactId: contactId,
+    inquiryId: inquiryId,
+    subject: subject,
+    body: bodyHtml,
+    toEmail: toEmail
+  });
+
+  // Record as interaction on the contact
+  var interactionId = 'int_' + Date.now().toString(36);
+  var now = new Date().toISOString();
+  await MastDB.contacts.setInteraction(contactId, interactionId, {
+    id: interactionId,
+    date: now.slice(0, 10),
+    type: 'Email',
+    notes: subject + ': ' + body.substring(0, 500),
+    documents: [],
+    loggedBy: currentUser ? currentUser.uid : 'unknown',
+    createdAt: now
+  });
+
+  // Update inquiry status to 'responded'
+  if (inquiryId) {
+    await MastDB.set('inquiries/' + inquiryId + '/status', 'responded');
+    await MastDB.set('inquiries/' + inquiryId + '/respondedAt', now);
+  }
+  contactsLoaded = false;
+}
+
 async function sendInquiryResponse() {
-  var subjectEl = document.getElementById('inquiryResponseSubject');
-  var bodyEl = document.getElementById('inquiryResponseBody');
   var contactId = document.getElementById('inquiryResponseContactId').value;
-  var inquiryId = document.getElementById('inquiryResponseInquiryId').value;
-  var toEmail = document.getElementById('inquiryResponseToEmail').value;
   var sendBtn = document.getElementById('inquiryResponseSendBtn');
-
-  var subject = subjectEl.value.trim();
-  var body = bodyEl.value.trim();
-
-  if (!subject) { showToast('Subject is required.', true); return; }
-  if (!body) { showToast('Message body is required.', true); return; }
 
   sendBtn.disabled = true;
   sendBtn.textContent = 'Sending...';
 
+  var toEmail = document.getElementById('inquiryResponseToEmail').value;
   try {
-    // Convert plain text body to HTML (preserve line breaks)
-    var bodyHtml = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-
-    // Call Cloud Function to send email
-    var result = await firebase.functions().httpsCallable('sendInquiryResponse')({
-      tenantId: MastDB.tenantId(),
-      contactId: contactId,
-      inquiryId: inquiryId,
-      subject: subject,
-      body: bodyHtml,
-      toEmail: toEmail
+    await respondToInquiryCore(contactId, {
+      subject: document.getElementById('inquiryResponseSubject').value,
+      body: document.getElementById('inquiryResponseBody').value,
+      toEmail: toEmail,
+      inquiryId: document.getElementById('inquiryResponseInquiryId').value
     });
-
-    // Record as interaction on the contact
-    var interactionId = 'int_' + Date.now().toString(36);
-    var now = new Date().toISOString();
-    await MastDB.contacts.setInteraction(contactId, interactionId, {
-      id: interactionId,
-      date: now.slice(0, 10),
-      type: 'Email',
-      notes: subject + ': ' + body.substring(0, 500),
-      documents: [],
-      loggedBy: currentUser ? currentUser.uid : 'unknown',
-      createdAt: now
-    });
-
-    // Update inquiry status to 'responded'
-    if (inquiryId) {
-      await MastDB.set('inquiries/' + inquiryId + '/status', 'responded');
-      await MastDB.set('inquiries/' + inquiryId + '/respondedAt', now);
-    }
 
     showToast('Response sent to ' + toEmail);
     closeModal();
@@ -1325,7 +1361,7 @@ async function isGoogleContactsConnected() {
  * Open a popup to connect Google Contacts via the Cloud Function OAuth proxy.
  * Listens for postMessage from the callback page.
  */
-async function connectGoogleContacts() {
+async function connectGoogleContacts(onDone) {
   if (!currentUser) { showToast('Please sign in first.', true); return; }
 
   try {
@@ -1345,9 +1381,11 @@ async function connectGoogleContacts() {
         window.removeEventListener('message', messageHandler);
         showToast('Google Contacts connected!');
         updateGoogleContactsButtons();
+        if (typeof onDone === 'function') onDone(true);
       } else if (event.data && event.data.type === 'google-contacts-error') {
         window.removeEventListener('message', messageHandler);
         showToast('Google Contacts authorization failed.', true);
+        if (typeof onDone === 'function') onDone(false);
       }
     };
     window.addEventListener('message', messageHandler);
@@ -1423,82 +1461,87 @@ function openSyncGoogleContactsModal() {
   openModal(html);
 }
 
+// State-free sync core — pulls Google contacts via the CF proxy and imports
+// the ones not already linked by googleContactId. Shared with contacts-v2 via
+// ContactsBridge.googleSync. Returns { created }. Throws on failure.
+async function googleSyncCore(syncAll) {
+  var connected = await isGoogleContactsConnected();
+  if (!connected) throw new Error('Please connect Google Contacts first.');
+
+  var idToken = await currentUser.getIdToken();
+  var tenantId = window.TENANT_ID || 'dev';
+  var groupName = (TENANT_BRAND && TENANT_BRAND.name) || 'My Business';
+
+  var body = syncAll
+    ? { allContacts: true }
+    : { groupName: groupName };
+
+  var response = await fetch(GOOGLE_CONTACTS_FUNCTIONS_BASE + '/googleContactsSync', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + idToken,
+      'Content-Type': 'application/json',
+      'X-Tenant-ID': tenantId
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    var errText = await response.text();
+    console.error('Google contacts sync failed:', errText);
+    throw new Error('Failed to sync Google Contacts.');
+  }
+
+  var data = await response.json();
+  var contacts = data.contacts || [];
+
+  // Check existing contacts for googleContactId matches — read FRESH (the
+  // module-level cache may be cold when called from the V2 twin).
+  var existingIds = {};
+  var fresh = await MastDB.contacts.list();
+  Object.keys(fresh || {}).forEach(function(k) {
+    var c = fresh[k];
+    if (c && c.googleContactId) existingIds[c.googleContactId] = true;
+  });
+
+  var created = 0;
+  for (var i = 0; i < contacts.length; i++) {
+    var person = contacts[i];
+    if (existingIds[person.resourceName]) continue;
+
+    var id = 'contact_' + Date.now().toString(36) + '_' + i;
+    var now = new Date().toISOString();
+    await MastDB.contacts.set(id, {
+      id: id,
+      name: person.name || 'Unknown',
+      email: person.email || null,
+      phone: person.phone || null,
+      company: person.company || null,
+      category: person.category || 'Other',
+      website: null,
+      address: null,
+      notes: null,
+      googleContactId: person.resourceName,
+      driveFolderLink: null,
+      createdAt: now,
+      createdBy: currentUser ? currentUser.uid : 'unknown',
+      updatedAt: now
+    });
+    created++;
+  }
+  contactsLoaded = false;
+  return { created: created };
+}
+
 async function doSyncGoogleContacts() {
   var syncAll = document.querySelector('input[name="syncMode"]:checked').value === 'all';
   closeModal();
 
   try {
-    var connected = await isGoogleContactsConnected();
-    if (!connected) {
-      showToast('Please connect Google Contacts first.', true);
-      return;
-    }
-
     showToast('Syncing Google Contacts...');
-
-    var idToken = await currentUser.getIdToken();
-    var tenantId = window.TENANT_ID || 'dev';
-    var groupName = (TENANT_BRAND && TENANT_BRAND.name) || 'My Business';
-
-    var body = syncAll
-      ? { allContacts: true }
-      : { groupName: groupName };
-
-    var response = await fetch(GOOGLE_CONTACTS_FUNCTIONS_BASE + '/googleContactsSync', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + idToken,
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': tenantId
-      },
-      body: JSON.stringify(body)
-    });
-
-    if (!response.ok) {
-      var errText = await response.text();
-      console.error('Google contacts sync failed:', errText);
-      showToast('Failed to sync Google Contacts.', true);
-      return;
-    }
-
-    var data = await response.json();
-    var contacts = data.contacts || [];
-
-    // Check existing contacts for googleContactId matches
-    var existingIds = {};
-    contactsData.forEach(function(c) {
-      if (c.googleContactId) existingIds[c.googleContactId] = true;
-    });
-
-    var created = 0;
-    for (var i = 0; i < contacts.length; i++) {
-      var person = contacts[i];
-      if (existingIds[person.resourceName]) continue;
-
-      var id = 'contact_' + Date.now().toString(36) + '_' + i;
-      var now = new Date().toISOString();
-      await MastDB.contacts.set(id, {
-        id: id,
-        name: person.name || 'Unknown',
-        email: person.email || null,
-        phone: person.phone || null,
-        company: person.company || null,
-        category: person.category || 'Other',
-        website: null,
-        address: null,
-        notes: null,
-        googleContactId: person.resourceName,
-        driveFolderLink: null,
-        createdAt: now,
-        createdBy: currentUser ? currentUser.uid : 'unknown',
-        updatedAt: now
-      });
-      created++;
-    }
-
-    if (created > 0) {
-      showToast(created + ' contact(s) synced from Google.');
-      contactsLoaded = false;
+    var res = await googleSyncCore(syncAll);
+    if (res.created > 0) {
+      showToast(res.created + ' contact(s) synced from Google.');
       loadContacts();
     } else {
       showToast('No new contacts to sync.');
@@ -1508,6 +1551,8 @@ async function doSyncGoogleContacts() {
     console.error('Google Contacts sync error:', err);
   }
 }
+
+// (legacy import loop now lives in googleSyncCore)
 
   // ============================================================
   // Window exports for onclick handlers
@@ -1641,7 +1686,16 @@ async function doSyncGoogleContacts() {
       await writeAudit('delete', 'contacts', id);
       contactsLoaded = false;
       return id;
-    }
+    },
+    // Classic burn-down (operations Wave A): the formerly classic-only
+    // sub-surfaces, exposed as state-free cores so contacts-v2 hosts the UI.
+    INTERACTION_TYPES: INTERACTION_TYPES,
+    logInteraction: logInteractionCore,
+    prepareInquiryResponse: prepareInquiryResponseCore,
+    respondToInquiry: respondToInquiryCore,
+    googleStatus: isGoogleContactsConnected,
+    googleConnect: connectGoogleContacts,
+    googleSync: googleSyncCore
   };
 
   MastAdmin.registerModule('contacts', {
