@@ -49,12 +49,21 @@ extraction properly.
    a state-free bridge" an explicit architectural invariant in
    CODING-STANDARDS/the playbook, surviving V1's deletion.
 
+## Phase 1.5 — Classic-dependency burn-down (HARD GATE for Phase 2)
+
+Operator directive (2026-06-10): V1 retirement was always the plan; the conversion
+rounds' "single-source heavy sub-surfaces on legacy with a link" pattern was never
+sanctioned. Every classic link is a missing V2 feature. The full audited inventory
+(43 call sites / 39 modules, classified S/M/L) lives in
+**`classic-dependency-burndown.md`** — Phase 2 MUST NOT start until
+`grep -c "navigateToClassic(" app/modules/*.js` returns 0 and legacy-function reuse
+(e.g. the amendment submit modal) is rehomed.
+
 ## Phase 2 — Delete V1 (content, not plumbing)
 
-- Legacy render code in the per-section modules (keep each module's bridge cores +
-  any classic surfaces V2 still links to: day-close drawer form, AR dunning
-  settings, report generators, channel-connect wizard, Time Clock/PTO, etc. —
-  consult each section plan's debt register for the authoritative list).
+- Legacy render code in the per-section modules (keep each module's bridge cores).
+  By Phase-2 time the burn-down (Phase 1.5) has rebuilt every formerly-linked classic
+  surface, so nothing in V1 render code is load-bearing.
 - Dual sidebar item sets (e.g. finance `.fin-merged-v1` / `.fin-merged-v2` →
   collapse to the merged set), dual tab divs, `data-route-alt` stays (generic).
 - `mastLegacyUI` flag + "Legacy UI" avatar-menu entry → superseded by the
