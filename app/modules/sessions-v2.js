@@ -149,14 +149,26 @@
         var viewClass = s.classId
           ? '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="MastEntity.drill(\'classes-v2\',\'' + esc(s.classId) + '\')">View full class →</button></div>'
           : '';
-        // Session ops — native, delegated to window.SessionsBridge (state-free
-        // cores in book.js). Cancelled/completed occurrences are history: no ops.
+        // Run-session runtime — native, delegated to window.SessionsBridge
+        // (state-free cores in book.js; V1-removal directive: the legacy
+        // session-ops view's whole flow lives here now). Cancelled/completed
+        // occurrences are history: no ops.
         var ops = '';
         var sid = esc(s._key || s.id);
+        var isStarted = !!s.classStartedAt;
         if (statusOf(s) === 'scheduled' && can('calendar', 'edit')) {
-          ops = '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
-            '<button class="btn btn-secondary btn-small" onclick="SessionsV2.complete(\'' + sid + '\')">✓ Mark completed</button>' +
-            '<button class="btn btn-danger btn-small" onclick="SessionsV2.cancelSession(\'' + sid + '\')">Cancel session</button></div>';
+          var phase = isStarted ? 'In progress' : 'Check-in';
+          ops = '<div class="mu-sub" style="margin-top:10px;">Run this session — ' + phase + '</div>' +
+            '<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="btn btn-secondary btn-small" onclick="SessionsV2.checkInAll(\'' + sid + '\')">Check in all</button>' +
+            (!isStarted ? '<button class="btn btn-primary btn-small" onclick="SessionsV2.startClass(\'' + sid + '\')">▶ Start class</button>' : '') +
+            '<button class="btn btn-secondary btn-small" onclick="SessionsV2.closeOutAll(\'' + sid + '\')">Close out all</button>' +
+            '<button class="btn btn-secondary btn-small" onclick="SessionsV2.walkIn(\'' + esc(s.classId || '') + '\',\'' + sid + '\')">+ Walk-in</button>' +
+            '<button class="btn btn-danger btn-small" onclick="SessionsV2.cancelSession(\'' + sid + '\')">Cancel session</button></div>' +
+            '<div style="margin-top:10px;">' +
+              '<textarea class="form-input" id="sessV2Notes" rows="2" style="width:100%;resize:vertical;" placeholder="Session notes (kept on the close-out)…">' + esc(s.sessionNotes || '') + '</textarea>' +
+              '<button class="btn btn-primary btn-small" style="margin-top:6px;" onclick="SessionsV2.closeSession(\'' + sid + '\')">✓ Complete session</button>' +
+            '</div>';
         }
         // Roster — async fill (placeholder + post-render fetch of this
         // session's enrollments; CampaignsBridge.renderChipInto pattern).
@@ -317,6 +329,96 @@
         });
       }).catch(function (e) { console.error('[sessions-v2] cancel', e); if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
     },
+    // ── Run-session verbs (SessionsBridge cores; refresh SO after each) ──
+    _afterRunAction: function (sessionId, msg) {
+      if (window.showToast && msg) showToast(msg);
+      // Fresh-read the session so phase/status reflect the write, re-render.
+      Promise.resolve(MastDB.classSessions.get(sessionId)).then(function (fresh) {
+        if (fresh && V2.byId[sessionId]) Object.assign(V2.byId[sessionId], fresh);
+        var rec = V2.byId[sessionId];
+        if (rec) MastEntity.openRecord('sessions-v2', rec, 'read');
+        render();
+      }).catch(function () {});
+    },
+    _guardRun: function () {
+      if (!can('calendar', 'edit')) { if (window.showToast) showToast('Schedule write access required.', true); return false; }
+      if (!window.SessionsBridge || !window.SessionsBridge.checkIn) { if (window.showToast) showToast('Schedule engine still loading — try again', true); return false; }
+      return true;
+    },
+    checkIn: function (enrollId, sessionId) {
+      if (!SessionsV2._guardRun()) return;
+      Promise.resolve(window.SessionsBridge.checkIn(enrollId)).then(function () {
+        SessionsV2._afterRunAction(sessionId, 'Checked in.');
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
+    },
+    checkInAll: function (sessionId) {
+      if (!SessionsV2._guardRun()) return;
+      Promise.resolve(window.SessionsBridge.checkInAll(sessionId)).then(function (n) {
+        SessionsV2._afterRunAction(sessionId, n + ' student' + (n === 1 ? '' : 's') + ' checked in.');
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
+    },
+    startClass: function (sessionId) {
+      if (!SessionsV2._guardRun()) return;
+      Promise.resolve(window.SessionsBridge.start(sessionId)).then(function () {
+        SessionsV2._afterRunAction(sessionId, 'Class started.');
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
+    },
+    closeOut: function (enrollId, sessionId, status) {
+      if (!SessionsV2._guardRun()) return;
+      Promise.resolve(window.SessionsBridge.closeOut(enrollId, status)).then(function (finalStatus) {
+        SessionsV2._afterRunAction(sessionId, finalStatus === 'attended-pending-waiver' ? 'Closed out (pending waiver).' : 'Closed out.');
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
+    },
+    closeOutAll: function (sessionId) {
+      if (!SessionsV2._guardRun()) return;
+      Promise.resolve(window.SessionsBridge.closeOutAll(sessionId)).then(function (n) {
+        SessionsV2._afterRunAction(sessionId, n + ' student' + (n === 1 ? '' : 's') + ' closed out.');
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
+    },
+    closeSession: function (sessionId) {
+      if (!SessionsV2._guardRun()) return;
+      var notes = ((document.getElementById('sessV2Notes') || {}).value || '');
+      var ask = (typeof window.mastConfirm === 'function')
+        ? window.mastConfirm('Complete this session? Open seats are auto-completed.', { title: 'Complete Session' })
+        : Promise.resolve(true);
+      Promise.resolve(ask).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(window.SessionsBridge.close(sessionId, notes)).then(function (n) {
+          SessionsV2._afterRunAction(sessionId, 'Session completed' + (n ? ' (' + n + ' auto-completed)' : '') + '.');
+        });
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
+    },
+    walkIn: function (classId, sessionId) {
+      // Walk-in = the enrollment intake, pre-aimed at this session.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('enrollments-v2'); } catch (e) {} }
+      var go = function () {
+        if (window.EnrollmentsV2 && EnrollmentsV2.create) { EnrollmentsV2.create({ classId: classId, sessionId: sessionId }); return true; }
+        return false;
+      };
+      if (go()) return;
+      setTimeout(function () { if (!go() && window.showToast) showToast('Enrollments engine still loading — try again', true); }, 800);
+    },
+    incidentForm: function (enrollId) {
+      var wrap = document.getElementById('sessV2IncWrap');
+      if (!wrap) return;
+      wrap.style.display = '';
+      var idEl = document.getElementById('sessV2IncEnroll'); if (idEl) idEl.value = enrollId;
+      var d = document.getElementById('sessV2IncDesc'); if (d) { d.value = ''; d.focus(); }
+    },
+    saveIncident: function (sessionId) {
+      if (!SessionsV2._guardRun()) return;
+      var inc = {
+        type: ((document.getElementById('sessV2IncType') || {}).value || 'other'),
+        severity: ((document.getElementById('sessV2IncSeverity') || {}).value || 'low'),
+        description: ((document.getElementById('sessV2IncDesc') || {}).value || '')
+      };
+      var enrollId = ((document.getElementById('sessV2IncEnroll') || {}).value || '');
+      if (!inc.description.trim()) { if (window.showToast) showToast('Description required.', true); return; }
+      Promise.resolve(window.SessionsBridge.addIncident(enrollId, inc)).then(function () {
+        if (window.showToast) showToast('Incident saved.');
+        var wrap = document.getElementById('sessV2IncWrap'); if (wrap) wrap.style.display = 'none';
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
+    },
     // Async roster fill for the session SO (placeholder div + post-render fetch).
     // Click a row → drill to the enrollment record (stacked SO with Back).
     _fillRoster: function (sessionId) {
@@ -330,6 +432,8 @@
         if (!rows.length) { el2.innerHTML = '<span class="mu-sub">No one is enrolled yet.</span>'; return; }
         var EN_LABEL = { confirmed: 'Confirmed', waitlisted: 'Waitlist', cancelled: 'Cancelled', 'no-show': 'No-show', completed: 'Attended', late: 'Late', 'checked-in': 'Checked in', 'attended-pending-waiver': 'Attended (waiver pending)', cancelled_by_session: 'Session cancelled' };
         var EN_TONE = { confirmed: 'success', waitlisted: 'amber', cancelled: 'neutral', 'no-show': 'danger', completed: 'teal', late: 'warning', 'checked-in': 'teal', 'attended-pending-waiver': 'amber', cancelled_by_session: 'neutral' };
+        var sess = V2.byId[sessionId] || {};
+        var runnable = String(sess.status || 'scheduled').toLowerCase() === 'scheduled' && can('calendar', 'edit');
         el2.innerHTML = U.relatedTable([
           { label: 'Student', render: function (e) {
               var nm = e.studentName || e.customerName || '(unnamed)';
@@ -339,8 +443,31 @@
           { label: 'Status', render: function (e) {
               var st = e.status || '—';
               return U.badge(EN_LABEL[st] || st, EN_TONE[st] || 'neutral');
+          } },
+          { label: '', render: function (e) {
+              if (!runnable) return '';
+              var eid = esc(e._key), btns = [];
+              if (e.status === 'confirmed') btns.push('<button class="btn btn-secondary btn-small" onclick="SessionsV2.checkIn(\'' + eid + '\',\'' + esc(sessionId) + '\')">Check in</button>');
+              if (e.status === 'checked-in' || e.status === 'confirmed' || e.status === 'late') {
+                btns.push('<button class="btn btn-secondary btn-small" onclick="SessionsV2.closeOut(\'' + eid + '\',\'' + esc(sessionId) + '\',\'completed\')">Attended</button>');
+                btns.push('<button class="btn btn-secondary btn-small" onclick="SessionsV2.closeOut(\'' + eid + '\',\'' + esc(sessionId) + '\',\'no-show\')">No-show</button>');
+              }
+              btns.push('<button type="button" class="btn-icon" title="Record incident" onclick="SessionsV2.incidentForm(\'' + eid + '\')">⚠</button>');
+              return '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;">' + btns.join('') + '</div>';
           } }
-        ], rows);
+        ], rows) +
+        // Incident mini-form (hidden; one per roster card — legacy parity).
+        '<div id="sessV2IncWrap" style="display:none;margin-top:10px;border:1px solid var(--border,rgba(127,127,127,0.3));border-radius:8px;padding:10px;">' +
+          '<input type="hidden" id="sessV2IncEnroll">' +
+          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px;">' +
+            '<select class="form-input" id="sessV2IncType" style="flex:1;min-width:120px;"><option value="injury">Injury</option><option value="equipment">Equipment</option><option value="behavior">Behavior</option><option value="other" selected>Other</option></select>' +
+            '<select class="form-input" id="sessV2IncSeverity" style="flex:1;min-width:120px;"><option value="low" selected>Low</option><option value="medium">Medium</option><option value="high">High</option></select>' +
+          '</div>' +
+          '<textarea class="form-input" id="sessV2IncDesc" rows="2" style="width:100%;resize:vertical;" placeholder="What happened?"></textarea>' +
+          '<div style="margin-top:6px;display:flex;gap:8px;">' +
+            '<button class="btn btn-primary btn-small" onclick="SessionsV2.saveIncident(\'' + esc(sessionId) + '\')">Save incident</button>' +
+            '<button class="btn btn-secondary btn-small" onclick="document.getElementById(\'sessV2IncWrap\').style.display=\'none\'">Cancel</button>' +
+          '</div></div>';
       }).catch(function (e) {
         console.error('[sessions-v2] roster', e);
         var el3 = document.getElementById('sessV2Roster');
