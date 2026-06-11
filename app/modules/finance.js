@@ -2758,9 +2758,32 @@ async function _closeV3Call(name, payload) {
   return (res && res.data) ? res.data : {};
 }
 
-// Close v3: Save — always goes through the writeDayClose CF. The CF performs
-// the version-bump + supersede + audit-row write atomically (single Firestore
-// transaction). requestId is a client UUID for at-most-once semantics.
+// Close v3: state-free save core — both the classic form and the V2 close hub
+// call this. Builds the at-most-once requestId, invokes the writeDayClose CF
+// (which performs version-bump + supersede + audit-row atomically), enforces
+// the explicit ok===true contract (R2-F1), and writes the client-side audit
+// row. Throws on any failure; resolves with the CF response on success.
+async function _dayCloseSaveCore(payload, isReclose) {
+  // Best-effort UUID (crypto.randomUUID is widely supported in supported browsers).
+  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
+    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  var p = Object.assign({}, payload, { requestId: requestId });
+  var json = await _closeV3Call('writeDayClose', p);
+  if (!json || json.ok !== true) {
+    console.error('[close-v3] writeDayClose returned non-ok response:', json);
+    var err = new Error((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console');
+    err.response = json;
+    throw err;
+  }
+  // Audit: client-side row for cross-UI consistency. CF also writes its own
+  // immutable audit row in `closes/audit/{...}` (Agent A) so this is belt-and-braces.
+  try { await writeAudit(isReclose ? 'update' : 'create', 'dayClose', payload.date + ':v' + (json.version || '?')); } catch (xerr) {}
+  return json;
+}
+
+// Close v3: Save — always goes through the writeDayClose CF (via the shared
+// state-free core above; this wrapper owns the classic form's DOM gather +
+// diff modal + re-render).
 window.finDayCloseSave = async function(mode) {
   var el = document.getElementById('fCfContent');
   if (el && el._dcReadOnly) { showToast('Cannot edit a superseded version.', true); return; }
@@ -2772,22 +2795,8 @@ window.finDayCloseSave = async function(mode) {
     var ok = await _dcShowDiffModal(payload.date, latest.version + 1, diffHtml);
     if (!ok) return;
   }
-  // Best-effort UUID (crypto.randomUUID is widely supported in supported browsers).
-  var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
-    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
-  payload.requestId = requestId;
   try {
-    var json = await _closeV3Call('writeDayClose', payload);
-    // R2-F1: require explicit ok===true. CF returning {} or {ok:undefined} now
-    // surfaces as an error instead of silently passing through to the success path.
-    if (!json || json.ok !== true) {
-      console.error('[close-v3] writeDayClose returned non-ok response:', json);
-      showToast('Save failed: ' + ((json && (json.message || json.error || json.code)) || 'CF returned no ok flag — check console'), true);
-      return;
-    }
-    // Audit: client-side row for cross-UI consistency. CF also writes its own
-    // immutable audit row in `closes/audit/{...}` (Agent A) so this is belt-and-braces.
-    try { await writeAudit(mode === 'reclose' ? 'update' : 'create', 'dayClose', payload.date + ':v' + (json.version || '?')); } catch (xerr) {}
+    var json = await _dayCloseSaveCore(payload, mode === 'reclose');
     showToast('Day Close v' + (json.version || '?') + ' saved for ' + payload.date);
     window._dcViewVersionId = null;
     // TODO(close-v3 fix-up Round 2): Morgan persona reported URL hash flips to
@@ -8280,6 +8289,10 @@ window.FinanceBridge = {
   apDeleteBill: _apDeleteBillCore,
   apDeleteVendor: _apDeleteVendorCore,
   // Wave 3 — close hub cores:
+  dayCloseVersions: _dcLoadVersionsForDate,
+  saveDayClose: _dayCloseSaveCore,
+  dayCloseDiffHtml: _dcRenderDiff,
+  dayCloseDiffConfirm: _dcShowDiffModal,
   dayClosesForMonth: _dcLoadLatestDayClosesForMonth,
   periodCloseForMonth: _dcLoadLatestPeriodClose,
   recentAmendments: _dcLoadRecentAmendments,
