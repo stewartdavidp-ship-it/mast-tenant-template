@@ -3117,18 +3117,50 @@ async function renderArDunningSettings() {
   }
 }
 
-window.finArSaveDunningSettings = async function() {
-  var enabled = !!(document.getElementById('dunEnabled') && document.getElementById('dunEnabled').checked);
-  var cadence = {
-    '1d': !!(document.getElementById('dun_1d') && document.getElementById('dun_1d').checked),
-    '7d': !!(document.getElementById('dun_7d') && document.getElementById('dun_7d').checked),
-    '30d': !!(document.getElementById('dun_30d') && document.getElementById('dun_30d').checked)
+// State-free settings core — both the classic sub-view and the V2 open-items
+// hub call this. settings = { enabled: bool, cadence: {'1d','7d','30d'} }.
+async function _arSaveDunningSettingsCore(settings) {
+  await MastDB.set('admin/config/dunning', {
+    enabled: !!settings.enabled,
+    cadence: {
+      '1d': !!(settings.cadence && settings.cadence['1d']),
+      '7d': !!(settings.cadence && settings.cadence['7d']),
+      '30d': !!(settings.cadence && settings.cadence['30d'])
+    },
+    updatedAt: new Date().toISOString()
+  });
+}
+
+// Read core for the V2 hub: settings doc with the legacy defaults applied
+// (enabled unless explicitly false; every cadence step on unless false).
+async function _arDunningConfigCore() {
+  var cfg = (await MastDB.get('admin/config/dunning')) || {};
+  var cadence = cfg.cadence || {};
+  return {
+    enabled: cfg.enabled !== false,
+    cadence: { '1d': cadence['1d'] !== false, '7d': cadence['7d'] !== false, '30d': cadence['30d'] !== false },
+    updatedAt: cfg.updatedAt || null
   };
+}
+
+// Read core for the reminder audit log (written by finArSendReminder),
+// newest first.
+async function _arReminderLogCore() {
+  var raw = (await MastDB.get('admin/ar_reminders')) || {};
+  return Object.entries(raw)
+    .map(function(kv) { return Object.assign({ _key: kv[0] }, kv[1]); })
+    .sort(function(a, b) { return (b.sentAt || '').localeCompare(a.sentAt || ''); });
+}
+
+window.finArSaveDunningSettings = async function() {
   try {
-    await MastDB.set('admin/config/dunning', {
-      enabled: enabled,
-      cadence: cadence,
-      updatedAt: new Date().toISOString()
+    await _arSaveDunningSettingsCore({
+      enabled: !!(document.getElementById('dunEnabled') && document.getElementById('dunEnabled').checked),
+      cadence: {
+        '1d': !!(document.getElementById('dun_1d') && document.getElementById('dun_1d').checked),
+        '7d': !!(document.getElementById('dun_7d') && document.getElementById('dun_7d').checked),
+        '30d': !!(document.getElementById('dun_30d') && document.getElementById('dun_30d').checked)
+      }
     });
     showToast('Dunning settings saved');
     location.hash = '#finance-ar';
@@ -8290,6 +8322,9 @@ window.FinanceBridge = {
   apOpenItems: _apOpenItems,
   arMarkPaid: _arMarkPaidCore,
   arQueueReminder: _arQueueReminderCore,
+  arDunningConfig: _arDunningConfigCore,
+  arSaveDunningSettings: _arSaveDunningSettingsCore,
+  arReminderLog: _arReminderLogCore,
   apMarkPaid: _apMarkPaidCore,
   apRecordPayment: _apRecordPaymentCore,
   apSaveBill: _apSaveBillCore,
