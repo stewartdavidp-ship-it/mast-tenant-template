@@ -41,6 +41,7 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+  function can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
 
   var STATUS_LABEL = { active: 'Active', inactive: 'Inactive' };
   var STATUS_TONE = { active: 'success', inactive: 'neutral' };
@@ -91,7 +92,10 @@
         get: statusOf,
         tone: function (v) { return STATUS_TONE[v] || 'neutral'; } }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return ensureLoaded().then(function () { return V2.byId[id] || null; });
+    },
     detail: {
       render: function (UI, i) {
         var classes = classesFor(i);
@@ -135,7 +139,7 @@
         var other = classes.filter(function (c) { return c.status !== 'active'; });
         function classCols() {
           return [
-            { label: 'Class', render: function (c) { return esc(c.name || '—'); } },
+            { label: 'Class', render: function (c) { return c.id ? '<button type="button" class="mu-link" onclick="MastEntity.drill(\'classes-v2\',\'' + esc(c.id) + '\')">' + esc(c.name || '—') + '</button>' : esc(c.name || '—'); } },
             { label: 'Type', render: function (c) { return c.type ? '<span class="mu-sub">' + esc(c.type) + '</span>' : '<span class="mu-sub">—</span>'; } },
             { label: 'Status', render: function (c) { return UI.badge(c.status || '—', c.status === 'active' ? 'success' : 'neutral'); } }
           ];
@@ -149,6 +153,11 @@
           if (other.length) classesBody += '<div class="mu-sub" style="margin:' + (active.length ? '14px' : '0') + ' 0 6px;">Other (' + other.length + ')</div>' + UI.relatedTable(classCols(), other);
         }
 
+        // Danger zone — hard delete via the bridge (RBAC + mastConfirm + FK
+        // warn in the remove() handler; writeAudit in the bridge core).
+        var dangerZone = can('instructors', 'delete')
+          ? UI.card('Danger zone', '<button class="btn btn-danger btn-small" onclick="InstructorsV2.remove(\'' + esc(i._key || i.id) + '\')">Delete instructor</button>')
+          : '';
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
             UI.card('Contact', contact) +
@@ -156,7 +165,7 @@
             UI.card('Skills', skillsBody + manage) +
             UI.card('Internal notes', notesBody) +
           '</div>' +
-          '<div class="mu-pane" data-pane="classes" hidden>' + UI.cardTable('Classes (' + classes.length + ')', classesBody) + '</div>';
+          '<div class="mu-pane" data-pane="classes" hidden>' + UI.cardTable('Classes (' + classes.length + ')', classesBody) + '</div>' + dangerZone;
       },
       // Native edit form — the legacy showInstructorForm profile field set,
       // grouped: name (required), status, bio, email, phone, pay rate, photo URL,
@@ -230,13 +239,21 @@
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, classes: [], skillCatalog: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false };
 
-  function load() {
+  // Run-once data load shared by route setup and cold drills (fetch gate).
+  var _loadPromise = null;
+  function ensureLoaded() {
+    if (V2.loaded) return Promise.resolve();
+    if (!_loadPromise) _loadPromise = loadData();
+    return _loadPromise;
+  }
+  function load() { _loadPromise = null; loadData().then(render); }
+  function loadData() {
     // Ensure the legacy Book module is loaded so window.InstructorsBridge (the
     // delegated write path) exists — mirrors contacts-v2 / materials-v2.
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
     // Instructors + classes (for the Classes facet/count) + skill catalog (for
     // slug→label) load together; all one-shot keyed-object reads.
-    Promise.all([
+    return Promise.all([
       Promise.resolve(MastDB.get('public/instructors')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('public/classes')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('admin/skillCatalog')).catch(function () { return null; })
@@ -250,10 +267,10 @@
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
       V2.classes = Object.keys(cv).map(function (k) { var c = cv[k] || {}; c.id = c.id || k; return c; });
       V2.skillCatalog = sv || {};
-      V2.loaded = true; render();
-    }).catch(function (e) { console.error('[instructors-v2] load', e); render(); });
+      V2.loaded = true;
+    }).catch(function (e) { console.error('[instructors-v2] load', e); });
   }
-  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
+  function reloadSoon() { V2.loaded = false; _loadPromise = null; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -305,6 +322,25 @@
   }
 
   window.InstructorsV2 = {
+    remove: function (id) {
+      if (!can('instructors', 'delete')) { if (window.showToast) showToast('Instructors delete access required.', true); return; }
+      if (!window.InstructorsBridge || !window.InstructorsBridge.remove) { if (window.showToast) showToast('Instructors engine still loading — try again', true); return; }
+      var rec = V2.byId[id];
+      var assigned = rec ? V2.classes.filter(function (c) { return c && c.instructorId === id; }).length : 0;
+      var msg = 'Delete the instructor "' + ((rec && rec.name) || '') + '"?' +
+        (assigned ? ' ' + assigned + ' class' + (assigned === 1 ? ' is' : 'es are') + ' assigned to them — those classes keep the name but lose the link.' : '') +
+        ' This cannot be undone.';
+      mastConfirm(msg, { title: 'Delete Instructor', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(window.InstructorsBridge.remove(id)).then(function () {
+          delete V2.byId[id];
+          V2.rows = V2.rows.filter(function (x) { return (x._key || x.id) !== id; });
+          if (window.showToast) showToast('Instructor deleted');
+          try { U.slideOut.requestClose(); } catch (_) {}
+          render();
+        }).catch(function (e) { if (window.showToast) showToast('Delete failed: ' + (e && e.message || e), true); });
+      });
+    },
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = (key === 'classCount' ? 'desc' : 'asc'); }

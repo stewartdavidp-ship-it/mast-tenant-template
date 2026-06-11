@@ -2420,6 +2420,13 @@
       await MastDB.instructors.update(id, rec);
       instructorsLoaded = false;
       return id;
+    },
+    // Hard delete (the twin confirms + checks class assignments first).
+    remove: async function (id) {
+      await MastDB.instructors.remove(id);
+      instructorsLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'instructor', id);
+      return true;
     }
   };
 
@@ -2526,6 +2533,24 @@
       if (!cls.schedule || (!cls.schedule.startDate && !cls.schedule.date)) throw new Error('Set a schedule first.');
       await materializeSessions(id, cls);
       return cls;
+    },
+    // Hard delete — DRAFT classes with no enrollments only (anything that has
+    // been sellable archives instead; enrollment FKs must never strand).
+    // Cascades the class's generated sessions.
+    remove: async function (id) {
+      var cls = await MastDB.classes.get(id);
+      if (!cls) throw new Error('Class not found');
+      if (cls.status !== 'draft') throw new Error('Only draft classes can be deleted — archive it instead.');
+      var enrolls = (await MastDB.enrollments.byClass(id)) || {};
+      var ev = (enrolls && typeof enrolls.val === 'function') ? (enrolls.val() || {}) : enrolls;
+      if (Object.keys(ev).length) throw new Error('This class has enrollments — archive it instead.');
+      var sess = (await MastDB.classSessions.byClass(id)) || {};
+      var ids = Object.keys(sess);
+      for (var i = 0; i < ids.length; i++) await MastDB.classSessions.remove(ids[i]);
+      await MastDB.classes.remove(id);
+      classesLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'class', id);
+      return true;
     }
   };
 
@@ -2753,6 +2778,14 @@
       await MastDB.resources.set(id, rec);
       resourcesLoaded = false;
       return id;
+    },
+    // Hard delete (the twin confirms + checks class references first —
+    // classes point at resources by NAME string).
+    remove: async function (id) {
+      await MastDB.resources.remove(id);
+      resourcesLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'resource', id);
+      return true;
     }
   };
 
@@ -3374,6 +3407,18 @@
       await syncPassDefToPublic(id, rec);
       passDefsLoaded = false;
       return id;
+    },
+    // Hard delete — ARCHIVED definitions only (sold pass instances reference
+    // definition ids from user wallets; archive ends sales, delete is for
+    // never-sold/retired defs). Cascades the public dual-write mirror.
+    remove: async function (id) {
+      var existing = await MastDB.passDefinitions.get(id);
+      if (existing && existing.status === 'active') throw new Error('Archive the pass first (set status to archived), then delete.');
+      await MastDB.passDefinitions.remove(id);
+      await MastDB.remove('public/passDefinitions/' + id);
+      passDefsLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'passDefinition', id);
+      return true;
     }
   };
 

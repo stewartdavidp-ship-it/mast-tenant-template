@@ -157,15 +157,20 @@
         var tabsBar = UI.paneTabsBar(tabs, 'ov');
 
         // Overview — student + class/session + lifecycle dates.
+        // Cross-drills: student profile / customer record / class / session —
+        // stacked SO with Back (all four fetches are cold-drill safe).
+        function dlink(entity, id, text) {
+          return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'' + entity + '\',\'' + esc(String(id)) + '\')">' + esc(text) + '</button>';
+        }
         var student = UI.kv([
-          { k: 'Name', v: esc(studentName(e)) },
+          { k: 'Name', v: e.studentId ? dlink('students-v2', e.studentId, studentName(e)) : esc(studentName(e)) },
           { k: 'Email', v: studentEmail(e) ? esc(studentEmail(e)) : '—' },
           { k: 'Phone', v: (e.studentPhone || e.phone) ? esc(e.studentPhone || e.phone) : '—' },
-          { k: 'Customer', v: e.customerId ? esc(e.customerId) : '—' }
+          { k: 'Customer', v: e.customerId ? dlink('customers-v2', e.customerId, 'View customer record →') : '—' }
         ]);
         var classCard = UI.kv([
-          { k: 'Class', v: esc(className(e)) },
-          { k: 'Session', v: e.sessionId ? esc(sessionLabel(e)) : '—' },
+          { k: 'Class', v: e.classId ? dlink('classes-v2', e.classId, className(e)) : esc(className(e)) },
+          { k: 'Session', v: e.sessionId ? dlink('sessions-v2', e.sessionId, sessionLabel(e)) : '—' },
           { k: 'Capacity', v: (sess && sess.capacity) ? N.count(sess.capacity) : '—' },
           { k: 'Status', v: UI.badge(statusDisplay(e), STATUS_TONE[e.status] || 'neutral') }
         ]);

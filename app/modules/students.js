@@ -1523,6 +1523,13 @@
       await writeStudent(id, fields, false);
       studentsLoaded = false;
       return id;
+    },
+    // Hard delete (the twin confirms + checks enrollment references first).
+    remove: async function (id) {
+      await MastDB.remove('students/' + id);
+      studentsLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'student', id);
+      return true;
     }
   };
 
