@@ -12,9 +12,10 @@
  * IMMUTABILITY IS DESIGN: closed periods and decided amendments render
  * read-only — no edit/delete affordances, ever; a re-close mints a new
  * version. All writes are the Close-v3 Cloud Functions via the state-free
- * FinanceBridge cores (closePeriod / amendApprove / amendReject); the
- * day-close drawer form and the submit-amendment modal stay on the classic
- * surfaces (linked) — they are already CF-backed.
+ * FinanceBridge cores (closePeriod / amendApprove / amendReject /
+ * saveDayClose). The day-close drawer-count form is native here (classic
+ * burn-down 2026-06-10): opening/closing cash, checks, notes, live variance,
+ * version history, and the re-close diff confirm — all through the bridge.
  */
 (function () {
   'use strict';
@@ -34,7 +35,9 @@
   function canClose() { return (typeof window.can === 'function') ? window.can('finance-period-close', 'edit') : true; }
   function canApprove() { return (typeof window.hasPermission === 'function') ? window.hasPermission('finance', 'approveAmendment') : false; }
 
-  var V2 = { lens: 'periods', month: null, months: [], periods: {}, days: {}, amendments: [], openPeriod: null, busy: false };
+  var V2 = { lens: 'periods', month: null, months: [], periods: {}, days: {}, amendments: [], openPeriod: null, busy: false,
+    // Native day-close drawer-count form (null = lens shows the list).
+    dayForm: null };
 
   function ensureTab() {
     var el = document.getElementById('financeCloseV2Tab');
@@ -69,7 +72,7 @@
         title: 'Close the Books',
         count: 'Day closes → period close → amendments (immutable once closed)',
         actionsHtml:
-          '<button class="btn btn-primary" onclick="FinCloseV2.newDayClose()">Day close (classic) ↗</button>' +
+          '<button class="btn btn-primary" onclick="FinCloseV2.newDayClose()">+ New day close</button>' +
           '<button class="btn btn-secondary" onclick="FinCloseV2.submitAmendment()">+ Submit amendment</button>' +
           '<button class="btn btn-secondary" onclick="FinCloseV2.refresh()">Refresh</button>'
       }) +
@@ -139,8 +142,188 @@
       '<div style="margin-top:10px;font-size:0.72rem;color:var(--warm-gray);">A period can close only when every calendar day in it has a day close. Closed periods are immutable; corrections go through Amendments.</div>';
   }
 
+  // ── Native day-close drawer-count form ────────────────────────────────────
+  // Replaces the classic finance-cash-flow?subView=dayclose escape hatch.
+  // All persistence goes through the state-free FinanceBridge cores
+  // (dayCloseVersions / saveDayClose / dayCloseDiffHtml / dayCloseDiffConfirm).
+
+  var INPUT_CSS = 'background:var(--bg-primary);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);padding:6px 8px;font-size:0.85rem;width:100%;box-sizing:border-box;font-family:inherit;';
+
+  function checkRowHtml(c, i) {
+    c = c || {};
+    var amt = (c.amountCents != null) ? (c.amountCents / 100).toFixed(2) : (c.amount != null ? c.amount : '');
+    function inp(cls, ph, val, type) {
+      return '<input type="' + (type || 'text') + '"' + (type === 'number' ? ' step="0.01"' : '') + ' class="' + cls + '" placeholder="' + ph + '" value="' + esc(val == null ? '' : String(val)) + '" style="' + INPUT_CSS + '"' + (cls === 'fcv2-ck-amount' ? ' oninput="FinCloseV2.dayVariance()"' : '') + '>';
+    }
+    return '<div class="fcv2-check-row" style="display:grid;grid-template-columns:90px 110px 1fr 1fr 90px 32px;gap:8px;align-items:center;margin-bottom:6px;">' +
+      inp('fcv2-ck-number', 'Check #', c.number) +
+      inp('fcv2-ck-amount', 'Amount', amt, 'number') +
+      inp('fcv2-ck-payer', 'Payer name', c.payerName != null ? c.payerName : c.payor) +
+      inp('fcv2-ck-memo', 'Memo', c.memo) +
+      inp('fcv2-ck-invoice', 'Invoice #', c.invoiceRef) +
+      '<button type="button" class="btn btn-secondary" style="font-size:0.78rem;padding:3px 8px;" title="Remove check" onclick="FinCloseV2.removeCheck(this)">✕</button>' +
+      '</div>';
+  }
+
+  function dayFormViewSource(f) {
+    if (f.viewVersionId) {
+      var v = (f.versions || []).filter(function (x) { return x.id === f.viewVersionId; })[0];
+      if (v) return v;
+    }
+    return f.latest || f.legacy || null;
+  }
+
+  function renderDayForm() {
+    var el = body(); if (!el) return;
+    var f = V2.dayForm;
+    var pc = V2.periods[(f.date || '').slice(0, 7)];
+    var viewingOld = !!(f.viewVersionId && f.latest && f.viewVersionId !== f.latest.id);
+    var readOnly = !!pc || viewingOld || !canClose();
+    var src = dayFormViewSource(f) || {};
+    var checks = Array.isArray(src.checks) ? src.checks : [];
+
+    var h = '<div style="max-width:860px;">';
+    h += '<a href="javascript:void(0)" onclick="FinCloseV2.closeDayForm()" style="color:var(--teal);font-size:0.85rem;text-decoration:none;">&larr; Back to day closes</a>';
+
+    // Context line: version history + lock state.
+    var ctx = '';
+    if (f.versions && f.versions.length) {
+      ctx += (f.versions.map(function (v) {
+        var on = f.viewVersionId ? (v.id === f.viewVersionId) : (f.latest && v.id === f.latest.id);
+        return '<button type="button" onclick="FinCloseV2.viewVersion(\'' + esc(v.id) + '\')" style="border:1px solid var(--border);border-radius:999px;padding:2px 10px;font-size:0.72rem;cursor:pointer;margin-right:6px;' +
+          'background:' + (on ? 'color-mix(in srgb,var(--teal) 16%,transparent)' : 'transparent') + ';color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';">v' + esc(String(v.version || '?')) + (v.superseded ? ' (superseded)' : '') + '</button>';
+      }).join(''));
+      if (viewingOld) ctx += '<button type="button" onclick="FinCloseV2.viewVersion(null)" style="border:none;background:transparent;color:var(--teal);font-size:0.72rem;cursor:pointer;">Return to latest</button>';
+    } else if (f.legacy && (f.legacy.openingCashCents != null || f.legacy.closingCashCents != null)) {
+      ctx += '<span style="font-size:0.72rem;color:var(--warm-gray);">Legacy (pre-v3) close found — saving migrates it to v1.</span>';
+    }
+    if (pc) ctx += ' <span style="font-size:0.72rem;color:var(--amber);">' + statusBadge(pc) + ' Period closed — read-only; corrections go through Amendments.</span>';
+    else if (viewingOld) ctx += ' <span style="font-size:0.72rem;color:var(--warm-gray);">Viewing a superseded version (read-only).</span>';
+
+    var dis = readOnly ? ' disabled style="opacity:0.6;' + INPUT_CSS + '"' : ' style="' + INPUT_CSS + '"';
+    h += U.card('Day close — drawer count',
+      '<div style="margin-bottom:10px;">' + ctx + '</div>' +
+      '<div style="display:grid;grid-template-columns:160px 160px 160px 1fr;gap:10px 12px;align-items:end;margin-bottom:12px;">' +
+      '<div><label style="font-size:0.72rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Date</label>' +
+      '<input type="date" id="fcv2DcDate" value="' + esc(f.date) + '" onchange="FinCloseV2.dayFormSetDate(this.value)" style="' + INPUT_CSS + '"></div>' +
+      '<div><label style="font-size:0.72rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Opening cash ($)</label>' +
+      '<input type="number" step="0.01" id="fcv2DcOpen" value="' + (src.openingCashCents != null ? (src.openingCashCents / 100).toFixed(2) : '') + '" oninput="FinCloseV2.dayVariance()"' + dis + '></div>' +
+      '<div><label style="font-size:0.72rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Closing cash ($)</label>' +
+      '<input type="number" step="0.01" id="fcv2DcClose" value="' + (src.closingCashCents != null ? (src.closingCashCents / 100).toFixed(2) : '') + '" oninput="FinCloseV2.dayVariance()"' + dis + '></div>' +
+      '<div id="fcv2DcVariance" style="font-size:0.78rem;color:var(--warm-gray);padding-bottom:8px;">Variance: $0.00 (closing − opening − checks)</div>' +
+      '</div>' +
+      '<div style="font-size:0.85rem;font-weight:600;margin:14px 0 8px;">Checks received <span id="fcv2DcCheckTotal" style="font-weight:400;color:var(--warm-gray);font-size:0.78rem;"></span></div>' +
+      (readOnly
+        ? (checks.length
+            ? '<div>' + checks.map(function (c, i) { return checkRowHtml(c, i); }).join('') + '</div>'
+            : '<div style="color:var(--warm-gray);font-size:0.78rem;margin-bottom:6px;">No checks recorded.</div>')
+        : U.repeatRows({ id: 'fcv2DcChecks', rows: checks, template: checkRowHtml, addLabel: '+ Add check', spares: checks.length ? 0 : 1 })) +
+      '<div style="margin-top:14px;"><label style="font-size:0.72rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Notes</label>' +
+      '<textarea id="fcv2DcNotes" rows="2"' + dis + '>' + esc(src.notes || '') + '</textarea></div>' +
+      '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">' +
+      (readOnly
+        ? (canClose() ? '' : '<span style="font-size:0.78rem;color:var(--warm-gray);">Finance write access required to close a day.</span>')
+        : '<button class="btn btn-primary" ' + (V2.busy ? 'disabled ' : '') + 'onclick="FinCloseV2.saveDayForm()">' + esc(dayFormCtaLabel(f)) + '</button>') +
+      '</div>');
+    h += '</div>';
+    el.innerHTML = h;
+    if (readOnly) {
+      el.querySelectorAll('.fcv2-check-row input, .fcv2-check-row button').forEach(function (n) {
+        if (n.tagName === 'BUTTON') { n.style.display = 'none'; return; }
+        n.setAttribute('disabled', 'disabled'); n.style.opacity = '0.6';
+      });
+      // Stored values, not live recompute — the saved varianceCents is canonical.
+      var vEl = document.getElementById('fcv2DcVariance');
+      if (vEl && src.varianceCents != null) vEl.textContent = 'Variance: ' + (src.varianceCents >= 0 ? '+' : '−') + m(Math.abs(src.varianceCents)) + ' (closing − opening − checks)';
+      var totEl = document.getElementById('fcv2DcCheckTotal');
+      if (totEl && checks.length) totEl.textContent = '· total ' + m(src.checkTotalCents || checks.reduce(function (s, c) { return s + (c.amountCents || 0); }, 0));
+    } else {
+      dayVariance();
+    }
+  }
+
+  function dayFormCtaLabel(f) {
+    if (!f.latest && f.legacy && (f.legacy.openingCashCents != null || f.legacy.closingCashCents != null)) return 'Migrate to v1';
+    if (!f.latest) return 'Close as v1';
+    return 'Re-close (creates v' + ((f.latest.version || 1) + 1) + ')';
+  }
+
+  function gatherChecks() {
+    var rows = document.querySelectorAll('#fcv2DcChecks .fcv2-check-row');
+    var out = [];
+    rows.forEach(function (row) {
+      function val(cls) { var n = row.querySelector('.' + cls); return n ? (n.value || '').trim() : ''; }
+      var amt = parseFloat(val('fcv2-ck-amount'));
+      if (isNaN(amt) || !amt) return;
+      out.push({
+        number: val('fcv2-ck-number'),
+        payerName: val('fcv2-ck-payer'),
+        amountCents: Math.round(amt * 100),
+        memo: val('fcv2-ck-memo'),
+        invoiceRef: val('fcv2-ck-invoice')
+      });
+    });
+    return out;
+  }
+
+  // Mirrors the classic _dcGatherPayload computation (variance = closing −
+  // opening − checks, CPA convention) against THIS form's inputs.
+  function gatherDayForm() {
+    var date = (document.getElementById('fcv2DcDate') || {}).value || (V2.dayForm && V2.dayForm.date);
+    var openVal = parseFloat((document.getElementById('fcv2DcOpen') || {}).value);
+    var closeVal = parseFloat((document.getElementById('fcv2DcClose') || {}).value);
+    var notes = ((document.getElementById('fcv2DcNotes') || {}).value || '').trim();
+    var checks = gatherChecks();
+    var checkTotalCents = checks.reduce(function (s, c) { return s + c.amountCents; }, 0);
+    var variance = (isNaN(openVal) || isNaN(closeVal)) ? null : Math.round((closeVal - openVal) * 100) - checkTotalCents;
+    return {
+      date: date,
+      openingCashCents: isNaN(openVal) ? null : Math.round(openVal * 100),
+      closingCashCents: isNaN(closeVal) ? null : Math.round(closeVal * 100),
+      varianceCents: variance,
+      checks: checks,
+      checkTotalCents: checkTotalCents,
+      notes: notes || null
+    };
+  }
+
+  function dayVariance() {
+    var vEl = document.getElementById('fcv2DcVariance');
+    if (!vEl) return;
+    var open = parseFloat((document.getElementById('fcv2DcOpen') || {}).value);
+    var close = parseFloat((document.getElementById('fcv2DcClose') || {}).value);
+    var checks = gatherChecks();
+    var checkTotal = checks.reduce(function (s, c) { return s + c.amountCents; }, 0);
+    var totEl = document.getElementById('fcv2DcCheckTotal');
+    if (totEl) totEl.textContent = checks.length ? '· total ' + m(checkTotal) : '';
+    if (isNaN(open) || isNaN(close)) { vEl.textContent = 'Variance: $0.00 (closing − opening − checks)'; vEl.style.color = 'var(--warm-gray)'; return; }
+    var diff = Math.round((close - open) * 100) - checkTotal;
+    vEl.textContent = 'Variance: ' + (diff >= 0 ? '+' : '−') + m(Math.abs(diff)) + ' (closing − opening − checks)';
+    vEl.style.color = diff === 0 ? 'var(--warm-gray)' : (Math.abs(diff) < 500 ? 'var(--teal)' : 'var(--amber)');
+  }
+
+  function openDayForm(date) {
+    V2.lens = 'days';
+    V2.dayForm = { date: date, versions: [], latest: null, legacy: null, viewVersionId: null, loading: true };
+    render();
+    var el = body();
+    if (el) el.innerHTML = '<div style="color:var(--warm-gray);font-size:0.85rem;padding:20px 0;">Loading ' + esc(date) + '…</div>';
+    bridge().dayCloseVersions(date).then(function (r) {
+      if (!V2.dayForm || V2.dayForm.date !== date) return;
+      V2.dayForm.versions = r.versions || [];
+      V2.dayForm.latest = r.latest || null;
+      V2.dayForm.legacy = r.legacy || null;
+      V2.dayForm.loading = false;
+      renderDayForm();
+    }).catch(function (e) {
+      console.error('[finance-close-v2] day form load', e);
+      var b = body(); if (b) b.innerHTML = '<div style="color:var(--danger);padding:12px;">' + esc(e.message || String(e)) + '</div>';
+    });
+  }
+
   function renderDays() {
     var el = body(); if (!el) return;
+    if (V2.dayForm) { renderDayForm(); return; }
     var monthPills = pills(V2.months.map(function (mo) { return [mo, bridge().monthLabel(mo).split(' ')[0], null]; }), V2.month, 'FinCloseV2.setMonth');
     var days = V2.days[V2.month] || {};
     var pc = V2.periods[V2.month];
@@ -156,7 +339,7 @@
       { label: 'Checks', align: 'right', render: function (r) { return String((r.checks || []).length || '—'); } },
       { label: 'Notes', render: function (r) { return r.notes ? '<span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(String(r.notes).slice(0, 60)) + '</span>' : '—'; } },
       { label: '', align: 'right', render: function (r) {
-          return '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 9px;" onclick="FinCloseV2.openDay(\'' + esc(r.date) + '\')">' + (locked ? 'View' : 'Open') + ' ↗</button>';
+          return '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 9px;" onclick="FinCloseV2.openDay(\'' + esc(r.date) + '\')">' + (locked ? 'View' : 'Open') + '</button>';
         } }
     ], rows);
     if (!rows.length) h += '<div style="color:var(--warm-gray);font-size:0.85rem;padding:14px 0;">No day closes in ' + esc(bridge().monthLabel(V2.month)) + ' yet.</div>';
@@ -216,12 +399,53 @@
   function findAmendment(id) { return V2.amendments.filter(function (a) { return a.id === id; })[0]; }
 
   window.FinCloseV2 = {
-    setLens: function (l) { V2.lens = l; render(); },
-    setMonth: function (mo) { V2.month = mo; render(); },
+    setLens: function (l) { V2.lens = l; V2.dayForm = null; render(); },
+    setMonth: function (mo) { V2.month = mo; V2.dayForm = null; render(); },
     refresh: refresh,
-    openMonth: function (mo) { V2.month = mo; V2.lens = 'days'; render(); },
-    openDay: function (date) { if (window.navigateToClassic) navigateToClassic('finance-cash-flow', { subView: 'dayclose', date: date }); },
-    newDayClose: function () { if (window.navigateToClassic) navigateToClassic('finance-cash-flow', { subView: 'dayclose' }); },
+    openMonth: function (mo) { V2.month = mo; V2.lens = 'days'; V2.dayForm = null; render(); },
+    openDay: openDayForm,
+    newDayClose: function () { openDayForm(new Date().toISOString().slice(0, 10)); },
+    closeDayForm: function () { V2.dayForm = null; refresh(); },
+    dayFormSetDate: function (date) { if (date) openDayForm(date); },
+    dayVariance: dayVariance,
+    removeCheck: function (btn) {
+      var row = btn && btn.closest('.fcv2-check-row');
+      if (row) row.parentNode.removeChild(row);
+      dayVariance();
+    },
+    viewVersion: function (vid) {
+      if (!V2.dayForm) return;
+      V2.dayForm.viewVersionId = vid || null;
+      renderDayForm();
+    },
+    saveDayForm: function () {
+      if (!canClose()) { showToast('Finance write access required.', true); return; }
+      var f = V2.dayForm; if (!f) return;
+      var payload = gatherDayForm();
+      if (!payload.date) { showToast('Pick a date first.', true); return; }
+      if (payload.openingCashCents == null || payload.closingCashCents == null) {
+        showToast('Opening and closing cash are both required.', true); return;
+      }
+      var isReclose = !!f.latest;
+      var go = isReclose
+        ? bridge().dayCloseDiffConfirm(payload.date, (f.latest.version || 1) + 1, bridge().dayCloseDiffHtml(f.latest, payload))
+        : Promise.resolve(true);
+      go.then(function (ok) {
+        if (!ok) return;
+        V2.busy = true; renderDayForm();
+        return bridge().saveDayClose(payload, isReclose).then(function (json) {
+          V2.busy = false;
+          showToast('Day close v' + ((json && json.version) || '?') + ' saved for ' + payload.date);
+          V2.dayForm = null;
+          refresh();
+        });
+      }).catch(function (err) {
+        V2.busy = false; renderDayForm();
+        var msg = (err && err.message) || (err && err.code) || String(err) || 'unknown error';
+        if (err && err.details && err.details.code) msg += ' (' + err.details.code + ')';
+        showToast('Save failed: ' + msg, true);
+      });
+    },
     submitAmendment: function () { bridge().openSubmitAmendment(); },
 
     closePeriod: function (mo) {
