@@ -5112,46 +5112,54 @@ function setupReportsTab() {
 // boundary. AR/AP snapshots use period.end as the as-of date; customer
 // statement uses [period.start, period.end] for the activity window.
 
+// State-free AR aging snapshot core — returns CSV rows (header + data) for
+// open invoices as of a date. Shared by the classic Reports tab and
+// finance-reports-v2.
+async function _arAgingSnapshotCore(asOf) {
+  var [sentRaw, overdueRaw] = await Promise.all([
+    MastDB.query('orders').orderByChild('invoiceStatus').equalTo('sent').limitToLast(2000).once(),
+    MastDB.query('orders').orderByChild('invoiceStatus').equalTo('overdue').limitToLast(2000).once()
+  ]);
+  var rows = [['Customer','Customer Email','Invoice #','Order ID','Amount Due (USD)','Due Date','Days Overdue (as of ' + asOf + ')','Bucket','Status']];
+  var asOfMs = new Date(asOf + 'T23:59:59Z').getTime();
+  Object.entries(Object.assign({}, sentRaw || {}, overdueRaw || {})).forEach(function(kv) {
+    var orderId = kv[0], o = kv[1];
+    if (!o) return;
+    var c = _orderRevenueCents(o);
+    var paid = o.invoicePaidAmount || 0;
+    var due = c - paid;
+    if (due <= 0) return;
+    if (isTestOrder(o) && !_includeTestData) return;
+    var daysOver = 0, bucket = 'current';
+    if (o.invoiceDueDate) {
+      var dueMs = new Date(o.invoiceDueDate + 'T00:00:00Z').getTime();
+      daysOver = Math.max(0, Math.floor((asOfMs - dueMs) / 86400000));
+      if (daysOver <= 0) bucket = 'current';
+      else if (daysOver <= 30) bucket = '1_to_30';
+      else if (daysOver <= 60) bucket = '31_to_60';
+      else if (daysOver <= 90) bucket = '61_to_90';
+      else bucket = '90_plus';
+    }
+    rows.push([
+      o.customerName || 'Unknown',
+      o.customerEmail || (o.customer && o.customer.email) || '',
+      o.invoiceNumber || '',
+      orderId,
+      (due / 100).toFixed(2),
+      o.invoiceDueDate || '',
+      String(daysOver),
+      bucket,
+      o.invoiceStatus || ''
+    ]);
+  });
+  return rows;
+}
+
 window.finReportArAgingSnapshot = async function() {
   var period = _finResolvePeriod();
   var asOf = period.end;
   try {
-    var [sentRaw, overdueRaw] = await Promise.all([
-      MastDB.query('orders').orderByChild('invoiceStatus').equalTo('sent').limitToLast(2000).once(),
-      MastDB.query('orders').orderByChild('invoiceStatus').equalTo('overdue').limitToLast(2000).once()
-    ]);
-    var rows = [['Customer','Customer Email','Invoice #','Order ID','Amount Due (USD)','Due Date','Days Overdue (as of ' + asOf + ')','Bucket','Status']];
-    var asOfMs = new Date(asOf + 'T23:59:59Z').getTime();
-    Object.entries(Object.assign({}, sentRaw || {}, overdueRaw || {})).forEach(function(kv) {
-      var orderId = kv[0], o = kv[1];
-      if (!o) return;
-      var c = _orderRevenueCents(o);
-      var paid = o.invoicePaidAmount || 0;
-      var due = c - paid;
-      if (due <= 0) return;
-      if (isTestOrder(o) && !_includeTestData) return;
-      var daysOver = 0, bucket = 'current';
-      if (o.invoiceDueDate) {
-        var dueMs = new Date(o.invoiceDueDate + 'T00:00:00Z').getTime();
-        daysOver = Math.max(0, Math.floor((asOfMs - dueMs) / 86400000));
-        if (daysOver <= 0) bucket = 'current';
-        else if (daysOver <= 30) bucket = '1_to_30';
-        else if (daysOver <= 60) bucket = '31_to_60';
-        else if (daysOver <= 90) bucket = '61_to_90';
-        else bucket = '90_plus';
-      }
-      rows.push([
-        o.customerName || 'Unknown',
-        o.customerEmail || (o.customer && o.customer.email) || '',
-        o.invoiceNumber || '',
-        orderId,
-        (due / 100).toFixed(2),
-        o.invoiceDueDate || '',
-        String(daysOver),
-        bucket,
-        o.invoiceStatus || ''
-      ]);
-    });
+    var rows = await _arAgingSnapshotCore(asOf);
     if (rows.length === 1) { showToast('No open invoices as of ' + asOf, true); return; }
     _finDownloadCsv('ar-aging-snapshot', rows, 'AR Aging as of ' + asOf + ' · Basis: orders.invoiceDueDate (invoiceStatus IN sent,overdue)');
     showToast('AR aging snapshot exported');
@@ -5160,47 +5168,53 @@ window.finReportArAgingSnapshot = async function() {
   }
 };
 
+// State-free AP aging snapshot core — CSV rows for open bills as of a date.
+async function _apAgingSnapshotCore(asOf) {
+  var [unpaidRaw, partialRaw, vendorsRaw] = await Promise.all([
+    MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('unpaid').limitToLast(2000).once(),
+    MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('partial').limitToLast(2000).once(),
+    MastDB.get('admin/vendors')
+  ]);
+  var vendors = vendorsRaw || {};
+  var rows = [['Vendor','Vendor Email','Invoice Ref','Receipt ID','Amount Due (USD)','Due Date','Days Overdue (as of ' + asOf + ')','Bucket','Payment Status']];
+  var asOfMs = new Date(asOf + 'T23:59:59Z').getTime();
+  Object.entries(Object.assign({}, unpaidRaw || {}, partialRaw || {})).forEach(function(kv) {
+    var receiptId = kv[0], r = kv[1];
+    if (!r) return;
+    var amt = r.amountCents || 0; var paid = r.paidAmount || 0;
+    var due = amt - paid;
+    if (due <= 0) return;
+    var daysOver = 0, bucket = 'current';
+    if (r.dueDate) {
+      var dueMs = new Date(r.dueDate + 'T00:00:00Z').getTime();
+      daysOver = Math.max(0, Math.floor((asOfMs - dueMs) / 86400000));
+      if (daysOver <= 0) bucket = 'current';
+      else if (daysOver <= 30) bucket = '1_to_30';
+      else if (daysOver <= 60) bucket = '31_to_60';
+      else if (daysOver <= 90) bucket = '61_to_90';
+      else bucket = '90_plus';
+    }
+    var v = vendors[r.vendorId] || {};
+    rows.push([
+      v.name || 'Unknown Vendor',
+      v.email || '',
+      r.vendorInvoiceRef || '',
+      receiptId,
+      (due / 100).toFixed(2),
+      r.dueDate || '',
+      String(daysOver),
+      bucket,
+      r.paymentStatus || ''
+    ]);
+  });
+  return rows;
+}
+
 window.finReportApAgingSnapshot = async function() {
   var period = _finResolvePeriod();
   var asOf = period.end;
   try {
-    var [unpaidRaw, partialRaw, vendorsRaw] = await Promise.all([
-      MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('unpaid').limitToLast(2000).once(),
-      MastDB.query('admin/purchaseReceipts').orderByChild('paymentStatus').equalTo('partial').limitToLast(2000).once(),
-      MastDB.get('admin/vendors')
-    ]);
-    var vendors = vendorsRaw || {};
-    var rows = [['Vendor','Vendor Email','Invoice Ref','Receipt ID','Amount Due (USD)','Due Date','Days Overdue (as of ' + asOf + ')','Bucket','Payment Status']];
-    var asOfMs = new Date(asOf + 'T23:59:59Z').getTime();
-    Object.entries(Object.assign({}, unpaidRaw || {}, partialRaw || {})).forEach(function(kv) {
-      var receiptId = kv[0], r = kv[1];
-      if (!r) return;
-      var amt = r.amountCents || 0; var paid = r.paidAmount || 0;
-      var due = amt - paid;
-      if (due <= 0) return;
-      var daysOver = 0, bucket = 'current';
-      if (r.dueDate) {
-        var dueMs = new Date(r.dueDate + 'T00:00:00Z').getTime();
-        daysOver = Math.max(0, Math.floor((asOfMs - dueMs) / 86400000));
-        if (daysOver <= 0) bucket = 'current';
-        else if (daysOver <= 30) bucket = '1_to_30';
-        else if (daysOver <= 60) bucket = '31_to_60';
-        else if (daysOver <= 90) bucket = '61_to_90';
-        else bucket = '90_plus';
-      }
-      var v = vendors[r.vendorId] || {};
-      rows.push([
-        v.name || 'Unknown Vendor',
-        v.email || '',
-        r.vendorInvoiceRef || '',
-        receiptId,
-        (due / 100).toFixed(2),
-        r.dueDate || '',
-        String(daysOver),
-        bucket,
-        r.paymentStatus || ''
-      ]);
-    });
+    var rows = await _apAgingSnapshotCore(asOf);
     if (rows.length === 1) { showToast('No open bills as of ' + asOf, true); return; }
     _finDownloadCsv('ap-aging-snapshot', rows, 'AP Aging as of ' + asOf + ' · Basis: admin/purchaseReceipts.dueDate (paymentStatus IN unpaid,partial)');
     showToast('AP aging snapshot exported');
@@ -5237,6 +5251,62 @@ window.finReportStatementOfAccount = async function() {
   }
 };
 
+// State-free statement cores. _statementCustomersCore returns the pickable
+// customer list; _statementRowsCore returns { customer, rows } for the
+// activity window (running balance, total row appended).
+async function _statementCustomersCore() {
+  var customersRaw = (await MastDB.get('admin/customers')) || {};
+  return Object.entries(customersRaw)
+    .map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); })
+    .filter(function(c) { return c && (c.displayName || c.primaryEmail); })
+    .sort(function(a, b) { return (a.displayName || '').localeCompare(b.displayName || ''); });
+}
+
+async function _statementRowsCore(customerId, start, end) {
+  var customer = (await MastDB.get('admin/customers/' + customerId)) || {};
+  var ordersRaw = await MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(start)).endAt(isoEnd(end)).limitToLast(2000).once();
+  var orders = Object.entries(ordersRaw || {})
+    .map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); })
+    .filter(function(o) {
+      return o && (
+        o.customerId === customerId ||
+        (o.customerEmail && customer.primaryEmail && o.customerEmail.toLowerCase() === customer.primaryEmail.toLowerCase())
+      );
+    });
+  orders.sort(function(a, b) { return (a.placedAt || '').localeCompare(b.placedAt || ''); });
+  var rows = [['Date','Order #','Description','Charges (USD)','Payments (USD)','Balance (USD)','Invoice Status']];
+  var balanceCents = 0;
+  orders.forEach(function(o) {
+    var totalCents = _orderRevenueCents(o);
+    var paidCents = o.invoicePaidAmount || 0;
+    balanceCents += (totalCents - paidCents);
+    rows.push([
+      (o.placedAt || '').slice(0, 10),
+      o.orderNumber || o._id,
+      o.customerName ? 'Order — ' + o.customerName : 'Order',
+      (totalCents / 100).toFixed(2),
+      (paidCents / 100).toFixed(2),
+      (balanceCents / 100).toFixed(2),
+      o.invoiceStatus || ''
+    ]);
+  });
+  rows.push(['','','TOTAL BALANCE', '', '', (balanceCents / 100).toFixed(2), '']);
+  return { customer: customer, rows: rows, orderCount: orders.length };
+}
+
+// State-free share-link mint (mintCustomerStatementToken CF) — extracted from
+// the AR Send Statement flow so the V2 reports hub can mint without the
+// mailto/DOM side effects.
+async function _mintStatementLinkCore(customerId, expiresInDays) {
+  var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || '';
+  var mintFn = firebase.functions().httpsCallable('mintCustomerStatementToken');
+  var result = await mintFn({ tenantId: tenantId, customerId: customerId, expiresInDays: expiresInDays || 30 });
+  var data = (result && result.data) || {};
+  var url = data.url || data.shareUrl || data.statementUrl || '';
+  if (!url) throw new Error('Mint CF did not return a URL');
+  return url;
+}
+
 window.finReportStatementExport = async function() {
   var sel = document.getElementById('fW29CustomerSelect');
   if (!sel) return;
@@ -5244,36 +5314,9 @@ window.finReportStatementExport = async function() {
   if (!customerId) { showToast('Pick a customer first', true); return; }
   var period = _finResolvePeriod();
   try {
-    var customer = (await MastDB.get('admin/customers/' + customerId)) || {};
-    var ordersRaw = await MastDB.query('orders').orderByChild('placedAt').startAt(isoStart(period.start)).endAt(isoEnd(period.end)).limitToLast(2000).once();
-    var orders = Object.entries(ordersRaw || {})
-      .map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); })
-      .filter(function(o) {
-        return o && (
-          o.customerId === customerId ||
-          (o.customerEmail && customer.primaryEmail && o.customerEmail.toLowerCase() === customer.primaryEmail.toLowerCase())
-        );
-      });
-    orders.sort(function(a, b) { return (a.placedAt || '').localeCompare(b.placedAt || ''); });
-    var rows = [['Date','Order #','Description','Charges (USD)','Payments (USD)','Balance (USD)','Invoice Status']];
-    var balanceCents = 0;
-    orders.forEach(function(o) {
-      var totalCents = _orderRevenueCents(o);
-      var paidCents = o.invoicePaidAmount || 0;
-      balanceCents += (totalCents - paidCents);
-      rows.push([
-        (o.placedAt || '').slice(0, 10),
-        o.orderNumber || o._id,
-        o.customerName ? 'Order — ' + o.customerName : 'Order',
-        (totalCents / 100).toFixed(2),
-        (paidCents / 100).toFixed(2),
-        (balanceCents / 100).toFixed(2),
-        o.invoiceStatus || ''
-      ]);
-    });
-    rows.push(['','','TOTAL BALANCE', '', '', (balanceCents / 100).toFixed(2), '']);
-    var fname = 'statement-' + (customer.displayName || customerId).replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
-    _finDownloadCsv(fname, rows, 'Statement for ' + (customer.displayName || customerId) + ' · ' + period.start + ' to ' + period.end);
+    var st = await _statementRowsCore(customerId, period.start, period.end);
+    var fname = 'statement-' + (st.customer.displayName || customerId).replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+    _finDownloadCsv(fname, st.rows, 'Statement for ' + (st.customer.displayName || customerId) + ' · ' + period.start + ' to ' + period.end);
     showToast('Statement exported');
   } catch (err) {
     showToast('Export failed: ' + (err.message || err), true);
@@ -5307,6 +5350,47 @@ window.finReportVendor1099Prep = async function() {
   }
 };
 
+// State-free contractor-vendor list + period-windowed 1099 rows cores.
+async function _contractorVendorsCore() {
+  var vendorsRaw = (await MastDB.get('admin/vendors')) || {};
+  return Object.entries(vendorsRaw)
+    .map(function(kv) { return Object.assign({ _id: kv[0] }, kv[1]); })
+    .filter(function(v) { return v && ((v.vendorType || v.payeeType) === 'contractor'); })
+    .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
+}
+
+async function _vendor1099RowsCore(pick, start, end) {
+  var [vendorsRaw, receiptsRaw] = await Promise.all([
+    MastDB.get('admin/vendors'),
+    MastDB.query('admin/purchaseReceipts').orderByChild('receivedAt').startAt(isoStart(start)).endAt(isoEnd(end)).limitToLast(5000).once()
+  ]);
+  var vendors = vendorsRaw || {};
+  var receipts = Object.values(receiptsRaw || {});
+  var totals = {};
+  receipts.forEach(function(r) {
+    if (!r) return;
+    var v = vendors[r.vendorId];
+    if (!v) return;
+    if ((v.vendorType || v.payeeType) !== 'contractor') return;
+    if (pick !== '__all__' && r.vendorId !== pick) return;
+    if (r.paymentStatus !== 'paid') return;
+    if (!totals[r.vendorId]) totals[r.vendorId] = { total: 0, vendor: v };
+    totals[r.vendorId].total += r.amountCents || 0;
+  });
+  var rows = [['Contractor','Tax ID (masked)','TIN Status','Period Paid (USD)','Threshold','1099 Required (>$600)']];
+  var keys = Object.keys(totals).sort(function(a, b) { return totals[b].total - totals[a].total; });
+  keys.forEach(function(vid) {
+    var d = totals[vid];
+    var taxId = d.vendor.taxId;
+    var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
+    var masked = hasTaxId ? 'XXX-XX-' + String(taxId).replace(/[^0-9]/g, '').slice(-4) : '';
+    var tinStatus = hasTaxId ? 'On file' : 'MISSING — request W-9';
+    var required = d.total > 60000 ? 'Yes' : 'No (below threshold)';
+    rows.push([d.vendor.name || 'Unknown', masked, tinStatus, (d.total / 100).toFixed(2), '$600 (period-windowed)', required]);
+  });
+  return rows;
+}
+
 window.finReportVendor1099Export = async function() {
   var sel = document.getElementById('fW29VendorSelect');
   if (!sel) return;
@@ -5314,34 +5398,7 @@ window.finReportVendor1099Export = async function() {
   if (!pick) { showToast('Pick a vendor first', true); return; }
   var period = _finResolvePeriod();
   try {
-    var [vendorsRaw, receiptsRaw] = await Promise.all([
-      MastDB.get('admin/vendors'),
-      MastDB.query('admin/purchaseReceipts').orderByChild('receivedAt').startAt(isoStart(period.start)).endAt(isoEnd(period.end)).limitToLast(5000).once()
-    ]);
-    var vendors = vendorsRaw || {};
-    var receipts = Object.values(receiptsRaw || {});
-    var totals = {};
-    receipts.forEach(function(r) {
-      if (!r) return;
-      var v = vendors[r.vendorId];
-      if (!v) return;
-      if ((v.vendorType || v.payeeType) !== 'contractor') return;
-      if (pick !== '__all__' && r.vendorId !== pick) return;
-      if (r.paymentStatus !== 'paid') return;
-      if (!totals[r.vendorId]) totals[r.vendorId] = { total: 0, vendor: v };
-      totals[r.vendorId].total += r.amountCents || 0;
-    });
-    var rows = [['Contractor','Tax ID (masked)','TIN Status','Period Paid (USD)','Threshold','1099 Required (>$600)']];
-    var keys = Object.keys(totals).sort(function(a, b) { return totals[b].total - totals[a].total; });
-    keys.forEach(function(vid) {
-      var d = totals[vid];
-      var taxId = d.vendor.taxId;
-      var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
-      var masked = hasTaxId ? 'XXX-XX-' + String(taxId).replace(/[^0-9]/g, '').slice(-4) : '';
-      var tinStatus = hasTaxId ? 'On file' : 'MISSING — request W-9';
-      var required = d.total > 60000 ? 'Yes' : 'No (below threshold)';
-      rows.push([d.vendor.name || 'Unknown', masked, tinStatus, (d.total / 100).toFixed(2), '$600 (period-windowed)', required]);
-    });
+    var rows = await _vendor1099RowsCore(pick, period.start, period.end);
     if (rows.length === 1) { showToast('No paid receipts in period for this vendor', true); return; }
     _finDownloadCsv('vendor-1099-prep', rows, '1099 Prep · ' + period.start + ' to ' + period.end + ' (period-windowed; legal threshold is calendar year)');
     showToast('1099-prep export downloaded');
@@ -5396,24 +5453,32 @@ async function computeMonthlyBreakdown(startDate, endDate) {
   return result;
 }
 
+// State-free loan-report data core — trailing-12m monthly breakdown + bank
+// balance. Shared by the classic Reports tab and finance-reports-v2 (which
+// also reuses renderLoanReport for the printable HTML).
+async function _loanReportDataCore() {
+  var endDate = todayStr();
+  var d12 = new Date(); d12.setFullYear(d12.getFullYear()-1); d12.setDate(1);
+  var startDate = d12.getFullYear()+'-'+String(d12.getMonth()+1).padStart(2,'0')+'-01';
+  var [monthly, plaidRaw] = await Promise.all([
+    computeMonthlyBreakdown(startDate, endDate),
+    MastDB.plaidItems.list().catch(function() { return {}; })
+  ]);
+  var bankTotal = 0;
+  Object.values(plaidRaw||{}).forEach(function(item) {
+    if (item.status!=='active') return;
+    (item.accounts||[]).forEach(function(a) { bankTotal += a.currentBalance||0; });
+  });
+  return { monthly: monthly, bankTotal: bankTotal, startDate: startDate, endDate: endDate };
+}
+
 window.loadLoanReport = async function() {
   var el = document.getElementById('fLoanContent');
   if (!el) return;
   el.innerHTML = skeletonCards(4) + '<div style="margin-top:16px;">' + skeletonTable(12,3) + '</div>';
   try {
-    var endDate = todayStr();
-    var d12 = new Date(); d12.setFullYear(d12.getFullYear()-1); d12.setDate(1);
-    var startDate = d12.getFullYear()+'-'+String(d12.getMonth()+1).padStart(2,'0')+'-01';
-    var [monthly, plaidRaw] = await Promise.all([
-      computeMonthlyBreakdown(startDate, endDate),
-      MastDB.plaidItems.list().catch(function() { return {}; })
-    ]);
-    var bankTotal = 0;
-    Object.values(plaidRaw||{}).forEach(function(item) {
-      if (item.status!=='active') return;
-      (item.accounts||[]).forEach(function(a) { bankTotal += a.currentBalance||0; });
-    });
-    el.innerHTML = renderLoanReport(monthly, bankTotal, startDate, endDate);
+    var d = await _loanReportDataCore();
+    el.innerHTML = renderLoanReport(d.monthly, d.bankTotal, d.startDate, d.endDate);
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
     showToast('Loan report failed: ' + err.message, true);
@@ -5540,22 +5605,29 @@ window.finCopyMetrics = function() {
 
 window.finSetReportYear = function(year) { _reportYear = parseInt(year); };
 
+// State-free year-end package data core — Schedule-C P&L, sales tax by
+// state, >$600 contractors, and mileage for a calendar year.
+async function _yearEndDataCore(year) {
+  var startDate = year+'-01-01';
+  var endDate   = year+'-12-31';
+  var [pnlData, taxData, contractors, mileage] = await Promise.all([
+    computePnlLocal(startDate, endDate),
+    computeTaxSummaryForReport(startDate, endDate),
+    compute1099DataForYear(year),
+    computeMileageForYear(year)
+  ]);
+  return { pnlData:pnlData, taxData:taxData, contractors:contractors, mileage:mileage, year:year };
+}
+
 window.loadYearEndReport = async function() {
   var el = document.getElementById('fYearEndContent');
   if (!el) return;
   var year = _reportYear;
   el.innerHTML = skeletonCards(3) + '<div style="margin-top:16px;">' + skeletonTable(5,3) + '</div>';
-  var startDate = year+'-01-01';
-  var endDate   = year+'-12-31';
   try {
-    var [pnlData, taxData, contractors, mileage] = await Promise.all([
-      computePnlLocal(startDate, endDate),
-      computeTaxSummaryForReport(startDate, endDate),
-      compute1099DataForYear(year),
-      computeMileageForYear(year)
-    ]);
-    window._yearEndData = { pnlData:pnlData, taxData:taxData, contractors:contractors, mileage:mileage, year:year };
-    el.innerHTML = renderYearEndReport(pnlData, taxData, contractors, mileage, year);
+    var d = await _yearEndDataCore(year);
+    window._yearEndData = d;
+    el.innerHTML = renderYearEndReport(d.pnlData, d.taxData, d.contractors, d.mileage, year);
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
     showToast('Year-end report failed: ' + err.message, true);
@@ -5766,8 +5838,9 @@ window.finPrintYearEnd = function() {
   window.print();
 };
 
-window.finExportPnlCsv = function() {
-  var d = window._yearEndData; if (!d) { showToast('Generate the report first', true); return; }
+// Year-end CSV exports — parameterized on the data object so both the classic
+// tab (window._yearEndData) and finance-reports-v2 (its own cache) can call.
+function _yearEndExportPnlCsv(d) {
   var pnl = d.pnlData; var year = d.year;
   var rows = [['Category','Amount']];
   rows.push(['Gross Income (Revenue)', (pnl.revenue/100).toFixed(2)]);
@@ -5779,10 +5852,13 @@ window.finExportPnlCsv = function() {
   rows.push(['Net Profit', (pnl.netProfit/100).toFixed(2)]);
   downloadCsv(rows, 'PnL_'+year+'.csv');
   showToast('P&L.csv downloaded');
+}
+window.finExportPnlCsv = function() {
+  var d = window._yearEndData; if (!d) { showToast('Generate the report first', true); return; }
+  _yearEndExportPnlCsv(d);
 };
 
-window.finExportTaxCsv = function() {
-  var d = window._yearEndData; if (!d) { showToast('Generate the report first', true); return; }
+function _yearEndExportTaxCsv(d) {
   var tax = d.taxData; var year = d.year;
   var rows = [['State','Tax Collected','Order Count','Registered']];
   Object.keys(tax.byState||{}).sort().forEach(function(state) {
@@ -5791,16 +5867,23 @@ window.finExportTaxCsv = function() {
   });
   downloadCsv(rows, 'SalesTax_'+year+'.csv');
   showToast('SalesTax.csv downloaded');
+}
+window.finExportTaxCsv = function() {
+  var d = window._yearEndData; if (!d) { showToast('Generate the report first', true); return; }
+  _yearEndExportTaxCsv(d);
 };
 
-window.finExport1099Csv = function() {
-  var d = window._yearEndData; if (!d) { showToast('Generate the report first', true); return; }
+function _yearEndExport1099Csv(d) {
   var rows = [['Name','Tax ID','Total Paid','1099 Required']];
   d.contractors.forEach(function(c) {
     rows.push([c.name, c.hasTaxId?c.taxId:'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
   });
   downloadCsv(rows, '1099s_'+d.year+'.csv');
   showToast('1099s.csv downloaded');
+}
+window.finExport1099Csv = function() {
+  var d = window._yearEndData; if (!d) { showToast('Generate the report first', true); return; }
+  _yearEndExport1099Csv(d);
 };
 
 // ── Period picker global handlers ─────────────────────────────────────────────
@@ -8365,6 +8448,25 @@ window.FinanceBridge = {
   nexusDelete: _nexusDeleteCore,
   openItemsTotals: _loadOpenItemsTotals,
   downloadCsv: _finDownloadCsv,
+  // Reports hub cores (classic burn-down 6/6):
+  arAgingSnapshot: _arAgingSnapshotCore,
+  apAgingSnapshot: _apAgingSnapshotCore,
+  statementCustomers: _statementCustomersCore,
+  statementRows: _statementRowsCore,
+  mintStatementLink: _mintStatementLinkCore,
+  contractorVendors: _contractorVendorsCore,
+  vendor1099Rows: _vendor1099RowsCore,
+  loanReportData: _loanReportDataCore,
+  loanReportHtml: function(d) { return renderLoanReport(d.monthly, d.bankTotal, d.startDate, d.endDate); },
+  yearEndData: _yearEndDataCore,
+  yearEndHtml: function(d) { return renderYearEndReport(d.pnlData, d.taxData, d.contractors, d.mileage, d.year); },
+  yearEndCsv: function(kind, d) {
+    if (kind === 'pnl') _yearEndExportPnlCsv(d);
+    else if (kind === 'tax') _yearEndExportTaxCsv(d);
+    else if (kind === '1099') _yearEndExport1099Csv(d);
+  },
+  printElement: function(id) { injectFinPrintCss(id); window.print(); },
+  copyLoanMetrics: function() { if (typeof window.finCopyMetrics === 'function') window.finCopyMetrics(); },
   // Wave 2 — open-items hub cores:
   arOpenItems: _arOpenItems,
   apOpenItems: _apOpenItems,
