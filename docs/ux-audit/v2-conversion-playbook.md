@@ -151,6 +151,39 @@ review — it found FOUR real bugs, two of them broken in LEGACY for months.
   the referenced id (David Stewart, Sarah Chen, Main Studio) healed 21+ dangling
   FKs without touching the referencing records.
 
+**Session review (post-retro additions, 2026-06-10 — process findings the round's
+own retro missed):**
+- **Per-wave shipping as ONE background shell command** (commit → push → PR →
+  poll checks → squash-merge → poll Deploy workflow) kept the merge-verify
+  cadence near-zero-cost and freed the foreground for building the next wave.
+  Pattern: `gh pr create … ; until checks not pending; merge; until Deploy
+  completed` with `run_in_background`.
+- **Ratification as an options table won same-day sign-off** — for the sidebar
+  merge, presenting 4 explicit options (incl. the two NOT recommended, with the
+  reasons) plus one recommendation got an immediate decision, and because the
+  recommended option reused an already-proven lens pattern it shipped within
+  the hour. Do this for every holistic consolidation ask: options + trade-offs
+  + one recommendation, never an open question.
+- **Edge can lag the Deploy-success signal** — twice the worker served the
+  PREVIOUS bundle for ~30–60s after `gh run` reported the Deploy workflow
+  green. Don't browser-verify on "workflow completed"; poll the worker until
+  its `MAST_MODULES_V` equals the value committed on `origin/main`
+  (`git show origin/main:app/index.html | grep MAST_MODULES_V`).
+- **The first post-deploy boot can present an EMPTY shell** (no sidebar items,
+  `window.MAST_MODULES_V` undefined) while still hydrating — that's the messy
+  boot, not a regression. Gate every browser assertion on `MAST_MODULES_V`
+  being defined and equal to the expected bundle before reading the DOM.
+- **Claude-in-Chrome JS results redact record ids** (`[BLOCKED: Base64 encoded
+  data]` / `[BLOCKED: Sensitive key]`) — returning a Firestore push-id from
+  `javascript_tool` often comes back blocked. Stash ids on `window.__vars`
+  inside the page and act on them in the NEXT call instead of round-tripping
+  them through tool results.
+- **The slide-out's primary save is callable directly**: the footer is
+  `#mastSlideOutFooter` and the button invokes
+  `window.MastUI.slideOut._save()` — for walk automation, fill the form fields
+  by element id, then call `_save()`; a synthetic `.click()` on a stale element
+  ref silently does nothing and reads like a dead CREATE.
+
 ## 1 · Recon (Explore agent, very thorough)
 
 **Verify the recon's surface characterizations before scheduling builds.** The Operations
@@ -320,6 +353,10 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 | Accessor PATH ≠ the "obvious" collection | `MastDB.resources` reads `admin/resources`, not `public/resources` — seed via the accessor path from rewrite-entities.js or docs land invisible |
 | `required:true` on a twin with custom editRender | 3rd + 4th occurrence (resources-v2, instructors-v2): CREATE dead since conversion. Audit existing twins for this pairing, don't just trust them |
 | Kept records referencing DELETED docs (instructor/resource ids) | Recreate the doc AT the referenced id (identity heal works for creates too), don't rewrite the referencing records |
+| Browser-verify right after "Deploy success" | The edge can serve the previous bundle for ~60s — poll the worker until MAST_MODULES_V matches origin/main's committed value, THEN touch the browser |
+| Post-deploy boot with empty sidebar + undefined MAST_MODULES_V | Mid-hydration, not a regression — gate DOM assertions on the expected bundle id being live |
+| Chrome-MCP javascript_tool returns "[BLOCKED: …]" for record ids | The extension redacts id-shaped strings — stash ids on window.__vars in-page; never round-trip them through tool results |
+| Recon agent asserts a confident NEGATIVE ("no route map", "no twin") | Mechanically diff app/modules/*-v2.js against MAST_V2_ROUTE_MAP + MODULE_MANIFEST + sidebar routes — two orphans and a false "doesn't exist" came from trusting prose over a 3-way diff |
 
 ## 8 · Helper scripts
 
@@ -332,3 +369,10 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 - [ ] CI smoke-load for `*-v2.js`: stub `window`/`MastAdmin`/`MastEntity`/`MastUI`, load each
       module file, assert no exception — would have caught the audit-v2 double-status-field
       define() throw (blank tab in prod) before merge.
+- [ ] Engine-level `ensureLoaded()` — the run-once load-promise fetch gate was hand-copied
+      into FIVE classes twins this round (and exists ad hoc elsewhere); MastEntity should own
+      "fetch gates on the module's data being loaded" so cold drills are safe by default.
+- [ ] Lint: flag `required:true` on an entity whose detail has a custom `editRender` —
+      four twins have now shipped with dead CREATE from this exact pairing.
+- [ ] Lint or smoke-test: any legacy `MastDB.update('' | '<coll>', {multi-path fanout})` —
+      two such writes sat silently dead in book.js since the Firestore migration.
