@@ -231,8 +231,13 @@
       return { avgCents: present > 0 ? Math.round(total / present) : 0, present: present };
     }).catch(function () { return null; });
 
-    // Recent coin purchases (same read as legacy: tokenLog, coin_purchase).
-    var recentP = Promise.resolve(MastDB.query('tokenLog').orderByChild('timestamp').limitToLast(50).get()).then(function (log) {
+    // Recent coin purchases (same data as legacy: tokenLog, coin_purchase).
+    // NOTE: the compat query exposes .once(), NOT .get() — legacy
+    // renderCoinsRecentList calls .get() inside a try/catch and has been
+    // silently falling back to "Could not load" since the Firestore
+    // migration (debt-registered in the plan doc).
+    var recentP = Promise.resolve(MastDB.query('tokenLog').orderByChild('timestamp').limitToLast(50).once()).then(function (snap) {
+      var log = (snap && typeof snap.val === 'function') ? snap.val() : snap;
       var rows = [];
       Object.keys(log || {}).forEach(function (k) {
         var r = log[k];
