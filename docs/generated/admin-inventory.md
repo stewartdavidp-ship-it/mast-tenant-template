@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,058** lines
-- **Feature modules:** **116** files in `app/modules/` (**107** routed), **122,569** lines combined
+- **Feature modules:** **116** files in `app/modules/` (**107** routed), **122,690** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -18,16 +18,16 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit.js` | 1,721 | audit |
 | `modules/blog-v2.js` | 403 | blog-v2 |
 | `modules/blog.js` | 2,359 | blog |
-| `modules/book.js` | 6,149 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
+| `modules/book.js` | 6,167 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand-v2.js` | 308 | brand-v2 |
 | `modules/brand.js` | 668 | brand |
-| `modules/calendar-v2.js` | 119 | calendar-v2 |
+| `modules/calendar-v2.js` | 108 | calendar-v2 |
 | `modules/campaigns-v2.js` | 405 | campaigns-v2 |
 | `modules/campaigns.js` | 560 | campaigns |
 | `modules/cart.js` | 1,577 | wallet, gift-cards, loyalty, membership |
 | `modules/channels-v2.js` | 481 | channels-v2 |
 | `modules/channels.js` | 2,808 | channels |
-| `modules/classes-v2.js` | 469 | classes-v2 |
+| `modules/classes-v2.js` | 488 | classes-v2 |
 | `modules/commission-terms-v2.js` | 267 | commission-terms-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
 | `modules/commissions-v2.js` | 296 | commissions-v2 |
@@ -52,7 +52,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/email-log.js` | 561 | email-log |
 | `modules/engagement-inbox-v2.js` | 383 | engagement-inbox-v2 |
 | `modules/engagement-inbox.js` | 515 | engagement-inbox |
-| `modules/enrollments-v2.js` | 456 | enrollments-v2 |
+| `modules/enrollments-v2.js` | 469 | enrollments-v2 |
 | `modules/events.js` | 1,937 | events-shows, events-settings |
 | `modules/finance-close-v2.js` | 294 | finance-period-close-v2, finance-amendments-v2 |
 | `modules/finance-expenses-v2.js` | 325 | finance-expenses-v2 |
@@ -97,7 +97,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/rma-v2.js` | 219 | rma-v2 |
 | `modules/sales-events-v2.js` | 351 | sales-events-v2 |
 | `modules/sales.js` | 3,257 | pos, receipts, events, salesEvents, terms |
-| `modules/sessions-v2.js` | 274 | sessions-v2 |
+| `modules/sessions-v2.js` | 356 | sessions-v2 |
 | `modules/settings-v2.js` | 105 | settings-v2 |
 | `modules/show-light.js` | 1,718 | show-light-profile, show-light-gallery, show-light-shows, show-light-apply |
 | `modules/shows.js` | 3,580 | show, show-find, show-apply, show-prep, show-execute, show-history |

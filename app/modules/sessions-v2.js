@@ -40,6 +40,7 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+  function can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
 
   // Status label / tone maps mirror book.js + calendar-v2 / classes-v2 SESSION
   // tones (kept local — read-only display lookups, mapped to v2 tone tokens).
@@ -110,7 +111,14 @@
         get: statusOf,
         tone: statusTone }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    // Cold drills (calendar entries, classes-v2 session rows, enrollment SOs)
+    // reach this fetch before the module's route setup has run — gate on a
+    // run-once ensureLoaded() so the class-name map + rows exist (playbook
+    // gotcha: a bare-doc fallback renders the SO without sibling state).
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return ensureLoaded().then(function () { return V2.byId[id] || null; });
+    },
     detail: {
       render: function (UI, s) {
         var cap = capacityOf(s);
@@ -136,17 +144,28 @@
           { k: 'Instructor', v: s.instructorName ? esc(s.instructorName) : '—' },
           { k: 'Location', v: s.location ? esc(s.location) : '—' }
         ]);
-        // Drill to the parent class detail (the catalog record this occurrence came
-        // from); the class lives on the legacy Book detail, opened by route.
+        // Drill to the parent class record (stacked SO with Back) — same panel,
+        // no route nav (MastEntity.drill; classes-v2 fetch is cold-drill safe).
         var viewClass = s.classId
-          ? '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="SessionsV2.openClass(\'' + esc(s.classId) + '\')">View full class →</button></div>'
+          ? '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="MastEntity.drill(\'classes-v2\',\'' + esc(s.classId) + '\')">View full class →</button></div>'
           : '';
-        // Scheduling / editing / cancelling an occurrence stays on legacy #book.
-        // navigateToClassic avoids looping the V2 route remap back to this twin.
-        var manage = '<div style="margin-top:10px;"><button class="btn btn-secondary" onclick="SessionsV2.classic()">Manage in classic view →</button></div>';
+        // Session ops — native, delegated to window.SessionsBridge (state-free
+        // cores in book.js). Cancelled/completed occurrences are history: no ops.
+        var ops = '';
+        var sid = esc(s._key || s.id);
+        if (statusOf(s) === 'scheduled' && can('calendar', 'edit')) {
+          ops = '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
+            '<button class="btn btn-secondary btn-small" onclick="SessionsV2.complete(\'' + sid + '\')">✓ Mark completed</button>' +
+            '<button class="btn btn-danger btn-small" onclick="SessionsV2.cancelSession(\'' + sid + '\')">Cancel session</button></div>';
+        }
+        // Roster — async fill (placeholder + post-render fetch of this
+        // session's enrollments; CampaignsBridge.renderChipInto pattern).
+        var roster = '<div id="sessV2Roster"><span class="mu-sub">Loading roster…</span></div>';
+        setTimeout(function () { window.SessionsV2 && SessionsV2._fillRoster(s._key || s.id); }, 0);
 
         return tiles + tabsBar +
-          '<div class="mu-pane" data-pane="ov">' + UI.card('Session', overview + viewClass + manage) + '</div>';
+          '<div class="mu-pane" data-pane="ov">' + UI.card('Session', overview + viewClass + ops) +
+          UI.card('Roster', roster) + '</div>';
       }
     }
     // No onSave → no Edit button (scheduling / editing an occurrence stays on legacy #book).
@@ -159,12 +178,23 @@
   }
   var V2 = { rows: [], byId: {}, classes: {}, today: todayStr(), sortKey: 'date', sortDir: 'desc', q: '', statusFilter: 'all', whenFilter: 'all', loaded: false };
 
-  function load() {
+  // Run-once data load shared by route setup and cold drills (fetch gate).
+  var _loadPromise = null;
+  function ensureLoaded() {
+    if (V2.loaded) return Promise.resolve();
+    if (!_loadPromise) _loadPromise = loadData();
+    return _loadPromise;
+  }
+  function load() { loadData().then(render); }
+  function loadData() {
     V2.today = todayStr();
+    // Ensure the legacy Book module is loaded so window.SessionsBridge (the
+    // delegated session-op write path) exists — mirrors enrollments-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
     // Sessions + their parent classes load together; both one-shot keyed-object
     // reads (mirrors classes-v2 load / calendar-v2 load). public/classes resolves
     // the class NAME; public/classSessions is the occurrence list.
-    Promise.all([
+    return Promise.all([
       Promise.resolve(MastDB.get('public/classSessions')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('public/classes')).catch(function () { return null; })
     ]).then(function (res) {
@@ -179,8 +209,8 @@
         if (s && typeof s === 'object' && s.date) { s = Object.assign({ _key: k }, s); out.push(s); }
       });
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
-      V2.loaded = true; render();
-    }).catch(function (e) { console.error('[sessions-v2] load', e); render(); });
+      V2.loaded = true;
+    }).catch(function (e) { console.error('[sessions-v2] load', e); });
   }
 
   function visibleRows() {
@@ -222,13 +252,20 @@
         var on = V2.whenFilter === f[0];
         return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="SessionsV2.when(\'' + f[0] + '\')">' + f[1] + '</button>';
       }).join(' ');
+    // One schedule surface, two lenses (Month · List) — the calendar grid and
+    // this flat list are two views of the same occurrences (plan: classes-v2-
+    // build-plan.md CONSOLIDATION; fulfillment-v2 route-pick-the-lens precedent).
+    var lensPills =
+      '<button class="btn btn-small btn-secondary" onclick="navigateTo(\'calendar-v2\')">Month</button> ' +
+      '<button class="btn btn-small btn-primary">List</button>';
     tab.innerHTML =
       U.pageHeader({
-        title: 'Sessions',
+        title: 'Schedule',
         count: N.count(V2.rows.length) + ' session' + (V2.rows.length === 1 ? '' : 's'),
         actionsHtml: '<button class="btn btn-secondary" onclick="SessionsV2.exportCsv()">↓ Export</button>'
       }) +
-      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + statusPills +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + lensPills +
+        '<span style="width:1px;background:var(--border,rgba(127,127,127,0.3));margin:0 4px;"></span>' + statusPills +
         '<span style="width:1px;background:var(--border,rgba(127,127,127,0.3));margin:0 4px;"></span>' + whenPills + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search class, instructor or location…" value="' + esc(V2.q) +
         '" oninput="SessionsV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
@@ -253,17 +290,62 @@
         if (rec) MastEntity.openRecord('sessions-v2', rec, 'read');
       });
     },
-    // Drill to the parent class detail (legacy Book detail). Close the panel first
-    // so the route nav doesn't race the open overlay (mirrors calendar-v2.openClass).
-    openClass: function (classId) {
-      try { U.slideOut.requestClose(); } catch (e) {}
-      if (typeof navigateTo === 'function') navigateTo('book-detail', { id: classId });
+    // Session ops — delegated to the state-free SessionsBridge cores in book.js.
+    complete: function (id) {
+      if (!can('calendar', 'edit')) { if (window.showToast) showToast('Schedule write access required.', true); return; }
+      if (!window.SessionsBridge) { if (window.showToast) showToast('Schedule engine still loading — try again', true); return; }
+      Promise.resolve(window.SessionsBridge.complete(id)).then(function () {
+        if (window.showToast) showToast('Session marked complete.');
+        var rec = V2.byId[id];
+        if (rec) { rec.status = 'completed'; MastEntity.openRecord('sessions-v2', rec, 'read'); }
+        render();
+      }).catch(function (e) { console.error('[sessions-v2] complete', e); if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
     },
-    // Scheduling / editing → classic Classes catalog + calendar (route 'book').
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('book');
-      else if (typeof navigateTo === 'function') navigateTo('book');
+    cancelSession: function (id) {
+      if (!can('calendar', 'edit')) { if (window.showToast) showToast('Schedule write access required.', true); return; }
+      if (!window.SessionsBridge) { if (window.showToast) showToast('Schedule engine still loading — try again', true); return; }
+      var ask = (typeof window.mastConfirm === 'function')
+        ? window.mastConfirm('Cancel this session? Students will need to be notified.', { title: 'Cancel Session', danger: true })
+        : Promise.resolve(true);
+      Promise.resolve(ask).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(window.SessionsBridge.cancel(id)).then(function () {
+          if (window.showToast) showToast('Session cancelled.');
+          var rec = V2.byId[id];
+          if (rec) { rec.status = 'cancelled'; MastEntity.openRecord('sessions-v2', rec, 'read'); }
+          render();
+        });
+      }).catch(function (e) { console.error('[sessions-v2] cancel', e); if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
+    },
+    // Async roster fill for the session SO (placeholder div + post-render fetch).
+    // Click a row → drill to the enrollment record (stacked SO with Back).
+    _fillRoster: function (sessionId) {
+      var el = document.getElementById('sessV2Roster');
+      if (!el) return;
+      Promise.resolve(MastDB.enrollments.bySession(sessionId)).then(function (snap) {
+        var data = (snap && typeof snap.val === 'function') ? (snap.val() || {}) : (snap || {});
+        var rows = Object.keys(data).map(function (k) { return Object.assign({ _key: k }, data[k]); });
+        var el2 = document.getElementById('sessV2Roster');
+        if (!el2) return;
+        if (!rows.length) { el2.innerHTML = '<span class="mu-sub">No one is enrolled yet.</span>'; return; }
+        var EN_LABEL = { confirmed: 'Confirmed', waitlisted: 'Waitlist', cancelled: 'Cancelled', 'no-show': 'No-show', completed: 'Attended', late: 'Late', 'checked-in': 'Checked in', 'attended-pending-waiver': 'Attended (waiver pending)', cancelled_by_session: 'Session cancelled' };
+        var EN_TONE = { confirmed: 'success', waitlisted: 'amber', cancelled: 'neutral', 'no-show': 'danger', completed: 'teal', late: 'warning', 'checked-in': 'teal', 'attended-pending-waiver': 'amber', cancelled_by_session: 'neutral' };
+        el2.innerHTML = U.relatedTable([
+          { label: 'Student', render: function (e) {
+              var nm = e.studentName || e.customerName || '(unnamed)';
+              return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'enrollments-v2\',\'' + esc(e._key) + '\')">' + esc(nm) + '</button>';
+          } },
+          { label: 'Paid', align: 'right', render: function (e) { return N.money(N.moneyVal(e, 'pricePaidCents', 'pricePaid')) || '—'; } },
+          { label: 'Status', render: function (e) {
+              var st = e.status || '—';
+              return U.badge(EN_LABEL[st] || st, EN_TONE[st] || 'neutral');
+          } }
+        ], rows);
+      }).catch(function (e) {
+        console.error('[sessions-v2] roster', e);
+        var el3 = document.getElementById('sessV2Roster');
+        if (el3) el3.innerHTML = '<span class="mu-sub">Could not load the roster.</span>';
+      });
     },
     exportCsv: function () { return MastEntity.exportRows('sessions-v2', visibleRows(), 'all'); }
   };

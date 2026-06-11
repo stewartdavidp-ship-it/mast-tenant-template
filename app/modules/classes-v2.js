@@ -156,7 +156,13 @@
         get: statusOf,
         tone: function (v) { return STATUS_TONE[v] || 'neutral'; } }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    // Cold drills (session SOs' "View full class") reach this fetch before the
+    // route setup has run — gate on a run-once ensureLoaded() so the sessions
+    // index exists (the Sessions facet reads V2.sessionsByClass).
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return ensureLoaded().then(function () { return V2.byId[id] || null; });
+    },
     detail: {
       render: function (UI, c) {
         var sessions = sessionsFor(c);
@@ -205,7 +211,12 @@
         });
         function sessCols() {
           return [
-            { label: 'Date', render: function (s) { return s.date ? N.date(s.date) : '—'; } },
+            // Date drills to the session record (stacked SO with Back) — the
+            // schedule surface's detail, with roster + session ops.
+            { label: 'Date', render: function (s) {
+                var label = s.date ? N.date(s.date) : '—';
+                return s.id ? '<button type="button" class="mu-link" onclick="MastEntity.drill(\'sessions-v2\',\'' + esc(s.id) + '\')">' + esc(label) + '</button>' : esc(label);
+            } },
             { label: 'Time', render: function (s) { return '<span class="mu-sub">' + fmtTimeRange(s) + '</span>'; } },
             { label: 'Enrolled', align: 'right', render: function (s) {
                 var cp = sessCapacity(s, c);
@@ -351,14 +362,22 @@
   }
   var V2 = { rows: [], byId: {}, sessionsByClass: {}, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false };
 
-  function load() {
+  // Run-once data load shared by route setup and cold drills (fetch gate).
+  var _loadPromise = null;
+  function ensureLoaded() {
+    if (V2.loaded) return Promise.resolve();
+    if (!_loadPromise) _loadPromise = loadData();
+    return _loadPromise;
+  }
+  function load() { loadData().then(render); }
+  function loadData() {
     V2.today = todayStr();
     // Ensure the legacy Book module is loaded so window.ClassesBridge (the
     // delegated write path) exists — mirrors contacts-v2 / materials-v2.
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
     // Classes + their generated sessions load together; both one-shot keyed-object
     // reads (mirrors book.js loadClassDetail + calendar-v2 load).
-    Promise.all([
+    return Promise.all([
       Promise.resolve(MastDB.get('public/classes')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('public/classSessions')).catch(function () { return null; })
     ]).then(function (res) {
@@ -377,10 +396,10 @@
         (byClass[s.classId] = byClass[s.classId] || []).push(s);
       });
       V2.sessionsByClass = byClass;
-      V2.loaded = true; render();
-    }).catch(function (e) { console.error('[classes-v2] load', e); render(); });
+      V2.loaded = true;
+    }).catch(function (e) { console.error('[classes-v2] load', e); });
   }
-  function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
+  function reloadSoon() { V2.loaded = false; _loadPromise = null; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
