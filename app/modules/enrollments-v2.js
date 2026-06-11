@@ -47,15 +47,31 @@
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
 
-  // Status label/tone maps mirror book.js ENROLLMENT_STATUSES (read-only display).
+  function can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
+
+  // Status label/tone maps cover BOTH writer vocabularies in public/enrollments:
+  // book.js ENROLLMENT_STATUSES (confirmed/waitlisted/cancelled/no-show/
+  // completed/late) AND the storefront-CF statuses live data carries
+  // (checked-in, attended-pending-waiver, cancelled_by_session) — the
+  // CS-round lesson: characterize per WRITER, resolve both (playbook §0c-5).
+  // Plain-language labels are display-only; stored vocab is untouched.
   var STATUS_LABEL = {
-    confirmed: 'Confirmed', waitlisted: 'Waitlisted', cancelled: 'Cancelled',
-    'no-show': 'No-show', completed: 'Completed', late: 'Late'
+    confirmed: 'Confirmed', waitlisted: 'Waitlist', cancelled: 'Cancelled',
+    'no-show': 'No-show', completed: 'Attended', late: 'Late',
+    'checked-in': 'Checked in', 'attended-pending-waiver': 'Attended (waiver pending)',
+    cancelled_by_session: 'Session cancelled'
   };
   var STATUS_TONE = {
     confirmed: 'success', waitlisted: 'amber', cancelled: 'neutral',
-    'no-show': 'danger', completed: 'teal', late: 'warning'
+    'no-show': 'danger', completed: 'teal', late: 'warning',
+    'checked-in': 'teal', 'attended-pending-waiver': 'amber',
+    cancelled_by_session: 'neutral'
   };
+  // A seat that can still be acted on (the roster verbs). Completed/attended
+  // and cancelled records are immutable history — no actions, no edit.
+  function isActionable(st) {
+    return st === 'confirmed' || st === 'checked-in' || st === 'late' || st === 'waitlisted' || st === 'attended-pending-waiver';
+  }
 
   // ── join helpers (read from the maps built at load; fall back to ids) ─
   function classOf(e) { return e && e.classId ? V2.classMap[e.classId] : null; }
@@ -114,8 +130,9 @@
       { name: 'enrolledAt', label: 'Enrolled', type: 'date', list: true, readOnly: true,
         get: function (e) { return e.enrolledAt || e.createdAt || null; } },
       { name: 'status', label: 'Status', type: 'status', list: true, readOnly: true,
-        options: ['confirmed', 'waitlisted', 'cancelled', 'no-show', 'completed', 'late'],
+        options: ['confirmed', 'waitlisted', 'checked-in', 'completed', 'late', 'no-show', 'attended-pending-waiver', 'cancelled', 'cancelled_by_session'],
         get: function (e) { return e.status || '—'; },
+        format: function (v) { return STATUS_LABEL[v] || v; },
         tone: function (v) { return STATUS_TONE[v] || 'neutral'; } }
     ],
     fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
@@ -153,9 +170,24 @@
           { k: 'Cancelled', v: e.cancelledAt ? N.date(e.cancelledAt) : '—' },
           { k: 'Waitlist position', v: e.waitlistPosition ? ('#' + e.waitlistPosition) : '—' }
         ]);
-        // Status actions (mark attended / no-show / promote / cancel) + seat-count
-        // and waitlist side effects stay on legacy #enrollments.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="EnrollmentsV2.classic()">Manage in classic view →</button></div>';
+        // Roster actions — native here, delegated to window.EnrollmentsBridge
+        // (state-free cores in book.js; seat-count/waitlist side effects stay
+        // single-sourced). Immutable history (attended/cancelled) gets none.
+        var manage = '';
+        var st = e.status;
+        if (isActionable(st) && can('enrollments', 'edit')) {
+          var id = esc(e._key || e.id);
+          var btns = [];
+          if (st === 'waitlisted') {
+            btns.push('<button class="btn btn-primary btn-small" onclick="EnrollmentsV2.act(\'' + id + '\',\'promote\')">▲ Promote to confirmed</button>');
+          } else {
+            btns.push('<button class="btn btn-secondary btn-small" onclick="EnrollmentsV2.act(\'' + id + '\',\'completed\')">✓ Mark attended</button>');
+            if (st !== 'late') btns.push('<button class="btn btn-secondary btn-small" onclick="EnrollmentsV2.act(\'' + id + '\',\'late\')">Mark late</button>');
+            btns.push('<button class="btn btn-secondary btn-small" onclick="EnrollmentsV2.act(\'' + id + '\',\'no-show\')">Mark no-show</button>');
+          }
+          btns.push('<button class="btn btn-danger btn-small" onclick="EnrollmentsV2.act(\'' + id + '\',\'cancel\')">Cancel enrollment</button>');
+          manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' + btns.join('') + '</div>';
+        }
 
         // Payment — amount + method + reference + pass (only when money on record).
         var paymentBody = UI.kv([
@@ -179,11 +211,76 @@
         return tiles + tabsBar + panes;
       }
     }
-    // No onSave → no Edit button (status actions + cancellation stay on legacy #enrollments).
+    // No onSave → no Edit button on the read SO. The roster verbs above are the
+    // only writes; CREATE goes through the separate intake entity below
+    // (commission-intake-v2 pattern: onSave on THIS entity would surface a
+    // misleading Edit button on immutable history records).
+  });
+
+  // ── operator intake (create-only entity) ────────────────────────────
+  // Phone/walk-in sign-up: class → session → student, delegated to
+  // window.EnrollmentsBridge.create (capacity-aware: a full session lands the
+  // seat on the waitlist with the next position).
+  MastEntity.define('enrollment-intake-v2', {
+    label: 'Enrollment', labelPlural: 'Enrollments', size: 'md',
+    recordId: function (e) { return e._key || e.id; },
+    fields: [
+      { name: 'student', label: 'Student', type: 'text', readOnly: true, get: function (e) { return (e && e.studentName) || 'New enrollment'; } }
+    ],
+    fetch: function () { return Promise.resolve(null); },
+    detail: {
+      render: function () { return ''; },
+      editRender: function () {
+        function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        var classOpts = '<option value="">Select a class…</option>' + Object.keys(V2.classMap).map(function (k) {
+          var c = V2.classMap[k];
+          return '<option value="' + esc(k) + '">' + esc((c && c.name) || k) + '</option>';
+        }).join('');
+        var studentOpts = '<option value="">— Type a name below —</option>' + Object.keys(V2.studentMap).map(function (k) {
+          var s = V2.studentMap[k];
+          return '<option value="' + esc(k) + '" data-name="' + esc(s.displayName || '') + '" data-email="' + esc(s.email || '') + '">' + esc(s.displayName || k) + '</option>';
+        }).join('');
+        return '<div class="mu-editbar"><span class="mu-editpill">NEW</span>New enrollment</div>' +
+          fg('Class *', '<select class="form-input" id="enV2Class" style="width:100%;" onchange="EnrollmentsV2._intakeClassChanged(this.value)">' + classOpts + '</select>') +
+          fg('Session *', '<select class="form-input" id="enV2Session" style="width:100%;"><option value="">Select a class first…</option></select>') +
+          fg('Student', '<select class="form-input" id="enV2Student" style="width:100%;" onchange="EnrollmentsV2._intakeStudentChanged(this)">' + studentOpts + '</select>') +
+          fg('Name *', '<input class="form-input" id="enV2Name" name="enV2Name" style="width:100%;" placeholder="e.g. Elena Vasquez">') +
+          fg('Email', '<input class="form-input" id="enV2Email" type="email" style="width:100%;" placeholder="student@example.com">') +
+          fg('Price paid ($)', '<input class="form-input" id="enV2Price" type="number" min="0" step="0.01" style="width:100%;" placeholder="0.00">') +
+          fg('Notes', '<textarea class="form-input" id="enV2Notes" rows="2" style="width:100%;resize:vertical;"></textarea>') +
+          '<div class="mu-sub" style="margin-top:8px;">If the session is full, the student is added to the waitlist automatically.</div>';
+      }
+    },
+    onSave: function (rec, mode) {
+      if (mode !== 'create') return false;
+      if (!can('enrollments', 'edit')) { if (window.showToast) showToast('Enrollment write access required.', true); return false; }
+      if (!window.EnrollmentsBridge) { if (window.showToast) showToast('Enrollments engine still loading — try again', true); return false; }
+      function v(id) { return ((document.getElementById(id) || {}).value || '').trim(); }
+      var priceRaw = v('enV2Price');
+      var data = {
+        classId: v('enV2Class'), sessionId: v('enV2Session'),
+        studentId: v('enV2Student') || null,
+        name: v('enV2Name'), email: v('enV2Email'),
+        pricePaidCents: priceRaw === '' ? 0 : Math.round(parseFloat(priceRaw) * 100),
+        notes: v('enV2Notes')
+      };
+      if (!data.classId) { if (window.showToast) showToast('Class is required.', true); return false; }
+      if (!data.sessionId) { if (window.showToast) showToast('Session is required.', true); return false; }
+      if (!data.name) { if (window.showToast) showToast('Student name is required.', true); return false; }
+      return Promise.resolve(window.EnrollmentsBridge.create(data)).then(function (res) {
+        if (window.showToast) showToast(res && res.status === 'waitlisted' ? 'Session full — added to the waitlist.' : 'Enrollment created.');
+        load();
+        return true;
+      }).catch(function (e) {
+        console.error('[enrollments-v2] create', e);
+        if (window.showToast) showToast('Error: ' + (e && e.message || 'could not create enrollment.'), true);
+        return false;
+      });
+    }
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, classMap: {}, sessionMap: {}, sortKey: 'enrolledAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false };
+  var V2 = { rows: [], byId: {}, classMap: {}, sessionMap: {}, studentMap: {}, sortKey: 'enrolledAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false };
 
   function toMap(snap) {
     var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
@@ -194,13 +291,18 @@
     // Class + session maps (for name joins) load alongside the enrollments — all
     // cheap one-shot reads, mirroring book.js loadEnrollments + allClassesMap/
     // allSessionsMap. Detail.render is synchronous, so these must be ready first.
+    // Ensure the legacy Book module is loaded so window.EnrollmentsBridge (the
+    // delegated write path) exists — mirrors classes-v2 / contacts-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
     Promise.all([
       Promise.resolve(MastDB.enrollments.list(500)),
       Promise.resolve(MastDB.classes.list(200)).catch(function () { return {}; }),
-      Promise.resolve(MastDB.classSessions.list(1000)).catch(function () { return {}; })
+      Promise.resolve(MastDB.classSessions.list(1000)).catch(function () { return {}; }),
+      Promise.resolve(MastDB.get('students')).catch(function () { return {}; })
     ]).then(function (res) {
       V2.classMap = toMap(res[1]);
       V2.sessionMap = toMap(res[2]);
+      V2.studentMap = toMap(res[3]);
       var val = toMap(res[0]);
       var out = [];
       Object.keys(val).forEach(function (k) {
@@ -248,7 +350,8 @@
       U.pageHeader({
         title: 'Enrollments',
         count: N.count(V2.rows.length) + ' enrollment' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="EnrollmentsV2.exportCsv()">↓ Export</button>'
+        actionsHtml: (can('enrollments', 'edit') ? '<button class="btn btn-primary" onclick="EnrollmentsV2.create()">+ New enrollment</button>' : '') +
+          '<button class="btn btn-secondary" onclick="EnrollmentsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search student, email or class…" value="' + esc(V2.q) +
@@ -256,7 +359,7 @@
       MastEntity.renderList('enrollments-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'EnrollmentsV2.sort', onRowClickFnName: 'EnrollmentsV2.open',
-        empty: { title: 'No enrollments', message: V2.loaded ? 'Enrollments appear here when students book classes. Manage them in the classic Enrollments view.' : 'Loading…' }
+        empty: { title: 'No enrollments', message: V2.loaded ? 'Enrollments appear here when students book classes — or add one with “+ New enrollment”.' : 'Loading…' }
       });
   }
 
@@ -273,11 +376,76 @@
         if (rec) MastEntity.openRecord('enrollments-v2', rec, 'read');
       });
     },
-    // Status actions + cancellation → classic Enrollments view. Use
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('enrollments');
-      else if (typeof navigateTo === 'function') navigateTo('enrollments');
+    // Roster verbs — delegated to the state-free EnrollmentsBridge cores in
+    // book.js (single-sourced side effects). 'cancel' confirms first; the
+    // others are reversible status writes.
+    act: function (id, action) {
+      if (!can('enrollments', 'edit')) { if (window.showToast) showToast('Enrollment write access required.', true); return; }
+      if (!window.EnrollmentsBridge) { if (window.showToast) showToast('Enrollments engine still loading — try again', true); return; }
+      var run = function () {
+        var p = (action === 'promote') ? window.EnrollmentsBridge.promote(id)
+              : (action === 'cancel') ? window.EnrollmentsBridge.cancel(id)
+              : window.EnrollmentsBridge.setStatus(id, action);
+        return Promise.resolve(p).then(function () {
+          if (window.showToast) showToast('Enrollment updated.');
+          // Patch the live cached record so the re-opened SO reflects the write
+          // immediately; load() then refreshes the list + joins.
+          var rec = V2.byId[id];
+          if (rec) {
+            rec.status = (action === 'promote') ? 'confirmed' : (action === 'cancel') ? 'cancelled' : action;
+            if (action === 'promote') rec.waitlistPosition = null;
+            MastEntity.openRecord('enrollments-v2', rec, 'read');
+          }
+          load();
+        }).catch(function (e) {
+          console.error('[enrollments-v2] ' + action, e);
+          if (window.showToast) showToast('Error: ' + (e && e.message || 'action failed.'), true);
+        });
+      };
+      if (action === 'cancel') {
+        var doCancel = (typeof window.mastConfirm === 'function')
+          ? window.mastConfirm('Cancel this enrollment?', { title: 'Cancel Enrollment', danger: true })
+          : Promise.resolve(true);
+        Promise.resolve(doCancel).then(function (ok) { if (ok) run(); });
+        return;
+      }
+      run();
+    },
+    create: function () {
+      // Ensure the legacy Book module (and thus window.EnrollmentsBridge) is
+      // loaded before opening the intake form — mirrors ClassesV2.create.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('book'); } catch (e) {} }
+      MastEntity.openRecord('enrollment-intake-v2', {}, 'create');
+    },
+    // Intake form helpers — dependent session picker + student autofill.
+    _intakeClassChanged: function (classId) {
+      var sel = document.getElementById('enV2Session');
+      if (!sel) return;
+      var today = new Date().toISOString().slice(0, 10);
+      var opts = Object.keys(V2.sessionMap).map(function (k) {
+        var s = V2.sessionMap[k]; return { id: k, s: s };
+      }).filter(function (x) {
+        return x.s && x.s.classId === classId && String(x.s.status || 'scheduled').toLowerCase() !== 'cancelled';
+      }).sort(function (a, b) {
+        // Upcoming first (soonest on top), then past (most recent first).
+        var af = String(a.s.date || '') >= today, bf = String(b.s.date || '') >= today;
+        if (af !== bf) return af ? -1 : 1;
+        var cmp = String(a.s.date || '').localeCompare(String(b.s.date || ''));
+        return af ? cmp : -cmp;
+      });
+      sel.innerHTML = opts.length
+        ? '<option value="">Select a session…</option>' + opts.map(function (x) {
+            var full = x.s.capacity && (x.s.enrolled || 0) >= x.s.capacity;
+            return '<option value="' + esc(x.id) + '">' + esc((x.s.date ? N.date(x.s.date) : x.id) + (x.s.startTime ? ' · ' + fmtTime(x.s.startTime) : '') + (full ? ' — FULL (waitlist)' : '')) + '</option>';
+          }).join('')
+        : '<option value="">No sessions for this class</option>';
+    },
+    _intakeStudentChanged: function (sel) {
+      var opt = sel && sel.options[sel.selectedIndex];
+      if (!opt || !opt.value) return;
+      var nameEl = document.getElementById('enV2Name'), emailEl = document.getElementById('enV2Email');
+      if (nameEl) nameEl.value = opt.getAttribute('data-name') || '';
+      if (emailEl) emailEl.value = opt.getAttribute('data-email') || '';
     },
     exportCsv: function () { return MastEntity.exportRows('enrollments-v2', visibleRows(), V2.statusFilter); }
   };
