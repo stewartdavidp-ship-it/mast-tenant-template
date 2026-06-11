@@ -41,6 +41,7 @@
   // visible to can('channels','view'). If the resolver isn't present, default
   // open (same as legacy, which has no per-axis gate on the route).
   function canViewChannels() { return typeof window.can === 'function' ? window.can('channels', 'view') : true; }
+  function canEditChannels() { return typeof window.can === 'function' ? window.can('channels', 'edit') : true; }
 
   // Bound reads (lint-unbounded-read). Channels + products are keyed-object
   // reads; orders is the only growth surface, capped via limitToLast.
@@ -207,10 +208,12 @@
         var termsCard = ch.contractTerms
           ? UI.card('Contract terms', '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(ch.contractTerms) + '</div>')
           : '';
-        // Connect / disconnect / settings / the onboarding wizard all stay on
-        // legacy #channels. navigateToClassic so the V2 route remap doesn't loop
-        // back to this twin.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ChannelsV2.classic()">Manage / connect in classic view →</button></div>';
+        // Classic burn-down Wave C: connect/reconnect is native (the OAuth legs
+        // live in the per-platform CFs; this just starts the flow).
+        var platf = (window.MastChannelShim && MastChannelShim.getPlatform) ? MastChannelShim.getPlatform(ch) : (ch.platform || null);
+        var manage = (platf && platf !== 'manual' && canEditChannels())
+          ? '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ChannelsV2.connect(\'' + esc(platf) + '\',\'' + esc(ch.channelId) + '\')">Connect / reconnect ' + esc(platf.charAt(0).toUpperCase() + platf.slice(1)) + ' →</button></div>'
+          : '';
 
         // ── Products facet — bound in-memory related collection ──
         var prods = productsForChannel(ch.channelId).sort(function (a, b) {
@@ -229,9 +232,15 @@
               return UI.badge(st, tone);
             } }
         ];
-        var prodBody = prods.length
-          ? UI.relatedTable(prodCols, prods)
-          : '<span class="mu-sub">No products on this channel. Assign products in the classic Channels view.</span>';
+        var addProdBtn = canEditChannels()
+          ? '<div style="margin-bottom:10px;"><button class="btn btn-secondary btn-small" onclick="ChannelsV2.addProducts(\'' + esc(ch.channelId) + '\')">+ Add products</button></div>'
+          : '';
+        var prodBody = addProdBtn + (prods.length
+          ? UI.relatedTable(prodCols.concat(canEditChannels() ? [{ label: '', render: function (p) {
+              var pid = p._key || p.pid || p.id;
+              return pid ? '<button class="btn-link" onclick="event.stopPropagation();ChannelsV2.removeProduct(\'' + esc(ch.channelId) + '\',\'' + esc(String(pid)) + '\')" style="color:var(--text-danger);background:none;border:none;cursor:pointer;font-size:0.78rem;">remove</button>' : '';
+            } }] : []), prods)
+          : '<span class="mu-sub">No products on this channel yet.</span>');
 
         // ── Activity facet — recent orders attributed to this channel ──
         var orders = ordersForChannel(ch).slice(0, 50);
@@ -270,8 +279,30 @@
       editRender: function (ch, mode) {
         ch = ch || {};
         function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
-        return '<div class="mu-editbar"><span class="mu-editpill">EDITING</span>Edit this channel</div>' +
+        function shimSel(id, map, cur, labelKey) {
+          var opts = Object.keys(map || {}).map(function (k) {
+            var lbl = (map[k] && (map[k][labelKey] || map[k].label)) || k;
+            return '<option value="' + esc(k) + '"' + (cur === k ? ' selected' : '') + '>' + esc(lbl) + '</option>';
+          }).join('');
+          return '<select class="form-input" id="' + id + '" style="width:100%;">' + opts + '</select>';
+        }
+        // Fall back to the module-local label maps when the bridge hasn't
+        // loaded yet (create() preloads channels.js, but it's async).
+        function labelMap(obj) { var m = {}; Object.keys(obj).forEach(function (k) { m[k] = { label: obj[k] }; }); return m; }
+        var B = window.ChannelsBridge || { ROUTES: labelMap(ROUTE_LABEL), PLATFORMS: labelMap(PLATFORM_LABEL) };
+        var curRoute = (window.MastChannelShim && MastChannelShim.getRoute) ? MastChannelShim.getRoute(ch) : ch.route;
+        var curPlatform = (window.MastChannelShim && MastChannelShim.getPlatform) ? MastChannelShim.getPlatform(ch) : ch.platform;
+        var tierSel = '<select class="form-input" id="chV2Tier" style="width:100%;">' + ['retail', 'wholesale'].map(function (t) {
+          return '<option value="' + t + '"' + ((ch.usesTier || 'retail') === t ? ' selected' : '') + '>' + t + '</option>';
+        }).join('') + '</select>';
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New channel' : 'Edit this channel') + '</div>' +
           fg('Name *', '<input class="form-input" id="chV2Name" value="' + esc(ch.name || '') + '" style="width:100%;">') +
+          '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+          fg('Route *', shimSel('chV2Route', B.ROUTES, curRoute, 'label')) +
+          fg('Platform *', shimSel('chV2Platform', B.PLATFORMS, curPlatform, 'label')) +
+          fg('Uses tier', tierSel) +
+          '</div>' +
+          (mode === 'create' ? fg('Platform account id', '<input class="form-input" id="chV2Account" value="" style="width:100%;" placeholder="e.g. mystore (optional)">') : '') +
           '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
           fg('Percent fee (%)', '<input class="form-input" type="number" step="0.1" id="chV2Pct" value="' + (ch.percentFee != null ? ch.percentFee : '') + '" style="width:130px;">') +
           fg('Per-order fee (¢)', '<input class="form-input" type="number" id="chV2PerOrder" value="' + (ch.fixedFeePerOrderCents != null ? ch.fixedFeePerOrderCents : '') + '" style="width:130px;">') +
@@ -281,7 +312,7 @@
           fg('Contact email', '<input class="form-input" id="chV2CEmail" value="' + esc(ch.contactEmail || '') + '" style="width:100%;">') +
           fg('Contact phone', '<input class="form-input" id="chV2CPhone" value="' + esc(ch.contactPhone || '') + '" style="width:100%;">') +
           fg('Notes', '<textarea class="form-input" id="chV2Notes" rows="3" style="width:100%;resize:vertical;">' + esc(ch.notes || '') + '</textarea>') +
-          '<div class="mu-sub">Type, platform, connection and sync settings are managed in the classic Channels view.</div>';
+          '<div class="mu-sub">Changing route/platform keeps the legacy type enum consistent automatically.</div>';
       }
     },
     onSave: function (rec) {
@@ -294,6 +325,9 @@
       if (!name) { if (window.showToast) showToast('Channel name is required', true); return false; }
       var updates = {
         name: name,
+        route: val('chV2Route') || null,
+        platform: val('chV2Platform') || null,
+        usesTier: val('chV2Tier') || 'retail',
         percentFee: parseFloat(val('chV2Pct')) || 0,
         fixedFeePerOrderCents: parseInt(val('chV2PerOrder'), 10) || 0,
         monthlyFixedCents: parseInt(val('chV2Monthly'), 10) || 0,
@@ -303,6 +337,26 @@
         notes: val('chV2Notes').trim() || null,
         updatedAt: new Date().toISOString()
       };
+      if (arguments.length > 1 && arguments[1] === 'create') {
+        // Classic burn-down Wave C: native create over ChannelsBridge.createChannel.
+        return Promise.resolve(window.ChannelsBridge.createChannel({
+          name: name,
+          route: updates.route, platform: updates.platform, usesTier: updates.usesTier,
+          platformAccountId: val('chV2Account'),
+          percentFee: updates.percentFee, fixedFeePerOrderCents: updates.fixedFeePerOrderCents,
+          monthlyFixedCents: updates.monthlyFixedCents,
+          contactName: updates.contactName, contactEmail: updates.contactEmail,
+          contactPhone: updates.contactPhone, notes: updates.notes
+        })).then(function (newId) {
+          if (window.writeAudit) writeAudit('create', 'channels', newId);
+          if (window.showToast) showToast('Channel created');
+          load(); return true;
+        }).catch(function (e) {
+          console.error('[channels-v2] create', e);
+          if (window.showToast) showToast(e && e.message || 'Error creating channel', true);
+          return false;
+        });
+      }
       var id = rec.channelId;
       return Promise.resolve(window.ChannelsBridge.updateChannel(id, updates)).then(function () {
         if (window.writeAudit) writeAudit('update', 'channels', id);
@@ -432,7 +486,7 @@
         title: 'Channels',
         count: N.count(active) + ' active · ' + N.count(V2.rows.length) + ' total',
         actionsHtml:
-          '<button class="btn btn-secondary" onclick="ChannelsV2.classic()">Manage / connect in classic view →</button>' +
+          (canEditChannels() ? '<button class="btn btn-primary" onclick="ChannelsV2.create()">+ New channel</button>' : '') +
           '<button class="btn btn-secondary" onclick="ChannelsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
@@ -441,7 +495,7 @@
       MastEntity.renderList('channels-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'ChannelsV2.sort', onRowClickFnName: 'ChannelsV2.open',
-        empty: { title: 'No channels', message: V2.loaded ? 'Set up sales channels in the classic Channels view.' : 'Loading…' }
+        empty: { title: 'No channels', message: V2.loaded ? 'Add your first sales channel to get started.' : 'Loading…' }
       });
   }
 
@@ -458,15 +512,100 @@
         if (rec) MastEntity.openRecord('channels-v2', rec, 'read');
       });
     },
-    // Connect/disconnect, the onboarding wizard and settings edits stay on
-    // legacy #channels. navigateToClassic bypasses the V2 route remap so this
-    // reaches LEGACY even when V2 routes are active.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('channels');
-      else if (typeof navigateTo === 'function') navigateTo('channels');
+    // ── Classic burn-down Wave C: native create / connect / product assign ──
+    create: function () {
+      if (!canEditChannels()) { if (window.showToast) showToast('You don\u2019t have permission to add channels', true); return; }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('channels'); } catch (e) {} }
+      MastEntity.openRecord('channels-v2', {}, 'create');
+    },
+    connect: function (platform, channelId) {
+      withBridge(function (b) {
+        if (!b.connect(platform, channelId)) {
+          if (window.showToast) showToast('Connect flow unavailable — try again shortly', true);
+        }
+      });
+    },
+    addProducts: function (channelId) {
+      withBridge(function () {
+        var onChannel = {};
+        productsForChannel(channelId).forEach(function (p) { onChannel[p._key || p.pid || p.id] = true; });
+        var candidates = Object.keys(V2.products).filter(function (pid) { return !onChannel[pid]; });
+        if (!candidates.length) { if (window.showToast) showToast('Every product is already on this channel'); return; }
+        var rows = candidates.map(function (pid) {
+          var p = V2.products[pid] || {};
+          return '<label style="display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:0.85rem;cursor:pointer;">' +
+            '<input type="checkbox" class="chV2AddCb" value="' + esc(pid) + '"> ' + esc(p.name || pid) + '</label>';
+        }).join('');
+        openModal(
+          '<div class="modal-header"><h3>Add products to channel</h3>' +
+            '<button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+          '<div class="modal-body" style="max-height:50vh;overflow-y:auto;">' + rows + '</div>' +
+          '<div class="modal-footer">' +
+            '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+            '<button class="btn btn-primary" data-ch="' + esc(channelId) + '" onclick="ChannelsV2.addProductsGo(this.dataset.ch)">Add selected</button>' +
+          '</div>');
+      });
+    },
+    addProductsGo: function (channelId) {
+      var pids = [];
+      document.querySelectorAll('.chV2AddCb:checked').forEach(function (cb) { pids.push(cb.value); });
+      if (!pids.length) { if (window.showToast) showToast('Select at least one product', true); return; }
+      withBridge(function (b) {
+        Promise.resolve(b.addProducts(channelId, pids)).then(function (res) {
+          if (typeof closeModal === 'function') closeModal();
+          if (window.writeAudit) writeAudit('update', 'channels', channelId);
+          if (window.showToast) showToast((res.added || 0) + ' product' + (res.added === 1 ? '' : 's') + ' added');
+          reopenAfterLoad(channelId);
+        }).catch(function (e) {
+          if (window.showToast) showToast('Could not add products: ' + (e && e.message || e), true);
+        });
+      });
+    },
+    removeProduct: function (channelId, pid) {
+      withBridge(function (b) {
+        mastConfirm('Remove this product from the channel? (The product itself is not deleted.)', { title: 'Remove product', confirmLabel: 'Remove' })
+          .then(function (ok) {
+            if (!ok) return;
+            return Promise.resolve(b.removeProduct(channelId, pid)).then(function () {
+              if (window.writeAudit) writeAudit('update', 'channels', channelId);
+              if (window.showToast) showToast('Removed from channel');
+              reopenAfterLoad(channelId);
+            });
+          }).catch(function (e) {
+            if (window.showToast) showToast('Could not remove: ' + (e && e.message || e), true);
+          });
+      });
     },
     exportCsv: function () { return MastEntity.exportRows('channels-v2', visibleRows(), 'all'); }
   };
+
+  // Bridge gate + post-write SO refresh (mirror contacts-v2 Wave A).
+  function withBridge(fn) {
+    if (window.ChannelsBridge) return fn(window.ChannelsBridge);
+    MastAdmin.loadModule('channels').then(function () {
+      if (window.ChannelsBridge) fn(window.ChannelsBridge);
+      else if (window.showToast) showToast('Channels engine still loading — try again', true);
+    }).catch(function () { if (window.showToast) showToast('Channels engine unavailable', true); });
+  }
+  function reopenAfterLoad(channelId) {
+    Promise.all([
+      Promise.resolve(MastDB.get('admin/channels')).catch(function () { return null; }),
+      Promise.resolve(MastDB.get('public/products')).catch(function () { return null; })
+    ]).then(function (res) {
+      var cv = res[0] || {};
+      var out = [];
+      Object.keys(cv).forEach(function (k) {
+        var ch = cv[k];
+        if (ch && typeof ch === 'object') { if (!ch.channelId) ch = Object.assign({ channelId: k }, ch); out.push(ch); }
+      });
+      V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r.channelId] = r; });
+      var pv = res[1] || {}; var pkeys = Object.keys(pv).slice(0, PRODUCTS_LIMIT);
+      V2.products = {}; pkeys.forEach(function (k) { V2.products[k] = pv[k]; });
+      render();
+      var rec = V2.byId[channelId];
+      if (rec) MastEntity.openRecord('channels-v2', rec, 'read', true);
+    });
+  }
 
   MastAdmin.registerModule('channels-v2', {
     routes: { 'channels-v2': { tab: 'channelsV2Tab', setup: function () {

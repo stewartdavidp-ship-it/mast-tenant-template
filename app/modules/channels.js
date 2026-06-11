@@ -2772,14 +2772,110 @@
     getUsesTier: getChannelUsesTier
   };
 
-  // V2 bridge — state-free write core shared with channels-v2 (playbook §4).
-  // Same field-scoped update path the legacy Settings save uses (light fields
-  // only — route/platform/type changes stay on legacy where deriveLegacyType
-  // keeps the legacy enum consistent).
+  // V2 bridge — state-free write cores shared with channels-v2 (playbook §4 /
+  // classic burn-down Wave C: the twin never re-implements a write).
   window.ChannelsBridge = {
+    ROUTES: ROUTES,
+    PLATFORMS: PLATFORMS,
+    deriveLegacyType: deriveLegacyType,
     updateChannel: function(channelId, updates) {
       if (!channelId) return Promise.reject(new Error('channelId required'));
+      // Keep the legacy `type` enum consistent when the new-shape pair changes
+      // (same rule as the legacy Settings save).
+      if (updates && updates.route && updates.platform) {
+        var derived = deriveLegacyType(updates.route, updates.platform);
+        if (derived) updates.type = derived;
+      }
       return MastDB.update('admin/channels/' + channelId, updates);
+    },
+    // Create — the saveNew() core with explicit fields (both shapes written,
+    // exactly like legacy; multi-channel-per-platform allowed w/ console.warn).
+    createChannel: function(input) {
+      input = input || {};
+      var name = (input.name || '').trim();
+      var route = input.route || '';
+      var platform = input.platform || '';
+      if (!name) return Promise.reject(new Error('Channel name is required.'));
+      if (!route) return Promise.reject(new Error('Please pick a Route.'));
+      if (!platform) return Promise.reject(new Error('Please pick a Platform.'));
+      var sharing = Object.values(channelsData || {}).filter(function(other) {
+        return getChannelPlatform(other) === platform;
+      });
+      if (sharing.length > 0) {
+        console.warn('[channels] Multi-channel on platform "' + platform + '" — order attribution falls back to first match until Phase 3 webhook reverse-routing lands.');
+      }
+      var id = 'ch_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+      var now = new Date().toISOString();
+      var derivedType = deriveLegacyType(route, platform) || 'dtc_online';
+      var t = CHANNEL_TYPES[derivedType] || {};
+      var channel = {
+        channelId: id,
+        name: name,
+        type: derivedType,
+        ownershipModel: t.ownership || 'owned',
+        pricingModel: t.pricing || 'full_retail',
+        inventoryModel: t.inventory || 'retained',
+        route: route,
+        platform: platform,
+        platformAccountId: (input.platformAccountId || '').trim() || null,
+        usesTier: input.usesTier || (ROUTES[route] && ROUTES[route].defaultUsesTier) || 'retail',
+        percentFee: parseFloat(input.percentFee) || 0,
+        fixedFeePerOrderCents: parseInt(input.fixedFeePerOrderCents, 10) || 0,
+        monthlyFixedCents: parseInt(input.monthlyFixedCents, 10) || 0,
+        externalPlatform: (input.externalPlatform || '').trim() || null,
+        defaultEligibility: input.defaultEligibility === 'opt-out' ? 'opt-out' : 'opt-in',
+        contactName: (input.contactName || '').trim() || null,
+        contactEmail: (input.contactEmail || '').trim() || null,
+        contactPhone: (input.contactPhone || '').trim() || null,
+        notes: (input.notes || '').trim() || null,
+        autoMatchSources: [],
+        isActive: true,
+        createdAt: now,
+        updatedAt: now
+      };
+      return MastDB.set('admin/channels/' + id, channel).then(function() {
+        channelsData[id] = channel;
+        window.__mastChannelsCache = channelsData; // Phase 2c — sync product-editor cache
+        return id;
+      });
+    },
+    // Product assignment — confirmAddProducts/removeProduct cores with a
+    // FRESH product read (the module cache may be cold from the V2 twin).
+    // Dual-writes channelBindings (new) + channelIds (legacy), same as legacy.
+    addProducts: async function(channelId, pids) {
+      if (!channelId || !Array.isArray(pids) || !pids.length) throw new Error('channelId + product ids required');
+      var fresh = await MastDB.get('public/products') || {};
+      var batch = {}, added = 0;
+      pids.forEach(function(pid) {
+        var p = fresh[pid];
+        if (!p) return;
+        var ids = Array.isArray(p.channelIds) ? p.channelIds.slice() : [];
+        var bindings = Array.isArray(p.channelBindings) ? p.channelBindings.slice() : [];
+        var alreadyBound = bindings.some(function(b) { return b && b.channelId === channelId; });
+        if (!alreadyBound) { bindings.push({ channelId: channelId, excludedVariantIds: [] }); batch[pid + '/channelBindings'] = bindings; }
+        if (ids.indexOf(channelId) === -1) { ids.push(channelId); batch[pid + '/channelIds'] = ids; }
+        if (!alreadyBound) added++;
+      });
+      if (!added) return { added: 0 };
+      await MastDB.update('public/products', batch);
+      return { added: added };
+    },
+    removeProduct: async function(channelId, pid) {
+      if (!channelId || !pid) throw new Error('channelId + product id required');
+      var p = await MastDB.get('public/products/' + pid);
+      if (!p) throw new Error('Product not found');
+      var batch = {};
+      batch[pid + '/channelIds'] = (Array.isArray(p.channelIds) ? p.channelIds : []).filter(function(id) { return id !== channelId; });
+      batch[pid + '/channelBindings'] = (Array.isArray(p.channelBindings) ? p.channelBindings : []).filter(function(b) { return b && b.channelId !== channelId; });
+      await MastDB.update('public/products', batch);
+      return true;
+    },
+    // OAuth connect/reconnect — same per-platform start endpoint the legacy
+    // banner uses (the OAuth legs live in the per-platform CFs).
+    connect: function(platform, channelId) {
+      if (typeof window.startChannelOAuth === 'function') { window.startChannelOAuth(platform, channelId || null); return true; }
+      if (typeof window.channelReconnect === 'function') { window.channelReconnect(platform); return true; }
+      return false;
     }
   };
 
