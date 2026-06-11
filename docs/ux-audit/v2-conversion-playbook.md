@@ -3,8 +3,8 @@
 **Status:** Canonical process, distilled from the Sales conversion (2026-06-10, PRs #360–#378),
 amended after the Marketing conversion (2026-06-10, PRs #380–#384), the Operations
 conversion (2026-06-10, PRs #387–#396), the Finance conversion (2026-06-10,
-PRs #399–#405 — the first CONSOLIDATION round: 12 routes → 3 hub modules + 3 twins), the Customer Service conversion (2026-06-10, PRs #413–#422), and the Classes conversion (2026-06-10, PRs #426–#433 — six pre-existing twins audited-in-place rather than rebuilt). Run this end-to-end for each remaining section
-(Site, Retention, Shows, Admin). Worked examples: `sales-v2-build-plan.md` /
+PRs #399–#405 — the first CONSOLIDATION round: 12 routes → 3 hub modules + 3 twins), the Customer Service conversion (2026-06-10, PRs #413–#422), the Classes conversion (2026-06-10, PRs #426–#433 — six pre-existing twins audited-in-place rather than rebuilt), and the Admin conversion (2026-06-10, PRs #437–#446 — RBAC hub + read-only twins + two hub consolidations under a read-mostly Settings directive). Run this end-to-end for each remaining section
+(Site, Retention, Shows). Worked examples: `sales-v2-build-plan.md` /
 `marketing-v2-build-plan.md` (plan shape) and `standard-record-ui.md` §10 (the four archetypes).
 
 ## 0 · Ground rules
@@ -184,6 +184,56 @@ own retro missed):**
   by element id, then call `_save()`; a synthetic `.click()` on a stale element
   ref silently does nothing and reads like a dead CREATE.
 
+## 0e · Admin-round retro (2026-06-10, PRs #437–#446) — process lessons
+
+**What worked (keep doing):** line-level verification of the recon caught three
+errors (a false "uses pageHeader", a false "no orphans" — settings-v2 was
+manifest-wired but reachable from nowhere — and under-weighted visibility
+absences: THREE admin sidebar items were soft-hidden for every tenant); the
+entry-lens hub pattern (two routes → one module/tab, route picks the lens)
+cleanly consolidated Subscription+Coins and absorbed the suppressions manager
+into audit-v2's new Muted-rules lens; exercising every write live immediately
+after each wave (create role → matrix save → role change → archive/unarchive,
+suppress → unmute) — the only crash of the round was caught by navigation, not
+by review; restricting RBAC-walk writes to throwaway records (a created role +
+a junk test user) made the Permissions conversion safe to verify aggressively.
+
+**What cost cycles (new gotchas below):**
+1. The compat query exposes `.once()` ONLY — `.get()` throws. subscription-v2
+   inherited `.get()` from legacy renderCoinsRecentList, whose own try/catch
+   had silently swallowed it since the Firestore migration ("Could not load
+   recent purchases" forever). A V2 twin that mirrors a legacy read can crash
+   at setup on a bug legacy hides — grep the legacy read for `.get()` before
+   mirroring it.
+2. A foreign PR (#438) merged mid-round and the next wave's PR went
+   `mergeStateStatus: DIRTY` on the MAST_MODULES_V line. Recovery cherry-pick
+   worked, BUT resolving with `git checkout --ours app/index.html` discarded
+   the wave's ENTIRE index.html wiring (route map + manifest + tab div), not
+   just the version-suffix hunks — ship-check stayed green because the module
+   simply wasn't wired. After ANY conflict resolution, grep for the wave's
+   route-map/manifest/tab-div lines before pushing.
+3. Recon dumps that truncate record ids (a 12-char uid prefix in a census
+   table) read back later as "record missing" during the walk and burned a
+   debugging cycle. Never slice ids in recon output; stash full ids on
+   window.__vars in-page.
+4. `MastUI.slideOut._opts` outlives requestClose() — a probe that reads the
+   title/mode from _opts can report a CLOSED slide-out as open-in-edit. Gate
+   walk probes on the SO body's offsetParent, then read _opts.
+5. `EmployeesV2.open(id)`-style helpers that silently no-op on a cache miss
+   make automation failures invisible (the stale-SO probe above compounded
+   it). Prefer open() helpers that toast/throw on unknown ids.
+
+**Session-process notes:**
+- Read-mostly directives work: Settings was characterized (20 sub-views,
+  singleton-doc writers, badges) and explicitly NOT converted; the orphan
+  settings-v2 was deleted instead of rewired. Zero config docs touched.
+- Demo seeding can be minimal in admin sections: only `emails` needed seeding
+  (the twin's 30-day window had aged out); audit history needed nothing — the
+  walk's own writeAudit entries ARE the demo.
+- Append-only surfaces (audit log) and CTA-only surfaces (Stripe checkout)
+  define their own walk boundary: read everything, click nothing financial,
+  fabricate nothing historical.
+
 ## 1 · Recon (Explore agent, very thorough)
 
 **Verify the recon's surface characterizations before scheduling builds.** The Operations
@@ -357,6 +407,10 @@ the skeleton and wires `MODULE_MANIFEST` + tab div + `MAST_V2_ROUTE_MAP`. Then:
 | Post-deploy boot with empty sidebar + undefined MAST_MODULES_V | Mid-hydration, not a regression — gate DOM assertions on the expected bundle id being live |
 | Chrome-MCP javascript_tool returns "[BLOCKED: …]" for record ids | The extension redacts id-shaped strings — stash ids on window.__vars in-page; never round-trip them through tool results |
 | Recon agent asserts a confident NEGATIVE ("no route map", "no twin") | Mechanically diff app/modules/*-v2.js against MAST_V2_ROUTE_MAP + MODULE_MANIFEST + sidebar routes — two orphans and a false "doesn't exist" came from trusting prose over a 3-way diff |
+| Compat query `.get()` | The compat layer exposes `.once()` ONLY — `.get()` throws. Legacy callers with try/catch have been silently dead since the Firestore migration (coins Recent purchases); a V2 twin mirroring the read crashes at setup instead. Grep legacy reads for `.get()` before mirroring |
+| Conflict resolution with `checkout --ours index.html` | Discards the wave's WHOLE index.html side (route map/manifest/tab div), not just the version-suffix hunks — and ship-check stays green with the module unwired. Resolve hunk-by-hunk or re-apply + grep the wiring after |
+| Truncated record ids in recon dumps | A sliced uid read back as "record missing" in the walk. Keep ids whole; stash them on window.__vars in-page |
+| `slideOut._opts` after requestClose() | Stale — reports a closed SO as open/edit. Gate probes on the SO body's offsetParent first |
 
 ## 8 · Helper scripts
 
