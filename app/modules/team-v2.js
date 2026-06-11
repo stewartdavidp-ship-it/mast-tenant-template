@@ -15,10 +15,11 @@
  * grouped) + an onSave that DELEGATES to window.TeamBridge (exposed in team.js)
  * so the employee write + validation stay single-sourced — this twin never
  * reimplements buildEmployeeFields / writeEmployee (mirrors the
- * StudentsBridge / ContactsBridge precedent). The heavy sub-surfaces — Time
- * Clock, PTO, Documents, Onboarding, Labor Burden, and the compliance-checklist
- * edits — have their own domain logic and NO V2 home; they stay bespoke on
- * legacy #team and keep a scoped "manage in classic view" link.
+ * StudentsBridge / ContactsBridge precedent). Classic burn-down (operations
+ * Wave B): the heavy sub-surfaces — Time Clock, PTO, Labor Burden, Documents,
+ * Onboarding — are RE-HOSTED here as page lenses via window.TeamPanels
+ * (team.js renders the same battle-tested panels into this page's container;
+ * one implementation, no classic link). The classic hatch is retired.
  *
  * RBAC: this surface shows pay. VIEW is gated by can('team','view') (mirrors the
  * legacy route boundary; pay is not gated below team-view in legacy). The WRITE
@@ -269,9 +270,14 @@
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' + UI.card('Employment', employment) + UI.card('Contact & personal', contact) + '</div>' +
-          '<div class="mu-pane" data-pane="compliance" hidden>' + UI.cardTable('Compliance — ' + compBadge, compTable) + '</div>' +
+          '<div class="mu-pane" data-pane="compliance" hidden>' + UI.cardTable('Compliance — ' + compBadge, compTable) +
+            '<div style="margin-top:10px;"><button class="btn btn-secondary" onclick="TeamV2.setLens(\'docs\')">Manage compliance documents →</button></div></div>' +
           '<div class="mu-pane" data-pane="records" hidden>' + UI.card('Records', records) +
-            '<div style="margin-top:10px;"><button class="btn btn-secondary" onclick="TeamV2.classic()">Manage hours, PTO &amp; documents in classic view →</button></div></div>';
+            '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
+              '<button class="btn btn-secondary" onclick="TeamV2.setLens(\'timeclock\')">Time clock →</button>' +
+              '<button class="btn btn-secondary" onclick="TeamV2.setLens(\'pto\')">PTO →</button>' +
+              (canEditTeam() ? '<button class="btn btn-secondary" onclick="TeamV2.setLens(\'burden\')">Labor burden →</button>' : '') +
+            '</div></div>';
       }
     }
   };
@@ -286,7 +292,16 @@
   MastEntity.define('team-v2', teamSchema);
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'fullName', sortDir: 'asc', q: '', allowed: true, loaded: false };
+  var V2 = { rows: [], byId: {}, sortKey: 'fullName', sortDir: 'asc', q: '', allowed: true, loaded: false, lens: 'roster' };
+
+  // Sub-surface lenses (classic burn-down Wave B). Roster = the engine list;
+  // the rest re-host the legacy panels via window.TeamPanels (manager-gated
+  // like legacy renderTeam).
+  function lensDefs() {
+    var L = [['roster', 'Roster'], ['timeclock', 'Time clock'], ['pto', 'PTO']];
+    if (canEditTeam()) L = L.concat([['burden', 'Labor burden'], ['docs', 'Documents'], ['onboarding', 'Onboarding']]);
+    return L;
+  }
 
   function load() {
     // Ensure the legacy team module is loaded so window.TeamBridge (the
@@ -346,13 +361,30 @@
         newBtn +
         '<button class="btn btn-secondary"' + (canEdit ? '' : ' style="margin-left:auto;"') + ' onclick="TeamV2.exportCsv()">↓ Export</button>' +
       '</div>' +
-      '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name or title…" value="' + esc(V2.q) +
-        '" oninput="TeamV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
-      MastEntity.renderList('team-v2', {
-        rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
-        onSortFnName: 'TeamV2.sort', onRowClickFnName: 'TeamV2.open',
-        empty: { title: 'No employees', message: V2.loaded ? (canEdit ? 'Add an employee to get started.' : 'No employees on file.') : 'Loading…' }
-      });
+      '<div style="margin:14px 0 10px;">' + lensDefs().map(function (p) {
+        var on = V2.lens === p[0];
+        return '<button onclick="TeamV2.setLens(\'' + p[0] + '\')" style="border:1px solid var(--border);' +
+          'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
+          'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
+          'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' + p[1] + '</button>';
+      }).join('') + '</div>' +
+      (V2.lens === 'roster'
+        ? '<div style="margin:4px 0 14px;"><input class="form-input" placeholder="Search name or title…" value="' + esc(V2.q) +
+          '" oninput="TeamV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
+          MastEntity.renderList('team-v2', {
+            rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
+            onSortFnName: 'TeamV2.sort', onRowClickFnName: 'TeamV2.open',
+            empty: { title: 'No employees', message: V2.loaded ? (canEdit ? 'Add an employee to get started.' : 'No employees on file.') : 'Loading…' }
+          })
+        : '<div id="teamV2PanelHost"></div>');
+    if (V2.lens !== 'roster') {
+      // Re-hosted legacy sub-surface — same implementation, V2 home.
+      MastAdmin.loadModule('team').then(function () {
+        if (window.TeamPanels) TeamPanels.show(V2.lens, document.getElementById('teamV2PanelHost'));
+      }).catch(function (e) { console.error('[team-v2] panel host', e); });
+    } else if (window.TeamPanels) {
+      TeamPanels.release();
+    }
   }
 
   window.TeamV2 = {
@@ -374,12 +406,11 @@
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('team'); } catch (e) {} }
       MastEntity.openRecord('team-v2', {}, 'create');
     },
-    // Heavy sub-surfaces with their own domain logic and NO V2 home — Time Clock,
-    // PTO, Documents, Onboarding, and Labor Burden — stay on legacy #team.
-    // navigateToClassic bypasses the V2 route remap so this reaches LEGACY.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('team');
-      else if (typeof navigateTo === 'function') navigateTo('team');
+    // Sub-surface lenses (classic burn-down Wave B): re-hosted legacy panels.
+    setLens: function (l) {
+      V2.lens = l;
+      try { U.slideOut.requestCloseForce(); } catch (e) {}
+      render();
     },
     exportCsv: function () { return MastEntity.exportRows('team-v2', visibleRows(), 'all'); }
   };
