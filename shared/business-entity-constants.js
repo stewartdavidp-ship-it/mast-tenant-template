@@ -780,8 +780,11 @@
     'analytics':          { alwaysOn: true },
     'auditlog':           { alwaysOn: true },
     'subscription':       { alwaysOn: true },  // SaaS billing, not "subscription billing" in matrix
-    'about':              { alwaysOn: true },
-    'email-log':          { alwaysOn: true }
+    'about':              { alwaysOn: true },  // sidebar item folded into Plan & Billing (Q3); route stays hash-reachable
+    'email-log':          { alwaysOn: true },
+    // Q5 ratified 2026-06-10: Ask AI had NO entry and was soft-hidden in every
+    // sidebar (unknown route → hidden); the chat surface is canonical, show it.
+    'ask-ai':             { alwaysOn: true }
   };
 
   // ============================================================
