@@ -446,7 +446,7 @@
                    startTime: (document.getElementById('clV2SchedTime') || {}).value || '' };
         }
         var days = [];
-        document.querySelectorAll('#mastSlideOut .clV2Day:checked').forEach(function (el) { days.push(el.value); });
+        document.querySelectorAll('#mastSlideOutBody .clV2Day:checked').forEach(function (el) { days.push(el.value); });
         return { type: 'recurring', days: days,
                  startTime: (document.getElementById('clV2SchedTime') || {}).value || '',
                  startDate: (document.getElementById('clV2SchedStart') || {}).value || '',
@@ -464,8 +464,8 @@
       function readExtras() {
         function v(id) { return ((document.getElementById(id) || {}).value || '').trim(); }
         var certs = [], skills = [];
-        document.querySelectorAll('#mastSlideOut .clV2Cert:checked').forEach(function (el) { certs.push(el.value); });
-        document.querySelectorAll('#mastSlideOut .clV2Skill:checked').forEach(function (el) { skills.push(el.value); });
+        document.querySelectorAll('#mastSlideOutBody .clV2Cert:checked').forEach(function (el) { certs.push(el.value); });
+        document.querySelectorAll('#mastSlideOutBody .clV2Skill:checked').forEach(function (el) { skills.push(el.value); });
         return {
           type: data.type,
           seriesTotal: v('clV2SeriesTotal'), seriesPrice: v('clV2SeriesPrice'),
