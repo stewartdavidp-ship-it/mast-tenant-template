@@ -2495,6 +2495,37 @@
       await MastDB.classes.update(id, rec);
       classesLoaded = false;
       return id;
+    },
+    // Schedule + assignment + session generation — the classes-v2 schedule
+    // section delegates here so the write shape and the materializer stay
+    // single-sourced with legacy saveClass. All PATCH-style.
+    setSchedule: async function (id, schedule) {
+      var sc = schedule || {};
+      var clean = (sc.type === 'once')
+        ? { type: 'once', date: sc.date || null, startDate: sc.date || null, startTime: sc.startTime || '' }
+        : { type: 'recurring', days: Array.isArray(sc.days) ? sc.days : [],
+            startTime: sc.startTime || '', startDate: sc.startDate || '', endDate: sc.endDate || '' };
+      await MastDB.classes.update(id, { schedule: clean, updatedAt: new Date().toISOString() });
+      classesLoaded = false;
+    },
+    assign: async function (id, a) {
+      await MastDB.classes.update(id, {
+        instructorId: (a && a.instructorId) || null,
+        instructorName: (a && a.instructorName) || null,
+        resourceId: (a && a.resourceId) || null,
+        resourceName: (a && a.resourceName) || null,
+        updatedAt: new Date().toISOString()
+      });
+      classesLoaded = false;
+    },
+    // Fresh-reads the class, then runs the SAME materializer legacy saveClass
+    // uses (duplicate-date-safe; no-op without a schedule). Returns the class.
+    generateSessions: async function (id) {
+      var cls = await MastDB.classes.get(id);
+      if (!cls) throw new Error('Class not found');
+      if (!cls.schedule || (!cls.schedule.startDate && !cls.schedule.date)) throw new Error('Set a schedule first.');
+      await materializeSessions(id, cls);
+      return cls;
     }
   };
 
