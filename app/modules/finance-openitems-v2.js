@@ -15,8 +15,9 @@
  * state-free FinanceBridge cores in finance.js (mark paid, record payment,
  * save bill/vendor, queue reminder, audited deletes) — nothing re-implemented.
  *
- * Stays classic (linked): AR dunning settings + AR audit log sub-views,
- * customer statement send (mailto composer flow).
+ * Reminders lens (classic burn-down 2026-06-10): dunning settings form +
+ * read-only reminder audit log, native — via FinanceBridge.arDunningConfig /
+ * arSaveDunningSettings / arReminderLog. No classic links remain.
  */
 (function () {
   'use strict';
@@ -36,7 +37,7 @@
   function can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
 
   var BUCKETS = [['all', 'All'], ['current', 'Current'], ['1_to_30', '1–30d'], ['31_to_60', '31–60d'], ['61_to_90', '61–90d'], ['90_plus', '90d+']];
-  var V2 = { lens: 'ar', bucket: 'all', ar: [], ap: [], vendors: {}, busy: {}, reminded: {} };
+  var V2 = { lens: 'ar', bucket: 'all', ar: [], ap: [], vendors: {}, busy: {}, reminded: {}, dunning: null, reminderLog: null };
 
   function ensureTab() {
     var el = document.getElementById('financeOpenItemsV2Tab');
@@ -287,7 +288,8 @@
     var lensPills = pills([
       ['ar', 'Invoices', V2.ar.length],
       ['ap', 'Bills', V2.ap.length],
-      ['vendors', 'Vendors', Object.keys(V2.vendors).length]
+      ['vendors', 'Vendors', Object.keys(V2.vendors).length],
+      ['reminders', 'Reminders', (V2.reminderLog || []).length || null]
     ], lens, 'OpenItemsV2.setLens');
     var bucketPills = isVendors ? '' : pills(BUCKETS.map(function (b) { return [b[0], b[1], c[b[0]] || 0]; }), V2.bucket, 'OpenItemsV2.setBucket');
 
@@ -300,8 +302,16 @@
       ? N.count(rows.length) + ' vendor(s)'
       : m(totalDue) + ' open · ' + N.count(allRows.length) + ' item(s)';
     if (lens === 'ar') {
-      actions = '<button class="btn btn-secondary" onclick="OpenItemsV2.classicAr(\'settings\')">Dunning ↗</button>' +
-        '<button class="btn btn-secondary" onclick="OpenItemsV2.classicAr(\'audit\')">Audit log ↗</button>' + actions;
+      actions = '<button class="btn btn-secondary" onclick="OpenItemsV2.setLens(\'reminders\')">Reminders &amp; dunning</button>' + actions;
+    }
+
+    if (lens === 'reminders') {
+      tab.innerHTML =
+        U.pageHeader({ title: 'Invoices & Bills', count: 'Automated reminders — settings & history', actionsHtml: '<button class="btn btn-secondary" onclick="OpenItemsV2.refreshReminders()">Refresh</button>' }) +
+        '<div style="margin:14px 0 6px;">' + lensPills + '</div><div style="margin:0 0 14px;"></div>' +
+        '<div id="oiV2Reminders">' + remindersHtml() + '</div>';
+      if (!V2.dunning || !V2.reminderLog) loadReminders();
+      return;
     }
 
     var entityKey = lens === 'ar' ? 'orders-v2' : (isVendors ? 'ap-vendors-v2' : 'ap-bills-v2');
@@ -320,6 +330,55 @@
           ? { title: 'No vendors yet', message: 'Add the suppliers you buy from.' }
           : { title: 'Nothing outstanding', message: lens === 'ar' ? 'No open invoices — everyone has paid up.' : 'No open bills — nothing owed right now.' }
       });
+  }
+
+  // ── Reminders lens (dunning settings + audit log) ─────────────────────────
+  function remindersHtml() {
+    var d = V2.dunning, log = V2.reminderLog;
+    if (!d || !log) return '<div style="color:var(--warm-gray);font-size:0.85rem;padding:20px 0;">Loading…</div>';
+    var canEdit = can('finance-ar', 'edit');
+    function ck(id, checked, label, body) {
+      return '<label style="display:flex;align-items:flex-start;gap:10px;padding:5px 0;cursor:pointer;">' +
+        '<input type="checkbox" id="' + id + '"' + (checked ? ' checked' : '') + (canEdit ? '' : ' disabled') + ' style="margin-top:3px;">' +
+        '<span><span style="font-size:0.85rem;font-weight:600;">' + label + '</span>' +
+        (body ? '<br><span style="font-size:0.78rem;color:var(--warm-gray);">' + body + '</span>' : '') + '</span></label>';
+    }
+    var settings = U.card('Dunning settings',
+      ck('oiDunEnabled', d.enabled, 'Enable automated reminders', 'The daily reminder job queues an email for every overdue invoice matching the cadence below (subject to per-customer opt-out on the customer record).') +
+      '<div style="font-weight:600;font-size:0.85rem;margin:12px 0 4px;">Reminder cadence (days past due)</div>' +
+      ck('oiDun1d', d.cadence['1d'], '1 day overdue', null) +
+      ck('oiDun7d', d.cadence['7d'], '7 days overdue', null) +
+      ck('oiDun30d', d.cadence['30d'], '30 days overdue', null) +
+      (canEdit
+        ? '<div style="display:flex;justify-content:flex-end;margin-top:12px;"><button class="btn btn-primary" onclick="OpenItemsV2.saveDunning()">Save settings</button></div>'
+        : '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:12px;">Finance write access required to change settings.</div>'),
+      { fill: true });
+    var logHtml = log.length
+      ? U.relatedTable([
+          { label: 'Sent', render: function (r) { return esc((r.sentAt || '').replace('T', ' ').slice(0, 16)); } },
+          { label: 'Invoice #', render: function (r) { return esc(r.invoiceNumber || (r.invoiceId ? r.invoiceId.slice(-8) : '—')); } },
+          { label: 'Customer email', render: function (r) { return esc(r.customerEmail || '—'); } },
+          { label: 'Amount due', align: 'right', render: function (r) { return m(r.amtDueCents || 0); } },
+          { label: 'Status', render: function (r) { return U.badge(r.status || 'queued', r.status === 'sent' ? 'teal' : 'neutral'); } },
+          { label: 'Sent by', render: function (r) { return esc(r.sentBy || '—'); } }
+        ], log)
+      : '<div style="color:var(--warm-gray);font-size:0.85rem;">No reminders sent yet. Use Send reminder on an overdue invoice, or enable the cadence above.</div>';
+    return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;align-items:start;">' +
+      settings + U.card('Reminder history (' + log.length + ')', logHtml, { fill: true }) + '</div>';
+  }
+
+  function loadReminders() {
+    return MastAdmin.loadModule('finance').then(function () {
+      return Promise.all([bridge().arDunningConfig(), bridge().arReminderLog()]);
+    }).then(function (r) {
+      V2.dunning = r[0]; V2.reminderLog = r[1];
+      var el = document.getElementById('oiV2Reminders');
+      if (el) el.innerHTML = remindersHtml();
+    }).catch(function (e) {
+      console.error('[finance-openitems-v2] reminders load', e);
+      var el = document.getElementById('oiV2Reminders');
+      if (el) el.innerHTML = '<div style="color:var(--danger);padding:12px;">' + esc(e.message || String(e)) + '</div>';
+    });
   }
 
   // ── Handlers ──────────────────────────────────────────────────────────────
@@ -443,7 +502,18 @@
       }
       bridge().downloadCsv('openitems-' + name, rows, 'As of today');
     },
-    classicAr: function (subView) { if (window.navigateToClassic) navigateToClassic('finance-ar', { subView: subView }); }
+    refreshReminders: function () { V2.dunning = null; V2.reminderLog = null; render(); },
+    saveDunning: function () {
+      if (!can('finance-ar', 'edit')) { showToast('Finance write access required.', true); return; }
+      function on(id) { var n = document.getElementById(id); return !!(n && n.checked); }
+      bridge().arSaveDunningSettings({
+        enabled: on('oiDunEnabled'),
+        cadence: { '1d': on('oiDun1d'), '7d': on('oiDun7d'), '30d': on('oiDun30d') }
+      }).then(function () {
+        showToast('Dunning settings saved');
+        return loadReminders();
+      }).catch(function (e) { showToast('Save failed: ' + (e.message || e), true); });
+    }
   };
 
   // Vendor select options refresh (per render — vendors can change).
