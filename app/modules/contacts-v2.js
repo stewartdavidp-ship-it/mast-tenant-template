@@ -22,10 +22,11 @@
  * window.ContactsBridge (exposed in contacts.js) so the contact write, the
  * create/update audit, and the background Google-Contact create/push stay
  * single-sourced — this twin never reimplements that logic (mirrors the
- * materials-v2 / MakerMaterialsBridge precedent). Logging interactions, inquiry
- * Respond, and Google/Drive *sync setup* remain bespoke modals coupled to legacy
- * #contacts and keep a "manage in classic view" link. Flag-gated (?ui=1) at
- * #contacts-v2, side-by-side.
+ * materials-v2 / MakerMaterialsBridge precedent). Classic burn-down (operations
+ * Wave A): logging interactions, inquiry Respond, and Google sync are NATIVE
+ * here too, over ContactsBridge cores (logInteraction / prepareInquiryResponse
+ * / respondToInquiry / googleStatus / googleConnect / googleSync) — the classic
+ * link is retired. Flag-gated (?ui=1) at #contacts-v2, side-by-side.
  *
  * Data: contacts live at admin/contacts (MastDB.contacts.list → that subtree);
  * each contact's interactions are nested under contact.interactions (already in
@@ -154,11 +155,13 @@
           { k: 'Created by', v: c.createdBy ? esc(c.createdBy) : '—' },
           { k: 'Updated', v: fmtDT(c.updatedAt) }
         ]);
-        // Identity editing is NATIVE now (the Edit button on this slide-out).
-        // What still has NO V2 home: logging interactions, inquiry Respond, and
-        // Google/Drive sync SETUP — those stay bespoke on legacy #contacts.
-        // navigateToClassic so the V2 route remap doesn't loop back here.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ContactsV2.classic()">Log interaction / sync in classic view →</button></div>';
+        var cid0 = c._key || c.id;
+        // All formerly-classic actions are native (classic burn-down Wave A):
+        // log interaction + respond by email live here, over ContactsBridge.
+        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" onclick="ContactsV2.logInteraction(\'' + esc(cid0) + '\')">+ Log interaction</button>' +
+          (c.email ? '<button class="btn btn-secondary" onclick="ContactsV2.respond(\'' + esc(cid0) + '\')">Respond by email →</button>' : '') +
+          '</div>';
         // Delete (operations W3): confirm + writeAudit, gated on
         // can('contacts','delete'). Interactions are nested on the doc (they
         // cascade); the linked customer + Google contact are NOT touched.
@@ -177,9 +180,10 @@
               return n + docs;
             } }
         ];
-        var interactionsBody = ints.length
+        var addInt = '<div style="margin-bottom:10px;"><button class="btn btn-secondary btn-small" onclick="ContactsV2.logInteraction(\'' + esc(cid0) + '\')">+ Log interaction</button></div>';
+        var interactionsBody = addInt + (ints.length
           ? UI.relatedTable(intCols, ints)
-          : '<span class="mu-sub">No interactions logged yet. Log interactions in the classic Contacts view.</span>';
+          : '<span class="mu-sub">No interactions logged yet — calls, emails, meetings and site visits land here.</span>');
 
         // ── Notes facet ──
         var notesBody = c.notes
@@ -285,6 +289,26 @@
   }
   function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
+  // Bridge gate (classic burn-down Wave A): every native action runs through
+  // ContactsBridge; load the legacy module first if the bridge isn't up yet.
+  function withBridge(fn) {
+    if (window.ContactsBridge) return fn(window.ContactsBridge);
+    MastAdmin.loadModule('contacts').then(function () {
+      if (window.ContactsBridge) fn(window.ContactsBridge);
+      else if (window.showToast) showToast('Contacts engine still loading — try again', true);
+    }).catch(function () { if (window.showToast) showToast('Contacts engine unavailable', true); });
+  }
+  // Refresh the list AND the open record SO after a write.
+  function refreshOpen(id) {
+    Promise.resolve(MastDB.contacts.get(id)).then(function (c) {
+      if (!c) return;
+      var rec = Object.assign({ _key: id }, c);
+      V2.byId[id] = rec;
+      MastEntity.openRecord('contacts-v2', rec, 'read', true);
+    }).catch(function () {});
+    reloadSoon();
+  }
+
   function visibleRows() {
     var rows = V2.rows;
     if (V2.categoryFilter !== 'all') rows = rows.filter(function (c) { return categoryOf(c) === V2.categoryFilter; });
@@ -323,6 +347,7 @@
         title: 'Contacts',
         count: N.count(V2.rows.length) + ' contact' + (V2.rows.length === 1 ? '' : 's'),
         actionsHtml: '<button class="btn btn-primary" onclick="ContactsV2.create()">+ New contact</button>' +
+          '<button class="btn btn-secondary" onclick="ContactsV2.google()">Google Contacts</button>' +
           '<button class="btn btn-secondary" onclick="ContactsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
@@ -354,12 +379,139 @@
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('contacts'); } catch (e) {} }
       MastEntity.openRecord('contacts-v2', {}, 'create');
     },
-    // Interaction logging, inquiry Respond, and Google/Drive sync setup are still
-    // bespoke on legacy #contacts (no V2 home). Identity create/edit is native.
-    // navigateToClassic so the V2 route remap doesn't loop back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('contacts');
-      else if (typeof navigateTo === 'function') navigateTo('contacts');
+    // ── Classic burn-down Wave A: native sub-surface actions ─────────
+    // All writes via ContactsBridge cores; modals use the shared app modal.
+    logInteraction: function (id) {
+      if (typeof window.can === 'function' && !window.can('contacts', 'edit')) {
+        if (window.showToast) showToast('You don\u2019t have permission to edit contacts', true); return;
+      }
+      withBridge(function (b) {
+        var types = (b.INTERACTION_TYPES || ['Call', 'Email', 'Meeting', 'Site Visit', 'Payment', 'Signed Doc', 'Other'])
+          .map(function (t) { return '<option value="' + esc(t) + '">' + esc(t) + '</option>'; }).join('');
+        var today = new Date().toISOString().slice(0, 10);
+        openModal(
+          '<div class="modal-header"><h3>Log interaction</h3>' +
+            '<button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+          '<div class="modal-body">' +
+            '<div class="form-group"><label>Date</label><input type="date" id="ctV2IntDate" value="' + today + '"></div>' +
+            '<div class="form-group"><label>Type</label><select id="ctV2IntType">' + types + '</select></div>' +
+            '<div class="form-group"><label>Notes *</label><textarea id="ctV2IntNotes" rows="4" placeholder="What happened? What was decided?"></textarea></div>' +
+            '<div class="form-group"><label>Attach document (optional)</label>' +
+              '<input type="text" id="ctV2IntDrive" placeholder="Paste Google Drive file URL">' +
+              '<p class="mu-sub" style="margin-top:4px;">Paste a Drive URL to attach file metadata to this interaction.</p></div>' +
+          '</div>' +
+          '<div class="modal-footer">' +
+            '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+            '<button class="btn btn-primary" data-cid="' + esc(id) + '" onclick="ContactsV2.saveInteraction(this.dataset.cid)">Log interaction</button>' +
+          '</div>');
+      });
+    },
+    saveInteraction: function (id) {
+      withBridge(function (b) {
+        Promise.resolve(b.logInteraction(id, {
+          date: ((document.getElementById('ctV2IntDate') || {}).value || ''),
+          type: ((document.getElementById('ctV2IntType') || {}).value || 'Other'),
+          notes: ((document.getElementById('ctV2IntNotes') || {}).value || ''),
+          driveUrl: ((document.getElementById('ctV2IntDrive') || {}).value || '')
+        })).then(function () {
+          if (typeof closeModal === 'function') closeModal();
+          if (window.showToast) showToast('Interaction logged');
+          refreshOpen(id);
+        }).catch(function (e) {
+          if (window.showToast) showToast(e && e.message || 'Could not log interaction', true);
+        });
+      });
+    },
+    respond: function (id) {
+      if (typeof window.can === 'function' && !window.can('contacts', 'edit')) {
+        if (window.showToast) showToast('You don\u2019t have permission to edit contacts', true); return;
+      }
+      withBridge(function (b) {
+        Promise.resolve(b.prepareInquiryResponse(id, null, null)).then(function (prep) {
+          openModal(
+            '<div class="modal-header"><h3>Respond by email</h3>' +
+              '<button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+            '<div class="modal-body">' +
+              '<div class="form-group"><label>To</label><input type="text" value="' + esc(prep.toEmail) + '" readonly style="opacity:0.7;cursor:default;"></div>' +
+              '<div class="form-group"><label>Subject</label><input type="text" id="ctV2RespSubject" value="' + esc(prep.subject) + '"></div>' +
+              '<div class="form-group"><label>Message</label><textarea id="ctV2RespBody" rows="12" style="font-family:monospace;font-size:0.85rem;white-space:pre-wrap;">' + esc(prep.bodyTemplate) + '</textarea></div>' +
+              '<input type="hidden" id="ctV2RespInquiryId" value="' + esc(prep.inquiryId || '') + '">' +
+              '<input type="hidden" id="ctV2RespToEmail" value="' + esc(prep.toEmail) + '">' +
+            '</div>' +
+            '<div class="modal-footer">' +
+              '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+              '<button class="btn btn-primary" id="ctV2RespSend" data-cid="' + esc(id) + '" onclick="ContactsV2.sendResponse(this.dataset.cid)">Send response</button>' +
+            '</div>');
+        }).catch(function (e) {
+          if (window.showToast) showToast(e && e.message || 'Could not prepare response', true);
+        });
+      });
+    },
+    sendResponse: function (id) {
+      var btn = document.getElementById('ctV2RespSend');
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending\u2026'; }
+      var toEmail = ((document.getElementById('ctV2RespToEmail') || {}).value || '');
+      withBridge(function (b) {
+        Promise.resolve(b.respondToInquiry(id, {
+          subject: ((document.getElementById('ctV2RespSubject') || {}).value || ''),
+          body: ((document.getElementById('ctV2RespBody') || {}).value || ''),
+          toEmail: toEmail,
+          inquiryId: ((document.getElementById('ctV2RespInquiryId') || {}).value || '')
+        })).then(function () {
+          if (typeof closeModal === 'function') closeModal();
+          if (window.showToast) showToast('Response sent to ' + toEmail);
+          refreshOpen(id);
+        }).catch(function (e) {
+          if (btn) { btn.disabled = false; btn.textContent = 'Send response'; }
+          if (window.showToast) showToast('Failed to send: ' + (e && e.message || e), true);
+        });
+      });
+    },
+    google: function () {
+      withBridge(function (b) {
+        Promise.resolve(b.googleStatus()).then(function (connected) {
+          openModal(
+            '<div class="modal-header"><h3>Google Contacts</h3>' +
+              '<button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+            '<div class="modal-body">' +
+              '<div class="form-group" id="ctV2GStatus">' +
+                (connected ? U.badge('Connected', 'success') : U.badge('Not connected', 'neutral')) +
+              '</div>' +
+              (connected
+                ? '<div class="form-group"><label><input type="radio" name="ctV2GMode" value="group" checked style="margin-right:8px;">Only contacts in my business group</label></div>' +
+                  '<div class="form-group"><label><input type="radio" name="ctV2GMode" value="all" style="margin-right:8px;">All my Google contacts</label></div>'
+                : '<p class="mu-sub">Connect your Google account to import contacts and keep Mast contacts pushed to Google.</p>') +
+            '</div>' +
+            '<div class="modal-footer">' +
+              '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+              (connected
+                ? '<button class="btn btn-primary" onclick="ContactsV2.googleSync()">Import now</button>'
+                : '<button class="btn btn-primary" onclick="ContactsV2.googleConnect()">Connect Google</button>') +
+            '</div>');
+        });
+      });
+    },
+    googleConnect: function () {
+      withBridge(function (b) {
+        b.googleConnect(function () {
+          if (typeof closeModal === 'function') closeModal();
+          ContactsV2.google();   // re-open with refreshed status
+        });
+      });
+    },
+    googleSync: function () {
+      var mode = document.querySelector('input[name="ctV2GMode"]:checked');
+      var syncAll = !!(mode && mode.value === 'all');
+      if (typeof closeModal === 'function') closeModal();
+      if (window.showToast) showToast('Syncing Google Contacts\u2026');
+      withBridge(function (b) {
+        Promise.resolve(b.googleSync(syncAll)).then(function (res) {
+          if (window.showToast) showToast(res.created > 0 ? res.created + ' contact(s) imported from Google' : 'No new contacts to import');
+          load();
+        }).catch(function (e) {
+          if (window.showToast) showToast('Sync failed: ' + (e && e.message || e), true);
+        });
+      });
     },
     // Delete — confirm + ContactsBridge.remove (which writeAudits + cleans the
     // byContactId index row). RBAC re-checked here (the button is also gated).
