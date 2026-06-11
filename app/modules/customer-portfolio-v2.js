@@ -155,10 +155,8 @@
     clearSelection: function () { V2.selected = {}; render(); },
     bulkTag: function (tag) { applyBulk(tag, false); },
     bulkUntag: function () {
-      var ask = window.mastPrompt
-        ? mastPrompt('Tag to remove from the selected customers:', { title: 'Remove tag', confirmLabel: 'Remove' })
-        : Promise.resolve(window.prompt('Tag to remove:'));
-      ask.then(function (tag) {
+      if (!window.mastPrompt) return;
+      mastPrompt('Tag to remove from the selected customers:', { title: 'Remove tag', confirmLabel: 'Remove' }).then(function (tag) {
         if (!tag) return;
         applyBulk(String(tag).trim(), true);
       });
