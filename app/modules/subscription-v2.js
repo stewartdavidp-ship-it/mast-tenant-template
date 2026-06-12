@@ -45,7 +45,43 @@
     loaded: false
   };
 
+  // TRIAL_CAPABILITY_TIER (module-system.js): a no-card trial bills at $0/free but
+  // runs at Starter capability. Source trial state from the AUTHORITATIVE platform
+  // doc (V2.tenant.subscriptions[]) — the tenant-side admin/subscription mirror can
+  // be desynced (e.g. the shirglassworks legacy tenant), so never key trial UI off it.
+  var TRIAL_CAP_TIER = 'starter';
+
+  function activeTrial(pt) {
+    var subs = (pt && pt.subscriptions) || [];
+    if (!Array.isArray(subs)) return null;
+    var now = Date.now(), best = null;
+    for (var i = 0; i < subs.length; i++) {
+      var s = subs[i];
+      if (!s || s.status !== 'trialing' || !s.trialEndsAt) continue;
+      var e = new Date(s.trialEndsAt).getTime();
+      if (isNaN(e) || e <= now) continue;
+      if (!best || e > new Date(best.trialEndsAt).getTime()) best = s;
+    }
+    return best;
+  }
+
+  function hasStripeCustomer(pt) {
+    return !!(pt && ((pt.stripe && pt.stripe.customerId) || pt.stripeCustomerId));
+  }
+
+  // Shape that renderTrialDecisionPanel(sub, elId) expects, built from the platform
+  // doc: a live trial -> 'trialing'; an ended trial awaiting deletion -> cancel-window.
+  function trialSub(pt) {
+    var t = activeTrial(pt);
+    if (t) return { status: 'trialing', trialEndsAt: t.trialEndsAt, trialDecision: t.trialDecision || (pt && pt.trialDecision) || null, deletionScheduledAt: (pt && pt.deletionScheduledAt) || null };
+    if (pt && pt.deletionScheduledAt) return { status: 'cancel-window', deletionScheduledAt: pt.deletionScheduledAt, trialDecision: pt.trialDecision || null };
+    return null;
+  }
+
   function tierOf(platformTenant) {
+    if (activeTrial(platformTenant)) {
+      return { key: TRIAL_CAP_TIER, tier: V1_TIER_BY_KEY[TRIAL_CAP_TIER], interval: 'month', trial: true };
+    }
     var v1sub = (typeof v1PickActiveSub === 'function') ? v1PickActiveSub(platformTenant) : null;
     var key = v1ResolveTierKey(v1sub ? v1sub.plan : (platformTenant && platformTenant.currentTier));
     return { key: key, tier: V1_TIER_BY_KEY[key], interval: (v1sub && v1sub.billingInterval) || 'month' };
@@ -74,7 +110,8 @@
     var t = tierOf(V2.tenant), tier = t.tier;
     var w = (V2.tenant && V2.tenant.tokenWallet) || getTokenWallet() || {};
     var priceText = v1FormatCents(tier.priceMonthly) + '/mo';
-    if (t.interval === 'year') priceText = v1FormatCents(tier.priceMonthly * 10) + '/yr (2 months free)';
+    if (t.trial) priceText = 'Free during trial';
+    else if (t.interval === 'year') priceText = v1FormatCents(tier.priceMonthly * 10) + '/yr (2 months free)';
     var alloc = tier.tokens;
     var current = w.currentBalance || 0;
     var used = Math.max(0, alloc - current);
@@ -115,12 +152,23 @@
       revenue = U.card('Trailing revenue', inner);
     }
 
-    var manage = U.card('Manage subscription',
-      '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Open the Stripe Customer Portal to change plan, update your card, or download invoices.</div>' +
-      '<button class="btn btn-primary" id="billingPortalBtn" onclick="openBillingPortal()">Manage subscription</button>' +
-      '<span id="billingPortalStatus" style="margin-left:12px;font-size:0.85rem;"></span>');
+    // Trial decision panel (days left + Go Paid / Move to Free / Cancel) — populated
+    // after innerHTML is set, in render(), via the global renderTrialDecisionPanel.
+    var ts = trialSub(V2.tenant);
+    var trialPanel = ts ? '<div id="subscriptionV2TrialPanel" style="margin-bottom:14px;"></div>' : '';
 
-    return offerBanner() + tiles + usage + revenue + manage;
+    // The Stripe Customer Portal needs an existing customer. A no-card trial has
+    // none (it would 400 "Subscribe first"), so show the portal only once a customer
+    // exists; during the trial the panel above carries the Go-Paid path instead.
+    var manage = '';
+    if (hasStripeCustomer(V2.tenant) || !ts) {
+      manage = U.card('Manage subscription',
+        '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Open the Stripe Customer Portal to change plan, update your card, or download invoices.</div>' +
+        '<button class="btn btn-primary" id="billingPortalBtn" onclick="openBillingPortal()">Manage subscription</button>' +
+        '<span id="billingPortalStatus" style="margin-left:12px;font-size:0.85rem;"></span>');
+    }
+
+    return offerBanner() + trialPanel + tiles + usage + revenue + manage;
   }
 
   function topupCards() {
@@ -210,6 +258,20 @@
       U.pageHeader({ title: 'Plan & billing', subtitle: 'Your Mast plan, token usage and top-ups' }) +
       '<div style="margin:14px 0;">' + lensPill('plan', 'Plan') + lensPill('topups', 'Top-ups') + lensPill('about', 'About') + '</div>' +
       body;
+
+    // Fill the trial panel from the AUTHORITATIVE platform doc and route the panel's
+    // CTAs (interval toggle, below-floor regrade, post-decision) back to THIS surface.
+    if (V2.lens === 'plan') {
+      var ts = trialSub(V2.tenant);
+      if (ts && typeof window.renderTrialDecisionPanel === 'function') {
+        window.__trialRerenderHook = function () {
+          var el = document.getElementById('subscriptionV2Tab');
+          if (el && el.style.display !== 'none') { window.PlanBillingV2.refresh(); return; }
+          if (typeof renderSubscriptionSettings === 'function') renderSubscriptionSettings();
+        };
+        window.renderTrialDecisionPanel(ts, 'subscriptionV2TrialPanel');
+      }
+    }
   }
 
   function load() {
