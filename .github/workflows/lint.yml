@@ -128,4 +128,5 @@ jobs:
           node test/guided-header-branch.test.js &&
           node test/workflow-overrides.test.js &&
           node test/business-entity-feature-mode.test.js &&
+          node test/wizard-launch-never-blocks.test.js &&
           node test/lint-ratchet.test.js

@@ -1057,8 +1057,19 @@ var MastDB = (function() {
           });
         },
 
-        // Verify required fields per spec §3, then flip entityStatus to 'active'.
-        activate: function() {
+        // Flip entityStatus to 'active', reporting which spec-§3 required fields
+        // are still blank.
+        //
+        // opts.force (default false): when true, activation NEVER blocks on
+        // missing fields — the entity is activated regardless and the blanks are
+        // returned in `missingFields` so the caller can surface them as
+        // non-blocking nudges (e.g. the dashboard setup checklist). This is what
+        // the onboarding wizard uses: a fresh tenant (a Shopify App Store
+        // reviewer) must ALWAYS be able to reach the dashboard. Without force,
+        // legacy/strict callers still get the hard gate (rejects with
+        // err.missingFields) so non-wizard activation paths are unchanged.
+        activate: function(opts) {
+          var force = !!(opts && opts.force);
           return tenantStore.get('admin/businessEntity').then(function(ent) {
             ent = ent || {};
             var missing = [];
@@ -1072,7 +1083,7 @@ var MastDB = (function() {
             if (ent.identity && typeof ent.identity.businessName === 'string' && !ent.identity.businessName.trim()) {
               if (missing.indexOf('identity.businessName') === -1) missing.push('identity.businessName');
             }
-            if (missing.length > 0) {
+            if (missing.length > 0 && !force) {
               var err = new Error('Cannot activate business entity — required fields missing');
               err.missingFields = missing;
               err.currentStatus = ent.entityStatus || 'none';
@@ -1083,7 +1094,7 @@ var MastDB = (function() {
               'admin/businessEntity/entityStatus': 'active',
               'admin/businessEntity/updatedAt': now
             }).then(function() {
-              return { success: true, entityStatus: 'active', activatedAt: now };
+              return { success: true, entityStatus: 'active', activatedAt: now, missingFields: missing };
             });
           });
         },
