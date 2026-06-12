@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **60,844** lines
-- **Feature modules:** **118** files in `app/modules/` (**109** routed), **126,988** lines combined
+- **Core shell:** `app/index.html` — **60,858** lines
+- **Feature modules:** **118** files in `app/modules/` (**109** routed), **127,064** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -17,8 +17,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit-v2.js` | 414 | audit-v2, audit-muted-v2 |
 | `modules/audit.js` | 1,721 | audit |
 | `modules/auditlog-v2.js` | 243 | auditlog-v2 |
-| `modules/blog-v2.js` | 403 | blog-v2 |
-| `modules/blog.js` | 2,359 | blog |
+| `modules/blog-v2.js` | 412 | blog-v2 |
+| `modules/blog.js` | 2,364 | blog |
 | `modules/book.js` | 6,460 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand-v2.js` | 308 | brand-v2 |
 | `modules/brand.js` | 668 | brand |
@@ -109,7 +109,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/students.js` | 1,570 | students |
 | `modules/studio-v2.js` | 446 | studio-v2 |
 | `modules/studio.js` | 823 | studio |
-| `modules/subscription-v2.js` | 282 | subscription-v2, plan-billing-coins-v2 |
+| `modules/subscription-v2.js` | 344 | subscription-v2, plan-billing-coins-v2 |
 | `modules/team-v2.js` | 426 | team-v2 |
 | `modules/team.js` | 3,325 | team |
 | `modules/terms-v2.js` | 237 | terms-v2 |
