@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260612-093957-7a2ea0b"></script>
+  <script src="../shared/mastdb.js?v=20260612-115231-0d1d331"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,25 +184,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260612-093957-7a2ea0b"></script>
-  <script src="../shared/brand-sync.js?v=20260612-093957-7a2ea0b"></script>
+  <script src="../shared/customer-filters.js?v=20260612-115231-0d1d331"></script>
+  <script src="../shared/brand-sync.js?v=20260612-115231-0d1d331"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260612-093957-7a2ea0b"></script>
+  <script src="../shared/variant-reconcile.js?v=20260612-115231-0d1d331"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260612-093957-7a2ea0b"></script>
-  <script src="../shared/mast-io.js?v=20260612-093957-7a2ea0b"></script>
-  <script src="../shared/mast-entity.js?v=20260612-093957-7a2ea0b"></script>
+  <script src="../shared/mast-ui.js?v=20260612-115231-0d1d331"></script>
+  <script src="../shared/mast-io.js?v=20260612-115231-0d1d331"></script>
+  <script src="../shared/mast-entity.js?v=20260612-115231-0d1d331"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260612-093957-7a2ea0b"></script>
+  <script src="../shared/product-readiness.core.js?v=20260612-115231-0d1d331"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22335,7 +22335,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260612-093957-7a2ea0b';
+var MAST_MODULES_V = '20260612-115231-0d1d331';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -32804,17 +32804,40 @@ function initSetupWizard() {
 // the wizard's prefill source so it's carried forward instead of re-typed. Only
 // fills a blank — never clobbers a site-scan value or something the user typed.
 // Best-effort + async; if config/brand has no name the wizard behaves as before.
+// Guarantee the business name is never blank. The signup/Shopify handoff writes
+// the name to config/brand.name, but it was never copied to the canonical
+// businessEntity.identity.businessName that the launch validator + dashboard
+// read — so a Shopify install (where the merchant never types a name; only the
+// shop name lands in config/brand.name) showed "Business name still needed"
+// forever. Resolve the best name we know — handoff name → owner email → generic
+// — seed it into the wizard prefill, AND persist it to identity if that field is
+// blank (never clobbering a real name the user already set). Best-effort/async.
 function _wizardHydrateSignupName() {
   try {
-    MastDB.config.get('brand').then(function(brand) {
-      var nm = (brand && typeof brand.name === 'string') ? brand.name.trim() : '';
-      if (!nm) return;
+    Promise.all([
+      MastDB.config.get('brand').catch(function() { return null; }),
+      MastDB.businessEntity.get().catch(function() { return null; })
+    ]).then(function(res) {
+      var brand = res[0] || {};
+      var identity = (res[1] && res[1].identity) || {};
+      var existing = (identity.businessName && String(identity.businessName).trim()) || '';
+      // Best known name: handoff (config/brand.name) → owner email → generic.
+      var nm = (brand && typeof brand.name === 'string' && brand.name.trim()) || '';
+      if (!nm) {
+        try { var u = firebase.auth().currentUser; nm = String((u && (u.displayName || u.email)) || '').trim(); } catch (e) {}
+      }
+      if (!nm) nm = 'My Business';
+      // Seed the prefill source + fill a blank brand-step field so it shows.
       window._wizardExtracted = window._wizardExtracted || {};
       if (!window._wizardExtracted.businessName) window._wizardExtracted.businessName = nm;
-      // If the brand step is already on screen with an empty field, fill it now
-      // (the synchronous prefill in showWizardStep('2') may have run pre-hydrate).
       var el = document.getElementById('wizardBrandName');
       if (el && !el.value) el.value = window._wizardExtracted.businessName;
+      // Persist to the canonical identity field iff it's currently blank — this
+      // is the fix: the handoff name (or a known-value fallback) now reaches the
+      // field the validator reads, so launch is never gated on Business name.
+      if (!existing && typeof MastBrandSync !== 'undefined') {
+        MastBrandSync.setName(nm).catch(function() {});
+      }
     }).catch(function() {});
   } catch (e) { /* non-blocking */ }
 }
@@ -34235,9 +34258,21 @@ async function wizardBackfillRequiredDefaults() {
     var loc = (ent.operations && ent.operations.localization) || {};
 
     if (!identity.businessName || !String(identity.businessName).trim()) {
+      // Resolve a name from anything we know, and NEVER leave it blank at launch
+      // (a blank name is the only thing that still gets flagged). Order: typed
+      // input → wizard prefill / signup handoff → owner email → generic. The
+      // email fallback is deliberately a visible placeholder so the dashboard
+      // nudge prompts the user to set their real name.
       var nameEl = document.getElementById('wizardBrandName');
+      var brandCfg = null;
+      try { brandCfg = await MastDB.config.get('brand'); } catch (e) {}
+      var authUser = null;
+      try { authUser = firebase.auth().currentUser; } catch (e) {}
       var nm = (nameEl && nameEl.value && nameEl.value.trim()) ||
-        (window._wizardExtracted && window._wizardExtracted.businessName) || '';
+        (window._wizardExtracted && window._wizardExtracted.businessName) ||
+        (brandCfg && typeof brandCfg.name === 'string' && brandCfg.name.trim()) ||
+        String((authUser && (authUser.displayName || authUser.email)) || '').trim() ||
+        'My Business';
       if (nm && typeof MastBrandSync !== 'undefined') {
         try { await MastBrandSync.setName(nm); } catch (e) {}
       }
