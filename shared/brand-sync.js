@@ -9,7 +9,10 @@
  *
  * Canonical paths (sources of truth):
  *   - Logo:       config/brand/logo/primary
- *   - Brand name: config/brand.name
+ *   - Brand name: config/brand.name  (+ businessEntity/identity.businessName —
+ *                 the businessEntity record needs its OWN copy because that is
+ *                 the field the onboarding-wizard activation validator
+ *                 (REQUIRED_AT_ACTIVATE) and the dashboard setup checklist read)
  *   - Tagline:    config/brand.tagline
  *   - Colors:     public/config/theme.{primaryColor,accentColor}
  *   - Font pair:  public/config/theme.fontPair
@@ -24,7 +27,8 @@
  *   - public/config/nav/logoUrl                     (storefront-nav fallback dropped)
  *   - config/brand.logoUrl                          (in-doc legacy field)
  *   - businessEntity/identity.logoUrl               (BE dashboard reads canonical)
- *   - businessEntity/identity.businessName          (BE dashboard reads canonical name)
+ *   (businessEntity/identity.businessName is NOT dropped — see Canonical paths
+ *    above; activation still requires it, so setName re-writes it.)
  *   - mast-platform/tenants/{tid}/publicConfig.brandLogoUrl
  *     (storefront-tenant.js setGlobals deliberately does NOT read this; logo is
  *      delivered via STOREFRONT_DATA.brandLogo from canonical config/brand/logo/primary)
@@ -87,8 +91,17 @@
   async function setName(name) {
     if (typeof name !== 'string') throw new Error('MastBrandSync.setName: name must be string');
     var clean = name.trim();
-    // Canonical
+    // Canonical brand config
     await window.MastDB.update('config/brand', { name: clean, updatedAt: new Date().toISOString() });
+    // Canonical businessEntity identity — the field the onboarding wizard's
+    // activation validator (REQUIRED_AT_ACTIVATE → identity.businessName) and the
+    // dashboard "Finish your business profile" checklist read. Without this, a
+    // name typed in the wizard reaches config/brand but NEVER the BE record, so
+    // launch validation + the setup checklist report it missing even though the
+    // user entered it. Skip on empty so a cleared name doesn't blank the BE field.
+    if (clean && window.MastDB.businessEntity && window.MastDB.businessEntity.update) {
+      _mirror('businessEntity.identity.businessName', window.MastDB.businessEntity.update('identity', { businessName: clean }));
+    }
     // Retained mirrors
     var tid = _tid();
     if (tid) {
@@ -143,11 +156,16 @@
     return fontPair;
   }
 
-  window.MastBrandSync = {
+  var _root = (typeof window !== 'undefined') ? window
+            : (typeof global !== 'undefined') ? global : this;
+  _root.MastBrandSync = {
     setLogo: setLogo,
     setName: setName,
     setTagline: setTagline,
     setColors: setColors,
     setFontPair: setFontPair
   };
+  // Node test seam (no effect in the browser). setName/etc. resolve `window.MastDB`
+  // at call time, so a test sets global.window = { MastDB: <fake> } before require.
+  if (typeof module !== 'undefined' && module.exports) module.exports = _root.MastBrandSync;
 })();
