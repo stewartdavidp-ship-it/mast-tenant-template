@@ -99,7 +99,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
-  <script src="../shared/mastdb.js?v=20260611-210159-f58842a"></script>
+  <script src="../shared/mastdb.js?v=20260612-071831-8ad2ede"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260611-210159-f58842a"></script>
+  <script src="../shared/customer-filters.js?v=20260612-071831-8ad2ede"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260611-210159-f58842a"></script>
+  <script src="../shared/variant-reconcile.js?v=20260612-071831-8ad2ede"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260611-210159-f58842a"></script>
-  <script src="../shared/mast-io.js?v=20260611-210159-f58842a"></script>
-  <script src="../shared/mast-entity.js?v=20260611-210159-f58842a"></script>
+  <script src="../shared/mast-ui.js?v=20260612-071831-8ad2ede"></script>
+  <script src="../shared/mast-io.js?v=20260612-071831-8ad2ede"></script>
+  <script src="../shared/mast-entity.js?v=20260612-071831-8ad2ede"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260611-210159-f58842a"></script>
+  <script src="../shared/product-readiness.core.js?v=20260612-071831-8ad2ede"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -7600,7 +7600,8 @@
         <div id="wizardStep0" class="wizard-step">
           <h2 style="font-size:1.6rem;margin-bottom:8px;">Welcome to Mast</h2>
           <p style="color:var(--warm-gray);margin-bottom:24px;">A few questions to set up your workspace. We'll start by looking at your current site (if you have one) so we can pre-fill what we can.</p>
-          <div style="display:flex;justify-content:flex-end;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <a href="#" onclick="event.preventDefault();wizardFastExit();" style="font-size:0.85rem;color:var(--warm-gray);text-decoration:none;">Skip setup — go straight to my dashboard &rarr;</a>
             <button class="btn btn-primary" style="font-size:1rem;padding:12px 32px;" onclick="wizardConfirmDepth()">Get started</button>
           </div>
         </div>
@@ -22253,7 +22254,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260611-210159-f58842a';
+var MAST_MODULES_V = '20260612-071831-8ad2ede';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -34039,13 +34040,16 @@ async function wizardConfirmFeaturePages() {
     logWizardEvent('4b', 'feature_pages_confirmed', {
       mode: mode, selectedPages: selected, count: selected.length
     });
-    // After 4B feature pages, route everyone to fork (decide dashboard vs. continue setup).
-    showWizardStep('fork');
-    saveWizardProgress('fork', { featurePagesConfirmed: true, featurePages: selected });
   } catch (err) {
-    if (btn) btn.disabled = false;
-    showToast('Could not save features: ' + esc(err.message || ''), true);
+    // Saving features must NEVER strand the user — log it and continue. Any
+    // resulting gap is backfilled / flagged at launch, not blocked here.
+    console.warn('[Wizard] feature-pages save failed, continuing anyway:', err && err.message);
+    logWizardEvent('4b', 'feature_pages_save_failed_nonblocking', { mode: mode, message: (err && err.message) || 'unknown' });
   }
+  // After 4B feature pages, route everyone to fork (decide dashboard vs. continue
+  // setup) — unconditionally, whether or not the save above succeeded.
+  showWizardStep('fork');
+  saveWizardProgress('fork', { featurePagesConfirmed: true, featurePages: selected });
 }
 
 // ----------------------------------------------------------------
@@ -34091,6 +34095,23 @@ function _wizardRenderMissingFields(errorsEl, missing) {
   Array.prototype.forEach.call(errorsEl.querySelectorAll('[data-wizard-goto]'), function(a) {
     a.onclick = function(e) { e.preventDefault(); showWizardStep(a.getAttribute('data-wizard-goto')); };
   });
+}
+
+// Persist the business-profile fields that are STILL blank at launch so the
+// dashboard setup checklist can surface them as non-blocking flagged to-dos
+// (the "finish-business-profile" NEXT_STEP item reads this). `missing` is the
+// array of spec-§3 field paths returned by businessEntity.activate(). Writing an
+// empty array clears the flag once the gaps are filled. Best-effort: never
+// throws into the launch flow.
+async function _wizardRecordLaunchGaps(missing) {
+  try {
+    var gaps = (missing || []).map(function(path) {
+      var meta = _WIZARD_REQUIRED_FIELD_META[path] || { label: path, step: null };
+      return { path: path, label: meta.label, step: meta.step || null };
+    });
+    await MastDB.set('webPresence/config/launchGaps', gaps);
+    if (window._nextStepsCache) window._nextStepsCache.launchGaps = gaps;
+  } catch (e) { /* non-blocking — the checklist just won't list specifics */ }
 }
 
 // Before a skip-to-launch, backfill safe defaults for every activation-required
@@ -34864,20 +34885,19 @@ async function wizardCompleteFast() {
 
     await MastDB.businessEntity.update('people', peoplePayload);
 
+    // Fill safe defaults for anything the user skipped, then activate WITHOUT
+    // blocking. A fresh tenant (incl. a Shopify App Store reviewer) must always
+    // reach the dashboard — any field still blank after backfill is recorded as
+    // a non-blocking nudge on the dashboard setup checklist, never a wall.
+    await wizardBackfillRequiredDefaults();
     try {
-      await MastDB.businessEntity.activate();
+      var actRes = await MastDB.businessEntity.activate({ force: true });
+      await _wizardRecordLaunchGaps((actRes && actRes.missingFields) || []);
+      logWizardEvent(5, 'wizard_activated', { missingFields: (actRes && actRes.missingFields) || [], path: 'fast', blocked: false });
     } catch (activateErr) {
-      var missing = (activateErr && activateErr.missingFields) || null;
-      if (errorsEl) {
-        if (missing && missing.length) {
-          _wizardRenderMissingFields(errorsEl, missing);
-        } else {
-          errorsEl.style.display = '';
-          errorsEl.textContent = activateErr.message || 'Activation failed. Please try again.';
-        }
-      }
-      logWizardEvent(5, 'activate_failed', { missingFields: missing || null, path: 'fast' });
-      return;
+      // Activation itself failed (e.g. a write error) — still let the user in.
+      console.warn('[Wizard] force-activate failed, proceeding to dashboard anyway:', activateErr && activateErr.message);
+      logWizardEvent(5, 'activate_error_nonblocking', { message: (activateErr && activateErr.message) || 'unknown', path: 'fast' });
     }
 
     // Write onboardingDepth to presence now that wizard is complete
@@ -37139,21 +37159,18 @@ async function wizardComplete() {
 
     await MastDB.businessEntity.update('people', peoplePayload);
 
-    // Spec §3 activation — all required fields set or we block with missingFields.
+    // Spec §3 activation is now NON-BLOCKING. Backfill safe defaults for any
+    // skipped field, then force-activate so the user always reaches the
+    // dashboard; residual blanks become flagged to-dos on the dashboard setup
+    // checklist instead of a launch wall.
+    await wizardBackfillRequiredDefaults();
     try {
-      await MastDB.businessEntity.activate();
+      var actRes = await MastDB.businessEntity.activate({ force: true });
+      await _wizardRecordLaunchGaps((actRes && actRes.missingFields) || []);
+      logWizardEvent(5, 'wizard_activated', { missingFields: (actRes && actRes.missingFields) || [], blocked: false });
     } catch (activateErr) {
-      var missing = (activateErr && activateErr.missingFields) || null;
-      if (errorsEl) {
-        if (missing && missing.length) {
-          _wizardRenderMissingFields(errorsEl, missing);
-        } else {
-          errorsEl.style.display = '';
-          errorsEl.textContent = activateErr.message || 'Activation failed. Please try again.';
-        }
-      }
-      logWizardEvent(5, 'activate_failed', { missingFields: missing || null });
-      return;
+      console.warn('[Wizard] force-activate failed, proceeding to dashboard anyway:', activateErr && activateErr.message);
+      logWizardEvent(5, 'activate_error_nonblocking', { message: (activateErr && activateErr.message) || 'unknown' });
     }
 
     // engagement.mode no longer drives a deploy POST (triggerTenantDeploy
@@ -37602,6 +37619,17 @@ function renderSetupBanner() {
 // Each step is tied to a module and has a route, check function, and contextual copy.
 
 var NEXT_STEP_DEFINITIONS = [
+  // Surfaces only when the onboarding wizard force-activated the tenant with one
+  // or more business-profile fields still blank (the wizard no longer blocks
+  // launch on them \u2014 see _wizardRecordLaunchGaps). Done = no recorded gaps.
+  { id: 'finish-business-profile', module: null, icon: '\uD83D\uDCCB', title: 'Finish your business profile',
+    desc: function() {
+      var gaps = (window._nextStepsCache && window._nextStepsCache.launchGaps) || [];
+      if (!gaps.length) return 'Add the business details Mast needs for accurate reports.';
+      return 'Still needed: ' + gaps.map(function(g) { return g.label; }).join(', ') + '.';
+    },
+    route: 'settings', subView: 'general',
+    check: function() { var g = window._nextStepsCache && window._nextStepsCache.launchGaps; return !g || g.length === 0; } },
   { id: 'choose-template', module: null,         icon: '\uD83C\uDFA8', title: 'Choose your template',          desc: 'Pick a layout and color scheme for your site.',                           route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasTemplate; } },
   { id: 'customize-content', module: null,       icon: '\u270F\uFE0F', title: 'Customize your content',        desc: 'Edit your hero headline, about section, and contact info.',               route: 'website',     check: function() { return window._nextStepsCache && window._nextStepsCache.hasContent; } },
   { id: 'add-product',    module: null,         icon: '\uD83D\uDCE6', title: 'Add your first product',        desc: 'Upload a photo and set a price to start building your catalog.',           route: 'inventory',   check: function() { return window._nextStepsCache && window._nextStepsCache.hasProducts; } },
@@ -37788,8 +37816,8 @@ function renderDashCardSetupShop() {
     return '<div onclick="' + clickAction + '" style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;cursor:pointer;transition:background 0.15s;margin-bottom:4px;" onmouseover="this.style.background=\'var(--hover-bg, var(--cream-dark, var(--cream-dark)))\'" onmouseout="this.style.background=\'transparent\'">' +
       '<span style="font-size:1.6rem;flex-shrink:0;">' + step.icon + '</span>' +
       '<div style="flex:1;min-width:0;">' +
-        '<div style="font-size:0.9rem;font-weight:600;color:var(--text, var(--text-primary));">' + esc(step.title) + '</div>' +
-        '<div style="font-size:0.85rem;color:var(--warm-gray, var(--warm-gray));">' + esc(step.desc) + '</div>' +
+        '<div style="font-size:0.9rem;font-weight:600;color:var(--text, var(--text-primary));">' + esc(typeof step.title === 'function' ? step.title() : step.title) + '</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray, var(--warm-gray));">' + esc(typeof step.desc === 'function' ? step.desc() : step.desc) + '</div>' +
       '</div>' +
       '<button onclick="event.stopPropagation();dismissNextStep(\'' + step.id + '\');" style="background:none;border:1px solid var(--cream-dark, #ddd);border-radius:50%;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--warm-gray);font-size:0.72rem;transition:all 0.15s;" onmouseover="this.style.borderColor=\'var(--teal)\';this.style.color=\'var(--teal)\';" onmouseout="this.style.borderColor=\'var(--cream-dark, #ddd)\';this.style.color=\'var(--warm-gray)\';" title="Mark as done">&#10003;</button>' +
     '</div>';
@@ -37815,7 +37843,11 @@ window._nextStepsCache = {
   // Folded in from the retired Setup Scorecard (feedback ODQHG7kBLXoQ4hPDtDno):
   hasBusinessType: false, hasTaxConfig: false, hasPricingDefaults: false, hasModulesShown: false,
   // Channel-listing mapping status (drives the "Match your channel listings" step).
-  mappingComplete: false, mappingPending: false
+  mappingComplete: false, mappingPending: false,
+  // Business-profile fields still blank at launch — recorded by the wizard when
+  // it force-activates a tenant that skipped fields (see _wizardRecordLaunchGaps).
+  // Drives the non-blocking "Finish your business profile" checklist step.
+  launchGaps: []
 };
 
 async function loadNextStepsCache() {
@@ -37926,6 +37958,12 @@ async function loadNextStepsCache() {
       window._nextStepsCache.mappingPending = !!(mapStatus && mapStatus.pending);
     }
   } catch (e) { /* ignore */ }
+  try {
+    // Business-profile fields the wizard couldn't fill (it no longer blocks
+    // launch on them — they land here as a flagged to-do instead).
+    var gaps = await MastDB.get('webPresence/config/launchGaps');
+    window._nextStepsCache.launchGaps = Array.isArray(gaps) ? gaps : [];
+  } catch (e) { window._nextStepsCache.launchGaps = []; }
 }
 
 // Feature gating map: route → { feature, title, message, settingsRoute }
