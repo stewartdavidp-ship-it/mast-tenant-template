@@ -32,6 +32,9 @@
         clearInterval(pollId);
         clearTimeout(intermediateId);
         clearTimeout(failId);
+        // Boot succeeded — clear the one-shot auto-reload flag so a future transient
+        // SDK flake can self-heal again on its own next visit.
+        try { sessionStorage.removeItem('__mastSdkReloadTried'); } catch (e) {}
         var overlay = document.getElementById('__mastBootOverlay');
         if (overlay && overlay.parentNode) overlay.parentNode.removeChild(overlay);
       }
@@ -60,6 +63,30 @@
       }
     }
     watchTenantReady();
+
+    // Watch the resilient SDK loader. If it rejects, the gstatic compat scripts failed
+    // to load even after per-CDN retries AND the jsdelivr fallback — a genuinely stuck
+    // boot. Auto-reload ONCE (transient flakes usually clear on a fresh fetch) so a
+    // Shopify reviewer isn't left clicking a Reload button; if it fails again, fall
+    // through to the manual recovery screen rather than looping.
+    function watchSdk() {
+      if (window.FIREBASE_SDK_READY && typeof window.FIREBASE_SDK_READY.then === 'function') {
+        window.FIREBASE_SDK_READY.then(null, function(err) {
+          if (window.__mastBootOk) return;
+          try {
+            if (!sessionStorage.getItem('__mastSdkReloadTried')) {
+              sessionStorage.setItem('__mastSdkReloadTried', '1');
+              location.reload();
+              return;
+            }
+          } catch (e) {}
+          showBootRecovery('SDK: ' + (err && err.message || err));
+        });
+      } else {
+        setTimeout(watchSdk, 100);
+      }
+    }
+    watchSdk();
 
     function showBootIntermediate() {
       if (!document.body) { document.addEventListener('DOMContentLoaded', showBootIntermediate); return; }
@@ -94,12 +121,59 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
-  <script src="../shared/mastdb.js?v=20260612-091312-3666cf7"></script>
+  <script>
+  // Resilient Firebase SDK loader. The root cause of the "We couldn't load the admin"
+  // boot wall (see Bootstrap guard above) is that a gstatic firebase-*-compat.js script
+  // intermittently fails to load/execute on first visit, leaving firebase.* undefined so
+  // firebase.initializeApp() never runs. Plain <script src> tags have no retry, so one
+  // flake = dead page until manual reload. This loads each compat module with retry +
+  // a second-CDN fallback (gstatic → jsdelivr), verifies the expected global actually
+  // appeared, and exposes window.FIREBASE_SDK_READY which the Firebase init block awaits.
+  (function() {
+    var VER = '9.22.0';
+    // app must execute before the others (they register components onto firebase.*).
+    var APP = 'app';
+    var REST = ['auth', 'firestore', 'storage', 'functions'];
+    var CDNS = [
+      function(m){ return 'https://www.gstatic.com/firebasejs/' + VER + '/firebase-' + m + '-compat.js'; },
+      function(m){ return 'https://cdn.jsdelivr.net/npm/firebase@' + VER + '/firebase-' + m + '-compat.js'; }
+    ];
+    function present(m) {
+      if (typeof firebase === 'undefined') return false;
+      if (m === 'app') return typeof firebase.initializeApp === 'function';
+      return typeof firebase[m] === 'function'; // auth/firestore/storage/functions
+    }
+    // Load one compat module, retrying twice per CDN before falling back to the next CDN.
+    function loadModule(m) {
+      return new Promise(function(resolve, reject) {
+        var cdnIdx = 0, attempt = 0;
+        function tryLoad() {
+          var s = document.createElement('script');
+          s.src = CDNS[cdnIdx](m);
+          s.async = false; // preserve execution order
+          s.onload = function() { present(m) ? resolve() : next('executed but firebase.' + m + ' missing'); };
+          s.onerror = function() { next('network error'); };
+          document.head.appendChild(s);
+        }
+        function next(why) {
+          attempt++;
+          if (attempt >= 2) {
+            if (cdnIdx < CDNS.length - 1) { cdnIdx++; attempt = 0; } // fall back to next CDN
+            else { reject(new Error('firebase-' + m + '-compat failed: ' + why)); return; }
+          }
+          setTimeout(tryLoad, 300 * Math.max(1, attempt));
+        }
+        tryLoad();
+      });
+    }
+    // app first (sequential), then the rest in parallel — they each depend only on app,
+    // not on each other, so this preserves the old parallel-load latency.
+    window.FIREBASE_SDK_READY = loadModule(APP).then(function() {
+      return Promise.all(REST.map(loadModule));
+    });
+  })();
+  </script>
+  <script src="../shared/mastdb.js?v=20260612-093957-7a2ea0b"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -110,25 +184,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260612-091312-3666cf7"></script>
-  <script src="../shared/brand-sync.js?v=20260612-091312-3666cf7"></script>
+  <script src="../shared/customer-filters.js?v=20260612-093957-7a2ea0b"></script>
+  <script src="../shared/brand-sync.js?v=20260612-093957-7a2ea0b"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260612-091312-3666cf7"></script>
+  <script src="../shared/variant-reconcile.js?v=20260612-093957-7a2ea0b"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260612-091312-3666cf7"></script>
-  <script src="../shared/mast-io.js?v=20260612-091312-3666cf7"></script>
-  <script src="../shared/mast-entity.js?v=20260612-091312-3666cf7"></script>
+  <script src="../shared/mast-ui.js?v=20260612-093957-7a2ea0b"></script>
+  <script src="../shared/mast-io.js?v=20260612-093957-7a2ea0b"></script>
+  <script src="../shared/mast-entity.js?v=20260612-093957-7a2ea0b"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260612-091312-3666cf7"></script>
+  <script src="../shared/product-readiness.core.js?v=20260612-093957-7a2ea0b"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11849,11 +11923,14 @@ var FIREBASE_INIT_READY = (function() {
       try { firebase.firestore().doc('_warmup/_').get().catch(function() {}); } catch (e) {}
     }
   }
-  if (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG) {
-    doInit();
-    return Promise.resolve();
-  }
-  return window.TENANT_READY.then(doInit);
+  // Both the SDK (gstatic compat scripts, loaded resiliently above) and the tenant
+  // config must be ready before initializeApp. Awaiting FIREBASE_SDK_READY is what makes
+  // a transient gstatic flake recoverable instead of a hard boot failure.
+  var sdkReady = window.FIREBASE_SDK_READY || Promise.resolve();
+  var configReady = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG)
+    ? Promise.resolve()
+    : window.TENANT_READY;
+  return Promise.all([sdkReady, configReady]).then(doInit);
 })();
 
 const TEST_MODE = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
@@ -22258,7 +22335,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260612-091312-3666cf7';
+var MAST_MODULES_V = '20260612-093957-7a2ea0b';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
