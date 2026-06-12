@@ -99,7 +99,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
-  <script src="../shared/mastdb.js?v=20260611-203132-bd22f1a"></script>
+  <script src="../shared/mastdb.js?v=20260611-210159-f58842a"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260611-203132-bd22f1a"></script>
+  <script src="../shared/customer-filters.js?v=20260611-210159-f58842a"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260611-203132-bd22f1a"></script>
+  <script src="../shared/variant-reconcile.js?v=20260611-210159-f58842a"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260611-203132-bd22f1a"></script>
-  <script src="../shared/mast-io.js?v=20260611-203132-bd22f1a"></script>
-  <script src="../shared/mast-entity.js?v=20260611-203132-bd22f1a"></script>
+  <script src="../shared/mast-ui.js?v=20260611-210159-f58842a"></script>
+  <script src="../shared/mast-io.js?v=20260611-210159-f58842a"></script>
+  <script src="../shared/mast-entity.js?v=20260611-210159-f58842a"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260611-203132-bd22f1a"></script>
+  <script src="../shared/product-readiness.core.js?v=20260611-210159-f58842a"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -13427,9 +13427,12 @@ function getModeSet() { return _modeSetSnapshot; }
 function getModeOverrides() { return _modeOverridesSnapshot || { enabledRoutes: [], disabledRoutes: [] }; }
 
 function getTenantSubscription() {
-  // Default: minimal access if subscription not yet loaded
+  // Default: revenue-pricing unlocked access if subscription not yet loaded.
+  // Under the revenue-1pct cutover all modules are unlocked, so an unloaded
+  // subscription must not optimistically gate (the old publish/web-only default
+  // wrongly locked free/trial tenants until load completed).
   if (!_tenantSubscription) {
-    return { tier: 'publish', modules: ['web'], baseModules: ['web'], selectedModules: [], needsModuleSelection: false };
+    return { model: 'revenue-1pct', tier: 'publish', modules: ['web'], baseModules: ['web'], selectedModules: [], needsModuleSelection: false };
   }
   return _tenantSubscription;
 }
@@ -13483,14 +13486,52 @@ async function loadTenantSubscription() {
         console.log('Subscription: synced command tier modules, added:', missing.join(', '));
       }
     }
+    // Revenue-pricing cutover (Checkpoint 4b): a subscription without an explicit
+    // model predates the cutover — e.g. provisionFreeTenant writes
+    // tier:'free'/modules:['web'] with no model, and the wizard's revenue-1pct
+    // stamp may never have persisted (it aborts if a platformAdmin-gated registry
+    // write upstream is denied). Treat any unstamped subscription as revenue-1pct
+    // so module gating doesn't wrongly lock a free/trial tenant out of every
+    // purchasable module (the shirglassworks first-customer regression).
+    if (data && !data.model) data.model = 'revenue-1pct';
     _tenantSubscription = data;
     await hydrateEngagementSurface();
     return data;
   } catch (err) {
-    console.warn('Subscription load failed, defaulting to minimal access:', err.message);
-    _tenantSubscription = { tier: 'publish', modules: ['web'], baseModules: ['web'], selectedModules: [], needsModuleSelection: false };
+    console.warn('Subscription load failed, defaulting to revenue-pricing unlocked access:', err.message);
+    // A transient read failure must not strip module access under revenue
+    // pricing — default to the unlocked revenue model, not the legacy gated shape.
+    _tenantSubscription = { model: 'revenue-1pct', tier: 'publish', modules: ['web'], baseModules: ['web'], selectedModules: [], needsModuleSelection: false };
     await hydrateEngagementSurface();
     return _tenantSubscription;
+  }
+}
+
+// Stamp the revenue-1pct subscription model at wizard completion. Resilient by
+// design: update() first (the doc normally exists post-provisioning), falling
+// back to a full set() if it's missing, and surfacing a VISIBLE error if both
+// fail. The previous inline version swallowed failures with a console.warn, so
+// a denied write left tenants silently un-stamped and wrongly module-gated.
+async function stampRevenueSubscriptionModel() {
+  var stamp = {
+    model: 'revenue-1pct', tier: null, selectedModules: null,
+    moduleLimit: null, selectableModules: null, needsModuleSelection: false,
+    updatedAt: new Date().toISOString()
+  };
+  try {
+    await MastDB.subscription.update(stamp);
+    return true;
+  } catch (updErr) {
+    console.warn('[Wizard] revenue-1pct stamp update failed, retrying via set:', updErr && updErr.message);
+    try {
+      var cur = (await MastDB.subscription.get().catch(function () { return null; })) || getTenantSubscription() || {};
+      await MastDB.subscription.set(Object.assign({}, cur, stamp));
+      return true;
+    } catch (setErr) {
+      console.error('[Wizard] revenue-1pct subscription stamp FAILED — tenant may be wrongly module-gated:', setErr && setErr.message);
+      if (typeof showToast === 'function') showToast('We could not finalize your plan; some features may be locked. Contact support if this persists.', true);
+      return false;
+    }
   }
 }
 
@@ -22212,7 +22253,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260611-203132-bd22f1a';
+var MAST_MODULES_V = '20260611-210159-f58842a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -34848,13 +34889,7 @@ async function wizardCompleteFast() {
     await MastDB.config.set('setupProgress/completedAt', new Date().toISOString());
     await updateConfigChecklist('brand', true);
 
-    try {
-      await MastDB.subscription.update({
-        model: 'revenue-1pct', tier: null, selectedModules: null,
-        moduleLimit: null, selectableModules: null, needsModuleSelection: false,
-        updatedAt: new Date().toISOString()
-      });
-    } catch (subErr) { console.warn('[Wizard] subscription stamp failed:', subErr && subErr.message); }
+    await stampRevenueSubscriptionModel();
 
     try {
       var planStatus = await MastDB.get('admin/businessPlan/planStatus');
@@ -37158,20 +37193,9 @@ async function wizardComplete() {
 
     // Revenue-based pricing (Checkpoint 4a): stamp the subscription model and
     // clear any legacy tier fields so the subscription tab routes to the
-    // revenue meter unconditionally after cutover.
-    try {
-      await MastDB.subscription.update({
-        model: 'revenue-1pct',
-        tier: null,
-        selectedModules: null,
-        moduleLimit: null,
-        selectableModules: null,
-        needsModuleSelection: false,
-        updatedAt: new Date().toISOString()
-      });
-    } catch (subErr) {
-      console.warn('[Wizard] Failed to stamp revenue-1pct subscription model:', subErr && subErr.message);
-    }
+    // revenue meter unconditionally after cutover. Resilient stamp (update→set,
+    // surfaces failures) so a denial can't silently leave the tenant gated.
+    await stampRevenueSubscriptionModel();
 
     // Legacy planStatus guard: per v1 risk #3, only promote 'none' → 'draft'; never
     // touch an 'active' plan from the wizard.
