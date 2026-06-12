@@ -114,6 +114,11 @@
   // ===== VIEW ROUTER =====
 
   function renderBlog() {
+    // Deep-link intent from the blog-v2 read surface's "New Post" button: open a
+    // fresh editor once the classic module is mounted. Consumed here (the single
+    // render entry, run at the end of loadBlog and on every revisit) so it never
+    // races/clobbers the list render.
+    if (window._blogOpenNew) { window._blogOpenNew = false; blogCreatePost(); return; }
     if (blogCurrentView === 'editor' && blogCurrentPostId) { renderBlogEditor(); return; }
     renderBlogList();
   }
@@ -2352,7 +2357,7 @@
 
   MastAdmin.registerModule('blog', {
     routes: {
-      'blog': { tab: 'blogTab', setup: function() { if (!blogLoaded) loadBlog(); } }
+      'blog': { tab: 'blogTab', setup: function() { if (!blogLoaded) loadBlog(); else renderBlog(); } }
     }
   });
 

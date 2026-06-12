@@ -342,7 +342,8 @@
       U.pageHeader({
         title: 'Blog Posts',
         count: N.count(V2.rows.length) + (V2.rows.length === 1 ? ' post' : ' posts'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="BlogV2.exportCsv()">&darr; Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="BlogV2.newPost()">+ New Post</button> ' +
+          '<button class="btn btn-secondary" onclick="BlogV2.exportCsv()">&darr; Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search title, author, tags or excerpt…" value="' + esc(V2.q) +
@@ -370,6 +371,14 @@
     // Rich-text authoring → classic Blog view. Use navigateToClassic so the V2
     // route remap doesn't loop us back to this twin.
     classic: function () {
+      if (typeof navigateToClassic === 'function') navigateToClassic('blog');
+      else if (typeof navigateTo === 'function') navigateTo('blog');
+    },
+    // Create a post: authoring lives in the classic Blog editor (this twin is
+    // read-only). Set a one-shot intent the classic module consumes on mount to
+    // open a fresh draft directly.
+    newPost: function () {
+      window._blogOpenNew = true;
       if (typeof navigateToClassic === 'function') navigateToClassic('blog');
       else if (typeof navigateTo === 'function') navigateTo('blog');
     },
