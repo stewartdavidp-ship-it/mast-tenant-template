@@ -99,7 +99,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-functions-compat.js"></script>
-  <script src="../shared/mastdb.js?v=7"></script>
+  <script src="../shared/mastdb.js?v=20260611-203000-d764c88"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -110,25 +110,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260611-163957-59cd40f"></script>
+  <script src="../shared/customer-filters.js?v=20260611-203000-d764c88"></script>
   <script src="../shared/brand-sync.js?v=1"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260611-163957-59cd40f"></script>
+  <script src="../shared/variant-reconcile.js?v=20260611-203000-d764c88"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260611-163957-59cd40f"></script>
-  <script src="../shared/mast-io.js?v=20260611-163957-59cd40f"></script>
-  <script src="../shared/mast-entity.js?v=20260611-163957-59cd40f"></script>
+  <script src="../shared/mast-ui.js?v=20260611-203000-d764c88"></script>
+  <script src="../shared/mast-io.js?v=20260611-203000-d764c88"></script>
+  <script src="../shared/mast-entity.js?v=20260611-203000-d764c88"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260611-163957-59cd40f"></script>
+  <script src="../shared/product-readiness.core.js?v=20260611-203000-d764c88"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22212,7 +22212,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260611-163957-59cd40f';
+var MAST_MODULES_V = '20260611-203000-d764c88';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -32632,6 +32632,16 @@ function _wizardDetectShopifyOrigin() {
 }
 
 function initSetupWizard() {
+  // Run exactly once per page load. The auth funnel (auth.onAuthStateChanged)
+  // re-fires on every Firebase token refresh and during multi-step auto-login,
+  // and each re-entry would call initSetupWizard → _wizardApplyProgress →
+  // showWizardStep(lastSavedStep). Sub-step navigation (e.g. step 1's 1A-1D) and
+  // live form input are NOT persisted to currentStep, so a re-apply silently
+  // yanked the user back to the last *saved* step and tore down the visible pane
+  // mid-interaction (the "wizardBizCategory select disappears / selections drop"
+  // churn). Guarding to once keeps in-progress input alive across re-fires.
+  if (window._wizardBooted) return;
+  window._wizardBooted = true;
   window._wizardOnboardingDepth = window._wizardOnboardingDepth || 'quick';
   // Resolve Shopify-origin early (async); step 4 render reads window.wizardIsShopifyOrigin.
   _wizardDetectShopifyOrigin();
@@ -32639,10 +32649,14 @@ function initSetupWizard() {
   var lsProgress = _wizardLsLoad();
   if (lsProgress.currentStep) {
     _wizardApplyProgress(lsProgress);
-    // Also sync from Firestore in background to pick up any cross-device changes
+    var _appliedStep = String(wizardCurrentStep);
+    // Also sync from Firestore in background to pick up any cross-device changes.
+    // Only re-apply if the user hasn't navigated since we applied the local copy —
+    // otherwise a slow network read would yank them off the step they're editing.
     MastDB.config.get('setupProgress').then(function(snap) {
       var fsProgress = snap || {};
-      if (fsProgress.currentStep && fsProgress.updatedAt > (lsProgress.updatedAt || '')) {
+      if (fsProgress.currentStep && fsProgress.updatedAt > (lsProgress.updatedAt || '') &&
+          String(wizardCurrentStep) === _appliedStep) {
         _wizardApplyProgress(fsProgress);
       }
     }).catch(function() {});
@@ -33997,9 +34011,93 @@ async function wizardConfirmFeaturePages() {
 // Full-path steps 5-8
 // ----------------------------------------------------------------
 
+// Maps the activation-validator's raw field paths (shared/mastdb.js
+// REQUIRED_AT_ACTIVATE.label) to a human label + the wizard step that collects
+// them, so a blocked launch shows plain language with a "go fix it" deep-link
+// instead of internal dotted paths.
+var _WIZARD_REQUIRED_FIELD_META = {
+  'identity.archetype':                  { label: 'Business type', step: '1' },
+  'identity.businessName':               { label: 'Business name', step: '2' },
+  'people.primaryContact.name':          { label: 'Your name', step: null },
+  'people.primaryContact.email':         { label: 'Your email', step: null },
+  'people.primaryContact.dpaAcceptedAt': { label: 'Accepting the data agreement', step: null },
+  'engagement.mode':                     { label: 'How you’ll use Mast', step: '4' },
+  'engagement.surface':                  { label: 'Your preferred way to work', step: '4' },
+  'operations.localization.currency':            { label: 'Currency', step: '8' },
+  'operations.localization.timezone':            { label: 'Time zone', step: '8' },
+  'operations.localization.language':            { label: 'Language', step: '8' },
+  'operations.localization.fiscalYearStartMonth':{ label: 'Fiscal-year start month', step: '8' }
+};
+
+// Render the "missing required fields" block with human labels + deep-links back
+// to the collecting step. Shared by both launch paths (fast + full).
+function _wizardRenderMissingFields(errorsEl, missing) {
+  if (!errorsEl) return;
+  errorsEl.style.display = '';
+  var rows = (missing || []).map(function(path) {
+    return _WIZARD_REQUIRED_FIELD_META[path] || { label: path, step: null };
+  });
+  var html = '<strong>A few details are still needed before launch:</strong>' +
+    '<ul style="margin:6px 0 0 18px;line-height:1.7;">';
+  rows.forEach(function(meta) {
+    html += '<li>' + esc(meta.label) +
+      (meta.step ? ' &middot; <a href="#" data-wizard-goto="' + esc(meta.step) +
+        '" style="color:var(--teal);font-weight:600;text-decoration:none;">Add this &rarr;</a>' : '') +
+      '</li>';
+  });
+  html += '</ul>';
+  errorsEl.innerHTML = html;
+  Array.prototype.forEach.call(errorsEl.querySelectorAll('[data-wizard-goto]'), function(a) {
+    a.onclick = function(e) { e.preventDefault(); showWizardStep(a.getAttribute('data-wizard-goto')); };
+  });
+}
+
+// Before a skip-to-launch, backfill safe defaults for every activation-required
+// field that is still blank — so "Skip to launch" can't strand the user on a
+// launch page blocked by fields the skipped steps would have set. Only fills
+// BLANKS; never overwrites a real choice the user already made. Business name is
+// the one genuinely user-specific field — pulled from the brand input or site
+// scan if available, otherwise left for the (now actionable) launch validation.
+async function wizardBackfillRequiredDefaults() {
+  try {
+    var ent = (await MastDB.businessEntity.get()) || {};
+    var identity = ent.identity || {};
+    var engagement = ent.engagement || {};
+    var loc = (ent.operations && ent.operations.localization) || {};
+
+    if (!identity.businessName || !String(identity.businessName).trim()) {
+      var nameEl = document.getElementById('wizardBrandName');
+      var nm = (nameEl && nameEl.value && nameEl.value.trim()) ||
+        (window._wizardExtracted && window._wizardExtracted.businessName) || '';
+      if (nm && typeof MastBrandSync !== 'undefined') {
+        try { await MastBrandSync.setName(nm); } catch (e) {}
+      }
+    }
+    if (!identity.archetype) {
+      await MastDB.businessEntity.update('identity', {
+        archetype: 'other-maker',
+        businessType: identity.businessType || 'produce',
+        effectiveBusinessType: identity.effectiveBusinessType || identity.businessType || 'produce',
+        primaryOutput: identity.primaryOutput || 'physical'
+      }).catch(function() {});
+    }
+    if (!engagement.mode || !engagement.surface) {
+      await MastDB.businessEntity.update('engagement', {
+        mode: engagement.mode || 'storefront',
+        surface: engagement.surface || 'hybrid',
+        updatedAt: new Date().toISOString()
+      }).catch(function() {});
+    }
+    if (!loc.currency || !loc.timezone || !loc.language || !loc.fiscalYearStartMonth) {
+      await _applyEntityOperationsLocalization().catch(function() {});
+    }
+  } catch (e) { /* best-effort — launch validation still guards */ }
+}
+
 // "Skip remaining setup" — available on every full-path step (4-8).
-function wizardSkipToLaunch() {
+async function wizardSkipToLaunch() {
   logWizardEvent('full-skip', 'skip_to_launch', { fromStep: wizardCurrentStep });
+  await wizardBackfillRequiredDefaults();
   showWizardStep('fastDpa');
 }
 
@@ -34519,9 +34617,10 @@ async function wizardAnalyzeSiteStep8() {
 // Fast-exit path
 // ----------------------------------------------------------------
 
-function wizardFastExit() {
+async function wizardFastExit() {
   window._wizardFastExit = true;
   logWizardEvent('fast-exit', 'fast_exit_triggered', { fromStep: wizardCurrentStep });
+  await wizardBackfillRequiredDefaults();
   showWizardStep('fastDpa');
 }
 
@@ -34729,11 +34828,10 @@ async function wizardCompleteFast() {
     } catch (activateErr) {
       var missing = (activateErr && activateErr.missingFields) || null;
       if (errorsEl) {
-        errorsEl.style.display = '';
         if (missing && missing.length) {
-          errorsEl.innerHTML = '<strong>A few fields are still required:</strong><ul style="margin:6px 0 0 18px;">' +
-            missing.map(function(m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+          _wizardRenderMissingFields(errorsEl, missing);
         } else {
+          errorsEl.style.display = '';
           errorsEl.textContent = activateErr.message || 'Activation failed. Please try again.';
         }
       }
@@ -34847,19 +34945,31 @@ function updateWizardProgress() {
     }
   }
 
-  // Rebuild dots + lines
+  // Rebuild dots + lines. Completed (already-visited) dots are clickable so the
+  // user can jump back to a prior step to revise an answer; the active and future
+  // dots are not (you can't skip ahead past required steps).
   var html = '';
   for (var i = 0; i < barSteps.length; i++) {
     var cls = 'wizard-step-dot';
-    if (i < currentIdx) cls += ' completed';
+    var clickable = i < currentIdx;
+    if (clickable) cls += ' completed';
     else if (i === currentIdx) cls += ' active';
-    html += '<div class="' + cls + '" data-step="' + barSteps[i] + '">' + (i + 1) + '</div>';
+    html += '<div class="' + cls + '" data-step="' + barSteps[i] + '"' +
+      (clickable ? ' role="button" tabindex="0" title="Go back to this step" style="cursor:pointer;"' : '') +
+      '>' + (i + 1) + '</div>';
     if (i < barSteps.length - 1) {
       var lineCls = 'wizard-step-line' + (i < currentIdx ? ' completed' : '');
       html += '<div class="' + lineCls + '"></div>';
     }
   }
   progressEl.innerHTML = html;
+  // Wire back-navigation on the completed dots.
+  Array.prototype.forEach.call(progressEl.querySelectorAll('.wizard-step-dot.completed'), function(dot) {
+    dot.onclick = function() { showWizardStep(dot.getAttribute('data-step')); };
+    dot.onkeydown = function(e) {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); showWizardStep(dot.getAttribute('data-step')); }
+    };
+  });
 }
 
 function wizardNext(fromStep) {
@@ -37000,11 +37110,10 @@ async function wizardComplete() {
     } catch (activateErr) {
       var missing = (activateErr && activateErr.missingFields) || null;
       if (errorsEl) {
-        errorsEl.style.display = '';
         if (missing && missing.length) {
-          errorsEl.innerHTML = '<strong>A few fields are still required:</strong><ul style="margin:6px 0 0 18px;">' +
-            missing.map(function(m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>';
+          _wizardRenderMissingFields(errorsEl, missing);
         } else {
+          errorsEl.style.display = '';
           errorsEl.textContent = activateErr.message || 'Activation failed. Please try again.';
         }
       }

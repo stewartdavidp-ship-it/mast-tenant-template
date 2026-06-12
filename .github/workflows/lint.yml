@@ -127,4 +127,5 @@ jobs:
           node test/jobs-transitions.test.js &&
           node test/guided-header-branch.test.js &&
           node test/workflow-overrides.test.js &&
+          node test/business-entity-feature-mode.test.js &&
           node test/lint-ratchet.test.js
