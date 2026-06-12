@@ -1090,7 +1090,7 @@ var MastDB = (function() {
 
         // Configure webPresence for features-only mode. enabledPages is an array
         // of FEATURE_PAGE_OPTIONS values. Writes feature flags and presence metadata.
-        applyFeaturesOnlyConfig: function(tenantRef, enabledPages) {
+        applyFeaturesOnlyConfig: function(enabledPages) {
           if (!Array.isArray(enabledPages)) {
             return Promise.reject(new Error('enabledPages must be an array'));
           }
@@ -1114,8 +1114,7 @@ var MastDB = (function() {
           updates['admin/businessEntity/presence/enabledFeaturePages'] = enabledPages;
           updates['admin/businessEntity/presence/updatedAt'] = now;
           updates['admin/businessEntity/updatedAt'] = now;
-          var store = tenantRef || tenantStore;
-          return store.multiUpdate(updates).then(function() {
+          return tenantStore.multiUpdate(updates).then(function() {
             return { success: true, featureMode: 'features-only', enabledFeaturePages: enabledPages, features: features };
           });
         },
@@ -1123,7 +1122,7 @@ var MastDB = (function() {
         // Set the top-level feature mode for a tenant's web presence.
         // mode: 'full-storefront' | 'features-only' | 'none'
         // 'full-storefront' is a no-op here — call applyStorefrontConfig for that path.
-        setFeatureMode: function(tenantRef, mode) {
+        setFeatureMode: function(mode) {
           var VALID_MODES = ['full-storefront', 'features-only', 'none'];
           if (VALID_MODES.indexOf(mode) === -1) {
             return Promise.reject(new Error("Invalid mode '" + mode + "'. Valid: " + VALID_MODES.join(', ')));
@@ -1151,8 +1150,7 @@ var MastDB = (function() {
             };
             updates['webPresence/config/updatedAt'] = now;
           }
-          var store = tenantRef || tenantStore;
-          return store.multiUpdate(updates).then(function() {
+          return tenantStore.multiUpdate(updates).then(function() {
             return { success: true, featureMode: mode };
           });
         },
@@ -2035,8 +2033,13 @@ var MastDB = (function() {
     _prefixPaths: _prefixPaths,
     _multiUpdate: _multiUpdate,
     tenantId: function() { return _tenantId; },
-    storagePath: function(subpath) { return _tenantId + '/' + subpath; }
+    storagePath: function(subpath) { return _tenantId + '/' + subpath; },
+    // Test-only seam: inject a fake tenant store so node unit tests can exercise
+    // the businessEntity write helpers (setFeatureMode/applyFeaturesOnlyConfig)
+    // without a live Firestore. Never called in the browser/production paths.
+    __setTenantStoreForTest: function(store) { tenantStore = store; }
   };
 })();
 
 if (typeof window !== 'undefined') window.MastDB = MastDB;
+if (typeof module !== 'undefined' && module.exports) module.exports = MastDB;
