@@ -13,14 +13,14 @@
  * dates) with no governed lifecycle — its status (published / draft) is an
  * assigned attribute, so it is a Faceted Record, NOT Process / MastFlow.
  *
- * Read-focused: a story is AUTHORED on a rich photo-curation canvas (the entries
- * gallery, milestone captions, QR-code generation, publish side effects) that is
- * deeply coupled to the Production module and the storefront. Per the read-on-page
- * model we only convert the LIST to a read-detail (title / status / cover /
- * excerpt / dates) and keep every authoring path single-sourced on legacy
- * #stories via a "manage in classic view" link. This twin re-hosts the VIEW only
- * — no onSave, no edit form, no entry editor / publish controls. Flag-gated
- * (?ui=1) at #stories-v2, side-by-side; never touches production.js.
+ * Create + light edit are NATIVE here: a custom detail.editRender + onSave that
+ * DELEGATE to window.StoriesBridge (exposed in production.js). CREATE mints a
+ * DRAFT skeleton (title only); EDIT renames it. The rich photo-curation canvas
+ * (the entries gallery, milestone captions, QR-code generation, publish side
+ * effects) is deeply coupled to the Production module + storefront and stays
+ * single-sourced on legacy #stories via the "Manage in classic view" link —
+ * that is the rich-authoring bridge, NOT a create punt. Flag-gated (?ui=1) at
+ * #stories-v2, side-by-side; never touches production.js beyond the bridge.
  *
  * Data: stories live at public/stories (MastDB.stories = _makeEntity('public/
  * stories', 200)); read one-shot via MastDB.get('public/stories') -> keyed object.
@@ -166,15 +166,52 @@
             UI.card('Story', vitals) +
             UI.card('Excerpt', excerptBody + manage) +
           '</div>';
+      },
+      // CREATE (title → draft skeleton) + light EDIT (rename) are NATIVE, so the
+      // twin no longer punts new stories to the classic view. The photo-curation
+      // canvas (entries, captions, QR codes) + publish side effects stay
+      // single-sourced on legacy #stories via the "Manage in classic view" link.
+      editRender: function (s, mode) {
+        s = s || {};
+        function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        var lead = mode === 'create'
+          ? 'New story — add photos, captions &amp; publish in the classic curation view after creating'
+          : 'Rename this story (photos &amp; publishing live in the classic curation view)';
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + lead + '</div>' +
+          fg('Title *', '<input class="form-input" id="storyV2Title" value="' + esc(mode === 'create' ? '' : (storyTitle(s) === 'Untitled story' ? '' : storyTitle(s))) + '" style="width:100%;" placeholder="Story title">');
       }
+    },
+    onSave: function (rec, mode) {
+      if (typeof window.can === 'function' && !window.can('stories', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to edit stories.', true); return false;
+      }
+      if (!window.StoriesBridge) { if (window.showToast) showToast('Stories engine still loading — try again', true); return false; }
+      var title = ((document.getElementById('storyV2Title') || {}).value || '').trim();
+      if (!title) { if (window.showToast) showToast('Title is required.', true); return false; }
+      if (mode === 'create') {
+        if (!window.StoriesBridge.create) { if (window.showToast) showToast('Stories engine still loading — try again', true); return false; }
+        return Promise.resolve(window.StoriesBridge.create({ title: title })).then(function (id) {
+          if (window.writeAudit) writeAudit('create', 'story', id);
+          if (window.showToast) showToast('Draft story created.');
+          reloadSoon(); return true;
+        }).catch(function (e) { console.error('[stories-v2] create', e); if (window.showToast) showToast('Error creating story.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      return Promise.resolve(window.StoriesBridge.update(id, { title: title })).then(function (updates) {
+        Object.assign(V2.byId[id] || rec, updates || { title: title });
+        if (window.showToast) showToast('Story updated.');
+        render(); return true;
+      }).catch(function (e) { console.error('[stories-v2] update', e); if (window.showToast) showToast('Error updating story.', true); return false; });
     }
-    // No onSave → no Edit button (story authoring stays on legacy #stories).
   });
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, jobs: {}, sortKey: 'updatedAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false };
 
   function load() {
+    // Ensure legacy production.js is loaded so window.StoriesBridge (the
+    // delegated create/edit write path) exists — mirrors blog-v2 / contacts-v2.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
     // Stories + production jobs (for the "from job" label) load together; both
     // one-shot keyed-object reads (bounded — MastDB.get on a _makeEntity path).
     Promise.all([
@@ -192,6 +229,7 @@
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[stories-v2] load', e); render(); });
   }
+  function reloadSoon() { setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   function visibleRows() {
     var rows = V2.rows;
@@ -229,7 +267,8 @@
       U.pageHeader({
         title: 'Stories',
         count: N.count(V2.rows.length) + (V2.rows.length === 1 ? ' story' : ' stories'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="StoriesV2.exportCsv()">&darr; Export</button>'
+        actionsHtml: '<button class="btn btn-primary" onclick="StoriesV2.newStory()">+ New Story</button> ' +
+          '<button class="btn btn-secondary" onclick="StoriesV2.exportCsv()">&darr; Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search title, job or caption..." value="' + esc(V2.q) +
@@ -237,7 +276,7 @@
       MastEntity.renderList('stories-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'StoriesV2.sort', onRowClickFnName: 'StoriesV2.open',
-        empty: { title: 'No stories', message: V2.loaded ? 'Create studio stories in the classic Stories view.' : 'Loading...' }
+        empty: { title: 'No stories', message: V2.loaded ? 'Click “+ New Story” to create your first story.' : 'Loading...' }
       });
   }
 
@@ -259,6 +298,17 @@
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('stories');
       else if (typeof navigateTo === 'function') navigateTo('stories');
+    },
+    // Create a story NATIVELY (title → draft skeleton); the write delegates to
+    // StoriesBridge.create. Photos / captions / publishing are added afterward
+    // in the classic curation view.
+    newStory: function () {
+      if (typeof window.can === 'function' && !window.can('stories', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to create stories.', true); return;
+      }
+      // Ensure legacy production.js is loaded so window.StoriesBridge exists at save.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
+      MastEntity.openRecord('stories-v2', {}, 'create');
     },
     // Draft deletion (Wave 3): published stories are live on the storefront —
     // they never delete from the twin (unpublish lives with Production).

@@ -24,9 +24,13 @@
  * record write (it does NOT send a welcome/confirmation email), so create stays a
  * plain write through the bridge — there is no send to route.
  *
- * Sending issues, A/B tests and the whole campaign Composer have no V2 home and
- * stay single-sourced on legacy #newsletter via a "compose / send in classic
- * view" link. Flag-gated (?ui=1) at #newsletter-v2, side-by-side.
+ * Issues are a second NATIVE surface (the Issues lens): a draft issue is CREATED
+ * + lightly edited (title / subject line) here via NewsletterBridge.createIssue /
+ * updateIssue (which seed + preserve the legacy grid sections). Composing the
+ * grid (sections, A/B tests) + sending have no V2 home and stay single-sourced
+ * on legacy #newsletter via the issue detail's "Edit / send in classic view"
+ * link — the rich-authoring bridge, NOT a create punt. Flag-gated (?ui=1) at
+ * #newsletter-v2, side-by-side.
  *
  * Data: subscribers live at newsletter/subscribers (MastDB.newsletter.subscribers
  * -> that path; legacy reads it via .ref().once('value')). One-shot keyed-object
@@ -114,16 +118,14 @@
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(s.notes) + '</div>'
           : '<span class="mu-sub">No notes.</span>';
 
-        // Subscriber create/edit is NATIVE now (the Edit button on this slide-out).
-        // What has NO V2 home: composing + sending issues, A/B tests, and the
-        // campaign Composer — those stay bespoke on legacy #newsletter.
-        // navigateToClassic so the V2 route remap doesn't loop back here.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="NewsletterV2.classic()">Compose / send issues in classic view →</button></div>';
-
+        // Subscriber create/edit is NATIVE (the Edit button on this slide-out).
+        // Newsletter ISSUES are now their own surface (the Issues lens) with a
+        // native create flow, so this subscriber pane no longer carries a
+        // "compose issues in classic" punt.
         return tiles +
           UI.card('Subscriber', details) +
           UI.card('Delivery health', healthBody) +
-          UI.card('Notes', notesBody + manage);
+          UI.card('Notes', notesBody);
       },
       // Native edit form — the legacy add-modal field set (name *, email *, notes)
       // plus the subscribed/unsubscribed status the legacy unsubscribe path
@@ -250,7 +252,49 @@
           }
         }, 0);
         return tiles + actions + UI.card('Issue', meta) + UI.card('Compose', '<span class="mu-sub">The grid builder (sections, A/B tests, send) lives in the classic view.</span>' + compose);
+      },
+      // CREATE (a draft issue) + light EDIT (title / subject line) are NATIVE, so
+      // the twin no longer punts new issues to the classic Composer. The grid
+      // builder (sections, A/B tests, send) stays single-sourced there. Sent /
+      // published issues are the send history — their fields are read-only here.
+      editRender: function (n, mode) {
+        n = n || {};
+        function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        var sent = mode !== 'create' && issueStatus(n) !== 'draft';
+        var lead = mode === 'create'
+          ? 'New issue — compose the grid (sections, A/B tests, send) in the classic view after creating'
+          : (sent ? 'This issue has been sent — its record is read-only' : 'Edit issue details (the grid builder lives in the classic view)');
+        var dis = sent ? ' disabled' : '';
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + lead + '</div>' +
+          fg('Title', '<input class="form-input" id="nlIssTitle" value="' + esc(mode === 'create' ? '' : (issueTitle(n) === '(untitled issue)' ? '' : issueTitle(n))) + '" style="width:100%;"' + dis + ' placeholder="Issue title (auto-named if blank)">') +
+          fg('Subject line', '<input class="form-input" id="nlIssSubject" value="' + esc(mode === 'create' ? '' : (n.subjectLine || '')) + '" style="width:100%;"' + dis + ' placeholder="Email subject line">');
       }
+    },
+    onSave: function (rec, mode) {
+      if (typeof window.can === 'function' && !window.can('newsletter', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to edit issues.', true); return false;
+      }
+      if (!window.NewsletterBridge) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return false; }
+      function val(id) { return ((document.getElementById(id) || {}).value || '').trim(); }
+      var data = { title: val('nlIssTitle'), subjectLine: val('nlIssSubject') };
+      if (mode === 'create') {
+        if (!NewsletterBridge.createIssue) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return false; }
+        return Promise.resolve(NewsletterBridge.createIssue(data)).then(function (id) {
+          if (window.writeAudit) writeAudit('create', 'newsletter-issue', id);
+          if (window.showToast) showToast('Draft issue created.'); reloadSoon(); return true;
+        }).catch(function (e) { console.error('[newsletter-v2] createIssue', e); if (window.showToast) showToast('Error creating issue.', true); return false; });
+      }
+      var id = rec._key || rec.id;
+      // Gate on the record actually being edited (rec carries the true status on
+      // cold/drill opens too) — NOT V2.issuesById, which is empty when an issue
+      // is opened cold (campaign drill / fetch cache-miss). Sent/published issues
+      // are the send history — immutable.
+      if (issueStatus(rec) !== 'draft') { if (window.showToast) showToast('Sent issues are the send history — they can\'t be edited.', true); return false; }
+      if (!NewsletterBridge.updateIssue) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return false; }
+      return Promise.resolve(NewsletterBridge.updateIssue(id, data)).then(function (updates) {
+        Object.assign(V2.issuesById[id] || rec, updates || data);
+        if (window.showToast) showToast('Issue updated.'); reloadSoon(); return true;
+      }).catch(function (e) { console.error('[newsletter-v2] updateIssue', e); if (window.showToast) showToast('Error updating issue.', true); return false; });
     }
   });
 
@@ -340,15 +384,15 @@
         U.pageHeader({
           title: 'Newsletter',
           count: N.count(V2.issues.length) + ' issue' + (V2.issues.length === 1 ? '' : 's'),
-          subtitle: 'Issues are composed and sent in the classic grid builder; this is the record of them.',
-          actionsHtml: '<button class="btn btn-primary" onclick="NewsletterV2.classic()">Compose in classic →</button>' +
+          subtitle: 'Create a draft here, then compose & send it in the classic grid builder.',
+          actionsHtml: '<button class="btn btn-primary" onclick="NewsletterV2.newIssue()">+ New issue</button>' +
             '<button class="btn btn-secondary" onclick="NewsletterV2.exportIssuesCsv()">↓ Export</button>'
         }) +
         '<div style="margin:14px 0;">' + lens + '</div>' +
         MastEntity.renderList('newsletter-issues-v2', {
           rows: visibleIssues(), sortKey: V2.issueSortKey, sortDir: V2.issueSortDir,
           onSortFnName: 'NewsletterV2.sortIssues', onRowClickFnName: 'NewsletterV2.openIssue',
-          empty: { title: 'No issues yet', message: V2.loaded ? 'Compose your first issue in the classic view.' : 'Loading…' }
+          empty: { title: 'No issues yet', message: V2.loaded ? 'Click “+ New issue” to create your first draft.' : 'Loading…' }
         });
       return;
     }
@@ -404,6 +448,17 @@
     },
     // ── Issues lens (Wave 3) ──
     view: function (v) { V2.view = v === 'issues' ? 'issues' : 'subs'; render(); },
+    // Create a draft issue NATIVELY (title / subject line); the write delegates
+    // to NewsletterBridge.createIssue, which seeds the default grid sections.
+    // Composing + sending happen afterward in the classic grid Composer.
+    newIssue: function () {
+      if (typeof window.can === 'function' && !window.can('newsletter', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to create issues.', true); return;
+      }
+      // Ensure legacy newsletter.js is loaded so window.NewsletterBridge.createIssue exists at save.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('newsletter'); } catch (e) {} }
+      MastEntity.openRecord('newsletter-issues-v2', {}, 'create');
+    },
     sortIssues: function (key) {
       if (V2.issueSortKey === key) V2.issueSortDir = (V2.issueSortDir === 'asc' ? 'desc' : 'asc');
       else { V2.issueSortKey = key; V2.issueSortDir = (key === 'date' || key === 'issueNumber' ? 'desc' : 'asc'); }

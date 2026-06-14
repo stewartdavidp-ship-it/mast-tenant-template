@@ -114,11 +114,6 @@
   // ===== VIEW ROUTER =====
 
   function renderBlog() {
-    // Deep-link intent from the blog-v2 read surface's "New Post" button: open a
-    // fresh editor once the classic module is mounted. Consumed here (the single
-    // render entry, run at the end of loadBlog and on every revisit) so it never
-    // races/clobbers the list render.
-    if (window._blogOpenNew) { window._blogOpenNew = false; blogCreatePost(); return; }
     if (blogCurrentView === 'editor' && blogCurrentPostId) { renderBlogEditor(); return; }
     renderBlogList();
   }
@@ -2330,6 +2325,47 @@
       var local = (typeof blogPosts !== 'undefined' && blogPosts) ? blogPosts.find(function (p) { return p.id === id; }) : null;
       if (local) Object.assign(local, updates);
       return updates;
+    },
+    // Native create for blog-v2 (free/trial tenants reach the twin without the
+    // Builder as their only authoring path). Mirrors blogCreatePost's record
+    // shape exactly (postNumber counter, author default, full field set) but is
+    // parameterized. Body arrives as PLAIN TEXT and is run through
+    // blogPlainToHtml (escapeHtml → <p>) so a body that merely *looks* like HTML
+    // can never render raw on the storefront (blogIsHtmlBody treats any <tag> as
+    // HTML); rich formatting / inline images stay on the Builder. Status is
+    // capped to the pre-publish states — publishing has website/Substack side
+    // effects that live with the Builder.
+    create: async function (data) {
+      data = data || {};
+      var counterRef = MastDB.blog.meta.postCounter();
+      var result = await counterRef.transaction(function (current) { return (current || 0) + 1; });
+      var postNumber = result.snapshot.val();
+      var id = 'post_' + Date.now();
+      var status = (data.status === 'complete') ? 'complete' : 'draft';
+      var post = {
+        id: id,
+        postNumber: postNumber,
+        title: (data.title || '').trim(),
+        slug: '',
+        author: (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.uid)
+          || Object.keys(BLOG_AUTHORS)[0] || 'author',
+        body: blogPlainToHtml(data.body || ''),
+        aiVersion: '',
+        usedAI: false,
+        status: status,
+        inlineImages: [],
+        tags: Array.isArray(data.tags) ? data.tags : [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        publishedAt: null,
+        scheduledAt: null,
+        featuredImageId: null,
+        excerpt: (data.excerpt || '').trim(),
+        substackDraftUrl: null
+      };
+      await MastDB.blog.posts.ref(id).set(post);
+      if (typeof blogPosts !== 'undefined' && Array.isArray(blogPosts)) blogPosts.unshift(post);
+      return id;
     },
     removeDraft: async function (id) {
       await MastDB.blog.posts.ref(id).remove();
