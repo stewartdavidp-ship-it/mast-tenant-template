@@ -79,7 +79,7 @@
     return '';
   }
   // Display label for the linked production job (resolved from the one-shot
-  // public/jobs read loaded alongside the stories).
+  // admin/jobs read loaded alongside the stories).
   function jobLabel(s) {
     var id = s && s.jobId; if (!id) return '';
     var j = V2.jobs[id]; return j ? (j.name || 'Untitled job') : '';
@@ -431,10 +431,11 @@
     // delegated create/edit write path) exists — mirrors blog-v2 / contacts-v2.
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
     // Stories + production jobs (for the "from job" label) load together; both
-    // one-shot keyed-object reads (bounded — MastDB.get on a _makeEntity path).
+    // one-shot keyed-object reads. Jobs live at admin/jobs (no public/jobs entity),
+    // read bounded via productionJobs.list(200).
     Promise.all([
       Promise.resolve(MastDB.get('public/stories')).catch(function () { return null; }),
-      Promise.resolve(MastDB.get('public/jobs')).catch(function () { return null; })
+      Promise.resolve(MastDB.productionJobs.list(200)).catch(function () { return null; })
     ]).then(function (res) {
       var sv = res[0] || {}, jv = res[1] || {};
       var out = [];

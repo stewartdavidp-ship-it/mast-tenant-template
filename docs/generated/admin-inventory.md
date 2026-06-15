@@ -90,7 +90,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/pos-v2.js` | 160 | pos-v2 |
 | `modules/procurement-v2.js` | 875 | procurement-v2 |
 | `modules/procurement.js` | 2,378 | procurement |
-| `modules/production.js` | 3,670 | jobs, production, stories, forecast |
+| `modules/production.js` | 3,669 | jobs, production, stories, forecast |
 | `modules/products-v2.js` | 3,523 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
@@ -104,7 +104,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/shows.js` | 3,580 | show, show-find, show-apply, show-prep, show-execute, show-history |
 | `modules/social-v2.js` | 371 | social-v2 |
 | `modules/social.js` | 1,494 | social |
-| `modules/stories-v2.js` | 639 | stories-v2 |
+| `modules/stories-v2.js` | 640 | stories-v2 |
 | `modules/students-config-v2.js` | 611 | students-config-v2 |
 | `modules/students-v2.js` | 784 | students-v2 |
 | `modules/students.js` | 1,643 | students |

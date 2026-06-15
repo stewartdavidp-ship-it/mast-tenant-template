@@ -2579,7 +2579,7 @@ async function publishStoryFromDetail(storyId) {
         Object.values(job.lineItems).forEach(function(li) {
           if (li.productId && li.productLinked) {
             productUpdates.push(
-              MastDB.products.storyIdRef(li.productId).set(storyId)
+              MastDB.products.setStoryId(li.productId, storyId)
             );
           }
         });
@@ -2609,7 +2609,7 @@ async function unpublishStoryFromDetail(storyId) {
         Object.values(job.lineItems).forEach(function(li) {
           if (li.productId && li.productLinked) {
             clearUpdates.push(
-              MastDB.products.storyIdRef(li.productId).remove()
+              MastDB.products.removeStoryId(li.productId)
             );
           }
         });
@@ -3216,7 +3216,7 @@ async function publishStory(existingId) {
         Object.values(job.lineItems).forEach(function(li) {
           if (li.productId && li.productLinked) {
             productUpdates.push(
-              MastDB.products.storyIdRef(li.productId).set(storyId)
+              MastDB.products.setStoryId(li.productId, storyId)
             );
           }
         });
@@ -3255,7 +3255,7 @@ async function unpublishStory(storyId) {
         Object.values(job.lineItems).forEach(function(li) {
           if (li.productId && li.productLinked) {
             clearUpdates.push(
-              MastDB.products.storyIdRef(li.productId).remove()
+              MastDB.products.removeStoryId(li.productId)
             );
           }
         });
@@ -3345,24 +3345,23 @@ async function linkProductToBuild(jobId, lineItemId) {
   }
   try {
     // Get existing buildIds on the product
-    var snap = await MastDB.products.buildIdsRef(productId).once('value');
-    var existing = snap.val() || [];
+    var existing = (await MastDB.products.getBuildIds(productId)) || [];
     if (!Array.isArray(existing)) existing = [];
     // Add all build IDs from this job
     var builds = job.builds || {};
     Object.keys(builds).forEach(function(bk) {
       if (existing.indexOf(bk) === -1) existing.push(bk);
     });
-    await MastDB.products.buildIdsRef(productId).set(existing);
+    await MastDB.products.setBuildIds(productId, existing);
     // Mark linked on line item
-    await MastDB.productionJobs.subRef(jobId, 'lineItems', lineItemId, 'productLinked').set(true);
+    await MastDB.productionJobs.updateLineItem(jobId, lineItemId, { productLinked: true });
     await writeAudit('update', 'jobs', jobId);
 
     // Check if a published story exists for this job and write storyId
     var stories = (await MastDB.stories.queryByJob(jobId)) || {};
     Object.keys(stories).forEach(function(sk) {
       if (stories[sk].status === 'published') {
-        MastDB.products.storyIdRef(productId).set(sk);
+        MastDB.products.setStoryId(productId, sk);
       }
     });
 
