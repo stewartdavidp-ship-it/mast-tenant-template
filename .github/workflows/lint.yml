@@ -122,6 +122,7 @@ jobs:
           node test/mast-ui.test.js &&
           node test/mast-entity.test.js &&
           node test/finance-order-money.test.js &&
+          node test/finance-pos-dedup.test.js &&
           node test/customer-filters.test.js &&
           node test/variant-reconcile.test.js &&
           node test/jobs-transitions.test.js &&
