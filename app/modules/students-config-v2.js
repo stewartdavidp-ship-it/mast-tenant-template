@@ -30,6 +30,17 @@
  * (generateWaiverLink) is already native on students-v2 (copyWaiverLink); the
  * per-template PUBLIC link below is just a waiver.html?t=<id> URL (no CF).
  *
+ * SECURITY NOTE — `waiverTextSnapshot` provenance (audited 2026-06-14): the
+ * Signatures viewer renders each signature's `waiverTextSnapshot` as HTML. That
+ * field is NOT signer-controlled: the out-of-repo submitWaiverSignature CF
+ * (mast-architecture tenant-functions.js) sets it to `template.bodyHtml`, where
+ * `template` is read SERVER-SIDE from settings/waiverTemplates/<id>. The signer
+ * supplies only a templateId (lookup key) + free-text fields the CF clip()s of
+ * angle brackets — none reach the snapshot. It is therefore admin-authored
+ * template HTML, parity-safe vs. signer-stored-XSS. It is still sanitized at
+ * render (see sanitizeWaiverHtml) as defense-in-depth against an intra-tenant
+ * RBAC staff→owner payload, matching the public waiver.html signing page.
+ *
  * Reached from the students-v2 roster header ("⚙ Settings"). Flag-gated (?ui=1),
  * side-by-side with legacy #students.
  */
@@ -46,6 +57,28 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, esc = U._esc;
+
+  // Waiver bodies (settings/waiverTemplates[].bodyHtml) are admin-authored rich
+  // text — INTENTIONALLY HTML (the editor below is a contenteditable rich-text
+  // surface), so they're rendered as markup, not esc()'d (escaping would show raw
+  // tags and break the agreement formatting). The same bodyHtml is snapshotted
+  // verbatim into each signature as `waiverTextSnapshot` by the out-of-repo
+  // submitWaiverSignature CF (server-side copy of template.bodyHtml — NO signer
+  // input reaches it; see the Signatures-viewer note below). It is therefore NOT
+  // attacker/signer-controlled. But "admin-authored" spans RBAC roles: a staff
+  // member with can('students','edit') could plant script that runs in an owner's
+  // session when they open the template preview or the signatures viewer. So we
+  // sanitize at render — matching what the PUBLIC waiver.html signing page already
+  // does to this exact content — keeping formatting tags while stripping
+  // scripts/handlers. Falls back to raw (today's behavior) if DOMPurify is absent.
+  var WAIVER_SANITIZE_CFG = {
+    ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'a', 'br', 'hr', 'div', 'span', 'table', 'tr', 'td', 'th', 'blockquote', 'sub', 'sup'],
+    ALLOWED_ATTR: ['href', 'target', 'style']
+  };
+  function sanitizeWaiverHtml(html) {
+    if (!html) return '';
+    return window.DOMPurify ? window.DOMPurify.sanitize(html, WAIVER_SANITIZE_CFG) : html;
+  }
 
   // Vocabularies mirror students.js.
   var DOC_TYPES = ['waiver', 'medical', 'guardian-consent', 'photo-release', 'certification', 'other'];
@@ -307,11 +340,11 @@
         var linkBtn = active
           ? '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="StudentsConfigV2.copyTemplateLink(\'' + esc(w._key) + '\')">🔗 Copy public link</button> <span class="mu-sub">Send this link to students to sign (waiver.html).</span></div>'
           : '<p class="mu-sub" style="margin-top:12px;">Set status to <strong>Active</strong> to share a public signing link.</p>';
-        // bodyHtml is admin-authored rich text (intentionally HTML), rendered as-is
-        // — same trust model as the legacy preview + the public waiver.html. Not
-        // user-supplied content.
+        // bodyHtml is admin-authored rich text (intentionally HTML) — rendered as
+        // markup, but sanitized (see sanitizeWaiverHtml) to match the public
+        // waiver.html signing page's hardening of this same content.
         var body = w.bodyHtml
-          ? '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--surface-card);font-size:0.85rem;line-height:1.6;max-height:340px;overflow-y:auto;">' + w.bodyHtml + '</div>'
+          ? '<div style="border:1px solid var(--border);border-radius:8px;padding:14px;background:var(--surface-card);font-size:0.85rem;line-height:1.6;max-height:340px;overflow-y:auto;">' + sanitizeWaiverHtml(w.bodyHtml) + '</div>'
           : '<p class="mu-sub">No waiver body yet — edit to add the agreement text.</p>';
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' + UI.card('Template', meta + linkBtn) + UI.card('Waiver body', body) + '</div>' +
@@ -568,8 +601,17 @@
       { k: 'Guardian', v: esc(sig.guardianName) },
       { k: 'Relationship', v: esc(sig.guardianRelationship || '—') }
     ] : []));
+    // waiverTextSnapshot is a SERVER-SIDE copy of the admin-authored template
+    // bodyHtml, captured at sign time by the out-of-repo submitWaiverSignature CF
+    // (mast-architecture tenant-functions.js: `waiverTextSnapshot: template.bodyHtml`,
+    // where `template` is read server-side from settings/waiverTemplates/<id>). NO
+    // signer-supplied content reaches it — the signer only supplies a templateId
+    // (lookup key) plus free-text fields that the CF clip()s of angle brackets. So
+    // it is admin-authored, not signer-controlled. Sanitized at render (not esc()'d:
+    // it is intentionally formatted HTML) as defense-in-depth against an RBAC
+    // staff→owner payload, mirroring the public waiver.html signing page.
     var snapshot = sig.waiverTextSnapshot
-      ? '<div style="margin-top:8px;border:1px solid var(--border);border-radius:6px;padding:10px;background:var(--surface-card);font-size:0.85rem;line-height:1.6;max-height:260px;overflow-y:auto;">' + sig.waiverTextSnapshot + '</div>'
+      ? '<div style="margin-top:8px;border:1px solid var(--border);border-radius:6px;padding:10px;background:var(--surface-card);font-size:0.85rem;line-height:1.6;max-height:260px;overflow-y:auto;">' + sanitizeWaiverHtml(sig.waiverTextSnapshot) + '</div>'
       : '';
     return '<details style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:8px;background:var(--surface-card);">' +
       '<summary style="cursor:pointer;font-size:0.85rem;font-weight:600;color:var(--text-primary);">' +
