@@ -3,7 +3,7 @@
  * Run: node test/mast-ui.test.js
  */
 const assert = require('assert');
-const { Num, badge, tabs, list, esc, pageHeader, card, launchCard, cardGrid } = require('../shared/mast-ui.js');
+const { Num, badge, tabs, list, esc, pageHeader, card, launchCard, cardGrid, sanitizeHtml, _safeUrl } = require('../shared/mast-ui.js');
 
 let pass = 0;
 function t(name, fn) { fn(); pass++; console.log('  ✓ ' + name); }
@@ -144,4 +144,38 @@ t('validate.phone accepts common formats + empty, rejects junk', () => {
   assert.ok(!validate.phone('555-12'));        // too short
   assert.ok(!validate.phone('call me maybe')); // letters
   assert.ok(!validate.phone('12345678901234567890')); // too long
+});
+
+// sanitizeHtml — _safeUrl URL-scheme policy (pure, runs in node)
+t('_safeUrl allows http/https/mailto/tel + relative, strips unsafe schemes', () => {
+  assert.strictEqual(_safeUrl('https://x.com/a'), 'https://x.com/a');
+  assert.strictEqual(_safeUrl('http://x.com'), 'http://x.com');
+  assert.strictEqual(_safeUrl('mailto:a@b.com'), 'mailto:a@b.com');
+  assert.strictEqual(_safeUrl('tel:+15125550199'), 'tel:+15125550199');
+  assert.strictEqual(_safeUrl('/relative/path'), '/relative/path');
+  assert.strictEqual(_safeUrl('#anchor'), '#anchor');
+  assert.strictEqual(_safeUrl('?q=1'), '?q=1');
+  assert.strictEqual(_safeUrl('//cdn.example.com/x.png'), '//cdn.example.com/x.png'); // protocol-relative
+  assert.strictEqual(_safeUrl(''), '');
+  assert.strictEqual(_safeUrl(null), '');
+  // unsafe schemes → dropped to ''
+  assert.strictEqual(_safeUrl('javascript:alert(1)'), '');
+  assert.strictEqual(_safeUrl('JavaScript:alert(1)'), '');       // case-insensitive
+  assert.strictEqual(_safeUrl('  javascript:alert(1)'), '');     // leading whitespace
+  assert.strictEqual(_safeUrl('java\tscript:alert(1)'), '');     // embedded control char
+  assert.strictEqual(_safeUrl('data:text/html,<script>1</script>'), '');
+  assert.strictEqual(_safeUrl('vbscript:msgbox(1)'), '');
+  assert.strictEqual(_safeUrl('file:///etc/passwd'), '');
+});
+// sanitizeHtml node fallback — without a DOM it MUST escape everything (never
+// emit raw markup); the allow-list DOM walk is live-verified in the browser.
+t('sanitizeHtml escapes (never emits raw markup) in a non-DOM context', () => {
+  assert.strictEqual(sanitizeHtml(''), '');
+  assert.strictEqual(sanitizeHtml(null), '');
+  const a = sanitizeHtml('<b>hi</b>');
+  assert.ok(!/<b>/.test(a) && /&lt;b&gt;/.test(a));
+  const x = sanitizeHtml('<script>alert(1)</script>');
+  assert.ok(!/<script>/.test(x) && /&lt;script&gt;/.test(x)); // tag escaped → inert
+  const y = sanitizeHtml('<img src=x onerror=alert(1)>');
+  assert.ok(!/<img/.test(y) && /&lt;img/.test(y));            // no live tag; escaped text is harmless
 });
