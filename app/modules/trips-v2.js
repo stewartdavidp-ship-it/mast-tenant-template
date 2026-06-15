@@ -9,9 +9,12 @@
  * Variant (doc 17 §1a test): a completed trip has no governed lifecycle and the
  * legacy history is VIEW-ONLY (the only trip mutations are the active-trip
  * start/end flow + adding retroactive trips — neither is the history surface) →
- * read-focused Faceted Record, NO edit affordance (matches legacy). Scoped to
- * the current user's trips (the all-drivers admin toggle stays on legacy #trips).
- * Flag-gated (`?ui=1`), side-by-side with legacy `#trips`; never touches it.
+ * read-focused Faceted Record, NO edit affordance (matches legacy). Defaults to
+ * the current user's own trips; an "All drivers" admin toggle (admin role only,
+ * matching legacy `isAdmin()`) switches the load to EVERY driver's completed
+ * trips via the same bounded read legacy uses (`MastDB.trips.allDrivers()`), and
+ * surfaces the driver per row. Closes the V1→V2 parity gap (the toggle used to be
+ * legacy-#trips-only). Flag-gated (`?ui=1`), side-by-side with legacy `#trips`.
  */
 (function () {
   'use strict';
@@ -36,6 +39,9 @@
     return (icon ? icon + ' ' : '') + (label || '—');
   }
   function locLabel(o) { return (o && o.label) || '—'; }
+  // Driver display (all-drivers admin mode only). Trip records snapshot
+  // driverName at start/save time (trips.js); fall back to the uid if absent.
+  function driverLabel(t) { return (t && (t.driverName || t.driverId)) || 'Unknown'; }
   function tripTime(iso) {
     if (!iso) return '—';
     var d = new Date(iso);
@@ -60,6 +66,12 @@
         get: function (t) { return t.miles || 0; } },
       { name: 'deductible', label: 'Deductible', type: 'money', list: true, readOnly: true,
         get: function (t) { return t.deductibleValue || 0; } }
+      // Driver is NOT a schema field on purpose: it's only meaningful in the
+      // all-drivers admin lens, and adding it here would also inject it into the
+      // CSV export (exportColumns walks all fields) — regressing the own-trips
+      // export. Instead render() injects a Driver list column + the detail facet
+      // pushes a Driver row, both only in all-drivers mode; sorting works because
+      // load() materializes `driver` (the label string) onto each row then.
     ],
     fetch: function (id) {
       var t = V2.byId[id];
@@ -77,10 +89,13 @@
         ]);
         var tabsBar = UI.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'timing', label: 'Timing' }], 'ov');
 
-        var route = UI.kv([
+        var routeRows = [
           { k: 'Origin', v: esc(locLabel(t.origin)) },
           { k: 'Destination', v: esc(locLabel(t.destination)) }
-        ]);
+        ];
+        // Driver shown only when viewing another driver's trip (all-drivers lens).
+        if (t.driverName || t.driverId) routeRows.push({ k: 'Driver', v: esc(driverLabel(t)) });
+        var route = UI.kv(routeRows);
         var details = UI.kv([
           { k: 'Purpose', v: esc(purposeText(t)) },
           { k: 'Miles', v: (t.miles || 0).toFixed(1) + ' mi' + (t.milesSource ? ' (' + esc(t.milesSource) + ')' : '') },
@@ -104,13 +119,60 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'date', sortDir: 'desc', q: '', loaded: false, lens: 'history' };
+  var V2 = { rows: [], byId: {}, sortKey: 'date', sortDir: 'desc', q: '', loaded: false, lens: 'history', allDrivers: false };
 
   function currentUid() {
     try { return (window.firebase && firebase.auth().currentUser && firebase.auth().currentUser.uid) || null; } catch (e) { return null; }
   }
 
+  // Admin gate for the all-drivers lens — EXACTLY legacy #trips's gate
+  // (`isAdmin()` = current user role === 'admin'). The all-drivers view exposes
+  // other people's trip data, so it must be admin-only; can('trips','view') is
+  // too permissive (managers/users can hold view). Defensive: default-deny if
+  // the global isn't resolvable.
+  function canSeeAllDrivers() {
+    try { return typeof window.isAdmin === 'function' ? !!window.isAdmin() : false; } catch (e) { return false; }
+  }
+
+  // Project one raw trip record into a list row (real string `dest` for the
+  // title + list column; `id` materialized). driverUid stamps driverId from the
+  // path key when the record didn't snapshot one (all-drivers flatten).
+  function projectTrip(k, t, driverUid) {
+    var r = Object.assign({ id: k }, t);
+    r.dest = locLabel(t.destination);
+    if (driverUid != null) {
+      if (!r.driverId) r.driverId = driverUid;
+      r.driver = driverLabel(r);   // sortable string for the all-drivers Driver column
+    }
+    return r;
+  }
+
+  function commitRows(out) {
+    V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r.id] = r; });
+    V2.loaded = true; render();
+  }
+
   function load() {
+    // All-drivers admin lens (parity with legacy #trips' "All Drivers" toggle):
+    // load EVERY driver's completed trips, flattened across uids. Reuses the
+    // SAME bounded read legacy uses — MastDB.trips.allDrivers() — so no new
+    // unbounded read is introduced (the helper lives in index.html, already
+    // baselined; it scans the per-tenant trips/ collection). Admin-only.
+    if (V2.allDrivers && canSeeAllDrivers()) {
+      Promise.resolve(MastDB.trips.allDrivers()).then(function (val) {
+        val = val || {};
+        var out = [];
+        Object.keys(val).forEach(function (driverUid) {
+          var userTrips = val[driverUid] || {};
+          Object.keys(userTrips).forEach(function (k) {
+            var t = userTrips[k];
+            if (t && typeof t === 'object' && t.status === 'completed') out.push(projectTrip(k, t, driverUid));
+          });
+        });
+        commitRows(out);
+      }).catch(function (e) { console.error('[trips-v2] load all-drivers', e); render(); });
+      return;
+    }
     var uid = currentUid();
     if (!uid) { V2.rows = []; render(); return; }
     // Read via the RTDB-compat ref keyed at trips/{uid} (the legacy #trips path),
@@ -124,14 +186,9 @@
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
         var t = val[k];
-        if (t && typeof t === 'object' && t.status === 'completed') {
-          var r = Object.assign({ id: k }, t);
-          r.dest = locLabel(t.destination);   // real string for the title + list column
-          out.push(r);
-        }
+        if (t && typeof t === 'object' && t.status === 'completed') out.push(projectTrip(k, t));
       });
-      V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r.id] = r; });
-      V2.loaded = true; render();
+      commitRows(out);
     }).catch(function (e) { console.error('[trips-v2] load', e); render(); });
   }
 
@@ -142,7 +199,8 @@
       rows = rows.filter(function (r) {
         return locLabel(r.destination).toLowerCase().indexOf(q) >= 0 ||
                locLabel(r.origin).toLowerCase().indexOf(q) >= 0 ||
-               purposeText(r).toLowerCase().indexOf(q) >= 0;
+               purposeText(r).toLowerCase().indexOf(q) >= 0 ||
+               (V2.allDrivers && driverLabel(r).toLowerCase().indexOf(q) >= 0);
       });
     }
     return window.mastSortRows(rows, V2.sortKey, V2.sortDir, function (r, k) {
@@ -155,6 +213,21 @@
     var miles = 0, ded = 0;
     rows.forEach(function (t) { miles += (t.miles || 0); ded += (t.deductibleValue || 0); });
     return { count: rows.length, miles: miles, ded: ded };
+  }
+
+  // List columns for the active lens. Own-trips mode uses the schema defaults
+  // (Driver is list:false, so it's absent). All-drivers admin mode injects a
+  // Driver column right after Destination so each row shows whose trip it is.
+  function listColumns() {
+    var cols = MastEntity.listColumns('trips-v2');
+    if (!V2.allDrivers) return cols;
+    var driverCol = { key: 'driver', label: 'Driver', align: 'left', sortable: true,
+      render: function (row) { return esc(driverLabel(row)); } };
+    var out = cols.slice();
+    var destIdx = -1;
+    out.forEach(function (c, i) { if (c.key === 'dest') destIdx = i; });
+    out.splice(destIdx >= 0 ? destIdx + 1 : 0, 0, driverCol);
+    return out;
   }
 
   function ensureTab() {
@@ -180,6 +253,20 @@
         'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
         'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' + p[1] + '</button>';
     }).join('');
+    // All-drivers admin toggle — RBAC-gated (admin role only, matching legacy
+    // #trips). Only meaningful in the History lens. Never rendered for non-admins,
+    // so other drivers' data is never reachable from the UI for them.
+    var allDriversPill = '';
+    if (V2.lens === 'history' && canSeeAllDrivers()) {
+      var ad = V2.allDrivers;
+      allDriversPill =
+        '<button onclick="TripsV2.toggleAllDrivers()" title="' +
+          (ad ? 'Showing every driver\'s trips' : 'Show every driver\'s trips') + '" style="border:1px solid var(--border);' +
+          'background:' + (ad ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
+          'color:' + (ad ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
+          'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-left:4px;">' +
+          (ad ? '👥 All drivers' : '👤 My trips') + '</button>';
+    }
     tab.innerHTML =
       '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
         '<h1 style="font-size:1.6rem;margin:0;">Trips</h1>' +
@@ -191,18 +278,20 @@
           '<button class="btn btn-secondary" onclick="TripsV2.exportCsv()">↓ Export</button>' +
         '</span>' +
       '</div>' +
-      '<div style="margin:10px 0;">' + lensPills + '</div>' +
+      '<div style="margin:10px 0;display:flex;align-items:center;gap:0;flex-wrap:wrap;">' + lensPills + allDriversPill + '</div>' +
       (V2.lens === 'report'
         ? '<div id="tripsV2Report" class="mu-sub">Loading report…</div>'
         : '<div style="display:flex;gap:12px;margin:12px 0;flex-wrap:wrap;">' +
             tile(N.count(s.count), 'Trips') + tile(s.miles.toFixed(1), 'Miles') + tile(N.money(s.ded) || '$0.00', 'Deductible') +
           '</div>' +
-          '<div style="margin:14px 0;"><input class="form-input" placeholder="Search destination, origin, purpose…" value="' + esc(V2.q) +
+          '<div style="margin:14px 0;"><input class="form-input" placeholder="' +
+            (V2.allDrivers ? 'Search driver, destination, origin, purpose…' : 'Search destination, origin, purpose…') + '" value="' + esc(V2.q) +
             '" oninput="TripsV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
           MastEntity.renderList('trips-v2', {
             rows: rows, sortKey: V2.sortKey, sortDir: V2.sortDir,
+            columns: listColumns(),
             onSortFnName: 'TripsV2.sort', onRowClickFnName: 'TripsV2.open',
-            empty: { title: 'No trips yet', message: V2.loaded ? 'Start a trip or add a past one to get going.' : 'Loading…' }
+            empty: { title: 'No trips yet', message: V2.loaded ? (V2.allDrivers ? 'No completed trips for any driver yet.' : 'Start a trip or add a past one to get going.') : 'Loading…' }
           }));
     if (V2.lens === 'report') {
       withTrips(function () {
@@ -231,6 +320,16 @@
       render();
     },
     setLens: function (l) { V2.lens = l; render(); },
+    // Admin-only: flip between own-trips and all-drivers. Re-guarded here (not
+    // just at render) so a stale/forged onclick can't load other drivers' data
+    // for a non-admin. Reloads from the right source, resets to the default sort.
+    toggleAllDrivers: function () {
+      if (!canSeeAllDrivers()) return;
+      V2.allDrivers = !V2.allDrivers;
+      // If the active sort was the (now-absent) driver column, fall back to date.
+      if (!V2.allDrivers && V2.sortKey === 'driver') { V2.sortKey = 'date'; V2.sortDir = 'desc'; }
+      V2.loaded = false; render(); load();
+    },
     // The flows are trips.js body-level modals — same implementation, V2 home.
     startTrip: function () { withTrips(function () { if (window.openStartTripModal) openStartTripModal(); }); },
     addPastTrip: function () { withTrips(function () { if (window.startRetroactiveManual) startRetroactiveManual(); }); },
