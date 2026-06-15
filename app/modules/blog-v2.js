@@ -16,19 +16,19 @@
  * (published / complete / scheduled / draft) is an assigned attribute, so it is
  * a Faceted Record, NOT Process / MastFlow.
  *
- * Create + light edit are NATIVE here: a custom detail.editRender + onSave that
- * DELEGATE to window.BlogBridge (exposed in blog.js). CREATE composes a basic
- * post (title / status / tags / excerpt / body) — the plain-text body is escaped
- * + wrapped by BlogBridge.create (blogPlainToHtml) so it can never render raw on
- * the storefront. EDIT is LIGHT (meta only — title / excerpt / tags). The rich
- * Builder/canvas (rich-text body editor, formatting toolbar, inline-image
- * curation, AI polish, SEO/schema, scheduling + website/Substack publish side
- * effects) stays single-sourced on legacy #blog via a "Write / publish in
- * classic view" link — that is the rich-authoring bridge, NOT a create punt. The
- * body is HTML on the doc; we
- * strip its tags to a plain-text preview (we never inject raw post HTML into the
- * slide-out) and esc() everything. Flag-gated (?ui=1) at #blog-v2, side-by-side;
- * never touches blog.js.
+ * Everything is NATIVE here — there is NO classic escape hatch (V1-editor-
+ * elimination program). CREATE composes a basic post (custom detail.editRender +
+ * onSave). The FULL Builder lives in the blog-editor-v2 drilled composer (opened
+ * via BlogV2.editBody): rich body (contenteditable + execCommand toolbar) + inline
+ * images + coupons, author + author photo, featured image, excerpt, tags (+ AI
+ * suggest), SEO & schema, AI polish, status lifecycle, schedule, and publish-to-
+ * website + unpublish. EVERY write DELEGATES to window.BlogBridge (exposed in
+ * blog.js); the rich body is sanitized via the canonical MastUI.sanitizeHtml
+ * before it lands (the storefront injects post.body RAW), and publish-to-website +
+ * scheduled-publish stay single-sourced in blog.js (BlogBridge.publishToWebsite →
+ * the shared _blogPublishPostToWebsite core, byte-identical to the Builder's
+ * output). The read detail's body PREVIEW strips tags + esc()s everything (never
+ * injects raw post HTML). Flag-gated (?ui=1) at #blog-v2.
  *
  * Data: posts live at blog/posts (MastDB.blog.posts = _makeEntity('blog/posts',
  * 100)); read one-shot via the entity ref (orderByChild('createdAt')
@@ -205,13 +205,12 @@
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.6;white-space:pre-wrap;">' + esc(preview) + '</div>'
           : '<span class="mu-sub">No body content yet.</span>';
 
-        // Rich-text authoring (the Builder/canvas editor, AI polish, scheduling,
-        // website/Substack publish) stays on legacy #blog. Use navigateToClassic
-        // so the V2 route remap doesn't loop us back to this twin.
+        // The full Builder (rich body, inline images, AI polish, author/photo, SEO,
+        // scheduling + website publish) is now NATIVE — BlogV2.editBody drills into
+        // the native blog-editor-v2 composer. No classic escape hatch.
         var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
           ((typeof window.can !== 'function' || window.can('blog', 'edit'))
-            ? '<button class="btn btn-primary" onclick="BlogV2.editBody(\'' + esc(pid) + '\')">✏️ Edit body</button>' : '') +
-          '<button class="btn btn-secondary" onclick="BlogV2.classic()">Write / publish in classic view &rarr;</button>' +
+            ? '<button class="btn btn-primary" onclick="BlogV2.editBody(\'' + esc(pid) + '\')">✏️ Edit post</button>' : '') +
           (statusOf(p) === 'draft' && (typeof window.can !== 'function' || window.can('blog', 'delete'))
             ? '<button class="btn btn-secondary" style="color:var(--text-danger);" onclick="BlogV2.removeDraft(\'' + esc(pid) + '\')">Delete draft</button>' : '') +
           '</div><div id="blogCampChip_' + esc(pid) + '"></div>';
@@ -395,17 +394,19 @@
   }
 
   // ── native rich-body editor (blog-editor-v2 — route:null drilled SO) ──
-  // The native Builder body editor (V1-editor-elimination program, PR-1). Opened
-  // via MastEntity.drill('blog-editor-v2', postId) from the post read detail.
-  // Rich text (contenteditable + execCommand toolbar) + inline images + coupon
-  // embeds, all NATIVE; EVERY write delegates to window.BlogBridge — the body is
-  // sanitized via the canonical MastUI.sanitizeHtml before it lands (the storefront
-  // injects post.body RAW). Formatting is emitted as TAGS (<b>/<i>/<u>/<h2>…) via
-  // execCommand styleWithCSS=false, because the strict sanitizer allowlist drops
-  // <font> + inline style/class. Title / excerpt / tags stay on the slide-out's
-  // light meta-edit; author / featured image / SEO / status / schedule /
-  // publish-to-website remain on the classic Builder until PR-2 (the classic
-  // button is still present on the read detail).
+  // The native Builder (V1-editor-elimination program). Opened via
+  // MastEntity.drill('blog-editor-v2', postId) from the post read detail. This is
+  // the FULL replacement for the legacy #blog Builder: title / author + author
+  // photo / featured image / excerpt / tags (+ AI suggest) / SEO & schema / rich
+  // body (contenteditable + execCommand toolbar) + inline images + coupons / AI
+  // polish / status lifecycle / schedule / publish-to-website + unpublish — all
+  // NATIVE, no classic escape hatch. EVERY write delegates to window.BlogBridge:
+  // the body is sanitized via the canonical MastUI.sanitizeHtml before it lands
+  // (the storefront injects post.body RAW). Formatting is emitted as TAGS
+  // (<b>/<i>/<u>/<h2>…) via execCommand styleWithCSS=false, because the strict
+  // sanitizer allowlist drops <font> + inline style/class. publish-to-website +
+  // scheduled-publish stay single-sourced in blog.js (BlogBridge.publishToWebsite
+  // → the shared _blogPublishPostToWebsite core, identical to the Builder).
   var BED = null, _bedTimer = null;
   var BED_EMOJI = ['😀','😊','🥰','😍','🎉','❤️','🔥','✨','⭐','💡','🙏','👏','👍','💪','🎨','📷','🌿','☀️','🌙','💎','🏷️','💌','🍀','🌸'];
 
@@ -486,16 +487,124 @@
     return U.card('Inline images', '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + cells + '</div>');
   }
 
+  function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+
+  function editorDetails() {
+    var p = BED.post;
+    var authors = (window.BlogBridge && BlogBridge.authors) ? BlogBridge.authors() : {};
+    var akey = p.author || '';
+    if (akey && !authors[akey]) authors[akey] = { name: authorName(p), photoUrl: '', bio: '' };
+    var aopts = Object.keys(authors).map(function (k) {
+      return '<option value="' + esc(k) + '"' + (akey === k ? ' selected' : '') + '>' + esc(authors[k].name || k) + '</option>';
+    }).join('') || ('<option value="' + esc(akey) + '" selected>' + esc(authorName(p)) + '</option>');
+    var aphoto = (authors[akey] && authors[akey].photoUrl) || '';
+    var feat = coverUrl(p);
+    var ex = String(p.excerpt || '');
+
+    var titleRow = fg('Title', '<input class="form-input" id="blogV2EdTitle" value="' + esc(p.title || '') + '" style="width:100%;" placeholder="Post title" onchange="BlogV2.setMeta(\'title\', this.value)">');
+
+    var authorRow = '<div class="form-group"><label class="form-label">Author</label>' +
+      '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+        '<span style="position:relative;display:inline-block;cursor:pointer;" onclick="BlogV2.changeAuthorPhoto()" title="Change author photo">' +
+          (aphoto
+            ? '<img src="' + esc(aphoto) + '" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--border);">'
+            : '<span style="width:40px;height:40px;border-radius:50%;border:1px dashed var(--border);display:inline-flex;align-items:center;justify-content:center;color:var(--warm-gray);">👤</span>') +
+          '<span style="position:absolute;bottom:-2px;right:-2px;background:var(--teal);color:var(--cream);border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;">✎</span>' +
+        '</span>' +
+        '<select class="form-input" style="flex:1;min-width:160px;" onchange="BlogV2.setAuthor(this.value)">' + aopts + '</select>' +
+      '</div></div>';
+
+    var featRow = '<div class="form-group"><label class="form-label">Featured image</label>' +
+      (feat
+        ? '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">' +
+            '<img src="' + esc(feat) + '" alt="" style="width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border);">' +
+            '<div style="display:flex;gap:6px;">' +
+              '<button type="button" class="btn btn-small btn-secondary" onclick="BlogV2.setFeatured()">Change</button>' +
+              '<button type="button" class="btn btn-small btn-secondary" style="color:var(--text-danger);" onclick="BlogV2.removeFeatured()">Remove</button>' +
+            '</div></div>'
+        : '<button type="button" class="btn btn-secondary" onclick="BlogV2.setFeatured()">🖼️ Set featured image</button>' +
+          '<div class="mu-sub" style="margin-top:4px;">Used for social cards and blog listings.</div>') +
+      '</div>';
+
+    var excerptRow = '<div class="form-group"><label class="form-label">Excerpt</label>' +
+      '<textarea class="form-input" id="blogV2EdExcerpt" rows="2" maxlength="300" style="width:100%;resize:vertical;" placeholder="Short summary for social sharing and listings" oninput="BlogV2._excerptCount(this.value)" onchange="BlogV2.setMeta(\'excerpt\', this.value)">' + esc(ex) + '</textarea>' +
+      '<div class="mu-sub" style="text-align:right;" id="blogV2ExcerptCount">' + ex.length + '/300</div></div>';
+
+    var tagsRow = '<div class="form-group"><label class="form-label">Tags (comma-separated)</label>' +
+      '<div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">' +
+        '<input class="form-input" id="blogV2EdTags" value="' + esc((p.tags || []).join(', ')) + '" style="flex:1;min-width:200px;" placeholder="news, behind-the-scenes" onchange="BlogV2.setMeta(\'tags\', this.value)">' +
+        '<button type="button" class="btn btn-small btn-secondary" onclick="BlogV2.suggestTags()" title="AI-suggested tags from your content">💡 Suggest</button>' +
+      '</div></div>';
+
+    return U.card('Details', titleRow + authorRow + featRow + excerptRow + tagsRow);
+  }
+
+  function editorSeo() {
+    var p = BED.post;
+    var schemaType = p.schemaType || 'BlogPosting';
+    var body =
+      fg('URL slug', '<input class="form-input" style="width:100%;font-family:monospace;font-size:0.85rem;" value="' + esc(p.slug || '') + '" placeholder="post-url-slug" onchange="BlogV2.setSeo(\'slug\', this.value)">') +
+      fg('Meta description', '<textarea class="form-input" rows="2" maxlength="200" style="width:100%;resize:vertical;" placeholder="Short summary for search engines (~160 chars)" onchange="BlogV2.setSeo(\'metaDescription\', this.value)">' + esc(p.metaDescription || '') + '</textarea>') +
+      fg('Canonical URL (optional)', '<input class="form-input" style="width:100%;font-family:monospace;font-size:0.85rem;" value="' + esc(p.canonical || '') + '" placeholder="https://example.com/source" onchange="BlogV2.setSeo(\'canonical\', this.value)">') +
+      fg('OG image URL (optional)', '<input class="form-input" style="width:100%;font-family:monospace;font-size:0.85rem;" value="' + esc(p.ogImage || '') + '" placeholder="Defaults to featured image" onchange="BlogV2.setSeo(\'ogImage\', this.value)">') +
+      '<div class="form-group"><label class="form-label">Schema.org type</label><div style="display:flex;gap:16px;">' +
+        '<label style="font-size:0.85rem;cursor:pointer;"><input type="radio" name="blogV2Schema" value="BlogPosting"' + (schemaType === 'BlogPosting' ? ' checked' : '') + ' onchange="BlogV2.setSeo(\'schemaType\', this.value)"> BlogPosting</label>' +
+        '<label style="font-size:0.85rem;cursor:pointer;"><input type="radio" name="blogV2Schema" value="Article"' + (schemaType === 'Article' ? ' checked' : '') + ' onchange="BlogV2.setSeo(\'schemaType\', this.value)"> Article</label>' +
+      '</div></div>';
+    return U.card('SEO & schema', body);
+  }
+
+  function editorPublish() {
+    var p = BED.post;
+    var st = statusOf(p);
+    var badge = U.badge(STATUS_LABEL[st] || 'Draft', STATUS_TONE[st] || 'neutral');
+    var onWeb = p.publishedToWebsite;
+    var btns = '';
+    if (st === 'draft') {
+      btns = '<button type="button" class="btn btn-secondary" onclick="BlogV2.polish()" title="Uses tokens">✨ Polish with AI</button>' +
+        '<button type="button" class="btn btn-primary" onclick="BlogV2.finishPost()">✅ Finish post</button>';
+    } else if (st === 'scheduled') {
+      var schedStr = p.scheduledAt ? N.date(p.scheduledAt) : '';
+      btns = '<span class="mu-sub">📅 Scheduled for ' + esc(schedStr) + '</span>' +
+        '<button type="button" class="btn btn-secondary" onclick="BlogV2.cancelSchedulePost()">Cancel schedule</button>' +
+        '<button type="button" class="btn btn-secondary" onclick="BlogV2.backToDraft()">✏️ Back to draft</button>';
+    } else {
+      // complete / posted / published
+      btns = '<button type="button" class="btn btn-secondary" onclick="BlogV2.backToDraft()">✏️ Back to draft</button>';
+      if (onWeb) {
+        btns += '<span style="display:inline-flex;align-items:center;gap:6px;">' + U.badge('🌐 Published', 'success') + '</span>' +
+          '<button type="button" class="btn btn-secondary" onclick="BlogV2.unpublish()">Unpublish</button>';
+      } else {
+        btns += '<span style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
+            '<input type="datetime-local" id="blogV2SchedAt" style="padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface-dark,transparent);color:var(--text-primary);font-size:0.85rem;">' +
+            '<button type="button" class="btn btn-secondary" onclick="BlogV2.schedulePost()">📅 Schedule</button>' +
+          '</span>' +
+          '<button type="button" class="btn btn-primary" onclick="BlogV2.publish()">📤 Publish to website</button>';
+      }
+    }
+    var body = '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">' +
+        '<span style="font-size:0.85rem;color:var(--warm-gray);">Status</span>' + badge +
+        '<span class="mu-sub">· On website: ' + (onWeb ? 'Yes' : 'No') + '</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' + btns + '</div>';
+    return U.card('Status & publishing', body);
+  }
+
   function editorHtml(UI, r) {
     if (!BED || BED.id !== (r && r._key)) return '<p class="mu-sub">Loading…</p>';
-    var hint = '<div class="mu-editbar"><span class="mu-editpill">BODY</span>' +
-      'Rich text, inline images &amp; coupons — saved automatically. Title, author, SEO &amp; publishing live on the classic Builder.</div>';
+    var hint = '<div class="mu-editbar"><span class="mu-editpill">EDIT</span>' +
+      'Everything about this post — title, author, images, SEO, body &amp; publishing. Changes save automatically.</div>';
     var actions = '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding-top:8px;">' +
       '<button class="btn btn-secondary" onclick="BlogV2.preview()">👁 Preview</button>' +
       '</div>';
     setTimeout(function () { if (window.BlogV2 && BlogV2._wordCount) BlogV2._wordCount(); }, 0);
-    return hint + UI.card('Body', editorBody()) +
-      '<div id="blogV2ImagesHost">' + editorImages() + '</div>' + actions;
+    return hint +
+      editorDetails() +
+      editorSeo() +
+      UI.card('Body', editorBody()) +
+      '<div id="blogV2ImagesHost">' + editorImages() + '</div>' +
+      editorPublish() +
+      actions;
   }
 
   MastEntity.define('blog-editor-v2', {
@@ -518,12 +627,6 @@
       MastEntity.get('blog-v2').fetch(id).then(function (rec) {
         if (rec) MastEntity.openRecord('blog-v2', rec, 'read');
       });
-    },
-    // Rich-text authoring → classic Blog view. Use navigateToClassic so the V2
-    // route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('blog');
-      else if (typeof navigateTo === 'function') navigateTo('blog');
     },
     // Create a post NATIVELY (title / status / tags / excerpt / body) — the
     // write is delegated to BlogBridge.create. Rich formatting, inline images
@@ -849,6 +952,151 @@
           '<div style="font-size:1.6rem;font-weight:700;margin:0 0 14px;">' + esc(BED.post.title || 'Untitled post') + '</div>' + (composed || '<p>No body content yet.</p>') + '</body></html>';
         if (w) { w.document.write(doc); w.document.close(); } else if (window.showToast) showToast('Allow pop-ups to preview', true);
       });
+    },
+    // ── PR-2: full-editor handlers (details / SEO / status / publish) ──
+    // Every mutating handler delegates to window.BlogBridge and re-renders the
+    // editor via _reopen() — which re-seeds the body from BED.post.body. So they
+    // FLUSH the body first (bodyFlush resolves after BED.post.body is current),
+    // guaranteeing the re-seed never drops in-flight typing.
+    _canEdit: function () {
+      if (typeof window.can === 'function' && !window.can('blog', 'edit')) { if (window.showToast) showToast('You don\'t have permission to edit posts.', true); return false; }
+      return true;
+    },
+    _reopen: function () {
+      if (!BED) return;
+      MastEntity.openRecord('blog-editor-v2', { _key: BED.id, _title: ((BED.post.title || 'Untitled post') + ' · Edit') }, 'read', true);
+    },
+    _excerptCount: function (v) { var el = document.getElementById('blogV2ExcerptCount'); if (el) el.textContent = String(v || '').length + '/300'; },
+    setMeta: function (field, value) {
+      if (!BED || !window.BlogBridge || !BlogV2._canEdit()) return;
+      var patch = {};
+      if (field === 'tags') patch.tags = String(value || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+      else patch[field] = value;
+      Promise.resolve(BlogBridge.updateMeta(BED.id, patch)).then(function (upd) {
+        Object.assign(BED.post, upd || patch);
+        if (V2.byId[BED.id]) Object.assign(V2.byId[BED.id], upd || patch);
+      }).catch(function (e) { console.error('[blog-v2] setMeta', e); if (window.showToast) showToast('Error saving.', true); });
+    },
+    setSeo: function (field, value) {
+      if (!BED || !window.BlogBridge || !BlogV2._canEdit()) return;
+      var patch = {}; patch[field] = value;
+      Promise.resolve(BlogBridge.updateMeta(BED.id, patch)).then(function (upd) {
+        Object.assign(BED.post, upd || patch);
+      }).catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Error saving.', true); });
+    },
+    setAuthor: function (key) {
+      if (!BED || !window.BlogBridge || !BlogV2._canEdit()) return;
+      Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.setAuthor(BED.id, key); }).then(function () {
+        BED.post.author = key; BlogV2._reopen();
+      }).catch(function (e) { console.error('[blog-v2] setAuthor', e); if (window.showToast) showToast('Error.', true); });
+    },
+    changeAuthorPhoto: function () {
+      if (!BED || !window.BlogBridge || !BlogV2._canEdit()) return;
+      if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable', true); return; }
+      openImagePicker(function (imgId, url, thumb) {
+        var photoUrl = url || thumb; if (!photoUrl) return;
+        Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.setAuthorPhoto(BED.post.author, photoUrl); }).then(function () {
+          if (window.showToast) showToast('Author photo updated.'); BlogV2._reopen();
+        }).catch(function (e) { console.error('[blog-v2] authorPhoto', e); if (window.showToast) showToast('Error saving photo.', true); });
+      });
+    },
+    setFeatured: function () {
+      if (!BED || !window.BlogBridge || !BlogV2._canEdit()) return;
+      if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable', true); return; }
+      openImagePicker(function (imgId) {
+        if (!imgId) return;
+        Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.setFeaturedImage(BED.id, imgId); }).then(function () {
+          BED.post.featuredImageId = imgId; if (V2.byId[BED.id]) V2.byId[BED.id].featuredImageId = imgId; BlogV2._reopen();
+        }).catch(function (e) { console.error('[blog-v2] setFeatured', e); if (window.showToast) showToast('Error.', true); });
+      });
+    },
+    removeFeatured: function () {
+      if (!BED || !window.BlogBridge || !BlogV2._canEdit()) return;
+      Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.setFeaturedImage(BED.id, null); }).then(function () {
+        BED.post.featuredImageId = null; if (V2.byId[BED.id]) V2.byId[BED.id].featuredImageId = null; BlogV2._reopen();
+      }).catch(function (e) { console.error('[blog-v2] removeFeatured', e); if (window.showToast) showToast('Error.', true); });
+    },
+    suggestTags: function () {
+      if (!BED || !window.BlogBridge || !BlogBridge.suggestTags || !BlogV2._canEdit()) return;
+      if (window.showToast) showToast('Thinking…');
+      Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.suggestTags(BED.id); }).then(function (res) {
+        BED.post.tags = (res && res.tags) || BED.post.tags;
+        if (V2.byId[BED.id]) V2.byId[BED.id].tags = BED.post.tags;
+        if (window.showToast) showToast((res && res.suggested && res.suggested.length) ? ('Tags suggested: ' + res.suggested.join(', ')) : 'No new tags suggested');
+        BlogV2._reopen();
+      }).catch(function (e) { console.error('[blog-v2] suggestTags', e); if (window.showToast) showToast('Tag suggestion failed.', true); });
+    },
+    polish: function () {
+      if (!BED || !window.BlogBridge || !BlogBridge.polishBody || !BlogV2._canEdit()) return;
+      if (window.showToast) showToast('Polishing…');
+      Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.polishBody(BED.id); }).then(function (aiHtml) {
+        return Promise.resolve(window.mastConfirm ? mastConfirm('Replace the body with the AI-polished version?', { title: 'Use AI polish?', confirmLabel: 'Use polished' }) : true).then(function (ok) {
+          if (!ok) return;
+          return Promise.resolve(BlogBridge.setBody(BED.id, aiHtml, BED.post.inlineImages || [])).then(function (res) {
+            if (res && typeof res.body === 'string') BED.post.body = res.body;
+            if (V2.byId[BED.id]) V2.byId[BED.id].body = BED.post.body;
+            if (window.showToast) showToast('Polished ✨'); BlogV2._reopen();
+          });
+        });
+      }).catch(function (e) { console.error('[blog-v2] polish', e); if (window.showToast) showToast('AI polish unavailable — use content as-is', true); });
+    },
+    finishPost: function () { BlogV2._setStatus('complete', 'Post marked complete.'); },
+    backToDraft: function () { BlogV2._setStatus('draft', 'Post returned to draft.'); },
+    _setStatus: function (status, msg) {
+      if (!BED || !window.BlogBridge || !BlogBridge.setStatus || !BlogV2._canEdit()) return;
+      Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.setStatus(BED.id, status); }).then(function (s) {
+        BED.post.status = s || status;
+        if (V2.byId[BED.id]) V2.byId[BED.id].status = BED.post.status;
+        if (window.showToast) showToast(msg); BlogV2._reopen();
+      }).catch(function (e) { console.error('[blog-v2] setStatus', e); if (window.showToast) showToast('Error.', true); });
+    },
+    schedulePost: function () {
+      if (!BED || !window.BlogBridge || !BlogBridge.schedule || !BlogV2._canEdit()) return;
+      var inp = document.getElementById('blogV2SchedAt');
+      var v = inp ? inp.value : '';
+      if (!v) { if (window.showToast) showToast('Pick a date and time first', true); return; }
+      var iso = new Date(v).toISOString();
+      if (iso <= new Date().toISOString()) { if (window.showToast) showToast('Scheduled time must be in the future', true); return; }
+      Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.schedule(BED.id, iso); }).then(function () {
+        BED.post.status = 'scheduled'; BED.post.scheduledAt = iso;
+        if (V2.byId[BED.id]) V2.byId[BED.id].status = 'scheduled';
+        if (window.showToast) showToast('Post scheduled 📅'); BlogV2._reopen();
+      }).catch(function (e) { console.error('[blog-v2] schedule', e); if (window.showToast) showToast('Schedule failed.', true); });
+    },
+    cancelSchedulePost: function () {
+      if (!BED || !window.BlogBridge || !BlogBridge.cancelSchedule || !BlogV2._canEdit()) return;
+      Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.cancelSchedule(BED.id); }).then(function () {
+        BED.post.status = 'complete'; BED.post.scheduledAt = null;
+        if (V2.byId[BED.id]) V2.byId[BED.id].status = 'complete';
+        if (window.showToast) showToast('Schedule cancelled'); BlogV2._reopen();
+      }).catch(function (e) { console.error('[blog-v2] cancelSchedule', e); if (window.showToast) showToast('Error.', true); });
+    },
+    publish: function () {
+      if (!BED || !window.BlogBridge || !BlogBridge.publishToWebsite || !BlogV2._canEdit()) return;
+      Promise.resolve(BlogV2.bodyFlush()).then(function () {
+        return Promise.resolve(window.mastConfirm ? mastConfirm('Publish this post to your public website?', { title: 'Publish to website?', confirmLabel: 'Publish' }) : true);
+      }).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(BlogBridge.publishToWebsite(BED.id)).then(function (res) {
+          BED.post.publishedToWebsite = true; BED.post.publishedAt = (res && res.publishedAt) || new Date().toISOString();
+          if (V2.byId[BED.id]) { V2.byId[BED.id].publishedToWebsite = true; V2.byId[BED.id].publishedAt = BED.post.publishedAt; }
+          if (window.writeAudit) writeAudit('update', 'blog-post', BED.id);
+          if (window.showToast) showToast('Published to website 🌐'); BlogV2._reopen();
+        });
+      }).catch(function (e) { console.error('[blog-v2] publish', e); if (window.showToast) showToast('Publish failed.', true); });
+    },
+    unpublish: function () {
+      if (!BED || !window.BlogBridge || !BlogBridge.unpublish || !BlogV2._canEdit()) return;
+      Promise.resolve(window.mastConfirm
+        ? mastConfirm('Remove this post from the public website?', { title: 'Unpublish?', confirmLabel: 'Unpublish', dangerous: true })
+        : true).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.unpublish(BED.id); }).then(function () {
+          BED.post.publishedToWebsite = false; BED.post.publishedAt = null;
+          if (V2.byId[BED.id]) V2.byId[BED.id].publishedToWebsite = false;
+          if (window.showToast) showToast('Unpublished from website'); BlogV2._reopen();
+        });
+      }).catch(function (e) { console.error('[blog-v2] unpublish', e); if (window.showToast) showToast('Error.', true); });
     },
     exportCsv: function () { return MastEntity.exportRows('blog-v2', visibleRows(), 'all'); }
   };
