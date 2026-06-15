@@ -24,12 +24,15 @@
  * record write (it does NOT send a welcome/confirmation email), so create stays a
  * plain write through the bridge — there is no send to route.
  *
- * Issues are a second NATIVE surface (the Issues lens): a draft issue is CREATED
- * + lightly edited (title / subject line) here via NewsletterBridge.createIssue /
- * updateIssue (which seed + preserve the legacy grid sections). Composing the
- * grid (sections, A/B tests) + sending have no V2 home and stay single-sourced
- * on legacy #newsletter via the issue detail's "Edit / send in classic view"
- * link — the rich-authoring bridge, NOT a create punt. Flag-gated (?ui=1) at
+ * Issues are a second FULLY-NATIVE surface (the Issues lens) — there is no classic
+ * escape hatch. A draft issue is created + lightly edited (title/subject) inline,
+ * and "Compose & send" drills into a native composer (newsletter-compose-v2):
+ * ordered-list sections with per-section rich-text + AI polish, audience segment
+ * picker, A/B test config, Preview, Publish-to-website, Send test + Send. EVERY
+ * write delegates to window.NewsletterBridge; section content is sanitized via
+ * MastUI.sanitizeHtml. The email SEND is an enqueue to tenants/{tid}/emailQueue
+ * (drained by the processEmailQueue backend worker) + the A/B winner cron —
+ * genuine backend, triggered from the native UI. Flag-gated (?ui=1) at
  * #newsletter-v2, side-by-side.
  *
  * Data: subscribers live at newsletter/subscribers (MastDB.newsletter.subscribers
@@ -241,10 +244,11 @@
           { k: 'Published', v: n.publishedAt ? N.date(n.publishedAt) : '—' }
         ]);
         var canEd = (typeof window.can !== 'function' || window.can('newsletter', 'edit'));
-        var cbtns = '';
-        if (st === 'draft' && canEd) cbtns += '<button class="btn btn-primary" onclick="NewsletterV2.compose(\'' + esc(id) + '\')">📝 Compose sections</button> ';
-        cbtns += '<button class="btn btn-secondary" onclick="NewsletterV2.classic()">' +
-          (st === 'draft' ? 'Audience &amp; send (classic) →' : 'View in classic view →') + '</button>';
+        // Drafts open the native composer (sections + audience + send, all native —
+        // no classic escape hatch). Sent/published issues are send history.
+        var cbtns = (st === 'draft' && canEd)
+          ? '<button class="btn btn-primary" onclick="NewsletterV2.compose(\'' + esc(id) + '\')">📝 Compose &amp; send</button>'
+          : '<span class="mu-sub">Sent / published issues are send history.</span>';
         var compose = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' + cbtns + '</div>' +
           '<div id="nlIssueCampChip_' + esc(id) + '"></div>';
         // Part-of-campaign chip — single-sourced renderer in campaigns.js.
@@ -255,7 +259,7 @@
             }).catch(function () {});
           }
         }, 0);
-        return tiles + actions + UI.card('Issue', meta) + UI.card('Compose', '<span class="mu-sub">Edit sections + content natively; audience &amp; send still run in the classic view (coming next).</span>' + compose);
+        return tiles + actions + UI.card('Issue', meta) + UI.card('Compose', '<span class="mu-sub">Compose sections, pick the audience, and send — all native.</span>' + compose);
       },
       // CREATE (a draft issue) + light EDIT (title / subject line) are NATIVE, so
       // the twin no longer punts new issues to the classic Composer. The grid
@@ -363,6 +367,16 @@
     }
   }
 
+  // Build the issue object the bridge composes/sends from, with sections rebuilt
+  // from the LIVE CMP.sections (CMP.issue.sections is a stale load-time snapshot —
+  // in-pane edits live in CMP.sections). Mirrors what cmpPublishWeb does.
+  function cmpIssueSnapshot() {
+    var map = {}; CMP.sections.forEach(function (s) { map[s.id] = s; });
+    return Object.assign({}, CMP.issue, { id: CMP.issueId, sections: map });
+  }
+  // Issue is mid/post-send → block re-sends (mirrors legacy's disabled Send button).
+  function cmpAlreadySent() { return CMP && ['sending', 'completed', 'manual-mark'].indexOf(CMP.issue.sendStatus) >= 0; }
+
   function cmpToolbar(idp) {
     return '<div class="nl-format-toolbar">' +
       '<button class="nl-format-btn" id="' + idp + 'Bold" onmousedown="event.preventDefault();nlFormatCmd(\'' + idp + '\',\'bold\')" title="Bold"><b>B</b></button>' +
@@ -402,13 +416,49 @@
       '<div class="form-group"><label class="form-label">Subject line</label><input class="form-input" id="cmpIssSubject" value="' + esc(iss.subjectLine || '') + '" onchange="NewsletterV2.cmpSaveMeta()" style="width:100%;" placeholder="Email subject line"></div>';
     var sections = CMP.sections.length ? CMP.sections.map(composeSectionCard).join('') : '<p class="mu-sub" style="padding:8px 0;">No sections yet — add one below.</p>';
     var addBtns = CMP_TYPES.map(function (t) { return '<button class="btn btn-small btn-secondary" onclick="NewsletterV2.cmpAdd(\'' + t[0] + '\')">' + t[1] + ' ' + esc(t[2]) + '</button>'; }).join(' ');
+    setTimeout(function () { if (window.NewsletterV2 && NewsletterV2.cmpRefreshCount) NewsletterV2.cmpRefreshCount(); }, 0);
     return UI.card('Issue', head) +
       UI.card('Sections', sections) +
       UI.card('Add a section', '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + addBtns + '</div>') +
+      UI.card('Audience & send', composeSendBody(iss)) +
       '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding-top:14px;">' +
         '<button class="btn btn-secondary" onclick="NewsletterV2.cmpPreview()">👁 Preview</button>' +
         '<button class="btn btn-primary" onclick="NewsletterV2.cmpPublishWeb()">🌐 Publish to website</button>' +
       '</div>';
+  }
+  // Audience picker + A/B config + test/send (composer PR-3). Recipient count is
+  // filled async after render (matchRecipients loads subscribers fresh).
+  function composeSendBody(iss) {
+    var seg = iss.audienceSegmentId || '__all';
+    var segOpts = [['__all', 'All active subscribers'], ['__has_orders', 'Customers (1+ orders)'], ['__no_orders', 'No orders yet'], ['__repeat_2', 'Repeat buyers (2+)'], ['__lapsed_90', 'Lapsed (90d+)']]
+      .map(function (o) { return '<option value="' + o[0] + '"' + (seg === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('');
+    var ab = iss.abTest || {}, abOn = !!ab.enabled, sending = iss.sendStatus === 'sending';
+    var alreadySent = ['sending', 'completed', 'manual-mark'].indexOf(iss.sendStatus) >= 0;
+    var holdout = typeof ab.holdoutPct === 'number' ? ab.holdoutPct : 50, hours = typeof ab.testWindowHours === 'number' ? ab.testWindowHours : 4;
+    var abFields = abOn ? (
+      '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' +
+        '<input class="form-input" value="' + esc((ab.variantB && ab.variantB.subject) || '') + '" placeholder="Variant B subject" onchange="NewsletterV2.cmpAbField(\'variantB.subject\',this.value)" style="flex:1;min-width:200px;">' +
+        '<label style="font-size:0.78rem;color:var(--warm-gray);">Holdout %: <input class="form-input" type="number" min="10" max="90" value="' + holdout + '" onchange="NewsletterV2.cmpAbField(\'holdoutPct\',Number(this.value))" style="width:64px;"></label>' +
+        '<label style="font-size:0.78rem;color:var(--warm-gray);">Test window (h): <input class="form-input" type="number" min="1" max="72" value="' + hours + '" onchange="NewsletterV2.cmpAbField(\'testWindowHours\',Number(this.value))" style="width:64px;"></label>' +
+      '</div>' +
+      (sending && ab.sendStartedAt && !ab.winnerPickedAt ? '<div style="margin-top:8px;"><button class="btn btn-small btn-secondary" onclick="NewsletterV2.cmpPickWinner()">⏱ Pick winner now</button></div>' : '') +
+      (ab.winnerPickedAt ? '<div class="mu-sub" style="margin-top:8px;">Winner: variant ' + esc(ab.winner || '?') + '</div>' : '')
+    ) : '';
+    return '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+        '<label class="form-label" style="margin:0;">Audience</label>' +
+        '<select class="form-input" onchange="NewsletterV2.cmpSetAudience(this.value)" style="width:auto;flex:1;min-width:180px;max-width:320px;">' + segOpts + '</select>' +
+        '<span class="mu-sub" id="cmpRecipCount">counting…</span>' +
+      '</div>' +
+      '<label style="display:flex;align-items:center;gap:6px;margin-top:10px;font-size:0.85rem;"><input type="checkbox"' + (abOn ? ' checked' : '') + ' onchange="NewsletterV2.cmpAbToggle(this.checked)"> A/B test (variant B subject + holdout)</label>' +
+      abFields +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center;">' +
+        '<input class="form-input" id="cmpTestEmail" type="email" placeholder="you@example.com" style="flex:1;min-width:180px;">' +
+        '<button class="btn btn-secondary" onclick="NewsletterV2.cmpSendTest()">📨 Send test</button>' +
+        (alreadySent
+          ? '<button class="btn btn-primary" disabled title="This issue has already been sent">✓ Sent</button>'
+          : '<button class="btn btn-primary" onclick="NewsletterV2.cmpSend()">🚀 Send to audience</button>') +
+      '</div>' +
+      (sending ? '<div class="mu-sub" style="margin-top:8px;">Last send: queued ' + ((iss.sendQueuedCount) || 0) + ', skipped ' + ((iss.sendSkippedCount) || 0) + '.</div>' : '');
   }
   MastEntity.define('newsletter-compose-v2', {
     label: 'Compose', labelPlural: 'Compose', size: 'lg', route: null,
@@ -561,13 +611,6 @@
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('newsletter'); } catch (e) {} }
       MastEntity.openRecord('newsletter-v2', {}, 'create');
     },
-    // Subscriber create/edit is native here. Composing + sending issues, A/B
-    // tests, and the campaign Composer have no V2 home → classic Newsletter view.
-    // navigateToClassic so the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('newsletter');
-      else if (typeof navigateTo === 'function') navigateTo('newsletter');
-    },
     // ── Issues lens (Wave 3) ──
     view: function (v) { V2.view = v === 'issues' ? 'issues' : 'subs'; render(); },
     // Create a draft issue NATIVELY (title / subject line); the write delegates
@@ -716,6 +759,81 @@
           MastEntity.get('newsletter-issues-v2').fetch(sid).then(function (rec) { if (rec) MastEntity.openRecord('newsletter-issues-v2', rec, 'read'); });
         });
       }).catch(function (e) { console.error('[newsletter-v2] cmpPublishWeb', e); if (window.showToast) showToast('Error publishing.', true); });
+    },
+    // ── audience + A/B + send (composer PR-3) ──
+    cmpSetAudience: function (seg) {
+      if (!CMP || !window.NewsletterBridge) return;
+      CMP.issue.audienceSegmentId = seg || null;
+      Promise.resolve(NewsletterBridge.setAudienceSegment(CMP.issueId, seg)).catch(function (e) { console.error('[newsletter-v2] cmpSetAudience', e); });
+      NewsletterV2.cmpRefreshCount();
+    },
+    cmpRefreshCount: function () {
+      if (!CMP || !window.NewsletterBridge || !NewsletterBridge.matchRecipients) return;
+      var el = document.getElementById('cmpRecipCount'); if (!el) return;
+      Promise.resolve(NewsletterBridge.matchRecipients(CMP.issue.audienceSegmentId || '__all')).then(function (recips) {
+        var n = (recips || []).length; el.textContent = n + ' recipient' + (n === 1 ? '' : 's');
+      }).catch(function () { if (el) el.textContent = '—'; });
+    },
+    cmpAbToggle: function (on) {
+      if (!CMP || !window.NewsletterBridge) return;
+      var ab = CMP.issue.abTest || {};
+      ab.enabled = !!on;
+      if (on) { if (typeof ab.holdoutPct !== 'number') ab.holdoutPct = 50; if (typeof ab.testWindowHours !== 'number') ab.testWindowHours = 4; if (!ab.variantA) ab.variantA = {}; if (!ab.variantB) ab.variantB = {}; }
+      CMP.issue.abTest = ab;
+      Promise.resolve(NewsletterBridge.setAbTest(CMP.issueId, ab)).then(function () { reopenCompose(); }).catch(function (e) { console.error('[newsletter-v2] cmpAbToggle', e); });
+    },
+    cmpAbField: function (path, value) {
+      if (!CMP || !window.NewsletterBridge) return;
+      var ab = CMP.issue.abTest || {}; var parts = String(path).split('.'); var cur = ab;
+      for (var i = 0; i < parts.length - 1; i++) { if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {}; cur = cur[parts[i]]; }
+      cur[parts[parts.length - 1]] = value;
+      CMP.issue.abTest = ab;
+      Promise.resolve(NewsletterBridge.setAbTest(CMP.issueId, ab)).catch(function (e) { console.error('[newsletter-v2] cmpAbField', e); });
+    },
+    cmpSendTest: function () {
+      if (!CMP || !window.NewsletterBridge || !NewsletterBridge.queueTest) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return; }
+      if (typeof window.can === 'function' && !window.can('newsletter', 'edit')) { if (window.showToast) showToast('You don\'t have permission to send.', true); return; }
+      cmpFlushAll();
+      var email = ((document.getElementById('cmpTestEmail') || {}).value || '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { if (window.showToast) showToast('Enter a valid test email address', true); return; }
+      Promise.resolve(NewsletterBridge.queueTest(cmpIssueSnapshot(), email)).then(function () {
+        if (window.showToast) showToast('Test queued to ' + email + ' — delivery in ~10s 📨');
+      }).catch(function (e) { console.error('[newsletter-v2] cmpSendTest', e); if (window.showToast) showToast('Send test failed.', true); });
+    },
+    cmpSend: function () {
+      if (!CMP || !window.NewsletterBridge || !NewsletterBridge.queueSend) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return; }
+      if (typeof window.can === 'function' && !window.can('newsletter', 'edit')) { if (window.showToast) showToast('You don\'t have permission to send.', true); return; }
+      if (cmpAlreadySent()) { if (window.showToast) showToast('This issue has already been sent.', true); return; }
+      cmpFlushAll();
+      var hasContent = CMP.sections.some(function (s) { return s.included !== false && (s.finalContent || '').trim(); });
+      if (!hasContent) { if (window.showToast) showToast('Add content to at least one section before sending', true); return; }
+      var ab = CMP.issue.abTest || {};
+      Promise.resolve(NewsletterBridge.matchRecipients(CMP.issue.audienceSegmentId || '__all')).then(function (recips) {
+        var n = (recips || []).length;
+        if (!n) { if (window.showToast) showToast('No recipients matched for this audience', true); return; }
+        var holdout = typeof ab.holdoutPct === 'number' ? ab.holdoutPct : 50, hours = typeof ab.testWindowHours === 'number' ? ab.testWindowHours : 4;
+        var msg = ab.enabled
+          ? 'Send to ' + n + ' subscribers? An A/B test goes to ' + (100 - holdout) + '% now (split A/B), then the winner goes to the remaining ' + holdout + '% after ' + hours + 'h.'
+          : 'Send this issue to ' + n + ' subscribers now?';
+        return Promise.resolve(window.mastConfirm ? mastConfirm(msg, { title: ab.enabled ? 'Send (with A/B test)' : 'Send' }) : true).then(function (ok) {
+          if (!ok) return;
+          return Promise.resolve(NewsletterBridge.queueSend(cmpIssueSnapshot(), recips)).then(function (res) {
+            if (window.writeAudit) writeAudit('update', 'newsletter-issue', CMP.issueId);
+            CMP.issue.sendStatus = 'sending'; CMP.issue.sendQueuedCount = res.queued; CMP.issue.sendSkippedCount = res.skipped;
+            if (window.showToast) showToast('Send queued: ' + res.queued + ' email(s), ' + res.skipped + ' skipped 🚀');
+            reopenCompose();
+          });
+        });
+      }).catch(function (e) { console.error('[newsletter-v2] cmpSend', e); if (window.showToast) showToast('Error sending.', true); });
+    },
+    cmpPickWinner: function () {
+      if (!CMP || !window.NewsletterBridge || !NewsletterBridge.pickWinnerNow) return;
+      Promise.resolve(window.mastConfirm ? mastConfirm('Force-pick the A/B winner now and send to the holdout? (Normally the cron picks at the end of the test window.)', { title: 'Pick winner now' }) : true).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(NewsletterBridge.pickWinnerNow(CMP.issueId)).then(function () {
+          if (window.showToast) showToast('Winner pick triggered — the cron queues the holdout send on its next tick (≤15 min).');
+        });
+      }).catch(function (e) { console.error('[newsletter-v2] cmpPickWinner', e); if (window.showToast) showToast('Error.', true); });
     },
     sortIssues: function (key) {
       if (V2.issueSortKey === key) V2.issueSortDir = (V2.issueSortDir === 'asc' ? 'desc' : 'asc');
