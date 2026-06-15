@@ -184,12 +184,14 @@
         fields.createdAt = nowIso();
         return Promise.resolve(MastDB.set('settings/clearanceTypes/' + key, fields)).then(function () {
           S.ct.byId[key] = Object.assign({ _key: key }, fields);
+          if (window.writeAudit) writeAudit('create', 'clearance-type', key);
           if (window.showToast) showToast('Clearance type created.'); reloadSoon(); return true;
         }).catch(function (e) { console.error('[students-config-v2] ct create', e); if (window.showToast) showToast('Error saving clearance type.', true); return false; });
       }
       var id = rec._key || rec.id;
       return Promise.resolve(MastDB.update('settings/clearanceTypes/' + id, fields)).then(function () {
         Object.assign(S.ct.byId[id] || rec, fields);
+        if (window.writeAudit) writeAudit('update', 'clearance-type', id);
         if (window.showToast) showToast('Clearance type saved.'); reloadSoon(); return true;
       }).catch(function (e) { console.error('[students-config-v2] ct update', e); if (window.showToast) showToast('Error saving clearance type.', true); return false; });
     }
@@ -286,12 +288,14 @@
         record.createdAt = nowIso();
         return Promise.resolve(MastDB.set('admin/documents/' + key, record)).then(function () {
           S.docs.byId[key] = Object.assign({ _key: key }, record);
+          if (window.writeAudit) writeAudit('create', 'business-document', key);
           if (window.showToast) showToast('Document created.'); reloadSoon(); return true;
         }).catch(function (e) { console.error('[students-config-v2] doc create', e); if (window.showToast) showToast('Error saving document.', true); return false; });
       }
       var id = rec._key || rec.documentId;
       return Promise.resolve(MastDB.update('admin/documents/' + id, record)).then(function () {
         Object.assign(S.docs.byId[id] || rec, record);
+        if (window.writeAudit) writeAudit('update', 'business-document', id);
         if (window.showToast) showToast('Document saved.'); reloadSoon(); return true;
       }).catch(function (e) { console.error('[students-config-v2] doc update', e); if (window.showToast) showToast('Error saving document.', true); return false; });
     }
@@ -418,6 +422,7 @@
       }).then(function () {
         if (mode === 'create') { S.wt.byId[key] = Object.assign({ _key: key }, fields); }
         else { Object.assign(S.wt.byId[key] || rec, fields); }
+        if (window.writeAudit) writeAudit(mode === 'create' ? 'create' : 'update', 'waiver-template', key);
         if (window.showToast) showToast(mode === 'create' ? 'Waiver template created.' : 'Waiver template saved.');
         reloadSoon(); return true;
       }).catch(function (e) { console.error('[students-config-v2] waiver save', e); if (window.showToast) showToast('Error saving waiver template.', true); return false; });
@@ -625,17 +630,18 @@
       if (window.showToast) showToast('You do not have permission to delete student settings.', true); return;
     }
     var spec = {
-      waiver: { title: 'Delete waiver template', msg: 'Delete this waiver template? This cannot be undone.', run: function () {
+      waiver: { title: 'Delete waiver template', msg: 'Delete this waiver template? This cannot be undone.', auditEntity: 'waiver-template', run: function () {
         return Promise.all([MastDB.remove('settings/waiverTemplates/' + id), MastDB.remove('public/waivers/' + id)]); } },
-      clearance: { title: 'Delete clearance type', msg: 'Delete this clearance type? This cannot be undone.', run: function () {
+      clearance: { title: 'Delete clearance type', msg: 'Delete this clearance type? This cannot be undone.', auditEntity: 'clearance-type', run: function () {
         return Promise.resolve(MastDB.remove('settings/clearanceTypes/' + id)); } },
-      doc: { title: 'Delete document', msg: 'Delete this document? This cannot be undone.', run: function () {
+      doc: { title: 'Delete document', msg: 'Delete this document? This cannot be undone.', auditEntity: 'business-document', run: function () {
         return Promise.resolve(MastDB.remove('admin/documents/' + id)); } }
     }[kind];
     if (!spec) return;
     Promise.resolve(mastConfirm(spec.msg, { title: spec.title, danger: true })).then(function (ok) {
       if (!ok) return;
       return Promise.resolve(spec.run()).then(function () {
+        if (window.writeAudit) writeAudit('delete', spec.auditEntity, id);
         if (window.MastUI && window.MastUI.slideOut && window.MastUI.slideOut.requestCloseForce) window.MastUI.slideOut.requestCloseForce();
         if (window.showToast) showToast('Deleted.'); reloadSoon();
       });
