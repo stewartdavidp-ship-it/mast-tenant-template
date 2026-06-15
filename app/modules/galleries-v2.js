@@ -21,11 +21,12 @@
  * the EXISTING admin/galleries write core). Never reimplements the write/merge
  * or validation logic. Mirrors contacts-v2 / students-v2.
  *
- * The Placements + Payouts machinery (record sale/return, settle payouts, print
- * statements) stays single-sourced on legacy #galleries — that's the consignment
- * PLACEMENT surface (the pieces/line-items), a separate surface from the gallery
- * record. The "Pieces" facet links there via navigateToClassic. Flag-gated
- * (?ui=1) at #galleries-v2, side-by-side.
+ * The Placements + Payouts machinery is native too: new placements are created
+ * here (FK stamped), pieces are managed on the placement record (consignments-v2),
+ * and recording a settlement (payout received) is native on the Payouts facet —
+ * routed through window.GalleriesBridge.recordSettlement (the gated CF call in
+ * consignment.js). No navigateToClassic hatch. Flag-gated (?ui=1) at
+ * #galleries-v2, side-by-side.
  */
 (function () {
   'use strict';
@@ -254,8 +255,9 @@
           : '<span class="mu-sub">No notes.</span>';
 
         // Payouts — per-placement earned/settled/due + settlement history.
+        var canSettle = (typeof window.can !== 'function' || window.can('galleries', 'edit'));
         var pb = payoutBreakdown(g);
-        var dueRows = pb.rows.length ? UI.relatedTable([
+        var dueCols = [
           { label: 'Placement', render: function (r) {
               var label = 'Placed ' + (r.p.createdAt ? N.date(r.p.createdAt) : '(undated)');
               return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'consignments-v2\',\'' + esc(r.p._key || '') + '\')">' + esc(label) + '</button>';
@@ -265,25 +267,36 @@
           { label: 'Due', align: 'right', render: function (r) {
               return r.due > 0 ? '<strong>' + N.money(r.due) + '</strong>' : '<span class="mu-sub">$0.00</span>';
             } }
-        ], pb.rows) : '<span class="mu-sub">Nothing owed — no placements yet.</span>';
+        ];
+        // Per-placement "Record settlement" — native, routed through the same
+        // recordConsignmentSettlement CF the classic form uses.
+        if (canSettle) dueCols.push({ label: '', align: 'right', render: function (r) {
+          var pKey = r.p.placementId || r.p._key || '';
+          return (r.due > 0 && pKey)
+            ? '<button type="button" class="mu-link" onclick="GalleriesV2.recordSettlement(\'' + esc(pKey) + '\',\'' + esc(g._key) + '\')">Record settlement</button>'
+            : '<span class="mu-sub">—</span>';
+        } });
+        var dueRows = pb.rows.length ? UI.relatedTable(dueCols, pb.rows)
+          : '<span class="mu-sub">Nothing owed — no placements yet.</span>';
         var histRows = pb.history.length ? UI.relatedTable([
           { label: 'Settled', render: function (h) { return h.at ? N.date(h.at) : '—'; } },
           { label: 'Placement', render: function (h) { return 'Placed ' + (h.placement.createdAt ? N.date(h.placement.createdAt) : '(undated)'); } },
           { label: 'Note', render: function (h) { return h.note ? '<span class="mu-sub">' + esc(h.note) + '</span>' : '<span class="mu-sub">—</span>'; } },
           { label: 'Amount', align: 'right', render: function (h) { return N.money(h.amount) || '—'; } }
         ], pb.history) : '<span class="mu-sub">No settlements recorded yet.</span>';
-        // Settle-up writes money records — stays single-sourced on classic (tracked debt).
-        var settleLink = '<div style="margin-top:12px;"><button class="btn btn-secondary" onclick="GalleriesV2.classic()">Record a settlement in classic view →</button></div>';
+        // Settlements are recorded natively per-placement (the "Record settlement"
+        // action on the "Owed to you" table above) — routed through the gated
+        // recordConsignmentSettlement CF; no classic hatch.
+        var settleHint = '<div class="mu-sub" style="margin-top:12px;">Record a settlement from the “Owed to you” table above when a payout arrives.</div>';
 
         var newPlacementBtn = (typeof window.can !== 'function' || window.can('galleries', 'edit'))
-          ? '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="GalleriesV2.newPlacement(\'' + esc(g._key) + '\')">+ New placement</button>' +
-            ' <button class="btn btn-secondary" onclick="GalleriesV2.classic()">Manage in classic view →</button></div>'
-          : '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="GalleriesV2.classic()">Manage in classic view →</button></div>';
+          ? '<div style="margin-top:14px;"><button class="btn btn-primary" onclick="GalleriesV2.newPlacement(\'' + esc(g._key) + '\')">+ New placement</button></div>'
+          : '';
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' + UI.card('Gallery', gallery) + UI.card('Primary contact', primaryContact) + UI.card('Addresses', addressBody) + '</div>' +
           '<div class="mu-pane" data-pane="pieces" hidden>' + UI.cardTable('Placements (' + allPlacements.length + ')', piecesBody + newPlacementBtn) + '</div>' +
-          '<div class="mu-pane" data-pane="payouts" hidden>' + UI.card('Owed to you', dueRows) + UI.cardTable('Settlement history', histRows + settleLink) + '</div>' +
+          '<div class="mu-pane" data-pane="payouts" hidden>' + UI.card('Owed to you', dueRows) + UI.cardTable('Settlement history', histRows + settleHint) + '</div>' +
           '<div class="mu-pane" data-pane="contacts" hidden>' + UI.cardTable('Contacts (' + contacts.length + ')', contactsBody) + '</div>' +
           '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>';
       },
@@ -568,13 +581,66 @@
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('consignment'); } catch (e) {} }
       MastEntity.openRecord('galleries-v2', {}, 'create');
     },
-    // KEPT CLASSIC: consignment PLACEMENT management (record sale/return, settle
-    // payouts, print statements) — a separate surface (pieces/line-items) with no
-    // V2 home. The gallery RECORD (identity/addresses/contacts/terms) is native
-    // here. navigateToClassic so the V2 route remap doesn't loop back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('galleries');
-      else if (typeof navigateTo === 'function') navigateTo('galleries');
+    // ── native settlement (payout received) — per placement ───────────────
+    // Opens a form (amount + date + notes), then routes through GalleriesBridge.
+    // recordSettlement — which mints the idempotencyKey, runs the outstanding-
+    // earnings cap pre-check, and calls the recordConsignmentSettlement CF (the
+    // same path classic confirmPayout uses; no raw client settlement write here).
+    // galleryKey is the open gallery record so we can re-open it after the write.
+    recordSettlement: function (placementId, galleryKey) {
+      if (typeof window.can === 'function' && !window.can('galleries', 'edit')) {
+        if (window.showToast) showToast('You do not have permission to record settlements.', true); return;
+      }
+      if (typeof openModal !== 'function') { if (window.showToast) showToast('Dialog unavailable — try again', true); return; }
+      var p = V2.placements.filter(function (x) { return (x.placementId || x._key) === placementId; })[0];
+      if (!p) { if (window.showToast) showToast('Placement not found — reload and try again.', true); return; }
+      var t = placementTotals(p);
+      var settlements = (p.settlements && typeof p.settlements === 'object') ? p.settlements : {};
+      var paid = Object.keys(settlements).reduce(function (s, k) { return s + ((settlements[k] && Number(settlements[k].amountReceivedCents)) || 0) / 100; }, 0);
+      var outstanding = Math.max(0, (t.makerEarnings || 0) - paid);
+      var today = new Date().toISOString().split('T')[0];
+      var label = 'Placement placed ' + (p.createdAt ? N.date(p.createdAt) : '(undated)');
+      var html = '<div class="modal-header"><h3>Record settlement</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div style="padding:20px;">' +
+        '<div class="mu-sub" style="margin-bottom:14px;">' + esc(label) + ' · Outstanding: <strong>' + esc(N.money(outstanding) || '$0.00') + '</strong></div>' +
+        '<div class="form-group" style="margin-bottom:14px;"><label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Amount received ($)</label>' +
+        '<input id="galV2SettleAmount" type="number" min="0" step="0.01" value="' + esc(outstanding > 0 ? outstanding.toFixed(2) : '') + '" class="form-input" style="width:100%;"></div>' +
+        '<div class="form-group" style="margin-bottom:14px;"><label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Received date</label>' +
+        '<input id="galV2SettleDate" type="date" value="' + esc(today) + '" class="form-input" style="width:100%;">' +
+        '<div class="mu-sub" style="margin-top:4px;">Revenue is attributed to the month the payment actually arrived.</div></div>' +
+        '<div class="form-group" style="margin-bottom:14px;"><label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Notes (optional)</label>' +
+        '<input id="galV2SettleNotes" type="text" placeholder="e.g. check #4521" class="form-input" style="width:100%;"></div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="GalleriesV2.confirmSettlement(\'' + esc(placementId) + '\',\'' + esc(galleryKey || '') + '\')">Record settlement</button>' +
+        '</div></div>';
+      openModal(html);
+    },
+    confirmSettlement: function (placementId, galleryKey) {
+      if (!window.GalleriesBridge || typeof window.GalleriesBridge.recordSettlement !== 'function') {
+        if (window.showToast) showToast('Consignment tools are still loading — try again in a moment.', true); return;
+      }
+      var amountEl = document.getElementById('galV2SettleAmount');
+      var dateEl = document.getElementById('galV2SettleDate');
+      var notesEl = document.getElementById('galV2SettleNotes');
+      var amountDollars = amountEl ? parseFloat(amountEl.value) : NaN;
+      var receivedDate = (dateEl && dateEl.value) || '';
+      var notes = (notesEl && notesEl.value) || '';
+      Promise.resolve(window.GalleriesBridge.recordSettlement(placementId, { amountDollars: amountDollars, receivedDate: receivedDate, notes: notes }))
+        .then(function (res) {
+          if (typeof closeModal === 'function') closeModal();
+          if (window.showToast) showToast('Settlement of ' + (window.formatCents ? window.formatCents(res.amountCents) : ('$' + (res.amountCents / 100).toFixed(2))) + ' recorded');
+          // Refresh placement+gallery caches, then re-open the gallery record so the
+          // Payouts facet reflects the new settlement (mirrors edit's post-save reopen).
+          reloadSoon();
+          if (galleryKey) setTimeout(function () {
+            MastEntity.get('galleries-v2').fetch(galleryKey).then(function (rec) {
+              if (rec) MastEntity.openRecord('galleries-v2', rec, 'read');
+            });
+          }, 350);
+        })
+        // Surface the server's reason verbatim (e.g. the over-cap rejection).
+        .catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Could not record settlement', true); });
     },
     exportCsv: function () { return MastEntity.exportRows('galleries-v2', visibleRows(), 'all'); }
   };

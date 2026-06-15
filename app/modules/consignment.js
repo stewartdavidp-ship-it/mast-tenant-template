@@ -1782,79 +1782,39 @@
     var amountDollars = parseFloat(amountEl && amountEl.value) || 0;
     var receivedDate = (dateEl && dateEl.value) || new Date().toISOString().split('T')[0];
     var notes = (notesEl && notesEl.value || '').trim();
-
-    if (amountDollars <= 0 || amountDollars > 100000) {
-      showToast('Amount must be between $0.01 and $100,000', 'error');
-      return;
-    }
-    if (!receivedDate) {
-      showToast('Received date required', 'error');
-      return;
-    }
-
-    var amountCents = Math.round(amountDollars * 100);
-    // Generated once per confirm action and reused on retry: the CF treats this
-    // as the idempotency key so a double-submit collapses to ONE settlement.
-    // The authoritative settlementId is minted server-side.
-    var idempotencyKey = MastDB.consignments.newKey();
-    var receivedAtIso = receivedDate + 'T12:00:00.000Z';
     var now = new Date().toISOString();
 
-    var p = placementsData[placementId];
-    var totals = p ? calculatePlacementTotals(p) : { makerEarnings: 0 };
-    var existingSettlements = (p && p.settlements && typeof p.settlements === 'object') ? p.settlements : {};
-    var totalPreviouslySettledCents = Object.values(existingSettlements).reduce(function(sum, s) {
-      return sum + (s && Number(s.amountReceivedCents) || 0);
-    }, 0);
-    var expectedAmountCents = Math.max(0, totals.makerEarnings - totalPreviouslySettledCents);
-
-    // Outstanding-earnings ceiling — fast UX pre-check ONLY. The authoritative
-    // cap (and the settlement write + revenue accrual) is server-enforced
-    // atomically in the recordConsignmentSettlement Cloud Function, so a client
-    // bypass can't over-accrue cash-basis 'consignment' revenue (which would skew
-    // tier/auto-upgrade logic). makerEarnings can be fractional cents (commission
-    // split), so round and allow a 1-cent tolerance for the prefilled full-payout.
-    var ceilingCents = Math.round(expectedAmountCents);
-    if (amountCents > ceilingCents + 1) {
-      showToast('Payout exceeds outstanding earnings (' + formatCurrency(ceilingCents) + ')', 'error');
-      return;
-    }
-
     try {
-      // Single authoritative call: the CF recomputes the cap server-side, mints
-      // the settlementId, and writes the settlement + admin_monthlyRevenue accrual
-      // in one transaction (no more best-effort revenue ping that could drift).
-      var resp = await firebase.functions().httpsCallable('recordConsignmentSettlement')({
-        tenantId: (MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
-        placementId: placementId,
-        idempotencyKey: idempotencyKey,
-        amountReceivedCents: amountCents,
-        receivedAt: receivedAtIso,
-        date: receivedDate,
-        notes: notes || null
+      // Single-sourced: the idempotency-key mint, the outstanding-earnings cap
+      // pre-check, and the authoritative recordConsignmentSettlement CF call all
+      // live in GalleriesBridge.recordSettlement (the V2 twins call the same
+      // method) — confirmPayout no longer duplicates that logic.
+      var res = await window.GalleriesBridge.recordSettlement(placementId, {
+        amountDollars: amountDollars,
+        receivedDate: receivedDate,
+        notes: notes
       });
-      var result = (resp && resp.data) || {};
-      var newSettlementId = result.settlementId || idempotencyKey;
 
-      // Optimistically reflect the new settlement locally so the detail re-render
-      // shows it immediately; the consignments listener reconciles to the
-      // server-authoritative record moments later.
+      // Optimistically reflect the new settlement on the classic cache so the
+      // detail re-render shows it immediately; the consignments listener
+      // reconciles to the server-authoritative record moments later.
+      var p = placementsData[placementId];
       if (p) {
         if (!p.settlements || typeof p.settlements !== 'object') p.settlements = {};
-        p.settlements[newSettlementId] = {
-          settlementId: newSettlementId,
-          date: receivedDate,
-          amountReceivedCents: amountCents,
-          expectedAmountCents: ceilingCents,
-          notes: notes || null,
+        p.settlements[res.settlementId] = {
+          settlementId: res.settlementId,
+          date: res.receivedDate,
+          amountReceivedCents: res.amountCents,
+          expectedAmountCents: res.expectedAmountCents,
+          notes: res.notes,
           createdAt: now
         };
-        p.totalSettled = totalPreviouslySettledCents + amountCents;
-        p.lastSettlementDate = receivedDate;
+        p.totalSettled = res.totalPreviouslySettledCents + res.amountCents;
+        p.lastSettlementDate = res.receivedDate;
       }
 
       closeModal();
-      showToast('Payout of ' + formatCurrency(amountCents) + ' recorded');
+      showToast('Payout of ' + formatCurrency(res.amountCents) + ' recorded');
       renderPlacementDetail(placementId);
     } catch (err) {
       console.error('Consignment payout error:', err);
@@ -2212,6 +2172,80 @@
     delete p.lineItems[lineItemId];
     await _persistPlacementTotals(placementId, p);
     return true;
+  };
+  // ── Settlement (payout received) — the single source of the CF call ─────
+  // Both the legacy confirmPayout modal and the galleries-v2 / consignments-v2
+  // twins record a settlement through THIS method, so the idempotency-key mint,
+  // the fast client-side outstanding-earnings cap pre-check, and the exact
+  // recordConsignmentSettlement payload are written exactly once. The CF is the
+  // authority: it recomputes the cap server-side, mints the settlementId, and
+  // writes the settlement + admin_monthlyRevenue accrual in ONE transaction —
+  // this method never writes the settlement itself (no raw client write path).
+  //
+  // Input: { amountDollars, receivedDate (YYYY-MM-DD), notes }. Fetches the
+  // placement fresh (the V2 twins don't populate the classic placementsData
+  // cache) so the pre-check ceiling is correct. Resolves with the CF result
+  // (incl. server-minted settlementId); throws with the server's reason (e.g.
+  // the over-cap rejection) so callers can surface it verbatim.
+  window.GalleriesBridge.recordSettlement = async function (placementId, input) {
+    _requireGalleryEdit('edit');
+    input = input || {};
+    var amountDollars = parseFloat(input.amountDollars);
+    var receivedDate = String(input.receivedDate || '').trim() || new Date().toISOString().split('T')[0];
+    var notes = String(input.notes || '').trim();
+
+    if (!(amountDollars > 0) || amountDollars > 100000) {
+      throw new Error('Amount must be between $0.01 and $100,000');
+    }
+    if (!receivedDate) throw new Error('Received date required');
+
+    var amountCents = Math.round(amountDollars * 100);
+    // Minted once per confirm action: the CF treats this as the idempotency key
+    // so a double-submit collapses to ONE settlement. The authoritative
+    // settlementId is minted server-side.
+    var idempotencyKey = MastDB.consignments.newKey();
+    var receivedAtIso = receivedDate + 'T12:00:00.000Z';
+
+    // Fetch the placement fresh so the cap pre-check ceiling is correct even when
+    // the V2 twin (which never populates placementsData) is the active surface.
+    var p = await _fetchPlacement(placementId);
+    var totals = calculatePlacementTotals(p);
+    var existingSettlements = (p.settlements && typeof p.settlements === 'object') ? p.settlements : {};
+    var totalPreviouslySettledCents = Object.values(existingSettlements).reduce(function (sum, s) {
+      return sum + (s && Number(s.amountReceivedCents) || 0);
+    }, 0);
+    var expectedAmountCents = Math.max(0, totals.makerEarnings - totalPreviouslySettledCents);
+
+    // Outstanding-earnings ceiling — fast UX pre-check ONLY. The authoritative
+    // cap (and the settlement write + revenue accrual) is server-enforced
+    // atomically in recordConsignmentSettlement, so a client bypass can't
+    // over-accrue cash-basis 'consignment' revenue (which would skew
+    // tier/auto-upgrade logic). makerEarnings can be fractional cents (commission
+    // split), so round and allow a 1-cent tolerance for the prefilled full-payout.
+    var ceilingCents = Math.round(expectedAmountCents);
+    if (amountCents > ceilingCents + 1) {
+      throw new Error('Payout exceeds outstanding earnings (' + formatCurrency(ceilingCents) + ')');
+    }
+
+    // Single authoritative call (identical payload to legacy confirmPayout).
+    var resp = await firebase.functions().httpsCallable('recordConsignmentSettlement')({
+      tenantId: (MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
+      placementId: placementId,
+      idempotencyKey: idempotencyKey,
+      amountReceivedCents: amountCents,
+      receivedAt: receivedAtIso,
+      date: receivedDate,
+      notes: notes || null
+    });
+    var result = (resp && resp.data) || {};
+    return {
+      settlementId: result.settlementId || idempotencyKey,
+      amountCents: amountCents,
+      expectedAmountCents: ceilingCents,
+      receivedDate: receivedDate,
+      notes: notes || null,
+      totalPreviouslySettledCents: totalPreviouslySettledCents
+    };
   };
 
   // W2.3 (Finance) — Gallery payouts register
