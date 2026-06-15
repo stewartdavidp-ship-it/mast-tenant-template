@@ -721,7 +721,7 @@
       extendedCost: roundCents((quantity || 0) * material.unitCost)
     };
 
-    await MastDB.recipes.subRef(recipeId, 'lineItems', liId).set(lineItem);
+    await MastDB.set(MastDB.recipes.sub(recipeId, 'lineItems', liId), lineItem);
     return lineItem;
   }
 
@@ -729,7 +729,7 @@
    * Remove a line item from a recipe.
    */
   async function removeLineItem(recipeId, lineItemId) {
-    await MastDB.recipes.subRef(recipeId, 'lineItems', lineItemId).remove();
+    await MastDB.remove(MastDB.recipes.sub(recipeId, 'lineItems', lineItemId));
   }
 
   // ============================================================

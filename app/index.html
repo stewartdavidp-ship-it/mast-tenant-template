@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260614-232519-e42e53b"></script>
+  <script src="../shared/mastdb.js?v=20260614-232807-c951b16"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,25 +184,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260614-232519-e42e53b"></script>
-  <script src="../shared/brand-sync.js?v=20260614-232519-e42e53b"></script>
+  <script src="../shared/customer-filters.js?v=20260614-232807-c951b16"></script>
+  <script src="../shared/brand-sync.js?v=20260614-232807-c951b16"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260614-232519-e42e53b"></script>
+  <script src="../shared/variant-reconcile.js?v=20260614-232807-c951b16"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260614-232519-e42e53b"></script>
-  <script src="../shared/mast-io.js?v=20260614-232519-e42e53b"></script>
-  <script src="../shared/mast-entity.js?v=20260614-232519-e42e53b"></script>
+  <script src="../shared/mast-ui.js?v=20260614-232807-c951b16"></script>
+  <script src="../shared/mast-io.js?v=20260614-232807-c951b16"></script>
+  <script src="../shared/mast-entity.js?v=20260614-232807-c951b16"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260614-232519-e42e53b"></script>
+  <script src="../shared/product-readiness.core.js?v=20260614-232807-c951b16"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22338,7 +22338,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260614-232519-e42e53b';
+var MAST_MODULES_V = '20260614-232807-c951b16';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -47009,12 +47009,12 @@ async function saveVariantInventory(pid, variantId) {
     // Sculpture sold-status flip — match modal behavior.
     if (isSculpture) {
       if (newOnHand <= 0) {
-        await MastDB.products.statusRef(pid).set('sold');
+        await MastDB.products.setStatus(pid, 'sold');
         writeAudit('update', 'products', pid);
         var localP = productsData.find(function(x) { return x.pid === pid; });
         if (localP) localP.status = 'sold';
       } else {
-        await MastDB.products.statusRef(pid).remove();
+        await MastDB.products.removeStatus(pid);
         writeAudit('update', 'products', pid);
         var localP2 = productsData.find(function(x) { return x.pid === pid; });
         if (localP2) delete localP2.status;
@@ -49954,8 +49954,8 @@ async function uploadProductImage(pid, fileInput) {
           var imageIds = product.imageIds || [];
           images.push(result.url);
           imageIds.push(result.imageId);
-          await MastDB.products.imagesRef(pid).set(images);
-          await MastDB.products.imageIdsRef(pid).set(imageIds);
+          await MastDB.products.setImages(pid, images);
+          await MastDB.products.setImageIds(pid, imageIds);
           await writeAudit('update', 'products', pid);
           product.images = images;
           product.imageIds = imageIds;
@@ -49981,8 +49981,8 @@ function selectProductImageFromLibrary(pid) {
     var imageIds = product.imageIds || [];
     images.push(url);
     imageIds.push(imgId);
-    MastDB.products.imagesRef(pid).set(images);
-    MastDB.products.imageIdsRef(pid).set(imageIds);
+    MastDB.products.setImages(pid, images);
+    MastDB.products.setImageIds(pid, imageIds);
     writeAudit('update', 'products', pid);
     product.images = images;
     product.imageIds = imageIds;
@@ -50259,13 +50259,13 @@ async function saveAdjustStock(pid) {
     if (isSculptureAdj) {
       var finalOnHand = updates['stock._default.onHand'] || 0;
       if (finalOnHand <= 0) {
-        await MastDB.products.statusRef(pid).set('sold');
+        await MastDB.products.setStatus(pid, 'sold');
         writeAudit('update', 'products', pid);
         var localP = productsData.find(function(x) { return x.pid === pid; });
         if (localP) localP.status = 'sold';
       } else {
         // Clear sold status if restocked
-        await MastDB.products.statusRef(pid).remove();
+        await MastDB.products.removeStatus(pid);
         writeAudit('update', 'products', pid);
         var localP = productsData.find(function(x) { return x.pid === pid; });
         if (localP) delete localP.status;
