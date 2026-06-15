@@ -9,9 +9,16 @@
  *     + recent opens; Edit is the composer form (type, tier, categories,
  *     exclusions, header/footer);
  *   • Generate is a row/SO action: save → CF → doc updated with signed URL.
+ *   • Share is a detail-SO action: a native modal mints a tokenized share link
+ *     (mintLookbookShareToken CF), optionally emails it to a buyer, copies the
+ *     link, and shows the open-tracking summary (admin/lookbook_share_opens
+ *     joined to admin/lookbook_share_tokens by jti for recipient labels).
  *
- * TEMP-LINK DEBT (tracked in sales-v2-build-plan.md): share-link minting
- * (mintLookbookShareToken + email) stays on the classic screen.
+ * NOTE (cross-repo, gated): the recipient-facing viewer (lookbook-view.html →
+ * getLookbookByToken CF) currently reads a never-written `pdfUrl` field and
+ * returns a 7-day signed URL for a 30-day token — so a shared link does not
+ * render the PDF until that mast-architecture CF is fixed (field → generatedUrl
+ * + re-sign on demand). Minting / email / open-tracking all work here today.
  *
  * Flag-gated (`uiRedesign`), side-by-side route `#lookbooks-v2`.
  */
@@ -48,6 +55,76 @@
       (p.categories || (p.category ? [p.category] : [])).forEach(function (c) { if (c) cats[c] = 1; });
     });
     return Object.keys(cats).sort();
+  }
+
+  // ── Share / exclusions helpers ──────────────────────────────────────────
+  // Per-lookbook cache of recent open rows: { lookbookId: [openRow, ...] }.
+  var shareOpensCache = {};
+
+  function catalogMap() { return V2.catalog || window.productsData || {}; }
+  function prodName(pid) { var p = catalogMap()[pid]; return (p && (p.name || p.title)) || pid; }
+
+  function exChipHtml(pid) {
+    return '<span class="lbv2-exchip" data-pid="' + esc(pid) + '" style="display:inline-flex;align-items:center;gap:6px;background:var(--cream-dark);border-radius:14px;padding:3px 10px;margin:0 6px 6px 0;font-size:0.85rem;">' +
+      esc(prodName(pid)) +
+      '<button type="button" title="Remove" onclick="LookbooksV2.removeExclusion(this,\'' + esc(pid) + '\')" style="border:none;background:none;cursor:pointer;color:var(--warm-gray);font-size:0.9rem;line-height:1;padding:0;">&times;</button></span>';
+  }
+
+  function _agoLabel(iso) {
+    if (!iso) return '';
+    var ms = Date.now() - new Date(iso).getTime();
+    if (ms < 0) return '';
+    var min = Math.floor(ms / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return min + 'm ago';
+    var hr = Math.floor(min / 60);
+    if (hr < 24) return hr + 'h ago';
+    return Math.floor(hr / 24) + 'd ago';
+  }
+
+  // Reads open events + token rows, joins them by jti (open events do NOT carry
+  // the recipient — that lives on the token row), filters to this lookbook +
+  // last 30 days, then re-renders #lbv2OpensPanel. Degrades gracefully.
+  function loadShareOpens(id) {
+    function panel() { return document.getElementById('lbv2OpensPanel'); }
+    Promise.all([
+      Promise.resolve(MastDB.get('admin/lookbook_share_opens')).catch(function () { return null; }),
+      Promise.resolve(MastDB.get('admin/lookbook_share_tokens')).catch(function () { return null; })
+    ]).then(function (arr) {
+      var opensMap = arr[0] || {}, tokMap = arr[1] || {};
+      var cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+      var rows = Object.keys(opensMap).map(function (k) { var o = opensMap[k] || {}; o._id = k; return o; })
+        .filter(function (o) {
+          if (o.lookbookId !== id) return false;
+          var t = o.openedAt ? new Date(o.openedAt).getTime() : 0;
+          return t >= cutoff;
+        })
+        .sort(function (a, b) { return String(b.openedAt || '').localeCompare(String(a.openedAt || '')); });
+      rows.forEach(function (o) {
+        var tok = (o.jti && tokMap[o.jti]) || null;
+        o._recipientName = (tok && tok.recipientName) || '';
+        o._recipientEmail = (tok && tok.recipientEmail) || '';
+      });
+      shareOpensCache[id] = rows.slice(0, 50);
+      var el = panel(); if (el) el.innerHTML = renderOpensInner(id);
+    }).catch(function () {
+      var el = panel(); if (el) el.innerHTML = '<div class="mu-sub">Open tracking is unavailable right now.</div>';
+    });
+  }
+
+  function renderOpensInner(id) {
+    var rows = shareOpensCache[id];
+    if (!rows) return '<div class="mu-sub">Loading opens…</div>';
+    if (!rows.length) return '<div class="mu-sub">No opens tracked yet. Opens appear here after a buyer views the link.</div>';
+    var head = '<div class="mu-sub" style="margin-bottom:6px;">' + rows.length + (rows.length === 1 ? ' open' : ' opens') +
+      (rows[0].openedAt ? ' · last ' + esc(_agoLabel(rows[0].openedAt)) : '') + '</div>';
+    var body = '<table class="data-table" style="width:100%;font-size:0.85rem;"><thead><tr><th>When</th><th>Recipient</th><th>Email</th></tr></thead><tbody>';
+    rows.forEach(function (o) {
+      var when = o.openedAt ? new Date(o.openedAt).toLocaleString() : '—';
+      body += '<tr><td>' + esc(when) + ' <span class="mu-sub" style="font-size:0.72rem;">(' + esc(_agoLabel(o.openedAt)) + ')</span></td>' +
+        '<td>' + esc(o._recipientName || '—') + '</td><td>' + esc(o._recipientEmail || '—') + '</td></tr>';
+    });
+    return head + body + '</tbody></table>';
   }
 
   MastEntity.define('lookbooks-v2', {
@@ -92,8 +169,16 @@
           pdf = '<div class="mu-sub">' + (r.generatedUrl ? 'The previous link has expired.' : 'No PDF generated yet.') + '</div>' +
             (canEdit() ? '<div style="margin-top:10px;"><button class="btn btn-primary" onclick="LookbooksV2.generate(\'' + esc(r._key) + '\')">Generate PDF</button></div>' : '');
         }
-        return UI.card('Setup', setup) + UI.card('PDF', pdf, { fill: true }) +
-          '<div class="mu-sub" style="margin-top:10px;">Share links + open tracking are on the <a href="#" onclick="LookbooksV2.classic();return false;">classic Look Books view</a> for now.</div>';
+        var share;
+        if (urlLive(r)) {
+          share = '<div class="mu-sub">Send a private, tokenized link to a buyer and see when they open it. Links work for 30 days.</div>' +
+            (canEdit()
+              ? '<div style="margin-top:10px;"><button class="btn btn-primary" onclick="LookbooksV2.share(\'' + esc(r._key) + '\')">Share with a buyer…</button></div>'
+              : '<div class="mu-sub" style="margin-top:8px;">You do not have permission to share.</div>');
+        } else {
+          share = '<div class="mu-sub">Generate the PDF first — then you can share a tokenized link with buyers.</div>';
+        }
+        return UI.card('Setup', setup) + UI.card('PDF', pdf, { fill: true }) + UI.card('Share', share);
       },
       editRender: function (r) {
         r = r || {};
@@ -110,6 +195,21 @@
           return '<label style="display:inline-flex;align-items:center;gap:6px;margin:0 12px 8px 0;font-size:0.85rem;cursor:pointer;">' +
             '<input type="checkbox" class="lbv2-cat" value="' + esc(c) + '"' + (on ? ' checked' : '') + '> ' + esc(c) + '</label>';
         }).join('') || '<span class="mu-sub">No product categories found.</span>';
+        var exIds = (r.excludeProductIds || []).slice();
+        var cat = catalogMap();
+        var exChips = exIds.map(exChipHtml).join('');
+        var exOpts = Object.keys(cat).filter(function (pid) {
+          var p = cat[pid]; if (!p || p.status === 'archived') return false;
+          return exIds.indexOf(pid) === -1;
+        }).sort(function (a, b) { return String(prodName(a)).localeCompare(String(prodName(b))); })
+          .map(function (pid) { return '<option value="' + esc(pid) + '">' + esc(prodName(pid)) + '</option>'; }).join('');
+        var exEditor =
+          '<div id="lbv2Excluded" style="margin-bottom:6px;">' + exChips + '</div>' +
+          '<div class="mu-sub" id="lbv2ExNone" style="margin-bottom:8px;' + (exIds.length ? 'display:none;' : '') + '">No products excluded.</div>' +
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+            '<select class="form-input" id="lbv2ExcludeSelect" style="flex:1;min-width:200px;"><option value="">Add a product to exclude…</option>' + exOpts + '</select>' +
+            '<button type="button" class="btn btn-secondary" onclick="LookbooksV2.addExclusion()">Add</button>' +
+          '</div>';
         return '<div class="mu-editbar"><span class="mu-editpill">EDITING</span>' + (r._key ? 'Document' : 'New document') + '</div>' +
           fg('Title', '<input class="form-input" id="lbv2Title" value="' + esc(r.title || '') + '" placeholder="Spring 2026 Line Sheet" style="width:100%;">') +
           '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
@@ -121,7 +221,7 @@
           fg('Categories (none checked = all)', '<div id="lbv2Cats">' + cats + '</div>') +
           fg('Header text', '<input class="form-input" id="lbv2Header" value="' + esc(r.headerText || '') + '" placeholder="Brand name / tagline" style="width:100%;">') +
           fg('Footer text', '<input class="form-input" id="lbv2Footer" value="' + esc(r.footerText || '') + '" placeholder="Contact info / how to order" style="width:100%;">') +
-          '<div class="mu-sub">Per-product exclusions are on the <a href="#" onclick="LookbooksV2.classic();return false;">classic view</a> for now; existing exclusions are preserved.</div>';
+          fg('Exclude products (optional)', exEditor);
       }
     },
     onSave: function (rec) {
@@ -132,6 +232,10 @@
       if (!String(title).trim()) { if (window.showToast) showToast('Title is required', true); return false; }
       var inc = [];
       document.querySelectorAll('#lbv2Cats .lbv2-cat:checked').forEach(function (cb) { inc.push(cb.value); });
+      var exclude = [];
+      document.querySelectorAll('#lbv2Excluded .lbv2-exchip').forEach(function (chip) {
+        var pid = chip.getAttribute('data-pid'); if (pid) exclude.push(pid);
+      });
       var now = new Date().toISOString();
       var patch = {
         title: String(title).trim(),
@@ -139,6 +243,7 @@
         priceTier: (document.getElementById('lbv2Tier') || {}).value || 'wholesale',
         showPrices: !!(document.getElementById('lbv2ShowPrices') || {}).checked,
         includeCategories: inc,
+        excludeProductIds: exclude,
         headerText: (document.getElementById('lbv2Header') || {}).value || '',
         footerText: (document.getElementById('lbv2Footer') || {}).value || '',
         updatedAt: now
@@ -323,7 +428,127 @@
         });
       });
     },
-    classic: function () { if (window.navigateToClassic) navigateToClassic('lookbooks'); },
+    // ── Share with a buyer ───────────────────────────────────────────────
+    // Native modal (replaces the classic escape hatch): mint a tokenized share
+    // link via mintLookbookShareToken (onCall CF — same surface the classic
+    // view used), optionally email it, copy it, and show the open-tracking
+    // summary. The mint is a write → gated on canEdit() + writeAudit.
+    share: function (id) {
+      if (!canEdit()) { if (window.showToast) showToast('You do not have permission to share look books.', true); return; }
+      var r = V2.byId[id]; if (!r) return;
+      if (!urlLive(r)) { if (window.showToast) showToast('Generate the PDF first before sharing.', true); return; }
+      if (typeof window.openModal !== 'function') { if (window.showToast) showToast('Unable to open the share dialog.', true); return; }
+      var html =
+        '<div style="max-width:520px;padding:24px;">' +
+          '<h3 style="margin:0 0 4px;">Share &ldquo;' + esc(r.title || 'Untitled') + '&rdquo; with a buyer</h3>' +
+          '<div class="mu-sub" style="margin-bottom:16px;">Creates a private link (valid 30 days). Opens are tracked below.</div>' +
+          '<div class="form-group"><label class="form-label">Buyer name</label>' +
+            '<input class="form-input" id="lbv2ShareName" placeholder="e.g. Anna Wilson" autocomplete="off" style="width:100%;"></div>' +
+          '<div class="form-group"><label class="form-label">Buyer email</label>' +
+            '<input class="form-input" id="lbv2ShareEmail" type="email" placeholder="buyer@example.com" autocomplete="off" style="width:100%;"></div>' +
+          '<label class="form-group" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">' +
+            '<input type="checkbox" id="lbv2ShareSend" checked> Email this link to the buyer</label>' +
+          '<div id="lbv2ShareStatus" style="margin-top:8px;font-size:0.85rem;"></div>' +
+          '<div id="lbv2ShareResult" style="margin-top:12px;display:none;"></div>' +
+          '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end;">' +
+            '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
+            '<button class="btn btn-primary" id="lbv2ShareGo" onclick="LookbooksV2.generateShare(\'' + esc(id) + '\')">Generate share link</button>' +
+          '</div>' +
+          '<div style="margin-top:20px;border-top:1px solid var(--cream-dark);padding-top:14px;">' +
+            '<div style="font-weight:500;margin-bottom:8px;">Opens (last 30 days)</div>' +
+            '<div id="lbv2OpensPanel"><div class="mu-sub">Loading opens…</div></div>' +
+          '</div>' +
+        '</div>';
+      window.openModal(html);
+      loadShareOpens(id);
+    },
+    generateShare: function (id) {
+      if (!canEdit()) { if (window.showToast) showToast('You do not have permission to share look books.', true); return; }
+      var r = V2.byId[id]; if (!r) return;
+      var nameEl = document.getElementById('lbv2ShareName');
+      var emailEl = document.getElementById('lbv2ShareEmail');
+      var sendEl = document.getElementById('lbv2ShareSend');
+      var statusEl = document.getElementById('lbv2ShareStatus');
+      var resultEl = document.getElementById('lbv2ShareResult');
+      var btn = document.getElementById('lbv2ShareGo');
+      var name = ((nameEl && nameEl.value) || '').trim();
+      var email = ((emailEl && emailEl.value) || '').trim();
+      var send = !!(sendEl && sendEl.checked);
+      function setStatus(msg, color) { if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || 'var(--warm-gray)'; } }
+      if (send && !email) { setStatus('Enter a buyer email, or uncheck “Email this link”.', 'var(--amber)'); return; }
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setStatus('That email address looks invalid.', 'var(--amber)'); return; }
+      if (typeof firebase === 'undefined' || !firebase.functions) { setStatus('Sharing is unavailable right now.', 'var(--danger)'); return; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+      setStatus('Minting share link…');
+      var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID;
+      // recipientEmail is sent ONLY when "Email this link" is checked — the CF
+      // queues an email whenever recipientEmail is non-null (it has no separate
+      // send flag), so withholding it gives a link-only result.
+      Promise.resolve(firebase.functions().httpsCallable('mintLookbookShareToken')({
+        tenantId: tenantId,
+        lookbookId: id,
+        recipientName: name || null,
+        recipientEmail: (send && email) ? email : null,
+        lookbookTitle: r.title || null
+      })).then(function (res) {
+        var data = (res && res.data) || {};
+        if (data.ok === false || data.success === false) throw new Error(data.error || 'mint failed');
+        var shareUrl = data.shareUrl || data.url || '';
+        if (!shareUrl) throw new Error('No share link returned');
+        if (window.writeAudit) writeAudit('share', 'lookbook', id);
+        setStatus((send && email) ? ('Link created — email queued to ' + email + '.') : 'Share link created.', 'var(--teal)');
+        if (resultEl) {
+          resultEl.style.display = '';
+          resultEl.innerHTML =
+            '<label class="form-label" style="display:block;margin-bottom:4px;">Share link</label>' +
+            '<div style="display:flex;gap:8px;">' +
+              '<input class="form-input" id="lbv2ShareUrl" readonly value="' + esc(shareUrl) + '" style="flex:1;font-size:0.85rem;">' +
+              '<button class="btn btn-secondary" onclick="LookbooksV2.copyShare()">Copy</button>' +
+            '</div>' +
+            (data.expiresAt ? '<div class="mu-sub" style="margin-top:6px;">Link expires ' + esc(U.Num.date(data.expiresAt)) + '.</div>' : '');
+        }
+        delete shareOpensCache[id];
+        loadShareOpens(id);
+      }).catch(function (e) {
+        console.error('[lookbooks-v2] share', e);
+        setStatus('Could not create the link: ' + (e && e.message || e), 'var(--danger)');
+        if (btn) { btn.disabled = false; btn.textContent = 'Generate share link'; }
+      });
+    },
+    copyShare: function () {
+      var el = document.getElementById('lbv2ShareUrl'); if (!el) return;
+      try { el.select(); } catch (e) {}
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(el.value);
+        else document.execCommand('copy');
+        if (window.showToast) showToast('Copied to clipboard.');
+      } catch (e2) { if (window.showToast) showToast('Copy failed — select and copy manually.', true); }
+    },
+    // ── Per-product exclusions (native; replaces the classic escape hatch) ──
+    addExclusion: function () {
+      var sel = document.getElementById('lbv2ExcludeSelect');
+      var box = document.getElementById('lbv2Excluded');
+      if (!sel || !sel.value || !box) return;
+      var pid = sel.value, i;
+      var chips = box.querySelectorAll('.lbv2-exchip');
+      for (i = 0; i < chips.length; i++) { if (chips[i].getAttribute('data-pid') === pid) { sel.value = ''; return; } }
+      box.insertAdjacentHTML('beforeend', exChipHtml(pid));
+      for (i = 0; i < sel.options.length; i++) { if (sel.options[i].value === pid) { sel.remove(i); break; } }
+      sel.value = '';
+      var none = document.getElementById('lbv2ExNone'); if (none) none.style.display = 'none';
+    },
+    removeExclusion: function (btn, pid) {
+      var chip = (btn && btn.closest) ? btn.closest('.lbv2-exchip') : null;
+      if (chip && chip.parentNode) chip.parentNode.removeChild(chip);
+      var sel = document.getElementById('lbv2ExcludeSelect');
+      if (sel) {
+        var has = false, i;
+        for (i = 0; i < sel.options.length; i++) { if (sel.options[i].value === pid) { has = true; break; } }
+        if (!has) { var o = document.createElement('option'); o.value = pid; o.textContent = prodName(pid); sel.appendChild(o); }
+      }
+      var box = document.getElementById('lbv2Excluded');
+      if (box && !box.querySelector('.lbv2-exchip')) { var none = document.getElementById('lbv2ExNone'); if (none) none.style.display = ''; }
+    },
     refresh: render
   };
 
