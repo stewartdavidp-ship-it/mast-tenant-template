@@ -1257,89 +1257,27 @@ async function applyEventReconciliation(eventId) {
   var ev = salesEventsData[eventId];
   if (!ev || !ev.allocations) return;
 
-  var allocs = ev.allocations;
-  var pids = Object.keys(allocs);
-  var now = new Date().toISOString();
-  var totalReturned = 0, totalDamaged = 0, totalUnaccounted = 0;
+  // Collect the per-product returned/damaged inputs into a reconciliation map,
+  // then delegate the inventory accounting + close to the single-sourced bridge
+  // (SalesEventsBridge.closeAndReconcile) the sales-events-v2 twin shares.
+  var reconMap = {};
+  Object.keys(ev.allocations).forEach(function(pid) {
+    var alloc = ev.allocations[pid];
+    var remaining = (alloc.quantity || 0) - (alloc.sold || 0);
+    var returnedInput = document.querySelector('.recon-returned[data-pid="' + pid + '"]');
+    var damagedInput = document.querySelector('.recon-damaged[data-pid="' + pid + '"]');
+    reconMap[pid] = {
+      returned: returnedInput ? (parseInt(returnedInput.value) || 0) : remaining,
+      damaged: damagedInput ? (parseInt(damagedInput.value) || 0) : 0
+    };
+  });
 
   try {
-    for (var i = 0; i < pids.length; i++) {
-      var pid = pids[i];
-      var alloc = allocs[pid];
-      var packed = alloc.quantity || 0;
-      var sold = alloc.sold || 0;
-      var remaining = packed - sold;
-
-      var returnedInput = document.querySelector('.recon-returned[data-pid="' + pid + '"]');
-      var damagedInput = document.querySelector('.recon-damaged[data-pid="' + pid + '"]');
-      var returned = returnedInput ? (parseInt(returnedInput.value) || 0) : remaining;
-      var damaged = damagedInput ? (parseInt(damagedInput.value) || 0) : 0;
-      var unaccounted = remaining - returned - damaged;
-
-      totalReturned += returned;
-      totalDamaged += damaged;
-      totalUnaccounted += Math.abs(unaccounted);
-
-      // Move damaged to damaged position
-      if (damaged > 0) {
-        await MastDB.transaction('admin/inventory/' + pid + '/stock/_default/damaged', function(current) { return (current || 0) + damaged; });
-        // Decrement onHand for damaged (they're no longer sellable)
-        await MastDB.transaction(MastDB.inventory.stockOnHandPath(pid), function(current) { return Math.max(0, (current || 0) - damaged); });
-        await MastDB.push('admin/inventory/' + pid + '/history', {
-          action: 'adjusted', reason: 'event_reconciled', qty: -damaged,
-          note: 'Damaged at event: ' + (ev.name || eventId),
-          actor: 'maker', actorType: 'maker', timestamp: now
-        });
-      }
-
-      // Log unaccounted as adjustment
-      if (unaccounted !== 0) {
-        await MastDB.push('admin/inventory/' + pid + '/history', {
-          action: 'adjusted', reason: 'event_reconciled', qty: -Math.abs(unaccounted),
-          note: 'Unaccounted at event: ' + (ev.name || eventId) + ' (' + unaccounted + ' units)',
-          actor: 'maker', actorType: 'maker', timestamp: now
-        });
-        if (unaccounted > 0) {
-          // Shrinkage — decrement onHand
-          await MastDB.transaction(MastDB.inventory.stockOnHandPath(pid), function(current) { return Math.max(0, (current || 0) - unaccounted); });
-        }
-      }
-
-      await syncStockInfoToPublic(pid);
-    }
-
-    // Close the event
-    await MastDB.salesEvents.update(eventId, {
-      status: 'closed', closedAt: now, updatedAt: now,
-      reconciliation: { totalReturned: totalReturned, totalDamaged: totalDamaged, totalUnaccounted: totalUnaccounted, reconciledAt: now }
-    });
-    await writeAudit('update', 'salesEvents', eventId);
-    if (activeEventId === eventId) activeEventId = null;
-
-    // Move unsold items back to source locations (returned items)
-    var eventLocId = getEventLocation(eventId);
-    if (eventLocId) {
-      var returnHomeId = getHomeLocationId();
-      pids.forEach(function(pid) {
-        var alloc = allocs[pid];
-        var returnedInput = document.querySelector('.recon-returned[data-pid="' + pid + '"]');
-        var returned = returnedInput ? (parseInt(returnedInput.value) || 0) : 0;
-        if (returned > 0) {
-          var returnTo = alloc.sourceLocationId || returnHomeId;
-          if (returnTo && eventLocId) {
-            moveInventory(pid, '_default', eventLocId, returnTo, returned).catch(function() {});
-          }
-        }
-      });
-
-      // Archive the event location
-      MastDB.locations.update(eventLocId, { status: 'archived', updatedAt: now }).catch(function() {});
-    }
-
+    var summary = await window.SalesEventsBridge.closeAndReconcile(eventId, reconMap, ev);
     closeModal();
-    var msg = 'Event closed. ' + totalReturned + ' returned';
-    if (totalDamaged > 0) msg += ', ' + totalDamaged + ' damaged';
-    if (totalUnaccounted > 0) msg += ', ' + totalUnaccounted + ' unaccounted';
+    var msg = 'Event closed. ' + summary.totalReturned + ' returned';
+    if (summary.totalDamaged > 0) msg += ', ' + summary.totalDamaged + ' damaged';
+    if (summary.totalUnaccounted > 0) msg += ', ' + summary.totalUnaccounted + ' unaccounted';
     msg += '.';
     showToast(msg);
     emitTestingEvent('closeEvent', {});
@@ -2851,6 +2789,10 @@ async function exitPackingMode() {
   // saveEvent() makes, parameterized by data (the legacy handler reads the modal
   // DOM, so it can't be called with an object). Editable set: name (required),
   // date (required), location, notes. Mirrors window.ContactsBridge.
+  // RBAC gate shared by the V2 hatch-closing bridge methods below — mirrors the
+  // can('pos','edit') check saveManualSale already uses for this surface.
+  function _canEditSalesEvents() { return typeof can !== 'function' || can('pos', 'edit'); }
+
   window.SalesEventsBridge = {
     create: async function (data) {
       var name = (data.name || '').trim();
@@ -2880,6 +2822,131 @@ async function exitPackingMode() {
       });
       await writeAudit('update', 'salesEvents', id);
       return id;
+    },
+
+    // ── Hatch-closing methods for the sales-events-v2 twin ───────────────
+    // Status transitions, allocation (packing-list) CRUD, and close+reconcile —
+    // the surfaces that used to keep a "manage in classic view" link. Each
+    // mirrors the legacy renderSalesEventDetail action handler exactly, is
+    // RBAC-gated (can('pos','edit'), the one gate this surface already uses in
+    // saveManualSale) and writes an audit row. The V2 twin owns the UI; these
+    // own the writes, so the two stay single-sourced (mirrors the contacts-v2 /
+    // ContactsBridge and wholesale-v2 / WholesaleBridge precedents).
+
+    // Plain status write for planning ↔ packed ↔ active. (closed goes through
+    // closeAndReconcile — it carries inventory accounting.) Mirrors
+    // startFairMode / revertToPlanningStatus / the packEvent write: a
+    // salesEvents.update + writeAudit. Activating also stamps the module's
+    // activeEventId so PoS sales link to this event (exactly as startFairMode).
+    setStatus: async function (eventId, status) {
+      if (!_canEditSalesEvents()) throw new Error('Not permitted');
+      if (['planning', 'packed', 'active'].indexOf(status) < 0) throw new Error('Unsupported status: ' + status);
+      await MastDB.salesEvents.update(eventId, { status: status, updatedAt: new Date().toISOString() });
+      await writeAudit('update', 'salesEvents', eventId);
+      if (status === 'active') activeEventId = eventId;
+      else if (activeEventId === eventId) activeEventId = null;
+      return eventId;
+    },
+
+    // Upsert one product's packed quantity in the allocation map (the
+    // "allocate quantity per product" surface). Mirrors the core write
+    // confirmPackItem / adjustAllocation make: set quantity + productName,
+    // PRESERVING the sold counter (a merge update — never touches sold). Serves
+    // both add-product and set-quantity. The best-effort inventory-location move
+    // confirmPackItem does is intentionally omitted: it only matters for
+    // multi-location packing and the close reconciliation already falls back to
+    // the home location when sourceLocationId is absent.
+    upsertAllocation: async function (eventId, pid, productName, quantity) {
+      if (!_canEditSalesEvents()) throw new Error('Not permitted');
+      var qty = Math.max(0, parseInt(quantity, 10) || 0);
+      await MastDB.salesEvents.allocations(eventId, pid).update({ quantity: qty, productName: productName || pid });
+      await writeAudit('update', 'salesEvents', eventId);
+      return qty;
+    },
+
+    // Remove a product from the packing list. Mirrors legacy removeAllocation.
+    removeAllocation: async function (eventId, pid) {
+      if (!_canEditSalesEvents()) throw new Error('Not permitted');
+      await writeAudit('update', 'salesEvents', eventId);
+      await MastDB.salesEvents.allocations(eventId, pid).remove();
+      return eventId;
+    },
+
+    // Close + reconcile an event — the single source for the inventory
+    // accounting legacy applyEventReconciliation performs, now DOM-free: the
+    // caller passes the per-product reconciliation map and the event record.
+    // Per product it moves damaged stock to the damaged bucket + decrements
+    // on-hand, logs unaccounted shrinkage, then flips the event to closed (with
+    // a reconciliation summary) and best-effort returns unsold stock to its
+    // source/home location + archives the event location.
+    //   reconMap: { [pid]: { returned, damaged } }  (a product omitted from the
+    //   map defaults returned→remaining, damaged→0, matching the legacy modal).
+    // Returns { totalReturned, totalDamaged, totalUnaccounted }.
+    closeAndReconcile: async function (eventId, reconMap, ev) {
+      if (!_canEditSalesEvents()) throw new Error('Not permitted');
+      reconMap = reconMap || {};
+      var allocs = (ev && ev.allocations) || {};
+      var pids = Object.keys(allocs);
+      var now = new Date().toISOString();
+      var totalReturned = 0, totalDamaged = 0, totalUnaccounted = 0;
+      for (var i = 0; i < pids.length; i++) {
+        var pid = pids[i];
+        var alloc = allocs[pid] || {};
+        var packed = alloc.quantity || 0;
+        var sold = alloc.sold || 0;
+        var remaining = packed - sold;
+        var entry = reconMap[pid] || {};
+        var returned = (entry.returned != null) ? (parseInt(entry.returned, 10) || 0) : remaining;
+        var damaged = (entry.damaged != null) ? (parseInt(entry.damaged, 10) || 0) : 0;
+        var unaccounted = remaining - returned - damaged;
+        totalReturned += returned;
+        totalDamaged += damaged;
+        totalUnaccounted += Math.abs(unaccounted);
+        if (damaged > 0) {
+          await MastDB.transaction('admin/inventory/' + pid + '/stock/_default/damaged', function (current) { return (current || 0) + damaged; });
+          await MastDB.transaction(MastDB.inventory.stockOnHandPath(pid), function (current) { return Math.max(0, (current || 0) - damaged); });
+          await MastDB.push('admin/inventory/' + pid + '/history', {
+            action: 'adjusted', reason: 'event_reconciled', qty: -damaged,
+            note: 'Damaged at event: ' + (ev.name || eventId),
+            actor: 'maker', actorType: 'maker', timestamp: now
+          });
+        }
+        if (unaccounted !== 0) {
+          await MastDB.push('admin/inventory/' + pid + '/history', {
+            action: 'adjusted', reason: 'event_reconciled', qty: -Math.abs(unaccounted),
+            note: 'Unaccounted at event: ' + (ev.name || eventId) + ' (' + unaccounted + ' units)',
+            actor: 'maker', actorType: 'maker', timestamp: now
+          });
+          if (unaccounted > 0) {
+            await MastDB.transaction(MastDB.inventory.stockOnHandPath(pid), function (current) { return Math.max(0, (current || 0) - unaccounted); });
+          }
+        }
+        await syncStockInfoToPublic(pid);
+      }
+      await MastDB.salesEvents.update(eventId, {
+        status: 'closed', closedAt: now, updatedAt: now,
+        reconciliation: { totalReturned: totalReturned, totalDamaged: totalDamaged, totalUnaccounted: totalUnaccounted, reconciledAt: now }
+      });
+      await writeAudit('update', 'salesEvents', eventId);
+      if (activeEventId === eventId) activeEventId = null;
+      // Best-effort: move unsold (returned) stock back to source/home location +
+      // archive the event location (mirrors applyEventReconciliation's tail).
+      var eventLocId = (typeof getEventLocation === 'function') ? getEventLocation(eventId) : null;
+      if (eventLocId) {
+        var returnHomeId = (typeof getHomeLocationId === 'function') ? getHomeLocationId() : null;
+        pids.forEach(function (pid) {
+          var alloc = allocs[pid] || {};
+          var entry = reconMap[pid] || {};
+          var remaining = (alloc.quantity || 0) - (alloc.sold || 0);
+          var returned = (entry.returned != null) ? (parseInt(entry.returned, 10) || 0) : remaining;
+          if (returned > 0) {
+            var returnTo = alloc.sourceLocationId || returnHomeId;
+            if (returnTo) { moveInventory(pid, '_default', eventLocId, returnTo, returned).catch(function () {}); }
+          }
+        });
+        MastDB.locations.update(eventLocId, { status: 'archived', updatedAt: now }).catch(function () {});
+      }
+      return { totalReturned: totalReturned, totalDamaged: totalDamaged, totalUnaccounted: totalUnaccounted };
     }
   };
 
