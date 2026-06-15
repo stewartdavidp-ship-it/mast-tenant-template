@@ -1250,15 +1250,19 @@
       },
       // Checklist "Go →" targets → focus the relevant V2 pane in place (the
       // record stays open; the requirement points INTO the live record, per the
-      // guided-record model). Spec requirement targets → V2 pane key:
+      // guided-record model). EVERY requirement `target` emitted by the products
+      // MastFlow spec (workflows/products.workflow.js) now has a native V2 home —
+      // there is no longer any reason to bounce to the legacy define page:
       //   define-section   (mode-chosen / defined)  → Recipe
       //   markup-section   (costed)                 → Pricing
       //   listing-section  (listingReady)           → Image
-      //   channels-section (channeled)              → Channels
+      //   channels-section (channeled / -live)      → Channels
       //   capacity-section (capacityPlanned)        → Fulfillment (batch size lives there)
-      // Any unmapped section falls back to the legacy define deep-link below.
+      // The legacy `navigateToClassic('products')` fallback was removed once
+      // capacity-section landed on the Fulfillment pane (its last unmapped
+      // section). An unrecognized target now no-ops gracefully (return false →
+      // the engine logs and does nothing) rather than dumping the user into V1.
       onFlowTarget: function (targetId, rec) {
-        var pid = rec._key || rec.id || rec.pid;
         var PANE = {
           'define-section': 'recipe',
           'markup-section': 'pricing',
@@ -1267,19 +1271,10 @@
           'capacity-section': 'fulfillment'
         };
         var pane = PANE[targetId];
-        if (pane) {
-          var body = document.getElementById('mastSlideOutBody');
-          var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'' + pane + '\'"]');
-          if (btn) { btn.click(); if (typeof btn.scrollIntoView === 'function') btn.scrollIntoView({ block: 'nearest' }); return true; }
-        }
-        // Fallback: no matching v2 pane (e.g. capacity) → legacy define deep-link.
-        ensureMaker(function () {
-          if (typeof navigateToClassic === 'function') navigateToClassic('products');
-          setTimeout(function () {
-            if (window.makerOpenDefineForProduct) window.makerOpenDefineForProduct(pid);
-            if (window.makerScrollToReadinessSection) setTimeout(function () { window.makerScrollToReadinessSection(targetId); }, 220);
-          }, 160);
-        });
+        if (!pane) return false; // unknown target → let the engine no-op (no classic bounce)
+        var body = document.getElementById('mastSlideOutBody');
+        var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'' + pane + '\'"]');
+        if (btn) { btn.click(); if (typeof btn.scrollIntoView === 'function') btn.scrollIntoView({ block: 'nearest' }); }
         return true;
       },
       render: function (UU, p) {
