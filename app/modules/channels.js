@@ -2881,6 +2881,43 @@
       if (typeof window.startChannelOAuth === 'function') { window.startChannelOAuth(platform, channelId || null); return true; }
       if (typeof window.channelReconnect === 'function') { window.channelReconnect(platform); return true; }
       return false;
+    },
+    // Delete a sales channel — the doDelete() core (plain admin write, no
+    // product-binding cascade: legacy leaves channelIds/channelBindings on
+    // products untouched, so a deleted channel's id simply stops matching).
+    deleteChannel: function(channelId) {
+      if (!channelId) return Promise.reject(new Error('channelId required'));
+      return MastDB.remove('admin/channels/' + channelId).then(function() {
+        if (channelsData && channelsData[channelId]) {
+          delete channelsData[channelId];
+          window.__mastChannelsCache = channelsData; // keep product-editor cache in sync
+        }
+        return true;
+      });
+    },
+    // Platforms with an OAuth integration record under
+    // admin/businessEntity/channels/{platform}. Only these can be disconnected.
+    OAUTH_PLATFORMS: ['shopify', 'etsy', 'square'],
+    // Disconnect / revoke a platform OAuth — single-sources the Settings>Channels
+    // disconnectChannel() flow: the disconnectChannelCallable CF revokes the
+    // platform token, deletes stored credentials (Secret Manager), removes webhook
+    // subscriptions, flips the Firestore integration record, and audits server-side.
+    // Keyed by PLATFORM (shopify/etsy/square), not by sales-channel id — one OAuth
+    // record per platform. Returns the CF payload ({ platformRevokeStatus, ... }).
+    disconnectPlatform: function(platform) {
+      if (!platform) return Promise.reject(new Error('platform required'));
+      if (this.OAUTH_PLATFORMS.indexOf(platform) === -1) {
+        return Promise.reject(new Error('Not an OAuth platform: ' + platform));
+      }
+      if (typeof firebase === 'undefined' || !firebase.functions) {
+        return Promise.reject(new Error('Cloud Functions unavailable'));
+      }
+      var tenantId = (typeof MastDB !== 'undefined' && typeof MastDB.tenantId === 'function') ? MastDB.tenantId() : null;
+      if (!tenantId) return Promise.reject(new Error('Tenant not resolved'));
+      var fn = firebase.functions().httpsCallable('disconnectChannelCallable');
+      return fn({ tenantId: tenantId, platform: platform }).then(function(result) {
+        return (result && result.data) || {};
+      });
     }
   };
 
