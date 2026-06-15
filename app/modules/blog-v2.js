@@ -209,6 +209,8 @@
         // website/Substack publish) stays on legacy #blog. Use navigateToClassic
         // so the V2 route remap doesn't loop us back to this twin.
         var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          ((typeof window.can !== 'function' || window.can('blog', 'edit'))
+            ? '<button class="btn btn-primary" onclick="BlogV2.editBody(\'' + esc(pid) + '\')">✏️ Edit body</button>' : '') +
           '<button class="btn btn-secondary" onclick="BlogV2.classic()">Write / publish in classic view &rarr;</button>' +
           (statusOf(p) === 'draft' && (typeof window.can !== 'function' || window.can('blog', 'delete'))
             ? '<button class="btn btn-secondary" style="color:var(--text-danger);" onclick="BlogV2.removeDraft(\'' + esc(pid) + '\')">Delete draft</button>' : '') +
@@ -392,6 +394,118 @@
       });
   }
 
+  // ── native rich-body editor (blog-editor-v2 — route:null drilled SO) ──
+  // The native Builder body editor (V1-editor-elimination program, PR-1). Opened
+  // via MastEntity.drill('blog-editor-v2', postId) from the post read detail.
+  // Rich text (contenteditable + execCommand toolbar) + inline images + coupon
+  // embeds, all NATIVE; EVERY write delegates to window.BlogBridge — the body is
+  // sanitized via the canonical MastUI.sanitizeHtml before it lands (the storefront
+  // injects post.body RAW). Formatting is emitted as TAGS (<b>/<i>/<u>/<h2>…) via
+  // execCommand styleWithCSS=false, because the strict sanitizer allowlist drops
+  // <font> + inline style/class. Title / excerpt / tags stay on the slide-out's
+  // light meta-edit; author / featured image / SEO / status / schedule /
+  // publish-to-website remain on the classic Builder until PR-2 (the classic
+  // button is still present on the read detail).
+  var BED = null, _bedTimer = null;
+  var BED_EMOJI = ['😀','😊','🥰','😍','🎉','❤️','🔥','✨','⭐','💡','🙏','👏','👍','💪','🎨','📷','🌿','☀️','🌙','💎','🏷️','💌','🍀','🌸'];
+
+  function loadEditor(id) {
+    return Promise.resolve(MastDB.get('blog/posts/' + id)).then(function (p) {
+      var pv = (p && typeof p.val === 'function') ? p.val() : p;
+      if (!pv) return null;
+      pv = Object.assign({ _key: id }, pv);
+      // inlineImages can come back as a keyed object from RTDB — normalize to array.
+      pv.inlineImages = Array.isArray(pv.inlineImages) ? pv.inlineImages
+        : (pv.inlineImages ? Object.keys(pv.inlineImages).map(function (k) { return pv.inlineImages[k]; }) : []);
+      BED = { id: id, post: pv };
+      return { _key: id, _title: ((pv.title || 'Untitled post') + ' · Edit') };
+    });
+  }
+  function bedToolbar() {
+    function b(cmd, label, title) {
+      return '<button type="button" class="btn btn-small btn-secondary" onmousedown="event.preventDefault();BlogV2.fmt(\'' + cmd + '\')" title="' + title + '" style="min-width:30px;">' + label + '</button>';
+    }
+    function blk(tag, label, title) {
+      return '<button type="button" class="btn btn-small btn-secondary" onmousedown="event.preventDefault();BlogV2.fmtBlock(\'' + tag + '\')" title="' + title + '" style="min-width:30px;">' + label + '</button>';
+    }
+    var sep = '<span style="width:1px;height:18px;background:var(--border);margin:0 2px;"></span>';
+    return '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:8px;padding:6px;border:1px solid var(--border);border-radius:8px;">' +
+      b('bold', '<b>B</b>', 'Bold') + b('italic', '<i>I</i>', 'Italic') + b('underline', '<u>U</u>', 'Underline') + sep +
+      blk('h2', 'H2', 'Heading 2') + blk('h3', 'H3', 'Heading 3') + blk('blockquote', '“', 'Quote') +
+      b('insertUnorderedList', '•', 'Bullet list') + b('insertOrderedList', '1.', 'Numbered list') +
+      '<button type="button" class="btn btn-small btn-secondary" onmousedown="event.preventDefault();BlogV2.insertLink()" title="Insert link" style="min-width:30px;">🔗</button>' +
+      b('insertHorizontalRule', '―', 'Divider') + sep +
+      '<button type="button" class="btn btn-small btn-secondary" onmousedown="event.preventDefault();BlogV2.insertImage()" title="Insert image" style="min-width:30px;">📷</button>' +
+      '<button type="button" class="btn btn-small btn-secondary" onmousedown="event.preventDefault();BlogV2.insertCoupon()" title="Insert coupon" style="min-width:30px;">🏷️</button>' +
+      '<span style="position:relative;display:inline-block;">' +
+        '<button type="button" class="btn btn-small btn-secondary" onmousedown="event.preventDefault();BlogV2.toggleEmoji()" title="Emoji" style="min-width:30px;">😊</button>' +
+        '<div id="blogV2Emoji" style="display:none;position:absolute;z-index:5;top:100%;left:0;margin-top:4px;background:var(--card-bg,var(--surface-card,var(--cream)));border:1px solid var(--border);border-radius:8px;padding:6px;width:230px;box-shadow:0 4px 16px rgba(0,0,0,0.2);"></div>' +
+      '</span>' +
+      '</div>';
+  }
+
+  function editorBody() {
+    var p = BED.post;
+    var loaded = (window.BlogBridge && BlogBridge.loadBodyHtml) ? BlogBridge.loadBodyHtml(p.body || '', p.inlineImages || []) : esc(bodyPlainText(p));
+    return bedToolbar() +
+      '<div id="blogV2Body" contenteditable="true" data-placeholder="Write your post…" ' +
+        'oninput="BlogV2.bodyInput()" onblur="BlogV2.bodyFlush()" ' +
+        'style="min-height:280px;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:0.9rem;line-height:1.6;color:var(--text-primary);outline:none;overflow-wrap:break-word;">' + loaded + '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px;">' +
+        '<span class="mu-sub" id="blogV2WordCount"></span>' +
+        '<span class="mu-sub" id="blogV2SaveStatus"></span>' +
+      '</div>';
+  }
+
+  function editorImages() {
+    var imgs = BED.post.inlineImages || [];
+    if (!imgs.length) return '';
+    var lib = window.imageLibrary || {};
+    var cells = imgs.map(function (img, idx) {
+      var d = lib[img.imageId];
+      var thumb = d ? (d.thumbnailUrl || d.url) : '';
+      var first = idx === 0, last = idx === imgs.length - 1;
+      var move = imgs.length > 1
+        ? '<div style="display:flex;justify-content:center;gap:4px;margin-top:2px;">' +
+            '<button type="button" class="btn btn-small btn-secondary" style="padding:0 6px;"' + (first ? ' disabled' : '') + ' onclick="BlogV2.moveImage(' + idx + ',-1)" title="Move up/left">◀</button>' +
+            '<button type="button" class="btn btn-small btn-secondary" style="padding:0 6px;"' + (last ? ' disabled' : '') + ' onclick="BlogV2.moveImage(' + idx + ',1)" title="Move down/right">▶</button>' +
+          '</div>'
+        : '';
+      return '<div style="text-align:center;">' +
+        '<div style="position:relative;display:inline-block;">' +
+          (thumb
+            ? '<img src="' + esc(thumb) + '" alt="" style="width:96px;height:68px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer;" onclick="BlogV2.editCaption(' + idx + ')" title="Edit caption">'
+            : '<div style="width:96px;height:68px;border:1px dashed var(--border);border-radius:6px;"></div>') +
+          '<button type="button" onclick="BlogV2.removeImage(' + idx + ')" title="Remove image" ' +
+            'style="position:absolute;top:-7px;right:-7px;width:20px;height:20px;border-radius:50%;border:1px solid var(--border);background:var(--cream,var(--card-bg));color:var(--text-danger);cursor:pointer;line-height:1;font-size:0.85rem;">×</button>' +
+        '</div>' +
+        '<div class="mu-sub" style="margin-top:2px;">Image ' + (idx + 1) + (img.caption ? ' 💬' : '') + '</div>' +
+        move +
+        '</div>';
+    }).join('');
+    return U.card('Inline images', '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + cells + '</div>');
+  }
+
+  function editorHtml(UI, r) {
+    if (!BED || BED.id !== (r && r._key)) return '<p class="mu-sub">Loading…</p>';
+    var hint = '<div class="mu-editbar"><span class="mu-editpill">BODY</span>' +
+      'Rich text, inline images &amp; coupons — saved automatically. Title, author, SEO &amp; publishing live on the classic Builder.</div>';
+    var actions = '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding-top:8px;">' +
+      '<button class="btn btn-secondary" onclick="BlogV2.preview()">👁 Preview</button>' +
+      '</div>';
+    setTimeout(function () { if (window.BlogV2 && BlogV2._wordCount) BlogV2._wordCount(); }, 0);
+    return hint + UI.card('Body', editorBody()) +
+      '<div id="blogV2ImagesHost">' + editorImages() + '</div>' + actions;
+  }
+
+  MastEntity.define('blog-editor-v2', {
+    label: 'Edit post', labelPlural: 'Edit post', size: 'xl', route: null,
+    recordId: function (r) { return r._key; },
+    fields: [{ name: '_title', label: 'Post', type: 'text', list: true, group: 'Post', readOnly: true }],
+    fetch: function (id) { return loadEditor(id); },
+    detail: { render: function (UI, r) { return editorHtml(UI, r); } }
+  });
+
   window.BlogV2 = {
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
@@ -442,6 +556,299 @@
           load();
         });
       }).catch(function (e) { console.error('[blog-v2] removeDraft', e); if (window.showToast) showToast('Delete failed.', true); });
+    },
+    // ── native rich-body editor (PR-1): drilled body composer ──
+    editBody: function (id) {
+      if (typeof window.can === 'function' && !window.can('blog', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to edit posts.', true); return;
+      }
+      // AWAIT legacy blog.js so window.BlogBridge (the sanitized write path +
+      // body helpers) exists before the editor's inline handlers can fire.
+      function go() { MastEntity.drill('blog-editor-v2', id); }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        Promise.resolve(MastAdmin.loadModule('blog')).then(go).catch(go);
+      } else go();
+    },
+    // Rich-text formatting via execCommand. styleWithCSS=false forces TAG output
+    // (<b>/<i>/<u>) so it survives MastUI.sanitizeHtml (which strips inline style).
+    fmt: function (cmd) {
+      try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+      try { document.execCommand(cmd, false, null); } catch (e) {}
+      BlogV2._bodyDirty();
+    },
+    fmtBlock: function (tag) {
+      try { document.execCommand('styleWithCSS', false, false); } catch (e) {}
+      var cur = '';
+      try { cur = (document.queryCommandValue('formatBlock') || '').toLowerCase(); } catch (e) {}
+      try { document.execCommand('formatBlock', false, cur === tag ? '<div>' : '<' + tag + '>'); } catch (e) {}
+      BlogV2._bodyDirty();
+    },
+    insertLink: function () {
+      BlogV2._saveBodyRange();
+      var sel = window.getSelection();
+      var selectedText = sel ? sel.toString() : '';
+      var html = '<div class="modal-header"><h3>Insert link</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div class="modal-body">' +
+        (selectedText ? '<div class="mu-sub" style="margin-bottom:8px;">Text: "' + esc(selectedText.substring(0, 60)) + '"</div>' : '') +
+        '<input type="url" id="blogV2LinkUrl" class="form-input" placeholder="https://…" style="width:100%;"></div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="BlogV2.applyLink()">Apply</button></div>';
+      openModal(html);
+      setTimeout(function () { var i = document.getElementById('blogV2LinkUrl'); if (i) i.focus(); }, 80);
+    },
+    applyLink: function () {
+      var url = ((document.getElementById('blogV2LinkUrl') || {}).value || '').trim();
+      closeModal();
+      if (!url) return;
+      if (!/^(https?:\/\/|mailto:|tel:|\/|#)/i.test(url)) url = 'https://' + url;
+      BlogV2._restoreBodyRange();
+      try { document.execCommand('createLink', false, url); } catch (e) {}
+      BlogV2._bodyDirty();
+    },
+    bodyInput: function () { BlogV2._bodyDirty(); },
+    bodyFlush: function () { clearTimeout(_bedTimer); return BlogV2._bodySave(); },
+    _bodyDirty: function () {
+      clearTimeout(_bedTimer);
+      _bedTimer = setTimeout(function () { BlogV2._bodySave(); }, 600);
+      BlogV2._wordCount();
+    },
+    _bodySave: function () {
+      if (!BED || !window.BlogBridge || !BlogBridge.setBody) return Promise.resolve();
+      if (typeof window.can === 'function' && !window.can('blog', 'edit')) return Promise.resolve();
+      var ed = document.getElementById('blogV2Body'); if (!ed) return Promise.resolve();
+      var html = ed.innerHTML || '';
+      var st = document.getElementById('blogV2SaveStatus'); if (st) st.textContent = 'Saving…';
+      return Promise.resolve(BlogBridge.setBody(BED.id, html)).then(function (res) {
+        if (res && typeof res.body === 'string') {
+          BED.post.body = res.body;
+          if (V2.byId[BED.id]) V2.byId[BED.id].body = res.body;
+        }
+        if (st) { st.textContent = '✓ Saved'; setTimeout(function () { var s = document.getElementById('blogV2SaveStatus'); if (s) s.textContent = ''; }, 2000); }
+      }).catch(function (e) { console.error('[blog-v2] bodySave', e); if (st) st.textContent = 'Save failed'; });
+    },
+    _wordCount: function () {
+      var ed = document.getElementById('blogV2Body'); if (!ed) return;
+      var el = document.getElementById('blogV2WordCount'); if (!el) return;
+      var text = (ed.textContent || '').replace(/📷 Image \d+/g, '').replace(/🏷️ [^\s]+/g, '').trim();
+      var words = text ? text.split(/\s+/).filter(function (w) { return w.length > 0; }).length : 0;
+      el.textContent = words + ' word' + (words !== 1 ? 's' : '') + ' · ' + Math.max(1, Math.ceil(words / 225)) + ' min read';
+    },
+    // Save/restore the body caret across a modal/picker that steals focus.
+    _saveBodyRange: function () {
+      var ed = document.getElementById('blogV2Body');
+      var sel = window.getSelection();
+      if (ed && sel && sel.rangeCount && ed.contains(sel.anchorNode)) window._blogV2Range = sel.getRangeAt(0).cloneRange();
+      else window._blogV2Range = null;
+    },
+    _restoreBodyRange: function () {
+      var ed = document.getElementById('blogV2Body'); if (ed) ed.focus();
+      if (window._blogV2Range) { var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(window._blogV2Range); window._blogV2Range = null; }
+    },
+    // ── inline images ──
+    insertImage: function () {
+      if (!BED) return;
+      BlogV2._saveBodyRange();
+      openModal('<div class="modal-header"><h3>Insert image</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div class="modal-body" style="text-align:center;padding:24px;"><p class="mu-sub" style="margin-bottom:16px;">Add an image to your post:</p>' +
+        '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">' +
+        '<button class="btn btn-primary" onclick="closeModal();BlogV2.imgFromLibrary()">📚 From library</button>' +
+        '<button class="btn btn-primary" onclick="closeModal();BlogV2.imgUpload()">💻 From computer</button>' +
+        '</div></div>');
+    },
+    imgFromLibrary: function () {
+      if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable', true); return; }
+      openImagePicker(function (imageId) { if (imageId) BlogV2.imgCaption(imageId); });
+    },
+    imgUpload: function () {
+      var input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
+      input.onchange = function () {
+        if (!input.files || !input.files[0]) return;
+        if (window.showToast) showToast('Uploading image…');
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            var base64 = String(e.target.result).split(',')[1];
+            auth.currentUser.getIdToken().then(function (token) {
+              return callCF('/uploadImage', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ image: base64, tags: [], source: 'blog-upload' }) });
+            }).then(function (resp) { return resp.json(); }).then(function (result) {
+              if (!result.success) throw new Error(result.error || 'Upload failed');
+              if (window.showToast) showToast('Image uploaded to library');
+              BlogV2.imgCaption(result.imageId);
+            }).catch(function (err) { if (window.showToast) showToast('Upload failed: ' + (err && err.message ? err.message : 'error'), true); });
+          } catch (err) { if (window.showToast) showToast('Upload failed', true); }
+        };
+        reader.readAsDataURL(input.files[0]);
+      };
+      input.click();
+    },
+    imgCaption: function (imageId) {
+      var lib = window.imageLibrary || {}; var d = lib[imageId];
+      var thumb = d ? (d.thumbnailUrl || d.url) : '';
+      var html = '<div class="modal-header"><h3>Add caption</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div class="modal-body" style="text-align:center;padding:18px;">' +
+        (thumb ? '<img src="' + esc(thumb) + '" alt="" style="max-width:200px;max-height:200px;border-radius:8px;margin-bottom:14px;">' : '') +
+        '<input type="text" id="blogV2Caption" class="form-input" placeholder="Caption (optional)…" style="width:100%;font-style:italic;"></div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="BlogV2.imgFinish(\'' + esc(imageId) + '\',\'\')">Skip</button>' +
+        '<button class="btn btn-primary" onclick="BlogV2.imgFinish(\'' + esc(imageId) + '\',(document.getElementById(\'blogV2Caption\')||{}).value||\'\')">Add image</button></div>';
+      setTimeout(function () { openModal(html); }, 150);
+    },
+    imgFinish: function (imageId, caption) {
+      closeModal();
+      if (!BED) return;
+      var imgs = BED.post.inlineImages || []; var num = imgs.length + 1;
+      BlogV2._restoreBodyRange();
+      var ed = document.getElementById('blogV2Body');
+      if (ed) {
+        ed.focus();
+        var marker = '<br><span class="blog-img-marker" contenteditable="false" data-image="' + num + '">📷 Image ' + num + '</span><br>';
+        try { document.execCommand('insertHTML', false, marker); } catch (e) {}
+      }
+      imgs.push({ markerId: 'image_' + num, imageId: imageId, caption: caption || '' });
+      BED.post.inlineImages = imgs;
+      BlogV2._persistImages();
+    },
+    editCaption: function (idx) {
+      if (!BED) return;
+      var imgs = BED.post.inlineImages || [];
+      if (idx < 0 || idx >= imgs.length) return;
+      var lib = window.imageLibrary || {}; var d = lib[imgs[idx].imageId];
+      var thumb = d ? (d.thumbnailUrl || d.url) : '';
+      var html = '<div class="modal-header"><h3>Edit caption — Image ' + (idx + 1) + '</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div class="modal-body" style="text-align:center;padding:18px;">' +
+        (thumb ? '<img src="' + esc(thumb) + '" alt="" style="max-width:200px;max-height:200px;border-radius:8px;margin-bottom:14px;">' : '') +
+        '<input type="text" id="blogV2Caption" class="form-input" value="' + esc(imgs[idx].caption || '') + '" placeholder="Caption…" style="width:100%;font-style:italic;"></div>' +
+        '<div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="BlogV2.saveCaption(' + idx + ',(document.getElementById(\'blogV2Caption\')||{}).value||\'\')">Save</button></div>';
+      openModal(html);
+    },
+    saveCaption: function (idx, caption) {
+      closeModal();
+      if (!BED) return;
+      var imgs = BED.post.inlineImages || [];
+      if (idx < 0 || idx >= imgs.length) return;
+      imgs[idx].caption = caption || '';
+      BlogV2._persistImages();
+    },
+    moveImage: function (idx, dir) {
+      if (!BED) return;
+      var imgs = BED.post.inlineImages || [];
+      var j = idx + dir;
+      if (idx < 0 || idx >= imgs.length || j < 0 || j >= imgs.length) return;
+      var t = imgs[idx]; imgs[idx] = imgs[j]; imgs[j] = t;
+      BlogV2._persistImages();
+    },
+    removeImage: function (idx) {
+      if (!BED) return;
+      var imgs = BED.post.inlineImages || [];
+      if (idx < 0 || idx >= imgs.length) return;
+      Promise.resolve(window.mastConfirm
+        ? mastConfirm('Remove this inline image from the post?', { title: 'Remove image?', confirmLabel: 'Remove', dangerous: true })
+        : true).then(function (ok) {
+        if (!ok) return;
+        // Drop the marker whose NUMBER is idx+1 (order-independent, mirroring
+        // legacy blogRemoveInlineImage) then renumber survivors by number, so the
+        // body placeholders stay aligned with inlineImages even if the user moved
+        // a marker span out of ascending document order.
+        var ed = document.getElementById('blogV2Body');
+        var html;
+        if (ed) {
+          var target = ed.querySelector('.blog-img-marker[data-image="' + (idx + 1) + '"]');
+          if (target && target.parentNode) target.parentNode.removeChild(target);
+          Array.prototype.slice.call(ed.querySelectorAll('.blog-img-marker')).forEach(function (m) {
+            var n = parseInt(m.getAttribute('data-image'), 10);
+            if (n > idx + 1) { m.setAttribute('data-image', n - 1); m.textContent = '📷 Image ' + (n - 1); }
+          });
+          html = ed.innerHTML || '';
+        }
+        imgs.splice(idx, 1);
+        BED.post.inlineImages = imgs;
+        BlogV2._persistImages(html);
+      }).catch(function (e) { console.error('[blog-v2] removeImage', e); if (window.showToast) showToast('Error removing image', true); });
+    },
+    _persistImages: function (html) {
+      if (!BED || !window.BlogBridge || !BlogBridge.setInlineImages) return;
+      // The body marker DOM is already mutated in place (insert/remove/renumber)
+      // and the array is updated, so we capture the LIVE editor and persist — then
+      // refresh ONLY the inline-images strip. We deliberately do NOT re-seed the
+      // contenteditable: a full re-render from the server-confirmed body would
+      // discard any keystrokes typed during the in-flight write. The autosave
+      // debounce owns the body, so cancel a now-redundant pending body save.
+      clearTimeout(_bedTimer);
+      if (typeof html !== 'string') { var ed = document.getElementById('blogV2Body'); html = ed ? (ed.innerHTML || '') : undefined; }
+      Promise.resolve(BlogBridge.setInlineImages(BED.id, BED.post.inlineImages || [], html)).then(function (res) {
+        if (res && typeof res.body === 'string') BED.post.body = res.body;
+        if (V2.byId[BED.id]) { V2.byId[BED.id].inlineImages = BED.post.inlineImages; if (BED.post.body != null) V2.byId[BED.id].body = BED.post.body; }
+        BlogV2._refreshImages();
+      }).catch(function (e) { console.error('[blog-v2] persistImages', e); if (window.showToast) showToast('Error saving image', true); });
+    },
+    // Re-render only the inline-images management strip (not the body) so an image
+    // op never destroys the live contenteditable / cursor / unsaved typing.
+    _refreshImages: function () {
+      var host = document.getElementById('blogV2ImagesHost');
+      if (host) host.innerHTML = editorImages();
+    },
+    // ── coupon embed ──
+    insertCoupon: function () {
+      if (!BED) return;
+      BlogV2._saveBodyRange();
+      var all = window.coupons || {};
+      var codes = Object.keys(all).filter(function (code) {
+        return (typeof window.getCouponEffectiveStatus === 'function') ? getCouponEffectiveStatus(all[code]) === 'active' : true;
+      });
+      if (!codes.length) { if (window.showToast) showToast('No active coupons. Create one in Coupons first.', true); return; }
+      var rows = codes.map(function (code) {
+        var c = all[code]; var valStr = c.type === 'percent' ? (c.value + '% off') : ('$' + (c.value || 0).toFixed(2) + ' off');
+        return '<div data-code="' + esc(code) + '" onclick="BlogV2.finishCoupon(this.dataset.code)" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--border);border-radius:6px;cursor:pointer;">' +
+          '<span style="font-family:monospace;font-weight:600;">' + esc(code) + '</span><span style="color:var(--teal);font-weight:600;">' + esc(valStr) + '</span></div>';
+      }).join('');
+      openModal('<div class="modal-header"><h3>Insert coupon</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div class="modal-body"><p class="mu-sub" style="margin-bottom:12px;">Select a coupon to embed:</p>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow:auto;">' + rows + '</div></div>');
+    },
+    finishCoupon: function (code) {
+      closeModal();
+      if (!BED || !code) return;
+      var all = window.coupons || {}; var c = all[code]; if (!c) return;
+      var valStr = c.type === 'percent' ? (c.value + '% off') : ('$' + (c.value || 0).toFixed(2) + ' off');
+      BlogV2._restoreBodyRange();
+      var ed = document.getElementById('blogV2Body');
+      if (ed) {
+        ed.focus();
+        var marker = '<br><div class="blog-coupon-marker" data-coupon-code="' + esc(code) + '" contenteditable="false" ' +
+          'style="display:inline-block;padding:8px 14px;margin:4px 0;background:rgba(42,124,111,0.15);border:1px dashed var(--teal);border-radius:6px;font-size:0.9rem;color:inherit;cursor:default;">🏷️ ' + esc(code) + ' — ' + esc(valStr) + '</div><br>';
+        try { document.execCommand('insertHTML', false, marker); } catch (e) {}
+      }
+      BlogV2.bodyFlush();
+    },
+    // ── emoji ──
+    toggleEmoji: function () {
+      var p = document.getElementById('blogV2Emoji'); if (!p) return;
+      if (p.style.display === 'none') {
+        BlogV2._saveBodyRange();
+        p.innerHTML = BED_EMOJI.map(function (e) {
+          return '<button type="button" onmousedown="event.preventDefault();BlogV2.insertEmoji(\'' + e + '\')" style="background:none;border:none;cursor:pointer;font-size:1.15rem;padding:2px;">' + e + '</button>';
+        }).join('');
+        p.style.display = 'block';
+      } else { p.style.display = 'none'; }
+    },
+    insertEmoji: function (e) {
+      BlogV2._restoreBodyRange();
+      var ed = document.getElementById('blogV2Body'); if (ed) ed.focus();
+      try { document.execCommand('insertText', false, e); } catch (err) {}
+      var p = document.getElementById('blogV2Emoji'); if (p) p.style.display = 'none';
+      BlogV2._bodyDirty();
+    },
+    // ── preview (composed storefront HTML — same renderer as publish) ──
+    preview: function () {
+      if (!BED) return;
+      var w = window.open('', '_blank');
+      Promise.resolve(BlogV2.bodyFlush()).then(function () {
+        var composed = (window.BlogBridge && BlogBridge.previewBodyHtml) ? BlogBridge.previewBodyHtml(BED.post.body || '', BED.post.inlineImages || []) : '';
+        var doc = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(BED.post.title || 'Preview') + '</title></head>' +
+          '<body style="font-family:sans-serif;max-width:680px;margin:0 auto;padding:24px;line-height:1.7;color:rgb(34,34,34);">' +
+          '<div style="font-size:1.6rem;font-weight:700;margin:0 0 14px;">' + esc(BED.post.title || 'Untitled post') + '</div>' + (composed || '<p>No body content yet.</p>') + '</body></html>';
+        if (w) { w.document.write(doc); w.document.close(); } else if (window.showToast) showToast('Allow pop-ups to preview', true);
+      });
     },
     exportCsv: function () { return MastEntity.exportRows('blog-v2', visibleRows(), 'all'); }
   };
