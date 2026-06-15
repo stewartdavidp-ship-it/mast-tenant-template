@@ -587,6 +587,10 @@
         var d = (s.timestamp || s.createdAt || '').split('T')[0];
         if (d < rangeStart || d > rangeEnd) return;
         if (s.status === 'voided') return;
+        // POS-square sales write a real `orders` row (counted above) AND an
+        // admin/sales mirror stamped with that orderId — skip the mirror so the
+        // pacing actuals don't double-count. Fair/offline sales have no orderId.
+        if (s.orderId) return;
         var amt = s.amount || 0;
         totalActual += amt;
         var ch = s.eventId ? 'craft-fairs' : 'online';
