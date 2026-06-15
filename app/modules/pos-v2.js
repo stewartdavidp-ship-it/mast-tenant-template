@@ -29,7 +29,7 @@
     shipped: 'teal', delivered: 'success', cancelled: 'neutral', refunded: 'danger'
   };
 
-  var V2 = { rows: [], byId: {}, sortKey: 'placedAt', sortDir: 'desc', range: 'week', off: null };
+  var V2 = { rows: [], byId: {}, sortKey: 'placedAt', sortDir: 'desc', range: 'week', status: 'all', off: null };
 
   function isLedgerRow(o) { return !!IN_PERSON[String(o.source || '').toLowerCase()]; }
   function toRows(tree) {
@@ -67,11 +67,21 @@
 
   function visibleRows() {
     var rows = V2.rows.filter(inRange);
+    if (V2.status !== 'all') rows = rows.filter(function (r) { return String(r.status || '').toLowerCase() === V2.status; });
     return window.mastSortRows(rows, V2.sortKey, V2.sortDir, function (r, k) {
       if (k === 'source') return IN_PERSON[String(r.source || '').toLowerCase()] || r.source;
       var f = MastEntity.get('orders-v2') && MastEntity.get('orders-v2').fields.filter(function (x) { return x.name === k; })[0];
       return (f && f.get) ? f.get(r) : r[k];
     });
+  }
+
+  // Distinct statuses present in the current date range — drives the status
+  // filter dropdown (parity with the legacy Sales Ledger status filter), so the
+  // operator only sees statuses their data actually contains.
+  function statusOptions() {
+    var seen = {};
+    V2.rows.filter(inRange).forEach(function (r) { var s = String(r.status || '').toLowerCase(); if (s) seen[s] = true; });
+    return Object.keys(seen).sort();
   }
 
   function columns() {
@@ -115,6 +125,17 @@
         'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' + p[1] + '</button>';
     }).join('');
 
+    // Status filter (parity with legacy Sales Ledger). Reset a stale selection
+    // that's no longer present in the current range so the list can't go blank.
+    var statuses = statusOptions();
+    if (V2.status !== 'all' && statuses.indexOf(V2.status) < 0) V2.status = 'all';
+    var cap = function (s) { return s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, ' '); };
+    var statusSel = '<select onchange="PosV2.setStatus(this.value)" class="form-input" ' +
+      'style="padding:6px 10px;font-size:0.85rem;width:auto;display:inline-block;vertical-align:middle;">' +
+      '<option value="all"' + (V2.status === 'all' ? ' selected' : '') + '>All statuses</option>' +
+      statuses.map(function (s) { return '<option value="' + s + '"' + (V2.status === s ? ' selected' : '') + '>' + cap(s) + '</option>'; }).join('') +
+      '</select>';
+
     tab.innerHTML =
       U.pageHeader({ title: 'Sales Ledger', subtitle: 'in-person & seller-entered sales',
         actionsHtml: '<button class="btn btn-primary" onclick="PosV2.openCheckout()">Open POS checkout ↗</button>' +
@@ -124,7 +145,7 @@
         { k: 'Sales shown', v: U.Num.count(rows.length) },
         { k: 'Today', v: U.Num.money(todaySum) + ' · ' + today.length + ' sale' + (today.length === 1 ? '' : 's') }
       ]) +
-      '<div style="margin:14px 0;">' + pills + '</div>' +
+      '<div style="margin:14px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><div>' + pills + '</div>' + statusSel + '</div>' +
       window.MastEntity.renderList('orders-v2', {
         columns: columns(),
         rows: rows, sortKey: V2.sortKey, sortDir: V2.sortDir,
@@ -140,6 +161,7 @@
       render();
     },
     setRange: function (rg) { V2.range = rg; render(); },
+    setStatus: function (st) { V2.status = st || 'all'; render(); },
     open: function (id) {
       var rec = V2.byId[id]; if (!rec) return;
       MastAdmin.loadModule('orders-v2').then(function () {
