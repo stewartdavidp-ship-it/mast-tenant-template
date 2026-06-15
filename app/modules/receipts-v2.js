@@ -250,7 +250,7 @@
         return '<button onclick="ReceiptsV2.setPayFilter(\'' + f[0] + '\')" style="border:1px solid var(--border);' +
           'background:' + (on ? 'color-mix(in srgb,var(--teal) 16%,transparent)' : 'transparent') + ';' +
           'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
-          'padding:4px 11px;font-size:0.8rem;cursor:pointer;margin-right:8px;">' +
+          'padding:4px 11px;font-size:0.78rem;cursor:pointer;margin-right:8px;">' +
           f[1] + ' <span style="color:var(--warm-gray);">' + f[2] + '</span></button>';
       }).join('') + '</div>';
     }
