@@ -36,6 +36,34 @@
 
   // --- Helpers ---
   function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, ' ') : ''; }
+
+  // Waiver bodies (settings/waiverTemplates[].bodyHtml, snapshotted verbatim into
+  // each signature as waiverTextSnapshot by the out-of-repo submitWaiverSignature
+  // CF) are admin-authored rich text — INTENTIONALLY HTML, so they're rendered as
+  // markup, not esc()'d. No signer input reaches the snapshot, so it is NOT
+  // attacker/signer-controlled. But "admin-authored" spans RBAC roles: a staff
+  // member with can('students','edit') could plant script that runs in an owner's
+  // session when they open the signatures viewer. So we sanitize at render —
+  // matching the public waiver.html signing page and the students-config-v2.js
+  // sanitizeWaiverHtml twin (PRs 507/514) that closed this same hole on V2.
+  // Canonical sanitizer is MastUI.sanitizeHtml (allow-list engine, app-wide);
+  // DOMPurify is a secondary path; if NEITHER is available we FAIL CLOSED —
+  // escape to inert text, never raw.
+  var WAIVER_SANITIZE_CFG = {
+    ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'a', 'br', 'hr', 'div', 'span', 'table', 'tr', 'td', 'th', 'blockquote', 'sub', 'sup'],
+    ALLOWED_ATTR: ['href', 'target', 'style']
+  };
+  function sanitizeWaiverHtml(html) {
+    if (!html) return '';
+    if (window.MastUI && typeof window.MastUI.sanitizeHtml === 'function') {
+      return window.MastUI.sanitizeHtml(html);
+    }
+    if (window.DOMPurify) {
+      return window.DOMPurify.sanitize(html, WAIVER_SANITIZE_CFG);
+    }
+    // Fail closed: no sanitizer available → render as inert escaped text, never raw.
+    return esc(html);
+  }
   function labelField(id, label, inputHtml) {
     return '<div><label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:4px;" for="' + id + '">' + esc(label) + '</label>' + inputHtml + '</div>';
   }
@@ -1296,7 +1324,7 @@
       h += '</div>';
       if (sig.waiverTextSnapshot) {
         h += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-weight:600;font-size:0.9rem;color:var(--teal,#2A9D8F);padding:6px 0;">View Waiver Text</summary>';
-        h += '<div style="margin-top:8px;padding:12px;background:#fff;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.85rem;line-height:1.6;max-height:300px;overflow-y:auto;">' + sig.waiverTextSnapshot + '</div></details>';
+        h += '<div style="margin-top:8px;padding:12px;background:#fff;border:1px solid var(--cream-dark,#ddd);border-radius:6px;font-size:0.85rem;line-height:1.6;max-height:300px;overflow-y:auto;">' + sanitizeWaiverHtml(sig.waiverTextSnapshot) + '</div></details>';
       }
       h += '</div></div>';
       document.body.insertAdjacentHTML('beforeend', h);
