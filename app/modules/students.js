@@ -1530,6 +1530,76 @@
       studentsLoaded = false;
       if (window.writeAudit) writeAudit('delete', 'student', id);
       return true;
+    },
+    // ── Sub-collection editors (students-v2 native sub-editors) ──────────
+    // Clearances + documents are arrays and the onboarding checklist is a map on
+    // the student doc; legacy edits them via saveClearance / saveDoc / saveChecklist.
+    // These make the SAME writes (same paths + updatedAt stamping) so the twin's
+    // in-pane sub-editors stay single-sourced. Each reads the live doc, applies the
+    // change by index/key, writes back, and returns the new value for the twin to
+    // mirror into its cache. (The twin builds the entry/record shape — there is no
+    // field transform here, unlike buildStudentFields.)
+    addClearance: async function (studentId, entry) {
+      var stu = (await MastDB.get('students/' + studentId)) || {};
+      var clearances = Array.isArray(stu.clearances) ? stu.clearances.slice() : [];
+      clearances.push(entry);
+      await MastDB.set('students/' + studentId + '/clearances', clearances);
+      await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
+      studentsLoaded = false;
+      return clearances;
+    },
+    removeClearance: async function (studentId, idx) {
+      var stu = (await MastDB.get('students/' + studentId)) || {};
+      var clearances = Array.isArray(stu.clearances) ? stu.clearances.slice() : [];
+      if (idx < 0 || idx >= clearances.length) return clearances;
+      clearances.splice(idx, 1);
+      await MastDB.set('students/' + studentId + '/clearances', clearances);
+      await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
+      studentsLoaded = false;
+      return clearances;
+    },
+    saveChecklistItem: async function (studentId, fieldKey, fields) {
+      await MastDB.update('students/' + studentId + '/onboardingChecklist/' + fieldKey, fields);
+      await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
+      studentsLoaded = false;
+      return fields;
+    },
+    saveDocument: async function (studentId, docIdx, record) {
+      var stu = (await MastDB.get('students/' + studentId)) || {};
+      var docs = Array.isArray(stu.documents) ? stu.documents.slice() : [];
+      var now = new Date().toISOString();
+      if (docIdx != null && docs[docIdx]) {
+        docs[docIdx] = Object.assign({}, docs[docIdx], record, { updatedAt: now });
+      } else {
+        docs.push(Object.assign({ documentId: 'doc_' + Date.now(), createdAt: now }, record, { updatedAt: now }));
+      }
+      await MastDB.set('students/' + studentId + '/documents', docs);
+      await MastDB.set('students/' + studentId + '/updatedAt', now);
+      studentsLoaded = false;
+      return docs;
+    },
+    removeDocument: async function (studentId, docIdx) {
+      var stu = (await MastDB.get('students/' + studentId)) || {};
+      var docs = Array.isArray(stu.documents) ? stu.documents.slice() : [];
+      if (docIdx < 0 || docIdx >= docs.length) return docs;
+      docs.splice(docIdx, 1);
+      await MastDB.set('students/' + studentId + '/documents', docs);
+      await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
+      studentsLoaded = false;
+      return docs;
+    },
+    // Clearance types are a tenant-level settings map (settings/clearanceTypes);
+    // the twin lets the user create one inline from the clearance editor so it
+    // isn't blocked when none exist yet. Mirrors legacy saveClearanceType.
+    saveClearanceType: async function (typeId, fields) {
+      if (typeId) {
+        await MastDB.update('settings/clearanceTypes/' + typeId, fields);
+        return Object.assign({ _key: typeId }, fields);
+      }
+      var key = MastDB.newKey('settings/clearanceTypes');
+      fields.createdAt = new Date().toISOString();
+      await MastDB.set('settings/clearanceTypes/' + key, fields);
+      return Object.assign({ _key: key }, fields);
     }
   };
 
