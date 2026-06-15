@@ -190,6 +190,18 @@ function isTestOrder(o) {
 // Revenue and P&L surfaces; every sales read now goes through this helper.
 function _salesCents(s) { return Math.round(Number(s && s.amount) || 0); }
 
+// Canonical "does this admin/sales row count toward revenue?" rule — single-
+// sourced so the readers can't drift. A POS-square checkout creates a REAL
+// `orders` row (channel 'pos', paid) AND an admin/sales MIRROR stamped with
+// that order's id (pos/index.html _writeSaleToServer: `saleRecord.orderId =
+// orderResult.orderId`). The `orders` row is the canonical money record, so the
+// mirror MUST NOT be summed again — counting both double-counts the sale at
+// full amount across Revenue / P&L / monthly-breakdown / dashboard. Fair-mode /
+// offline sales (recordManualSale, legacy saveManualSale) write admin/sales with
+// NO orderId — there is no orders row, so admin/sales is the SOLE money record
+// and they MUST still count. Rule: count iff not voided AND no linked orderId.
+function _salesRowCounts(s) { return s && s.status !== 'voided' && !s.orderId; }
+
 // W1.5 carry-forward — COMPLETE 2026-05-22: isTestOrder()/isTestSource()
 // thread through Revenue + computePnlLocal + loadArData + loadCashFlow's AR
 // rollup so test-channel orders are honored across every customer-money view.
@@ -551,7 +563,7 @@ async function _loadRevenueAggregate(start, end) {
     txnCount += 1;
   });
   sales.forEach(function(s) {
-    if (s.status === 'voided') return;
+    if (!_salesRowCounts(s)) return; // skip voided + POS-square mirrors (orderId set → counted via its orders row)
     var cents = _salesCents(s);
     if (cents <= 0) return;
     if (isTestOrder(s) && !_includeTestData) return;
@@ -622,7 +634,7 @@ async function loadRevenue() {
     });
 
     sales.forEach(function(s) {
-      if (s.status === 'voided') return;
+      if (!_salesRowCounts(s)) return; // skip voided + POS-square mirrors (orderId set → counted via its orders row)
       var cents = _salesCents(s);
       if (cents <= 0) return;
       var ch = s.source || 'pos';
@@ -1797,7 +1809,7 @@ async function computePnlLocal(startDate, endDate) {
     revenue += c;
   });
   sales.forEach(function(s) {
-    if (s.status === 'voided') return;
+    if (!_salesRowCounts(s)) return; // skip voided + POS-square mirrors (orderId set → counted via its orders row)
     var c = _salesCents(s); if (c <= 0) return;
     var ch = s.source || 'pos';
     if (isTestOrder(s) && !_includeTestData) {
@@ -5424,8 +5436,8 @@ async function computeMonthlyBreakdown(startDate, endDate) {
     monthData[ym].revenue += c;
   });
   Object.values(salesRaw||{}).forEach(function(s) {
-    if (s.status==='voided') return;
-    var c = Math.round((s.amount||0)*100); if (c<=0) return;
+    if (!_salesRowCounts(s)) return; // skip voided + POS-square mirrors (orderId set → counted via its orders row)
+    var c = _salesCents(s); if (c<=0) return; // `amount` is already CENTS — *100 over-reported this surface 100×
     var ym = gm(s.createdAt); if (!ym) return; em(ym);
     monthData[ym].revenue += c;
   });
@@ -8297,7 +8309,7 @@ async function _loadRevenueRows(start, end) {
     byChannel[ch] = (byChannel[ch] || 0) + cents; totalCents += cents;
   });
   Object.entries(salesRaw || {}).forEach(function(kv) {
-    var s = kv[1]; if (!s || s.status === 'voided') return;
+    var s = kv[1]; if (!_salesRowCounts(s)) return; // skip voided + POS-square mirrors (orderId set → counted via its orders row)
     var cents = _salesCents(s); if (cents <= 0) return;
     if (isTestOrder(s) && !_includeTestData) { testCount++; testCents += cents; return; }
     var ch = s.source || 'pos';
