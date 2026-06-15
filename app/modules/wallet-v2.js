@@ -15,7 +15,8 @@
  * editable objects (each edits its slice of the single admin/walletConfig record
  * and merge-saves). Store Credit has no settings (grants are per-customer on the
  * customer Wallet tab) and Membership is a separate object — both render as
- * read-only cards with a "manage in classic view" link for this pass.
+ * read-only cards that cross-link to their native V2 homes (customers-v2 /
+ * membership-v2) via WalletV2.open → navigateTo (no legacy hatch).
  *
  * Flag-gated (?ui=1) at #wallet-v2, side-by-side with legacy #wallet; cart.js
  * untouched. Both legacy saves are side-effect-free (walletConfig.update +
@@ -69,7 +70,7 @@
           { k: 'Status', v: c.giftCardsEnabled ? 'Enabled' : 'Disabled' },
           { k: 'Denominations', v: (c.giftCardDenominations || []).length ? esc((c.giftCardDenominations || []).map(money).join(', ')) : 'None configured' },
           { k: 'Custom amount', v: c.giftCardCustomEnabled ? (money(c.giftCardCustomMin || 500) + ' – ' + money(c.giftCardCustomMax || 50000)) : 'Off' }
-        ]) + '<div style="margin-top:10px;"><button class="btn btn-secondary" onclick="WalletV2.classic(\'gift-cards\')">Manage issued gift cards (classic view) →</button></div>');
+        ]) + '<div style="margin-top:10px;"><button class="btn btn-secondary" onclick="WalletV2.open(\'gift-cards-v2\')">Manage issued gift cards →</button></div>');
       },
       editRender: function (c) {
         c = c || {};
@@ -113,7 +114,7 @@
           { k: 'Redemption', v: esc(String(c.loyaltyRedemptionRate || 50)) + ' ' + esc(pn) + ' = $1.00 off' },
           { k: 'Expiry', v: esc(String(c.loyaltyExpiryDays || 365)) + ' days of inactivity' },
           { k: 'Excluded categories', v: (c.loyaltyExclusions || []).length ? esc((c.loyaltyExclusions || []).join(', ')) : 'None' }
-        ]) + '<div style="margin-top:10px;"><button class="btn btn-secondary" onclick="WalletV2.classic(\'loyalty\')">Open loyalty program (classic view) →</button></div>');
+        ]) + '<div style="margin-top:10px;"><button class="btn btn-secondary" onclick="WalletV2.open(\'loyalty-v2\')">View loyalty members →</button></div>');
       },
       editRender: function (c) {
         c = c || {};
@@ -173,10 +174,10 @@
     return U.launchCard({ title: title, body: summary, onClickFnName: 'WalletV2.edit', arg: key, arrow: 'Edit →', headerRight: onPill(statusOn) });
   }
 
-  // A read-only card with no editable settings here (link out to classic).
-  function infoCard(title, statusOn, desc, classicRoute, classicLabel) {
+  // A read-only card with no editable settings here (link out to the native V2 home).
+  function infoCard(title, statusOn, desc, v2Route, linkLabel) {
     var body = '<div style="font-size:0.9rem;color:var(--text-primary);line-height:1.5;">' + esc(desc) + '</div>' +
-      '<div class="mu-sub" style="margin-top:10px;"><button class="btn btn-secondary" onclick="WalletV2.classic(\'' + classicRoute + '\')">' + esc(classicLabel) + ' →</button></div>';
+      '<div class="mu-sub" style="margin-top:10px;"><button class="btn btn-secondary" onclick="WalletV2.open(\'' + v2Route + '\')">' + esc(linkLabel) + ' →</button></div>';
     return U.card(title, body, { fill: true, headerRight: onPill(statusOn) });
   }
 
@@ -195,11 +196,11 @@
       { k: 'Expiry', v: esc(String(c.loyaltyExpiryDays || 365)) + ' days' }
     ]);
     var credit = infoCard('Store Credit', c.creditsEnabled !== false,
-      'From returns, admin grants & promotions. Never expires. Per-customer adjustments happen on the customer Wallet tab.',
-      'wallet', 'Open wallet dashboard');
+      'From returns, admin grants & promotions. Never expires. Per-customer grants & adjustments happen on a customer\'s Wallet tab.',
+      'customers-v2', 'Manage on a customer Wallet tab');
     var member = infoCard('Membership', !!(V2.membership && V2.membership.enabled),
       'Subscription program with exclusive benefits. Managed as its own program.',
-      'membership', 'Open membership');
+      'membership-v2', 'Open membership');
 
     tab.innerHTML = U.pageHeader({ title: 'Wallet & instruments', subtitle: 'Gift cards, loyalty & store credit' }) + U.cardGrid([gc, loy, credit, member]);
   }
@@ -213,7 +214,9 @@
         MastEntity.openRecord(key, V2.cfg, 'edit');
       });
     },
-    classic: function (route) { if (typeof navigateToClassic === 'function') navigateToClassic(route || 'wallet'); else if (typeof navigateTo === 'function') navigateTo(route || 'wallet'); },
+    // Cross-nav to a native V2 home (gift-cards-v2 / loyalty-v2 / membership-v2 /
+    // customers-v2). No legacy hatch — these are the destinations after V1 is off.
+    open: function (route) { if (typeof navigateTo === 'function') navigateTo(route); else location.hash = '#' + route; },
     refresh: function () { render(); }
   };
 
