@@ -1291,34 +1291,72 @@
     await MastDB.multiUpdate(updates);
     MastAdmin.writeAudit('apply-recipe', 'products', recipe.productId);
 
-    // Etsy price sync (best-effort; retail tier is what Etsy shows publicly)
-    syncEtsyListingPrice(recipe.productId, Math.round(baseEff.retail * 100), recipeId);
+    // Etsy price sync (best-effort) — mirror the LIVE product retail just
+    // written; the variant branch sets priceCents to the lowest variant retail.
+    var appliedRetailCents = updates[prodPath + 'priceCents'];
+    if (typeof appliedRetailCents !== 'number') appliedRetailCents = Math.round(baseEff.retail * 100);
+    syncEtsyListingPrice(recipe.productId, appliedRetailCents, recipeId);
 
     return { version: recipe.version, prices: baseEff, applied: true };
   }
 
   /**
-   * Sync price to Etsy listing if product has an etsyListingId.
-   * Non-blocking — failures show a toast but don't affect local data.
+   * Canonical Etsy listing price-sync — anchored to the shared product-price
+   * write core so it fires no matter which UI (V1 maker or products-v2) drove
+   * the edit, and survives the V1 sunset (the V1 builder UI may go, but the
+   * product-write core stays — products-v2 depends on it). Callers:
+   * applyRecipeToProduct (recipe → product apply) and maybeSyncEtsyOnRetailChange
+   * (the direct-edit bridge + applyPendingChanges). Non-blocking — a failure
+   * toasts but never affects the local price write.
+   *
+   * @param {string} productId   product whose LIVE retail price changed
+   * @param {number} retailCents  new live retail price, in cents (> 0)
+   * @param {string} [recipeId]   recipe to stamp lastEtsySyncAt on; falls back to
+   *                              the product's linked recipe, skipped if neither.
    */
-  function syncEtsyListingPrice(productId, priceCents, recipeId) {
-    // Look up the product to get etsyListingId
-    var products = window.productsData || [];
-    var product = products.find(function(p) { return p.pid === productId; });
+  function syncEtsyListingPrice(productId, retailCents, recipeId) {
+    var product = findProduct(productId);
     if (!product || !product.etsyListingId) return;
-
-    var listingId = product.etsyListingId;
+    // Never push a zero/NaN price to a live listing.
+    if (typeof retailCents !== 'number' || !isFinite(retailCents) || retailCents <= 0) return;
     firebase.functions().httpsCallable('etsyUpdateListingPrice')({
-      listingId: listingId,
-      priceCents: priceCents
+      listingId: product.etsyListingId,
+      priceCents: retailCents
     }).then(function() {
       showToast('Price updated on Etsy');
-      // Record sync timestamp on recipe
-      MastDB.recipes.setField(recipeId, 'lastEtsySyncAt', new Date().toISOString());
+      // Bookkeeping stamp on the recipe (MastDB.recipes exposes setField, NOT
+      // fieldRef — see PR 521). A direct product-price edit may have no recipe.
+      var stampRecipeId = recipeId || product.recipeId;
+      if (stampRecipeId) {
+        try { MastDB.recipes.setField(stampRecipeId, 'lastEtsySyncAt', new Date().toISOString()); } catch (e) {}
+      }
     }).catch(function(err) {
       console.error('Etsy price sync failed:', err);
       showToast('Local price updated — Etsy sync failed', 'error');
     });
+  }
+
+  /**
+   * Fire the Etsy sync after a LIVE product write IF the change touched the
+   * public retail price. Shared by every product-price-write entry point that
+   * isn't the recipe-apply path (bridgeSetProductFields' live branch +
+   * applyPendingChanges) so a products-v2 price edit syncs Etsy the same way the
+   * V1 recipe-apply path always has. Staged revisions on Active products are NOT
+   * synced here — they sync when applyPendingChanges makes them live.
+   *
+   * @param {object} product      the in-memory product record (already updated)
+   * @param {string[]} changedKeys keys written this op (top-level field names)
+   */
+  function maybeSyncEtsyOnRetailChange(product, changedKeys) {
+    if (!product || !product.etsyListingId) return;
+    var touched = (changedKeys || []).some(function(k) {
+      return k === 'priceCents' || k === 'price' || k === 'retailPriceCents';
+    });
+    if (!touched) return;
+    var retailCents = (typeof product.priceCents === 'number') ? product.priceCents
+      : (typeof product.price === 'number' ? Math.round(product.price * 100) : null);
+    if (retailCents == null) return;
+    syncEtsyListingPrice(product.pid, retailCents, product.recipeId);
   }
 
   /**
@@ -4033,6 +4071,10 @@
 
       // Recompute readiness — applied changes may flip listingReady, costed, etc.
       try { await recomputeAndPersistReadiness(pid); } catch (e) {}
+
+      // Etsy price-sync — a staged retail revision going live mirrors to the
+      // listing (the live-write equivalent of bridgeSetProductFields' direct path).
+      maybeSyncEtsyOnRetailChange(p, keys);
 
       MastAdmin.showToast('Applied ' + keys.length + ' change' + (keys.length === 1 ? '' : 's') + ' ✓');
       // Re-render whichever surface is open
@@ -6987,6 +7029,9 @@
     // Readiness is derived — recompute off the now-updated in-memory record.
     try { await recomputeAndPersistReadiness(pid); } catch (e) {}
     MastAdmin.writeAudit('update', 'products', pid);
+    // A LIVE retail change here (DRAFT/READY products) mirrors to Etsy. Active
+    // products stage instead — they sync when applyPendingChanges goes live.
+    maybeSyncEtsyOnRetailChange(p, keys);
     return { ok: true, staged: false, changed: keys.length };
   }
 
