@@ -70,14 +70,35 @@
   // session when they open the template preview or the signatures viewer. So we
   // sanitize at render — matching what the PUBLIC waiver.html signing page already
   // does to this exact content — keeping formatting tags while stripping
-  // scripts/handlers. Falls back to raw (today's behavior) if DOMPurify is absent.
+  // scripts/handlers.
+  //
+  // Sanitizer (canonical): MastUI.sanitizeHtml — the platform's allow-list HTML
+  // sanitizer (shared engine, PR 509), already the standard for admin-rendered rich
+  // HTML (NewsletterBridge composer, PR 512). MastUI is a core module loaded
+  // app-wide and is already a HARD dependency of this route (module bails at top if
+  // absent), so it is reachable here at render time. window.DOMPurify is kept only as
+  // a secondary path if some surface still loads it. If NEITHER is available we FAIL
+  // CLOSED — escape the HTML so it renders as inert text, never raw. (The previous
+  // raw `: html` fallback was the regression that re-opened this hole when the
+  // DOMPurify CDN tag was dropped from index.html; raw render must never happen.)
+  //
+  // NOTE: MastUI.sanitizeHtml owns its own allow-list internally and takes no config
+  // arg. WAIVER_SANITIZE_CFG is retained for the DOMPurify secondary path, which
+  // mirrors the public waiver.html signing page's ALLOWED_TAGS/ATTR.
   var WAIVER_SANITIZE_CFG = {
     ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'strong', 'em', 'u', 'ul', 'ol', 'li', 'a', 'br', 'hr', 'div', 'span', 'table', 'tr', 'td', 'th', 'blockquote', 'sub', 'sup'],
     ALLOWED_ATTR: ['href', 'target', 'style']
   };
   function sanitizeWaiverHtml(html) {
     if (!html) return '';
-    return window.DOMPurify ? window.DOMPurify.sanitize(html, WAIVER_SANITIZE_CFG) : html;
+    if (window.MastUI && typeof window.MastUI.sanitizeHtml === 'function') {
+      return window.MastUI.sanitizeHtml(html);
+    }
+    if (window.DOMPurify) {
+      return window.DOMPurify.sanitize(html, WAIVER_SANITIZE_CFG);
+    }
+    // Fail closed: no sanitizer available → render as inert escaped text, never raw.
+    return esc(html);
   }
 
   // Vocabularies mirror students.js.
