@@ -6,8 +6,9 @@
  * records with an in-pane detail (renderStudentDetail) plus Clearance-Types,
  * Business-Documents and Waiver-template tooling. This twin re-hosts ONE of
  * those surfaces — the roster -> read detail — on the Entity Engine: a
- * schema-driven list + a read-focused Faceted Record slide-out
- * (Overview / Clearances / Documents / Notes facets).
+ * schema-driven list + a Faceted Record slide-out (Overview / Onboarding /
+ * Enrollments / Clearances / Documents / Notes facets) where Onboarding,
+ * Clearances and Documents are now natively EDITABLE in-pane.
  *
  * Variant (doc 17 §1a test): a student is a person record with related
  * collections (clearances, documents, an onboarding checklist) but no governed
@@ -19,11 +20,21 @@
  * form) + an onSave that DELEGATES to window.StudentsBridge (exposed in
  * students.js) so the student write, the onboardingChecklist seeding and the
  * isMinor auto-compute stay single-sourced — this twin never reimplements that
- * logic (mirrors the contacts-v2 / ContactsBridge precedent). The per-checklist,
- * per-clearance, per-document editors with Google-Drive linking + the waiver
- * template tooling remain bespoke on legacy #students (no V2 home). The signed
- * per-student waiver link is native here. Flag-gated (?ui=1) at #students-v2,
- * side-by-side.
+ * logic (mirrors the contacts-v2 / ContactsBridge precedent). The per-clearance,
+ * onboarding-checklist and per-document sub-editors are ALSO native now — each
+ * delegates to a window.StudentsBridge method (addClearance / removeClearance /
+ * saveChecklistItem / saveDocument / removeDocument / saveClearanceType) so the
+ * sub-collection writes stay single-sourced with legacy. Per-document/-checklist
+ * Google-Drive linking reuses the in-repo global fetchDriveFileMetadata (browser
+ * Google OAuth — NO new cross-repo code; degrades to a plain URL when Google
+ * isn't connected). The signed per-student waiver link is native here.
+ *
+ * FLAGGED (still legacy-only, intentionally out of scope here): the tenant-level
+ * WAIVER-TEMPLATE tooling (rich-text template editor + signatures viewer) and the
+ * public signing pipeline (generateWaiverLink CF + waiver.html). That's a
+ * roster/config surface plus a gated CF, NOT a per-student sub-editor — it needs
+ * its own V2 home alongside Clearance-Types and Business-Documents config.
+ * Flag-gated (?ui=1) at #students-v2, side-by-side.
  */
 (function () {
   'use strict';
@@ -51,6 +62,17 @@
     { key: 'photoRelease', label: 'Photo Release' },
     { key: 'guardianConsent', label: 'Guardian Consent' }
   ];
+  // Sub-editor vocabularies — mirror students.js (STORAGE_OPTIONS / DOC_TYPES /
+  // doc + checklist status enums) so the native twin writes the identical shape.
+  var STORAGE_OPTIONS = [
+    { value: 'physical', label: 'Physical' },
+    { value: 'google-drive', label: 'Google Drive' },
+    { value: 'dropbox', label: 'Dropbox' },
+    { value: 'other', label: 'Other' }
+  ];
+  var DOC_TYPES = ['waiver', 'medical', 'guardian-consent', 'photo-release', 'certification', 'other'];
+  var DOC_STATUSES = ['current', 'pending', 'expired', 'not-applicable'];
+  var CHECKLIST_STATUSES = ['pending', 'completed', 'not-applicable'];
 
   // helpers (mirror students.js)
   function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1).replace(/-/g, ' ') : ''; }
@@ -103,124 +125,26 @@
       return ensureLoaded().then(function () { return V2.byId[id] || null; });
     },
     detail: {
+      // Composed from per-pane builders (below) so each editable pane can be
+      // re-rendered in place after a sub-edit — the products-v2 rerenderPane
+      // convention. Onboarding / Clearances / Documents host native in-pane
+      // sub-editors; Overview / Enrollments / Notes are read.
       render: function (UI, s) {
-        var waiverOk = s.waiverStatus === 'signed';
-        var safetyOk = s.safetyOrientationCompleted === true;
-        var tiles = UI.tiles([
-          { k: 'Waiver', v: waiverOk ? 'Signed' : cap(s.waiverStatus || 'pending'), hero: true },
-          { k: 'Safety orientation', v: safetyOk ? 'Completed' : 'Not completed' },
-          { k: 'Photo waiver', v: esc(cap(s.photoWaiverStatus || 'pending')) },
-          { k: 'Minor', v: s.isMinor ? 'Yes (under 18)' : 'No' }
-        ]);
         var tabsBar = UI.paneTabsBar([
-          { key: 'ov', label: 'Overview' }, { key: 'enrollments', label: 'Enrollments' },
-          { key: 'clearances', label: 'Clearances' },
+          { key: 'ov', label: 'Overview' }, { key: 'onboarding', label: 'Onboarding' },
+          { key: 'enrollments', label: 'Enrollments' }, { key: 'clearances', label: 'Clearances' },
           { key: 'documents', label: 'Documents' }, { key: 'notes', label: 'Notes' }
         ], 'ov');
-
-        // Enrollments — joined by studentId OR email (the storefront writes
-        // customerEmail, not studentId); rows drill to the enrollment record.
-        var sid = s._key || s.id, sem = String(s.email || '').toLowerCase();
-        var myEnrolls = V2.enrollments.filter(function (e) {
-          return e.studentId === sid || (sem && String(e.studentEmail || e.customerEmail || '').toLowerCase() === sem);
-        }).sort(function (a, b) { return String(b.enrolledAt || '').localeCompare(String(a.enrolledAt || '')); });
-        var EN_LABEL = { confirmed: 'Confirmed', waitlisted: 'Waitlist', cancelled: 'Cancelled', 'no-show': 'No-show', completed: 'Attended', late: 'Late', 'checked-in': 'Checked in', 'attended-pending-waiver': 'Attended (waiver pending)', cancelled_by_session: 'Session cancelled' };
-        var EN_TONE = { confirmed: 'success', waitlisted: 'amber', cancelled: 'neutral', 'no-show': 'danger', completed: 'teal', late: 'warning', 'checked-in': 'teal', 'attended-pending-waiver': 'amber', cancelled_by_session: 'neutral' };
-        var enrollsBody = myEnrolls.length
-          ? UI.relatedTable([
-              { label: 'Class', render: function (e) {
-                  var c = e.classId && V2.classMap[e.classId];
-                  var nm = (c && c.name) || e.classId || '—';
-                  return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'enrollments-v2\',\'' + esc(e._key) + '\')">' + esc(nm) + '</button>';
-              } },
-              { label: 'Enrolled', render: function (e) { return e.enrolledAt ? N.date(e.enrolledAt) : '—'; } },
-              { label: 'Paid', align: 'right', render: function (e) { return N.money(N.moneyVal(e, 'pricePaidCents', 'pricePaid')) || '—'; } },
-              { label: 'Status', render: function (e) { var st = e.status || '—'; return UI.badge(EN_LABEL[st] || st, EN_TONE[st] || 'neutral'); } }
-            ], myEnrolls)
-          : '<span class="mu-sub">No enrollments yet.</span>';
-
-        // Overview — profile + onboarding + emergency contact.
-        var profile = UI.kv([
-          { k: 'Status', v: UI.badge(cap(s.status || 'active'), s.status === 'inactive' ? 'neutral' : 'success') },
-          { k: 'Contact ID', v: s.contactId ? esc(s.contactId) : '—' },
-          { k: 'Birth date', v: s.birthDate ? esc(s.birthDate) : '—' },
-          { k: 'Minor', v: s.isMinor ? 'Yes (under 18)' : 'No' },
-          { k: 'Guardian contact', v: (s.isMinor && s.guardianContactId) ? esc(s.guardianContactId) : '—' },
-          { k: 'Added', v: s.createdAt ? N.date(s.createdAt) : '—' }
-        ]);
-        var onboarding = UI.kv([
-          { k: 'Waiver', v: UI.badge(waiverOk ? 'Signed' : cap(s.waiverStatus || 'pending'), waiverOk ? 'success' : 'amber') +
-            (s.waiverSignedAt ? ' <span class="mu-sub">' + N.date(s.waiverSignedAt) + '</span>' : '') },
-          { k: 'Safety orientation', v: UI.badge(safetyOk ? 'Completed' : 'Not completed', safetyOk ? 'success' : 'amber') +
-            (s.safetyOrientationDate ? ' <span class="mu-sub">' + N.date(s.safetyOrientationDate) + '</span>' : '') },
-          { k: 'Photo waiver', v: esc(cap(s.photoWaiverStatus || 'pending')) },
-          { k: 'Checklist', v: checklistDone(s) + ' / ' + ONBOARDING_FIELDS.length + ' complete' }
-        ]);
-        var ec = s.emergencyContact || {};
-        var emerg = ec.name
-          ? esc(ec.name + (ec.phone ? ' · ' + ec.phone : '') + (ec.relationship ? ' (' + ec.relationship + ')' : ''))
-          : '—';
-        var emergency = UI.kv([{ k: 'Emergency contact', v: emerg }]);
-        // Identity / profile / onboarding / emergency / medical editing is NATIVE
-        // now (the Edit button on this slide-out). Per-clearance, per-document,
-        // checklist and waiver-template editors remain bespoke on legacy #students.
-        // Per-student signed waiver link (anti-forge, audit 2026-06-01 P2): mints a
-        // tokened link bound to THIS student via generateWaiverLink. Signing it
-        // flips only this student; a tokenless submission is create-new-only.
-        var waiverLinkBtn = '<div style="margin-top:12px;"><button class="btn btn-secondary" onclick="StudentsV2.copyWaiverLink(\'' + esc(s._key) + '\')">🔗 Copy waiver link</button> <span class="mu-sub">Signed link tied to this student — send it to them to sign.</span></div>';
-
-        // Clearances — active + expired, with cleared-by / expiry.
-        var clr = clearancesOf(s);
-        var t = today();
-        var clearancesBody = clr.length ? UI.relatedTable([
-          { label: 'Clearance', render: function (c) { return esc(c.label || c.clearanceId || '—'); } },
-          { label: 'Cleared', render: function (c) {
-            var by = (c.clearedAt || '') + (c.clearedBy ? ' by ' + c.clearedBy : '');
-            return by ? '<span class="mu-sub">' + esc(by) + '</span>' : '<span class="mu-sub">—</span>'; } },
-          { label: 'Status', render: function (c) {
-            var expired = c.expiresAt && c.expiresAt < t;
-            if (expired) return UI.badge('Expired ' + c.expiresAt, 'danger');
-            return UI.badge(c.expiresAt ? ('Expires ' + c.expiresAt) : 'Active', 'success'); } }
-        ], clr) : '<span class="mu-sub">No clearances on file.</span>';
-
-        // Documents — title / type / status (full management stays on legacy).
-        var docs = documentsOf(s);
-        var documentsBody = docs.length ? UI.relatedTable([
-          { label: 'Document', render: function (d) {
-            return esc(d.title || 'Untitled') + (d.driveFileName ? ' <span class="mu-sub">· 📄 ' + esc(d.driveFileName) + '</span>' : ''); } },
-          { label: 'Type', render: function (d) { return '<span class="mu-sub">' + esc(cap(d.type || 'other')) + '</span>'; } },
-          { label: 'Status', render: function (d) {
-            var st = d.status || 'pending';
-            var tone = st === 'current' ? 'success' : st === 'expired' ? 'danger' : 'amber';
-            return UI.badge(cap(st), tone); } }
-        ], docs) : '<span class="mu-sub">No documents on file.</span>';
-
-        // Notes — medical (allergies + medical notes) + internal instructor notes.
-        function noteBlock(label, text) {
-          return '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin:0 0 6px;">' + esc(label) + '</div>' +
-            '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(text) + '</div>';
-        }
-        var noteParts = [];
-        if (s.allergies) noteParts.push(noteBlock('Allergies', s.allergies));
-        if (s.medicalNotes) noteParts.push(noteBlock('Medical notes', s.medicalNotes));
-        if (s.instructorNotes) noteParts.push('<div style="margin-top:' + (noteParts.length ? '12px' : '0') + ';">' + noteBlock('Instructor notes', s.instructorNotes) + '</div>');
-        var notesBody = noteParts.length ? noteParts.join('') : '<span class="mu-sub">No notes.</span>';
-
-        // Danger zone — hard delete via the bridge (RBAC + mastConfirm + FK
-        // warn in the remove() handler; writeAudit in the bridge core).
         var dangerZone = can('students', 'delete')
           ? UI.card('Danger zone', '<button class="btn btn-danger btn-small" onclick="StudentsV2.remove(\'' + esc(s._key || s.id) + '\')">Delete student</button>')
           : '';
-        return tiles + tabsBar +
-          '<div class="mu-pane" data-pane="ov">' +
-            UI.card('Profile', profile) + UI.card('Onboarding', onboarding + waiverLinkBtn) + UI.card('Emergency contact', emergency) + '</div>' +
-          '<div class="mu-pane" data-pane="enrollments" hidden>' +
-            UI.cardTable('Enrollments (' + myEnrolls.length + ')', enrollsBody) + '</div>' +
-          '<div class="mu-pane" data-pane="clearances" hidden>' +
-            UI.cardTable('Clearances (' + activeClearances(s).length + ' active · ' + clr.length + ' total)', clearancesBody) + '</div>' +
-          '<div class="mu-pane" data-pane="documents" hidden>' +
-            UI.cardTable('Documents (' + docs.length + ')', documentsBody) + '</div>' +
-          '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>' + dangerZone;
+        return tilesFor(s) + tabsBar +
+          paneDiv('ov', overviewPane(s), false) +
+          paneDiv('onboarding', onboardingPane(s), true) +
+          paneDiv('enrollments', enrollmentsPane(s), true) +
+          paneDiv('clearances', clearancesPane(s), true) +
+          paneDiv('documents', documentsPane(s), true) +
+          paneDiv('notes', notesPane(s), true) + dangerZone;
       },
       // Native edit form — the legacy openStudentForm field set, grouped
       // (Identity / Profile / Emergency / Medical / Onboarding / Internal).
@@ -324,7 +248,7 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, enrollments: [], classMap: {}, sortKey: 'displayName', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
+  var V2 = { rows: [], byId: {}, enrollments: [], classMap: {}, clearanceTypes: [], sortKey: 'displayName', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
 
   // Run-once data load shared by route setup and cold drills (fetch gate).
   var _loadPromise = null;
@@ -343,13 +267,17 @@
     return Promise.all([
       Promise.resolve(MastDB.get('students')).catch(function () { return {}; }),
       Promise.resolve(MastDB.enrollments.list(2000)).catch(function () { return {}; }),
-      Promise.resolve(MastDB.classes.list(200)).catch(function () { return {}; })
+      Promise.resolve(MastDB.classes.list(200)).catch(function () { return {}; }),
+      // Clearance types power the per-clearance editor's type picker.
+      Promise.resolve(MastDB.get('settings/clearanceTypes')).catch(function () { return {}; })
     ]).then(function (res) {
       var val = res[0] || {};
       function toMap(x) { return (x && typeof x.val === 'function') ? (x.val() || {}) : (x || {}); }
       var ev = toMap(res[1]);
       V2.enrollments = Object.keys(ev).map(function (k) { return Object.assign({ _key: k }, ev[k]); });
       V2.classMap = toMap(res[2]);
+      var ctVal = res[3] || {};
+      V2.clearanceTypes = Object.keys(ctVal).map(function (k) { return Object.assign({ _key: k }, ctVal[k]); });
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
         var s = val[k];
@@ -407,6 +335,237 @@
         onSortFnName: 'StudentsV2.sort', onRowClickFnName: 'StudentsV2.open',
         empty: { title: 'No students', message: V2.loaded ? 'Add a student to get started.' : 'Loading…' }
       });
+  }
+
+  // ── Faceted-record pane builders + native sub-editors ───────────────
+  // Each pane's body is a pure builder so it can be re-rendered in place after
+  // a sub-edit (rerenderPane) — mirrors products-v2's pricingPane/rerenderPricingPane.
+  function paneDiv(key, inner, hidden) {
+    return '<div class="mu-pane" data-pane="' + key + '"' + (hidden ? ' hidden' : '') + '>' + inner + '</div>';
+  }
+  function rerenderPane(key, inner) {
+    var body = document.getElementById('mastSlideOutBody');
+    var el = body && body.querySelector('.mu-pane[data-pane="' + key + '"]');
+    if (el) el.innerHTML = inner;
+  }
+  function tilesFor(s) {
+    var waiverOk = s.waiverStatus === 'signed', safetyOk = s.safetyOrientationCompleted === true;
+    return U.tiles([
+      { k: 'Waiver', v: waiverOk ? 'Signed' : cap(s.waiverStatus || 'pending'), hero: true },
+      { k: 'Safety orientation', v: safetyOk ? 'Completed' : 'Not completed' },
+      { k: 'Photo waiver', v: esc(cap(s.photoWaiverStatus || 'pending')) },
+      { k: 'Minor', v: s.isMinor ? 'Yes (under 18)' : 'No' }
+    ]);
+  }
+  function overviewPane(s) {
+    var waiverOk = s.waiverStatus === 'signed', safetyOk = s.safetyOrientationCompleted === true;
+    var profile = U.kv([
+      { k: 'Status', v: U.badge(cap(s.status || 'active'), s.status === 'inactive' ? 'neutral' : 'success') },
+      { k: 'Contact ID', v: s.contactId ? esc(s.contactId) : '—' },
+      { k: 'Birth date', v: s.birthDate ? esc(s.birthDate) : '—' },
+      { k: 'Minor', v: s.isMinor ? 'Yes (under 18)' : 'No' },
+      { k: 'Guardian contact', v: (s.isMinor && s.guardianContactId) ? esc(s.guardianContactId) : '—' },
+      { k: 'Added', v: s.createdAt ? N.date(s.createdAt) : '—' }
+    ]);
+    var onboarding = U.kv([
+      { k: 'Waiver', v: U.badge(waiverOk ? 'Signed' : cap(s.waiverStatus || 'pending'), waiverOk ? 'success' : 'amber') +
+        (s.waiverSignedAt ? ' <span class="mu-sub">' + N.date(s.waiverSignedAt) + '</span>' : '') },
+      { k: 'Safety orientation', v: U.badge(safetyOk ? 'Completed' : 'Not completed', safetyOk ? 'success' : 'amber') +
+        (s.safetyOrientationDate ? ' <span class="mu-sub">' + N.date(s.safetyOrientationDate) + '</span>' : '') },
+      { k: 'Photo waiver', v: esc(cap(s.photoWaiverStatus || 'pending')) },
+      { k: 'Checklist', v: checklistDone(s) + ' / ' + ONBOARDING_FIELDS.length + ' complete' }
+    ]);
+    var ec = s.emergencyContact || {};
+    var emerg = ec.name
+      ? esc(ec.name + (ec.phone ? ' · ' + ec.phone : '') + (ec.relationship ? ' (' + ec.relationship + ')' : ''))
+      : '—';
+    // Per-student signed waiver link (anti-forge, audit 2026-06-01 P2): mints a
+    // tokened link bound to THIS student via generateWaiverLink — native here.
+    var waiverLinkBtn = '<div style="margin-top:12px;"><button class="btn btn-secondary" onclick="StudentsV2.copyWaiverLink(\'' + esc(s._key) + '\')">🔗 Copy waiver link</button> <span class="mu-sub">Signed link tied to this student — send it to them to sign.</span></div>';
+    return U.card('Profile', profile) + U.card('Onboarding', onboarding + waiverLinkBtn) +
+      U.card('Emergency contact', U.kv([{ k: 'Emergency contact', v: emerg }]));
+  }
+  function enrollmentsPane(s) {
+    var sid = s._key || s.id, sem = String(s.email || '').toLowerCase();
+    var myEnrolls = V2.enrollments.filter(function (e) {
+      return e.studentId === sid || (sem && String(e.studentEmail || e.customerEmail || '').toLowerCase() === sem);
+    }).sort(function (a, b) { return String(b.enrolledAt || '').localeCompare(String(a.enrolledAt || '')); });
+    var EN_LABEL = { confirmed: 'Confirmed', waitlisted: 'Waitlist', cancelled: 'Cancelled', 'no-show': 'No-show', completed: 'Attended', late: 'Late', 'checked-in': 'Checked in', 'attended-pending-waiver': 'Attended (waiver pending)', cancelled_by_session: 'Session cancelled' };
+    var EN_TONE = { confirmed: 'success', waitlisted: 'amber', cancelled: 'neutral', 'no-show': 'danger', completed: 'teal', late: 'warning', 'checked-in': 'teal', 'attended-pending-waiver': 'amber', cancelled_by_session: 'neutral' };
+    var body = myEnrolls.length
+      ? U.relatedTable([
+          { label: 'Class', render: function (e) {
+              var c = e.classId && V2.classMap[e.classId];
+              var nm = (c && c.name) || e.classId || '—';
+              return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'enrollments-v2\',\'' + esc(e._key) + '\')">' + esc(nm) + '</button>';
+          } },
+          { label: 'Enrolled', render: function (e) { return e.enrolledAt ? N.date(e.enrolledAt) : '—'; } },
+          { label: 'Paid', align: 'right', render: function (e) { return N.money(N.moneyVal(e, 'pricePaidCents', 'pricePaid')) || '—'; } },
+          { label: 'Status', render: function (e) { var st = e.status || '—'; return U.badge(EN_LABEL[st] || st, EN_TONE[st] || 'neutral'); } }
+        ], myEnrolls)
+      : '<span class="mu-sub">No enrollments yet.</span>';
+    return U.cardTable('Enrollments (' + myEnrolls.length + ')', body);
+  }
+  function notesPane(s) {
+    function noteBlock(label, text) {
+      return '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin:0 0 6px;">' + esc(label) + '</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(text) + '</div>';
+    }
+    var parts = [];
+    if (s.allergies) parts.push(noteBlock('Allergies', s.allergies));
+    if (s.medicalNotes) parts.push(noteBlock('Medical notes', s.medicalNotes));
+    if (s.instructorNotes) parts.push('<div style="margin-top:' + (parts.length ? '12px' : '0') + ';">' + noteBlock('Instructor notes', s.instructorNotes) + '</div>');
+    return U.card('Notes', parts.length ? parts.join('') : '<span class="mu-sub">No notes.</span>');
+  }
+
+  // ── Onboarding checklist sub-task manager (per-item editor) ──────────
+  function onboardingPane(s) {
+    var checklist = s.onboardingChecklist || {}, t = today();
+    var rows = ONBOARDING_FIELDS.map(function (f) {
+      var item = checklist[f.key] || {}, status = item.status || 'pending';
+      var tone = status === 'completed' ? 'success' : status === 'not-applicable' ? 'neutral' : 'amber';
+      var meta = [];
+      if (item.storageLocation) meta.push(cap(item.storageLocation));
+      if (item.completedDate) meta.push('Completed ' + item.completedDate);
+      if (item.expiryDate) meta.push(item.expiryDate < t ? 'Expired ' + item.expiryDate : 'Expires ' + item.expiryDate);
+      if (item.driveFileName) meta.push('📄 ' + item.driveFileName);
+      var metaHtml = meta.length ? '<div class="mu-sub" style="margin-top:3px;">' + esc(meta.join(' · ')) + '</div>' : '';
+      return '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding:9px 0;border-bottom:1px solid var(--border,rgba(127,127,127,.15));">' +
+        '<div><div>' + U.badge(cap(status), tone) + ' <span style="font-weight:600;margin-left:4px;">' + esc(f.label) + '</span></div>' + metaHtml + '</div>' +
+        '<button class="btn btn-small btn-secondary" onclick="StudentsV2.chkEdit(\'' + esc(s._key) + '\',\'' + f.key + '\')">Edit</button>' +
+      '</div>';
+    }).join('');
+    return U.card('Onboarding checklist (' + checklistDone(s) + ' / ' + ONBOARDING_FIELDS.length + ' complete)', rows);
+  }
+  function checklistForm(s, fieldKey) {
+    var field = ONBOARDING_FIELDS.filter(function (f) { return f.key === fieldKey; })[0];
+    if (!field) return onboardingPane(s);
+    var item = (s.onboardingChecklist || {})[fieldKey] || {};
+    var inner =
+      fgRow('Status', selectHtml('stV2ChkStatus', CHECKLIST_STATUSES, item.status || 'pending')) +
+      fgRow('Storage location', selectHtml('stV2ChkStorage', [{ value: '', label: '—' }].concat(STORAGE_OPTIONS), item.storageLocation || '')) +
+      fgRow('Completed date', dateHtml('stV2ChkCompleted', item.completedDate)) +
+      fgRow('Expiry date', dateHtml('stV2ChkExpiry', item.expiryDate)) +
+      driveField('Chk', item.documentUrl, item) +
+      fgRow('Notes', '<textarea class="form-input" id="stV2ChkNotes" rows="2" style="width:100%;resize:vertical;">' + esc(item.notes || '') + '</textarea>') +
+      formButtons('StudentsV2.chkSave(\'' + esc(s._key) + '\',\'' + fieldKey + '\')', 'StudentsV2.chkCancel(\'' + esc(s._key) + '\')', 'Save');
+    return U.card('Edit: ' + esc(field.label), inner);
+  }
+
+  // ── Per-clearance editor (type picker + inline new-type + expiry logic) ──
+  function clearancesPane(s) {
+    var clr = clearancesOf(s), t = today();
+    var addBtn = '<button class="btn btn-small btn-secondary" onclick="StudentsV2.clrAdd(\'' + esc(s._key) + '\')">+ Add</button>';
+    var rows = clr.map(function (c, i) { return Object.assign({ _idx: i }, c); });
+    var table = clr.length ? U.relatedTable([
+      { label: 'Clearance', render: function (c) { return esc(c.label || c.clearanceId || '—'); } },
+      { label: 'Cleared', render: function (c) {
+        var by = (c.clearedAt || '') + (c.clearedBy ? ' by ' + c.clearedBy : '');
+        return by ? '<span class="mu-sub">' + esc(by) + '</span>' : '<span class="mu-sub">—</span>'; } },
+      { label: 'Status', render: function (c) {
+        var expired = c.expiresAt && c.expiresAt < t;
+        if (expired) return U.badge('Expired ' + c.expiresAt, 'danger');
+        return U.badge(c.expiresAt ? ('Expires ' + c.expiresAt) : 'Active', 'success'); } },
+      { label: '', align: 'right', render: function (c) { return '<button class="btn btn-small btn-danger" onclick="StudentsV2.clrRemove(\'' + esc(s._key) + '\',' + c._idx + ')">Remove</button>'; } }
+    ], rows) : '<span class="mu-sub">No clearances on file.</span>';
+    return U.card('Clearances (' + activeClearances(s).length + ' active · ' + clr.length + ' total)', table, { headerRight: addBtn });
+  }
+  function clearanceForm(s) {
+    var typeOpts = V2.clearanceTypes.map(function (ct) { return '<option value="' + esc(ct._key) + '">' + esc(ct.label || ct._key) + '</option>'; }).join('');
+    var inner =
+      fgRow('Clearance type *', '<select class="form-input" id="stV2ClType" onchange="StudentsV2.clrTypeChange()" style="width:100%;"><option value="">Select…</option>' + typeOpts + '<option value="__new__">+ New clearance type…</option></select>') +
+      '<div id="stV2ClNewWrap" style="display:none;border-left:2px solid var(--teal);padding-left:10px;margin:0 0 10px;">' +
+        fgRow('New type name', '<input class="form-input" id="stV2ClNewLabel" style="width:100%;" placeholder="e.g., Torch Safety">') +
+        fgRow('Requires expiry', selectHtml('stV2ClNewExpiry', [{ value: 'false', label: 'No' }, { value: 'true', label: 'Yes' }], 'false')) +
+      '</div>' +
+      fgRow('Cleared by *', '<input class="form-input" id="stV2ClBy" style="width:100%;" placeholder="Staff member name">') +
+      fgRow('Expires at', dateHtml('stV2ClExpires', '')) +
+      fgRow('Notes', '<textarea class="form-input" id="stV2ClNotes" rows="2" style="width:100%;resize:vertical;"></textarea>') +
+      formButtons('StudentsV2.clrSave(\'' + esc(s._key) + '\')', 'StudentsV2.clrCancel(\'' + esc(s._key) + '\')', 'Add clearance');
+    return U.card('New clearance', inner);
+  }
+
+  // ── Per-document editor (+ optional Google-Drive linking) ────────────
+  function documentsPane(s) {
+    var docs = documentsOf(s);
+    var addBtn = '<button class="btn btn-small btn-secondary" onclick="StudentsV2.docAdd(\'' + esc(s._key) + '\')">+ New</button>';
+    var rows = docs.map(function (d, i) { return Object.assign({ _idx: i }, d); });
+    var table = docs.length ? U.relatedTable([
+      { label: 'Document', render: function (d) { return esc(d.title || 'Untitled') + (d.driveFileName ? ' <span class="mu-sub">· 📄 ' + esc(d.driveFileName) + '</span>' : ''); } },
+      { label: 'Type', render: function (d) { return '<span class="mu-sub">' + esc(cap(d.type || 'other')) + '</span>'; } },
+      { label: 'Status', render: function (d) {
+        var st = d.status || 'pending';
+        var tone = st === 'current' ? 'success' : st === 'expired' ? 'danger' : 'amber';
+        return U.badge(cap(st), tone); } },
+      { label: '', align: 'right', render: function (d) {
+        return '<button class="btn btn-small btn-secondary" onclick="StudentsV2.docEdit(\'' + esc(s._key) + '\',' + d._idx + ')">Edit</button> ' +
+          '<button class="btn btn-small btn-danger" onclick="StudentsV2.docRemove(\'' + esc(s._key) + '\',' + d._idx + ')">Remove</button>'; } }
+    ], rows) : '<span class="mu-sub">No documents on file.</span>';
+    return U.card('Documents (' + docs.length + ')', table, { headerRight: addBtn });
+  }
+  function documentForm(s, idx) {
+    var docs = documentsOf(s);
+    var isNew = (idx == null);
+    var d = (!isNew && docs[idx]) ? docs[idx] : {};
+    var inner =
+      fgRow('Title *', '<input class="form-input" id="stV2DocTitle" value="' + esc(d.title || '') + '" style="width:100%;" placeholder="Document title">') +
+      fgRow('Type', selectHtml('stV2DocType', DOC_TYPES, d.type || 'other')) +
+      fgRow('Status', selectHtml('stV2DocStatus', DOC_STATUSES, d.status || 'current')) +
+      fgRow('Storage location', selectHtml('stV2DocStorage', [{ value: '', label: '—' }].concat(STORAGE_OPTIONS), d.storageLocation || '')) +
+      fgRow('On-file date', dateHtml('stV2DocOnFile', d.onFileDate)) +
+      fgRow('Expiry date', dateHtml('stV2DocExpiry', d.expiryDate)) +
+      driveField('Doc', d.documentUrl, d) +
+      fgRow('Description', '<textarea class="form-input" id="stV2DocDesc" rows="2" style="width:100%;resize:vertical;">' + esc(d.description || '') + '</textarea>') +
+      fgRow('Notes', '<textarea class="form-input" id="stV2DocNotes" rows="2" style="width:100%;resize:vertical;">' + esc(d.notes || '') + '</textarea>') +
+      formButtons('StudentsV2.docSave(\'' + esc(s._key) + '\',' + (isNew ? 'null' : idx) + ')', 'StudentsV2.docCancel(\'' + esc(s._key) + '\')', isNew ? 'Create document' : 'Save');
+    return U.card(isNew ? 'New document' : 'Edit document', inner);
+  }
+
+  // Small form-control helpers (kept local so the sub-editors read uniformly).
+  function fgRow(label, inner) { return '<div class="form-group" style="margin-bottom:10px;"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+  function formButtons(saveCall, cancelCall, saveLabel) {
+    return '<div style="display:flex;gap:8px;margin-top:14px;"><button class="btn btn-primary btn-small" onclick="' + saveCall + '">' + esc(saveLabel || 'Save') + '</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="' + cancelCall + '">Cancel</button></div>';
+  }
+  function selectHtml(id, options, sel) {
+    var opts = options.map(function (o) {
+      var v = (o && typeof o === 'object') ? o.value : o;
+      var l = (o && typeof o === 'object') ? o.label : cap(o);
+      return '<option value="' + esc(v) + '"' + (String(sel) === String(v) ? ' selected' : '') + '>' + esc(l) + '</option>';
+    }).join('');
+    return '<select class="form-input" id="' + id + '" style="width:100%;">' + opts + '</select>';
+  }
+  function dateHtml(id, val) { return '<input class="form-input" type="date" id="' + id + '" value="' + esc(val || '') + '" style="width:100%;">'; }
+
+  // Google-Drive link field — plain URL input + (when a Drive share link is
+  // pasted) an auto-fetched file preview. The metadata fetch reuses the in-repo
+  // global fetchDriveFileMetadata (browser Google OAuth via requestGoogleOAuthToken);
+  // NO new cross-repo code. Degrades to a plain URL when Google isn't connected.
+  function isDriveUrl(url) { return url && /drive\.google\.com|docs\.google\.com/.test(url); }
+  function drivePreview(prefix, drive) {
+    return '<div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.35);border-radius:6px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">' +
+      '<span style="font-size:0.85rem;">📄 <strong>' + esc(drive.driveFileName || '') + '</strong>' + (drive.driveLastModified ? ' · ' + esc(String(drive.driveLastModified).split('T')[0]) : '') + '</span>' +
+      '<button type="button" class="btn btn-small btn-secondary" onclick="StudentsV2.driveUnlink(\'' + prefix + '\')">Unlink</button></div>';
+  }
+  function driveField(prefix, url, drive) {
+    drive = drive || {};
+    return '<div class="form-group" style="margin-bottom:10px;"><label class="form-label">Document URL or Google Drive link</label>' +
+      '<input class="form-input" id="stV2' + prefix + 'Url" value="' + esc(url || '') + '" style="width:100%;" placeholder="https://drive.google.com/file/d/…" onblur="StudentsV2.driveBlur(\'' + prefix + '\')">' +
+      '<div id="stV2' + prefix + 'Drive" data-fileid="' + esc(drive.driveFileId || '') + '" data-filename="' + esc(drive.driveFileName || '') + '" data-modified="' + esc(drive.driveLastModified || '') + '" style="margin-top:6px;' + (drive.driveFileName ? '' : 'display:none;') + '">' + (drive.driveFileName ? drivePreview(prefix, drive) : '') + '</div>' +
+      '<div class="mu-sub" style="margin-top:4px;">Paste a Drive share link to auto-link the file (needs a Google connection — otherwise just stores the URL).</div></div>';
+  }
+  function collectDrive(prefix) {
+    var el = document.getElementById('stV2' + prefix + 'Drive');
+    if (el && el.dataset && el.dataset.filename) {
+      return { driveFileId: el.dataset.fileid || null, driveFileName: el.dataset.filename || null, driveLastModified: el.dataset.modified || null };
+    }
+    return { driveFileId: null, driveFileName: null, driveLastModified: null };
+  }
+
+  function bridge() {
+    if (window.StudentsBridge && typeof window.StudentsBridge.addClearance === 'function') return window.StudentsBridge;
+    if (window.showToast) showToast('Students engine still loading — try again', true);
+    return null;
   }
 
   window.StudentsV2 = {
@@ -467,7 +626,149 @@
           if (window.showToast) showToast('Could not generate waiver link: ' + msg, true);
         });
     },
-    exportCsv: function () { return MastEntity.exportRows('students-v2', visibleRows(), V2.statusFilter); }
+    exportCsv: function () { return MastEntity.exportRows('students-v2', visibleRows(), V2.statusFilter); },
+
+    // ── Onboarding checklist sub-task editor ──────────────────────────
+    chkEdit: function (id, key) { var s = V2.byId[id]; if (s) rerenderPane('onboarding', checklistForm(s, key)); },
+    chkCancel: function (id) { var s = V2.byId[id]; if (s) rerenderPane('onboarding', onboardingPane(s)); },
+    chkSave: function (id, key) {
+      var b = bridge(); if (!b) return;
+      var fields = {
+        status: (document.getElementById('stV2ChkStatus') || {}).value || 'pending',
+        storageLocation: (document.getElementById('stV2ChkStorage') || {}).value || null,
+        completedDate: (document.getElementById('stV2ChkCompleted') || {}).value || null,
+        expiryDate: (document.getElementById('stV2ChkExpiry') || {}).value || null,
+        documentUrl: (document.getElementById('stV2ChkUrl') || {}).value || null,
+        notes: ((document.getElementById('stV2ChkNotes') || {}).value || '').trim() || null
+      };
+      Object.assign(fields, collectDrive('Chk'));
+      Promise.resolve(b.saveChecklistItem(id, key, fields)).then(function () {
+        var rec = V2.byId[id]; if (!rec) return;
+        rec.onboardingChecklist = rec.onboardingChecklist || {};
+        rec.onboardingChecklist[key] = Object.assign({}, rec.onboardingChecklist[key], fields);
+        if (window.showToast) showToast('Checklist updated');
+        rerenderPane('onboarding', onboardingPane(rec));
+        rerenderPane('ov', overviewPane(rec));   // checklist count + tiles live on Overview
+        reloadSoon();
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+    },
+
+    // ── Per-clearance editor ──────────────────────────────────────────
+    clrAdd: function (id) { var s = V2.byId[id]; if (s) rerenderPane('clearances', clearanceForm(s)); },
+    clrCancel: function (id) { var s = V2.byId[id]; if (s) rerenderPane('clearances', clearancesPane(s)); },
+    clrTypeChange: function () {
+      var sel = document.getElementById('stV2ClType'), wrap = document.getElementById('stV2ClNewWrap');
+      if (sel && wrap) wrap.style.display = (sel.value === '__new__') ? '' : 'none';
+    },
+    clrSave: function (id) {
+      var b = bridge(); if (!b) return;
+      var typeVal = (document.getElementById('stV2ClType') || {}).value || '';
+      var clearedBy = ((document.getElementById('stV2ClBy') || {}).value || '').trim();
+      var expiresAt = (document.getElementById('stV2ClExpires') || {}).value || null;
+      var notes = ((document.getElementById('stV2ClNotes') || {}).value || '').trim() || null;
+      if (!typeVal) { if (window.showToast) showToast('Select a clearance type', true); return; }
+      if (!clearedBy) { if (window.showToast) showToast('Cleared by is required', true); return; }
+      function persist(ct) {
+        // Expiry logic mirrors legacy saveClearance: a type that requires expiry
+        // can't be cleared without an expiry date.
+        if (ct.requiresExpiry && !expiresAt) { if (window.showToast) showToast('This clearance type requires an expiry date', true); return; }
+        var entry = { clearanceId: ct._key, label: ct.label || ct._key, clearedAt: today(), clearedBy: clearedBy, expiresAt: expiresAt, notes: notes };
+        Promise.resolve(b.addClearance(id, entry)).then(function (arr) {
+          var rec = V2.byId[id]; if (rec) rec.clearances = arr;
+          if (window.showToast) showToast('Clearance added');
+          rerenderPane('clearances', clearancesPane(rec || { _key: id, clearances: arr }));
+          reloadSoon();
+        }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+      }
+      if (typeVal === '__new__') {
+        var label = ((document.getElementById('stV2ClNewLabel') || {}).value || '').trim();
+        var reqExp = (document.getElementById('stV2ClNewExpiry') || {}).value === 'true';
+        if (!label) { if (window.showToast) showToast('Enter a name for the new clearance type', true); return; }
+        Promise.resolve(b.saveClearanceType(null, { label: label, requiresExpiry: reqExp, description: null })).then(function (ct) {
+          V2.clearanceTypes.push(ct); persist(ct);
+        }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+      } else {
+        var ct = V2.clearanceTypes.filter(function (x) { return x._key === typeVal; })[0];
+        if (!ct) { if (window.showToast) showToast('Clearance type not found', true); return; }
+        persist(ct);
+      }
+    },
+    clrRemove: function (id, idx) {
+      var b = bridge(); if (!b) return;
+      mastConfirm('Remove this clearance?', { title: 'Remove clearance', confirmLabel: 'Remove', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(b.removeClearance(id, Number(idx))).then(function (arr) {
+          var rec = V2.byId[id]; if (rec) rec.clearances = arr;
+          if (window.showToast) showToast('Clearance removed');
+          rerenderPane('clearances', clearancesPane(rec || { _key: id, clearances: arr }));
+          reloadSoon();
+        }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+      });
+    },
+
+    // ── Per-document editor (+ Google-Drive linking) ──────────────────
+    docAdd: function (id) { var s = V2.byId[id]; if (s) rerenderPane('documents', documentForm(s, null)); },
+    docEdit: function (id, idx) { var s = V2.byId[id]; if (s) rerenderPane('documents', documentForm(s, Number(idx))); },
+    docCancel: function (id) { var s = V2.byId[id]; if (s) rerenderPane('documents', documentsPane(s)); },
+    docSave: function (id, idx) {
+      var b = bridge(); if (!b) return;
+      var title = ((document.getElementById('stV2DocTitle') || {}).value || '').trim();
+      if (!title) { if (window.showToast) showToast('Title is required', true); return; }
+      var record = {
+        title: title,
+        type: (document.getElementById('stV2DocType') || {}).value || 'other',
+        status: (document.getElementById('stV2DocStatus') || {}).value || 'current',
+        storageLocation: (document.getElementById('stV2DocStorage') || {}).value || null,
+        onFileDate: (document.getElementById('stV2DocOnFile') || {}).value || null,
+        expiryDate: (document.getElementById('stV2DocExpiry') || {}).value || null,
+        documentUrl: (document.getElementById('stV2DocUrl') || {}).value || null,
+        description: ((document.getElementById('stV2DocDesc') || {}).value || '').trim() || null,
+        notes: ((document.getElementById('stV2DocNotes') || {}).value || '').trim() || null
+      };
+      Object.assign(record, collectDrive('Doc'));
+      var di = (idx === null || idx === 'null' || idx == null) ? null : Number(idx);
+      Promise.resolve(b.saveDocument(id, di, record)).then(function (arr) {
+        var rec = V2.byId[id]; if (rec) rec.documents = arr;
+        if (window.showToast) showToast(di != null ? 'Document saved' : 'Document added');
+        rerenderPane('documents', documentsPane(rec || { _key: id, documents: arr }));
+        reloadSoon();
+      }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+    },
+    docRemove: function (id, idx) {
+      var b = bridge(); if (!b) return;
+      mastConfirm('Delete this document?', { title: 'Delete document', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(b.removeDocument(id, Number(idx))).then(function (arr) {
+          var rec = V2.byId[id]; if (rec) rec.documents = arr;
+          if (window.showToast) showToast('Document deleted');
+          rerenderPane('documents', documentsPane(rec || { _key: id, documents: arr }));
+          reloadSoon();
+        }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+      });
+    },
+
+    // ── Google-Drive link helpers (shared by checklist + document forms) ──
+    driveBlur: function (prefix) {
+      var input = document.getElementById('stV2' + prefix + 'Url'); if (!input) return;
+      var url = (input.value || '').trim();
+      if (!isDriveUrl(url)) return;
+      var box = document.getElementById('stV2' + prefix + 'Drive'); if (!box) return;
+      if (typeof fetchDriveFileMetadata !== 'function') return;   // Drive helper unavailable — keep the plain URL
+      box.style.display = ''; box.innerHTML = '<span class="mu-sub">Fetching file info…</span>';
+      Promise.resolve(fetchDriveFileMetadata(url)).then(function (meta) {
+        if (!meta) { box.innerHTML = '<span class="mu-sub" style="color:var(--danger);">Could not fetch Drive file.</span>'; return; }
+        var m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+        box.dataset.fileid = (m && m[1]) || '';
+        box.dataset.filename = meta.name || '';
+        box.dataset.modified = meta.modifiedTime || '';
+        box.innerHTML = drivePreview(prefix, { driveFileName: meta.name, driveLastModified: meta.modifiedTime });
+      }).catch(function () { box.innerHTML = '<span class="mu-sub" style="color:var(--danger);">Drive fetch failed.</span>'; });
+    },
+    driveUnlink: function (prefix) {
+      var box = document.getElementById('stV2' + prefix + 'Drive');
+      if (box) { box.innerHTML = ''; box.style.display = 'none'; box.dataset.fileid = ''; box.dataset.filename = ''; box.dataset.modified = ''; }
+      var input = document.getElementById('stV2' + prefix + 'Url'); if (input) input.value = '';
+    }
   };
 
   MastAdmin.registerModule('students-v2', {
