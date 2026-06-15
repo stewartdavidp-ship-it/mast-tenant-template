@@ -121,8 +121,16 @@
   function savePlacementTotals(placementId) {
     var p = placementsData[placementId];
     if (!p) return;
+    return _persistPlacementTotals(placementId, p);
+  }
+
+  // Recompute + persist the denormalized placement totals from a placement
+  // OBJECT (not the classic placementsData cache), so the galleries-v2 /
+  // consignments-v2 twins can drive line-item mutations through GalleriesBridge
+  // without the classic Placements list having rendered. Returns the write promise.
+  function _persistPlacementTotals(placementId, p) {
     var totals = calculatePlacementTotals(p);
-    MastDB.consignments.update(placementId, {
+    return MastDB.consignments.update(placementId, {
       totalRetailValue: totals.totalRetailValue,
       totalSold: totals.totalSold,
       makerEarnings: totals.makerEarnings,
@@ -2096,6 +2104,98 @@
       if (!v.name) throw new Error('Name is required');
       return _writeGalleryRecord(id, v);
     }
+  };
+
+  // ── Placement line-item mutations (galleries-v2 / consignments-v2 twins) ──
+  // The read-focused V2 twins drive sale / return / add / remove of consigned
+  // pieces through these bridge methods instead of the classic placement detail
+  // (retiring the navigateToClassic('galleries') hatch for those actions; payout
+  // settlement is the one piece still single-sourced on classic #galleries).
+  //
+  // UI-agnostic: they resolve with data or throw — the V2 caller renders toasts
+  // and refreshes the record. RBAC-gated on can('galleries', …), routed through
+  // the canonical MastDB.consignments.setField/.remove write + a totals recompute,
+  // and ALWAYS fetch the placement fresh (never read the classic placementsData
+  // cache, which is empty when the V2 twin is the active surface).
+  function _requireGalleryEdit(action) {
+    if (typeof window.can === 'function' && !window.can('galleries', action || 'edit')) {
+      throw new Error('You do not have permission to manage consignments.');
+    }
+  }
+  async function _fetchPlacement(placementId) {
+    var p = await MastDB.consignments.get(placementId); // MastDB.get resolves the value, not a snapshot
+    if (!p || typeof p !== 'object') throw new Error('Placement not found');
+    return p;
+  }
+  // Mutate one field of one line item: fetch → validate via decide() → write the
+  // single field → recompute + persist placement totals from the mutated object.
+  async function _mutateLineItemField(placementId, lineItemId, decide) {
+    var p = await _fetchPlacement(placementId);
+    var li = p.lineItems && p.lineItems[lineItemId];
+    if (!li) throw new Error('Line item not found');
+    var change = decide(li, p); // -> { field, value }; throws on validation failure
+    li[change.field] = change.value; // reflect in-memory so the totals recompute is correct
+    await MastDB.consignments.setField(placementId, 'lineItems/' + lineItemId + '/' + change.field, change.value);
+    await _persistPlacementTotals(placementId, p);
+    return p;
+  }
+  window.GalleriesBridge.recordSale = async function (placementId, lineItemId, qty) {
+    _requireGalleryEdit('edit');
+    qty = parseInt(qty, 10);
+    if (!(qty > 0)) throw new Error('Enter a quantity of at least 1');
+    return _mutateLineItemField(placementId, lineItemId, function (li) {
+      var sold = li.qtySold || 0, ret = li.qtyReturned || 0;
+      var maxSellable = (li.qty || 0) - sold - ret;
+      if (qty > maxSellable) throw new Error('Cannot sell more than ' + maxSellable + ' on hand');
+      return { field: 'qtySold', value: sold + qty };
+    });
+  };
+  window.GalleriesBridge.recordReturn = async function (placementId, lineItemId, qty) {
+    _requireGalleryEdit('edit');
+    qty = parseInt(qty, 10);
+    if (!(qty > 0)) throw new Error('Enter a quantity of at least 1');
+    return _mutateLineItemField(placementId, lineItemId, function (li) {
+      var sold = li.qtySold || 0, ret = li.qtyReturned || 0;
+      var onHand = (li.qty || 0) - sold - ret;
+      if (qty > onHand) throw new Error('Cannot return more than ' + onHand + ' on hand');
+      return { field: 'qtyReturned', value: ret + qty };
+    });
+  };
+  window.GalleriesBridge.addLineItem = async function (placementId, item) {
+    _requireGalleryEdit('edit');
+    item = item || {};
+    var pid = String(item.productId || '').trim();
+    if (!pid) throw new Error('Select a product');
+    var qty = parseInt(item.qty, 10);
+    if (!(qty > 0)) throw new Error('Enter a quantity of at least 1');
+    // dollars in → CENTS stored (matches classic confirmAddLineItem; v2 reads via N.moneyVal)
+    var retailCents = Math.round((parseFloat(item.retailPrice) || 0) * 100);
+    var p = await _fetchPlacement(placementId);
+    var liKey = MastDB.consignments.newKey();
+    var lineItem = {
+      lineItemId: liKey,
+      productId: pid,
+      productName: String(item.productName || '').trim(),
+      qty: qty,
+      retailPrice: retailCents,
+      datePlaced: new Date().toISOString(),
+      qtySold: 0,
+      qtyReturned: 0
+    };
+    await MastDB.consignments.setField(placementId, 'lineItems/' + liKey, lineItem);
+    if (!p.lineItems) p.lineItems = {};
+    p.lineItems[liKey] = lineItem;
+    await _persistPlacementTotals(placementId, p);
+    return liKey;
+  };
+  window.GalleriesBridge.removeLineItem = async function (placementId, lineItemId) {
+    _requireGalleryEdit('delete');
+    var p = await _fetchPlacement(placementId);
+    if (!p.lineItems || !p.lineItems[lineItemId]) throw new Error('Line item not found');
+    await MastDB.consignments.remove(placementId + '/lineItems/' + lineItemId);
+    delete p.lineItems[lineItemId];
+    await _persistPlacementTotals(placementId, p);
+    return true;
   };
 
   // W2.3 (Finance) — Gallery payouts register
