@@ -42,11 +42,17 @@
   // open (same as legacy, which has no per-axis gate on the route).
   function canViewChannels() { return typeof window.can === 'function' ? window.can('channels', 'view') : true; }
   function canEditChannels() { return typeof window.can === 'function' ? window.can('channels', 'edit') : true; }
+  function canDeleteChannels() { return typeof window.can === 'function' ? window.can('channels', 'delete') : true; }
 
   // Bound reads (lint-unbounded-read). Channels + products are keyed-object
   // reads; orders is the only growth surface, capped via limitToLast.
   var ORDERS_LIMIT = 200;
   var PRODUCTS_LIMIT = 500;
+
+  // Platforms with an OAuth integration record under
+  // admin/businessEntity/channels/{platform} that can be disconnected/revoked
+  // server-side (mirrors ChannelsBridge.OAUTH_PLATFORMS / CHANNEL_PLATFORMS).
+  var OAUTH_PLATFORMS = ['shopify', 'etsy', 'square'];
 
   // ── static metadata (mirrors channels.js CHANNEL_TYPES/ROUTES/PLATFORMS) ──
   var TYPE_LABEL = {
@@ -211,9 +217,26 @@
         // Classic burn-down Wave C: connect/reconnect is native (the OAuth legs
         // live in the per-platform CFs; this just starts the flow).
         var platf = (window.MastChannelShim && MastChannelShim.getPlatform) ? MastChannelShim.getPlatform(ch) : (ch.platform || null);
-        var manage = (platf && platf !== 'manual' && canEditChannels())
-          ? '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ChannelsV2.connect(\'' + esc(platf) + '\',\'' + esc(ch.channelId) + '\')">Connect / reconnect ' + esc(platf.charAt(0).toUpperCase() + platf.slice(1)) + ' →</button></div>'
-          : '';
+        var isOAuthPlatform = !!platf && OAUTH_PLATFORMS.indexOf(platf) !== -1;
+        var platTitle = platf ? (platf.charAt(0).toUpperCase() + platf.slice(1)) : '';
+        var manageBtns = [];
+        if (platf && platf !== 'manual' && canEditChannels()) {
+          manageBtns.push('<button class="btn btn-secondary" onclick="ChannelsV2.connect(\'' + esc(platf) + '\',\'' + esc(ch.channelId) + '\')">Connect / reconnect ' + esc(platTitle) + ' →</button>');
+        }
+        // Disconnect / revoke a platform OAuth — only for Shopify/Etsy/Square,
+        // where a businessEntity/channels/{platform} integration record exists.
+        // Routes through disconnectChannelCallable (token revoke + credential
+        // cleanup + webhook removal + Firestore flip + server-side audit).
+        if (isOAuthPlatform && canEditChannels()) {
+          manageBtns.push('<button class="btn btn-secondary" onclick="ChannelsV2.disconnect(\'' + esc(platf) + '\',\'' + esc(ch.channelId) + '\')" style="color:var(--text-danger);">Disconnect ' + esc(platTitle) + '</button>');
+        }
+        // Delete the sales channel — plain admin write (no product cascade).
+        if (canDeleteChannels()) {
+          manageBtns.push('<button class="btn btn-secondary" onclick="ChannelsV2.deleteChannel(\'' + esc(ch.channelId) + '\')" style="color:var(--text-danger);">Delete channel</button>');
+        }
+        var manage = manageBtns.length
+          ? '<div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">' + manageBtns.join('') + '</div>'
+          : '<span class="mu-sub">No management actions available for your role.</span>';
 
         // ── Products facet — bound in-memory related collection ──
         var prods = productsForChannel(ch.channelId).sort(function (a, b) {
@@ -574,6 +597,60 @@
           }).catch(function (e) {
             if (window.showToast) showToast('Could not remove: ' + (e && e.message || e), true);
           });
+      });
+    },
+    // Delete a sales channel — gated can('channels','delete'), danger confirm,
+    // single-sourced through ChannelsBridge.deleteChannel (the legacy doDelete
+    // core: plain admin/channels remove, no product-binding cascade).
+    deleteChannel: function (channelId) {
+      if (!canDeleteChannels()) { if (window.showToast) showToast('You don’t have permission to delete channels', true); return; }
+      var rec = V2.byId[channelId] || {};
+      withBridge(function (b) {
+        if (typeof b.deleteChannel !== 'function') { if (window.showToast) showToast('Channels engine still loading — try again', true); return; }
+        mastConfirm('Delete "' + (rec.name || 'this channel') + '"? This cannot be undone. Products stay in your catalog but will no longer be on this channel.', {
+          title: 'Delete channel', confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          return Promise.resolve(b.deleteChannel(channelId)).then(function () {
+            if (window.writeAudit) writeAudit('delete', 'channels', channelId);
+            if (window.showToast) showToast('Channel deleted');
+            try { U.slideOut.requestCloseForce(); } catch (e) {}
+            load();
+          });
+        }).catch(function (e) {
+          if (window.showToast) showToast('Could not delete: ' + (e && e.message || e), true);
+        });
+      });
+    },
+    // Disconnect / revoke a platform OAuth — gated can('channels','edit'),
+    // danger confirm, single-sourced through ChannelsBridge.disconnectPlatform
+    // (the disconnectChannelCallable CF: token revoke + credential cleanup +
+    // webhook removal + Firestore flip + server-side audit). Keyed by PLATFORM.
+    disconnect: function (platform, channelId) {
+      if (!canEditChannels()) { if (window.showToast) showToast('You don’t have permission to disconnect channels', true); return; }
+      if (OAUTH_PLATFORMS.indexOf(platform) === -1) { if (window.showToast) showToast('This channel has no platform integration to disconnect', true); return; }
+      var label = platform.charAt(0).toUpperCase() + platform.slice(1);
+      withBridge(function (b) {
+        if (typeof b.disconnectPlatform !== 'function') { if (window.showToast) showToast('Channels engine still loading — try again', true); return; }
+        mastConfirm('Disconnect ' + label + '? Tokens will be revoked, stored credentials deleted, and webhook subscriptions removed. You can reconnect later.', {
+          title: 'Disconnect ' + label, confirmLabel: 'Disconnect', cancelLabel: 'Cancel', danger: true
+        }).then(function (ok) {
+          if (!ok) return;
+          if (window.showToast) showToast('Disconnecting ' + label + '…');
+          return Promise.resolve(b.disconnectPlatform(platform)).then(function (data) {
+            // Server CF owns the integration-record flip + audit; we audit the
+            // admin-initiated action locally too (mirrors other V2 write paths).
+            if (window.writeAudit) writeAudit('disconnect', 'channels', channelId || platform);
+            var msg = label + ' disconnected.';
+            if (data && data.platformRevokeStatus === 'revoke-best-effort') {
+              msg += ' Platform revoke was best-effort — the Mast app may still appear in your ' + label + ' admin until you remove it there.';
+            }
+            if (window.showToast) showToast(msg);
+            reopenAfterLoad(channelId);
+          });
+        }).catch(function (e) {
+          if (window.showToast) showToast('Disconnect failed: ' + (e && e.message || e), true);
+        });
       });
     },
     exportCsv: function () { return MastEntity.exportRows('channels-v2', visibleRows(), 'all'); }

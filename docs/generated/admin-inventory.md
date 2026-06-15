@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,884** lines
-- **Feature modules:** **119** files in `app/modules/` (**110** routed), **134,780** lines combined
+- **Feature modules:** **119** files in `app/modules/` (**110** routed), **134,894** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -26,8 +26,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/campaigns-v2.js` | 405 | campaigns-v2 |
 | `modules/campaigns.js` | 560 | campaigns |
 | `modules/cart.js` | 1,577 | wallet, gift-cards, loyalty, membership |
-| `modules/channels-v2.js` | 620 | channels-v2 |
-| `modules/channels.js` | 2,909 | channels |
+| `modules/channels-v2.js` | 697 | channels-v2 |
+| `modules/channels.js` | 2,946 | channels |
 | `modules/classes-v2.js` | 1,055 | classes-v2, book-reports-v2, classes-rooms-v2, classes-settings-v2 |
 | `modules/commission-terms-v2.js` | 267 | commission-terms-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
