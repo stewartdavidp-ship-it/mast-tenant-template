@@ -2418,7 +2418,10 @@
       return true;
     },
     setAudienceSegment: async function (issueId, segmentId) {
-      await MastDB.newsletter.issues.ref(issueId).update({ segmentId: segmentId || null, updatedAt: new Date().toISOString() });
+      // Write audienceSegmentId (the field the picker + queueSend agree on; the
+      // legacy nlSendIssue read the never-set `segmentId` → always "all", a bug we
+      // don't reproduce in the native path).
+      await MastDB.newsletter.issues.ref(issueId).update({ audienceSegmentId: segmentId || null, updatedAt: new Date().toISOString() });
       return true;
     },
     setAbTest: async function (issueId, ab) {
@@ -2441,6 +2444,138 @@
       });
       await MastDB.newsletter.issues.ref(issue.id).update({ status: 'published', publishedAt: publishedAt, updatedAt: publishedAt });
       return { publishedAt: publishedAt, sectionCount: sections.length };
+    },
+
+    // ── send pipeline (composer PR-3) ──
+    // Self-contained recipient resolution — loads subscribers (+ customer stats
+    // for the order-based segments) FRESH, since the legacy in-memory nlSubscribers
+    // / nlCustomerStatsByEmail aren't populated in the V2 context. Mirrors
+    // nlMatchSubscribersForSegment's filter semantics.
+    matchRecipients: async function (segmentId) {
+      var subsRaw = await MastDB.get('newsletter/subscribers');
+      var sv = (subsRaw && typeof subsRaw.val === 'function') ? subsRaw.val() : (subsRaw || {});
+      var active = Object.keys(sv || {}).map(function (k) { return sv[k]; }).filter(function (s) { return s && s.status === 'active' && s.email; });
+      var statsSegs = { __has_orders: 1, __no_orders: 1, __repeat_2: 1, __lapsed_90: 1 };
+      if (!statsSegs[segmentId]) return active; // __all / saved / null → all active
+      var statsBy = {};
+      try {
+        var custRaw = await MastDB.get('admin/customers');
+        var cv = (custRaw && typeof custRaw.val === 'function') ? custRaw.val() : (custRaw || {});
+        Object.keys(cv || {}).forEach(function (cid) {
+          var c = cv[cid]; if (!c) return;
+          var emails = [];
+          if (c.primaryEmail) emails.push(c.primaryEmail);
+          (c.emails || []).forEach(function (e) { if (typeof e === 'string') emails.push(e); else if (e && e.address) emails.push(e.address); });
+          var st = c.stats || {};
+          emails.forEach(function (e) { var key = String(e).toLowerCase().trim(); if (key) statsBy[key] = { orderCount: st.orderCount || 0, lastOrderAt: st.lastOrderAt || null }; });
+        });
+      } catch (e) {}
+      var ninety = Date.now() - 90 * 86400 * 1000;
+      return active.filter(function (sub) {
+        var key = String(sub.email || '').toLowerCase().trim();
+        var st = statsBy[key] || null;
+        switch (segmentId) {
+          case '__has_orders': return !!(st && st.orderCount > 0);
+          case '__no_orders': return !st || !st.orderCount;
+          case '__repeat_2': return !!(st && st.orderCount >= 2);
+          case '__lapsed_90': if (!st || !st.lastOrderAt) return false; return new Date(st.lastOrderAt).getTime() < ninety;
+          default: return true;
+        }
+      });
+    },
+    // Queue a single test email (mirrors nlSendTest; the V2 UI supplies the address
+    // so there is no window.prompt). Body composed via the in-module builder.
+    queueTest: async function (issue, toEmail) {
+      var subject = (issue.subjectLine || issue.title || '(test)') + ' [TEST]';
+      var htmlBody = nlComposeIssueHtml(issue);
+      var key = 'test-' + issue.id + '-' + Date.now();
+      await MastDB.set('emailQueue/' + key, {
+        id: key, type: 'test', issueId: issue.id, subject: subject, htmlBody: htmlBody, to: toEmail,
+        idempotencyKey: key, queuedAt: new Date().toISOString(),
+        queuedBy: (typeof currentUser !== 'undefined' && currentUser && currentUser.uid) || null, status: 'queued'
+      });
+      return key;
+    },
+    // Per-recipient queue write with sha1 idempotency (issueId|segment|email|variant)
+    // — keeps the EXACT key formula + emailQueue/admin/emailSends shape as legacy
+    // _nlQueueRecipients so the queue processor + re-send skip behave identically.
+    _queueRecipients: async function (issueId, recipients, subject, htmlBody, variantTag, segmentId) {
+      var queued = 0, skipped = 0, nowIso = new Date().toISOString();
+      for (var i = 0; i < recipients.length; i++) {
+        var r = recipients[i]; if (!r || !r.email) continue;
+        var lower = String(r.email).toLowerCase();
+        var keyInput = issueId + '|' + (segmentId || '') + '|' + lower + '|' + (variantTag || 'main');
+        var idk;
+        try { idk = await _nlSha1Hex(keyInput); } catch (_e) { idk = issueId + '_' + lower.replace(/[^a-z0-9]/g, '_') + '_' + (variantTag || 'main'); }
+        try { var prior = await MastDB.get('emailQueue/' + idk); if (prior) { skipped++; continue; } } catch (_e) {}
+        try {
+          await MastDB.set('emailQueue/' + idk, {
+            id: idk, type: 'newsletter', issueId: issueId, segmentId: segmentId || null, variant: variantTag || null,
+            subject: subject, htmlBody: htmlBody, to: r.email, toName: r.name || null, idempotencyKey: idk,
+            queuedAt: nowIso, queuedBy: (typeof currentUser !== 'undefined' && currentUser && currentUser.uid) || null, status: 'queued'
+          });
+          await MastDB.set('admin/emailSends/' + idk, {
+            idempotencyKey: idk, type: 'newsletter', issueId: issueId, segmentId: segmentId || null,
+            variant: variantTag || null, to: r.email, queuedAt: nowIso, status: 'queued'
+          });
+          queued++;
+        } catch (err) { console.warn('queue write failed for ' + lower, err); }
+      }
+      return { queued: queued, skipped: skipped };
+    },
+    // Real send to the issue's audience. Mirrors nlSendIssue: optional A/B split
+    // (deterministic email-hash A/B/holdout) with the holdout + variantB.htmlBody
+    // stashed on the issue for the winner cron. Returns counts. Caller confirms +
+    // gates; recipients are pre-resolved via matchRecipients.
+    queueSend: async function (issue, recipients) {
+      var self = this;
+      var seg = issue.audienceSegmentId || '__all';
+      if (!recipients) recipients = await this.matchRecipients(seg);
+      if (!recipients.length) return { queued: 0, skipped: 0, recipients: 0 };
+      var ab = issue.abTest || {};
+      var subjectA = issue.subjectLine || issue.title || '(no subject)';
+      var htmlBody = nlComposeIssueHtml(issue);
+      var nowIso = new Date().toISOString();
+      var queued = 0, skipped = 0;
+      if (ab.enabled) {
+        var holdoutPct = typeof ab.holdoutPct === 'number' ? ab.holdoutPct : 50;
+        var testHours = typeof ab.testWindowHours === 'number' ? ab.testWindowHours : 4;
+        var hashed = recipients.map(function (r) {
+          var s = String(r.email || '').toLowerCase(), h = 0;
+          for (var i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+          return { r: r, h: h };
+        }).sort(function (a, b) { return a.h - b.h; });
+        var testCount = Math.floor(hashed.length * (100 - holdoutPct) / 100);
+        var halfTest = Math.floor(testCount / 2);
+        var aRec = hashed.slice(0, halfTest).map(function (x) { return x.r; });
+        var bRec = hashed.slice(halfTest, testCount).map(function (x) { return x.r; });
+        var holdout = hashed.slice(testCount).map(function (x) { return x.r; });
+        var subjectB = (ab.variantB && ab.variantB.subject) || subjectA;
+        var abPersist = Object.assign({}, ab, {
+          sendStartedAt: nowIso,
+          testWindowExpiresAt: new Date(Date.now() + testHours * 3600 * 1000).toISOString(),
+          winner: null, winnerPickedAt: null, holdoutSendStartedAt: null,
+          variantA: Object.assign({}, ab.variantA || {}, { subject: subjectA, recipientCount: aRec.length }),
+          variantB: Object.assign({}, ab.variantB || {}, { subject: subjectB, recipientCount: bRec.length, htmlBody: htmlBody }),
+          holdoutRecipients: holdout
+        });
+        await MastDB.newsletter.issues.ref(issue.id).update({ abTest: abPersist, subject: subjectA, htmlBody: htmlBody, sendStatus: 'sending', sendStartedAt: nowIso, updatedAt: nowIso });
+        var qa = await self._queueRecipients(issue.id, aRec, subjectA, htmlBody, 'A', seg);
+        var qb = await self._queueRecipients(issue.id, bRec, subjectB, htmlBody, 'B', seg);
+        queued = qa.queued + qb.queued; skipped = qa.skipped + qb.skipped;
+      } else {
+        await MastDB.newsletter.issues.ref(issue.id).update({ subject: subjectA, htmlBody: htmlBody, sendStatus: 'sending', sendStartedAt: nowIso, updatedAt: nowIso });
+        var qr = await self._queueRecipients(issue.id, recipients, subjectA, htmlBody, null, seg);
+        queued = qr.queued; skipped = qr.skipped;
+      }
+      try { await MastDB.newsletter.issues.ref(issue.id).update({ sendQueuedCount: queued, sendSkippedCount: skipped, sendStatus: 'sending' }); } catch (_e) {}
+      return { queued: queued, skipped: skipped, recipients: recipients.length };
+    },
+    // Manual A/B winner override (mirrors nlPickWinnerNow): nudge the cron to pick
+    // on its next tick by expiring the test window.
+    pickWinnerNow: async function (issueId) {
+      await MastDB.newsletter.issues.ref(issueId).update({ 'abTest/testWindowExpiresAt': new Date().toISOString() });
+      return true;
     }
   };
 
