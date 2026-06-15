@@ -75,7 +75,7 @@ const MODULE_GATE_BASELINE = new Set([
   'production.js', 'students.js', 'studio.js', 'trips.js', 'website.js', 'show-light.js',
   // Other legacy feature modules with the same gap (routed, write, 0 gates):
   'audit-feedback.js', 'audit.js', 'blog.js', 'book.js', 'brand.js', 'campaigns.js',
-  'channels.js', 'commission-terms.js', 'composer.js', 'consignment.js', 'contacts.js',
+  'channels.js', 'commission-terms.js', 'composer.js', 'contacts.js',
   'customer-service.js', 'engagement-inbox.js', 'events.js', 'fulfillment.js',
   'homepage.js', 'lookbooks.js', 'maker.js', 'mapping.js', 'newsletter.js',
   'procurement.js', 'promotions.js', 'social.js', 'wholesale.js',

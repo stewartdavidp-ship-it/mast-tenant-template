@@ -97,6 +97,62 @@
     return Math.round(rate * 100) + '%';
   }
 
+  // ── native line-item editing (sale / return / add / remove) ─────────
+  // Sales, returns and add/remove of consigned pieces are native here, routed
+  // through window.GalleriesBridge (the gated write core in consignment.js).
+  // Payout settlement is the one action still single-sourced on classic
+  // #galleries (no V2 home yet) — see classic() below.
+  function canEdit() { return typeof window.can !== 'function' || window.can('galleries', 'edit'); }
+  function canDelete() { return typeof window.can !== 'function' || window.can('galleries', 'delete'); }
+
+  // The bridge lives in the classic consignment.js module; ensure it's loaded
+  // before invoking it (mirrors GalleriesV2.create's loadModule('consignment')).
+  function withBridge(method) {
+    if (window.GalleriesBridge && typeof window.GalleriesBridge[method] === 'function') {
+      return Promise.resolve(window.GalleriesBridge);
+    }
+    var loaded = (window.MastAdmin && typeof MastAdmin.loadModule === 'function')
+      ? Promise.resolve(MastAdmin.loadModule('consignment')) : Promise.resolve();
+    return loaded.then(function () {
+      if (!(window.GalleriesBridge && typeof window.GalleriesBridge[method] === 'function')) {
+        throw new Error('Consignment tools are still loading — try again in a moment.');
+      }
+      return window.GalleriesBridge;
+    });
+  }
+
+  // Product options for the Add-piece dialog: prefer the live products cache,
+  // else read public/products. price is in DOLLARS (the dialog's unit).
+  function loadProducts() {
+    if (Array.isArray(window.productsData) && window.productsData.length) {
+      return Promise.resolve(window.productsData.filter(function (p) { return p && p.status !== 'archived'; }).map(function (p) {
+        return { pid: p.pid, name: p.name || p.pid, price: (typeof p.retailPrice === 'number' ? p.retailPrice : (typeof p.priceCents === 'number' ? p.priceCents / 100 : 0)) };
+      }));
+    }
+    return Promise.resolve(MastDB.get('public/products')).then(function (val) {
+      val = (val && typeof val === 'object') ? val : {};
+      return Object.keys(val).map(function (pid) {
+        var p = val[pid] || {};
+        return { pid: pid, name: p.name || pid, price: (typeof p.priceCents === 'number' ? p.priceCents / 100 : (typeof p.price === 'number' ? p.price : 0)), status: p.status };
+      }).filter(function (p) { return p.status !== 'archived'; });
+    });
+  }
+
+  // After a mutation: re-fetch the placement, refresh the cache + list row, and
+  // re-render the open slide-out (mirrors WholesaleV2's post-write reopen).
+  function reloadAndReopen(placementId) {
+    return Promise.resolve(MastDB.get('admin/consignments/' + placementId)).then(function (raw) {
+      if (raw && typeof raw === 'object') {
+        var rec = Object.assign({ placementId: placementId, _key: placementId }, raw);
+        V2.byId[placementId] = rec;
+        var idx = V2.rows.findIndex(function (r) { return (r.placementId || r._key || r.id) === placementId; });
+        if (idx >= 0) V2.rows[idx] = rec;
+        MastEntity.openRecord('consignments-v2', rec, 'read');
+      }
+      render();
+    });
+  }
+
   // ── schema (read-only Faceted Record) ───────────────────────────────
   MastEntity.define('consignments-v2', {
     label: 'Consignment', labelPlural: 'Consignments', size: 'lg',
@@ -127,6 +183,7 @@
       render: function (UI, p) {
         var t = placementTotals(p);
         var st = placementStatus(p);
+        var pid = p.placementId || p._key || p.id;
         var tiles = UI.tiles([
           { k: 'Pieces placed', v: N.count(t.placed) || '0', hero: true },
           { k: 'Sold', v: N.count(t.soldUnits) || '0' },
@@ -159,8 +216,9 @@
         var notes = p.notes
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(p.notes) + '</div>'
           : '<span class="mu-sub">No notes.</span>';
-        // Placement editing + sale/return + payout settlement stay on legacy #galleries.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ConsignmentsV2.classic()">Record sale / settle / manage in classic view →</button></div>';
+        // Sale / return / add / remove are native (Pieces tab). Payout settlement
+        // is the one action still single-sourced on legacy #galleries (no V2 home yet).
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ConsignmentsV2.classic()">Settle payout in classic view →</button> <span class="mu-sub">Recording sales, returns &amp; pieces is native — use the Pieces tab.</span></div>';
 
         // Pieces — the consigned line items (on/under the record; cheap to read here).
         var lineItems = (p.lineItems && typeof p.lineItems === 'object') ? p.lineItems : {};
@@ -168,21 +226,36 @@
           var li = lineItems[k] || {};
           var qty = li.qty || 0, qtySold = li.qtySold || 0, qtyReturned = li.qtyReturned || 0, price = N.moneyVal(li, 'retailPrice', null) || 0;
           return {
+            key: k,
             name: li.productName || 'Unknown',
-            placed: qty, sold: qtySold,
+            placed: qty, sold: qtySold, returned: qtyReturned,
             onHand: qty - qtySold - qtyReturned,
             retail: price,
             earns: qtySold * price * (1 - t.rate)
           };
         });
-        var piecesBody = rows.length ? UI.relatedTable([
+        var canAct = canEdit() || canDelete();
+        var pieceCols = [
           { label: 'Piece', render: function (r) { return esc(r.name); } },
           { label: 'Placed', align: 'right', render: function (r) { return N.count(r.placed) || '0'; } },
           { label: 'Retail', align: 'right', render: function (r) { return N.money(r.retail) || '$0.00'; } },
           { label: 'Sold', align: 'right', render: function (r) { return N.count(r.sold) || '0'; } },
           { label: 'On hand', align: 'right', render: function (r) { return N.count(r.onHand); } },
           { label: 'Maker earns', align: 'right', render: function (r) { return N.money(r.earns) || '$0.00'; } }
-        ], rows) : '<span class="mu-sub">No pieces on this placement — add items in the classic Galleries view.</span>';
+        ];
+        if (canAct) pieceCols.push({ label: '', align: 'right', render: function (r) {
+          var b = [];
+          if (canEdit() && r.onHand > 0) b.push('<button type="button" class="mu-link" onclick="ConsignmentsV2.sell(\'' + esc(pid) + '\',\'' + esc(r.key) + '\')">Sell</button>');
+          if (canEdit() && r.sold > 0) b.push('<button type="button" class="mu-link" onclick="ConsignmentsV2.recordReturn(\'' + esc(pid) + '\',\'' + esc(r.key) + '\')">Return</button>');
+          if (canDelete()) b.push('<button type="button" class="mu-link" onclick="ConsignmentsV2.removePiece(\'' + esc(pid) + '\',\'' + esc(r.key) + '\')">Remove</button>');
+          return b.join(' &nbsp; ') || '<span class="mu-sub">—</span>';
+        } });
+        var addBtn = canEdit()
+          ? '<div style="margin-bottom:10px;"><button class="btn btn-small btn-primary" onclick="ConsignmentsV2.addPiece(\'' + esc(pid) + '\')">+ Add piece</button></div>'
+          : '';
+        var piecesBody = addBtn + (rows.length
+          ? UI.relatedTable(pieceCols, rows)
+          : '<span class="mu-sub">No pieces on this placement yet.</span>');
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' + UI.card('Placement', placement) + UI.card('Earnings', earnings + manage) + UI.card('Notes', notes) + '</div>' +
@@ -273,9 +346,89 @@
         if (rec) MastEntity.openRecord('consignments-v2', rec, 'read');
       });
     },
-    // Placement editing + sale/return + payout machinery -> classic Galleries view.
-    // Consignments live under the Galleries & Consignment surface (#galleries);
-    // use navigateToClassic so the V2 route remap doesn't loop us back to a twin.
+
+    // ── native line-item actions (route through GalleriesBridge) ──
+    sell: function (placementId, lineItemId) {
+      if (!canEdit()) { if (window.showToast) showToast('You do not have permission to record sales.', true); return; }
+      if (typeof window.mastPrompt !== 'function') { if (window.showToast) showToast('Dialog unavailable — try again', true); return; }
+      Promise.resolve(window.mastPrompt('How many sold?', { title: 'Record sale', placeholder: 'Quantity', confirmLabel: 'Record sale' })).then(function (raw) {
+        if (raw == null || String(raw).trim() === '') return;
+        return withBridge('recordSale')
+          .then(function (B) { return B.recordSale(placementId, lineItemId, raw); })
+          .then(function () { if (window.showToast) showToast('Sale recorded'); return reloadAndReopen(placementId); });
+      }).catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Could not record sale', true); });
+    },
+    recordReturn: function (placementId, lineItemId) {
+      if (!canEdit()) { if (window.showToast) showToast('You do not have permission to record returns.', true); return; }
+      if (typeof window.mastPrompt !== 'function') { if (window.showToast) showToast('Dialog unavailable — try again', true); return; }
+      Promise.resolve(window.mastPrompt('How many returned?', { title: 'Record return', placeholder: 'Quantity', confirmLabel: 'Record return' })).then(function (raw) {
+        if (raw == null || String(raw).trim() === '') return;
+        return withBridge('recordReturn')
+          .then(function (B) { return B.recordReturn(placementId, lineItemId, raw); })
+          .then(function () { if (window.showToast) showToast('Return recorded'); return reloadAndReopen(placementId); });
+      }).catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Could not record return', true); });
+    },
+    addPiece: function (placementId) {
+      if (!canEdit()) { if (window.showToast) showToast('You do not have permission to add pieces.', true); return; }
+      if (typeof openModal !== 'function') { if (window.showToast) showToast('Dialog unavailable — try again', true); return; }
+      loadProducts().then(function (products) {
+        var opts = '<option value="">Select a product…</option>' + products.map(function (pr) {
+          var dollars = (typeof pr.price === 'number' && pr.price) ? pr.price : 0;
+          return '<option value="' + esc(pr.pid) + '" data-name="' + esc(pr.name) + '" data-price="' + esc(String(dollars)) + '">' + esc(pr.name) + (dollars ? (' ($' + dollars.toFixed(2) + ')') : '') + '</option>';
+        }).join('');
+        var html = '<div class="modal-header"><h3>Add piece</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+          '<div style="padding:20px;">' +
+          '<div class="form-group" style="margin-bottom:14px;"><label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Product</label>' +
+          '<select id="cv2AddProduct" class="form-input" style="width:100%;" onchange="ConsignmentsV2._priceFromProduct(this)">' + opts + '</select></div>' +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">' +
+          '<div class="form-group"><label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Quantity</label><input id="cv2AddQty" type="number" min="1" value="1" class="form-input" style="width:100%;"></div>' +
+          '<div class="form-group"><label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Retail price ($)</label><input id="cv2AddPrice" type="number" min="0" step="0.01" class="form-input" style="width:100%;"></div>' +
+          '</div>' +
+          '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">' +
+          '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+          '<button class="btn btn-primary" onclick="ConsignmentsV2.confirmAddPiece(\'' + esc(placementId) + '\')">Add piece</button>' +
+          '</div></div>';
+        openModal(html);
+      }).catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Could not load products', true); });
+    },
+    _priceFromProduct: function (sel) {
+      var opt = sel && sel.options[sel.selectedIndex];
+      var price = opt ? opt.getAttribute('data-price') : '';
+      var el = document.getElementById('cv2AddPrice');
+      if (el && price && parseFloat(price)) el.value = parseFloat(price).toFixed(2);
+    },
+    confirmAddPiece: function (placementId) {
+      var sel = document.getElementById('cv2AddProduct');
+      var qtyEl = document.getElementById('cv2AddQty');
+      var priceEl = document.getElementById('cv2AddPrice');
+      var ppid = sel ? sel.value : '';
+      if (!ppid) { if (window.showToast) showToast('Select a product', true); return; }
+      var opt = sel.options[sel.selectedIndex];
+      var name = opt ? opt.getAttribute('data-name') : '';
+      var qty = qtyEl ? parseInt(qtyEl.value, 10) : 0;
+      var price = priceEl ? parseFloat(priceEl.value) : 0; // DOLLARS — bridge converts to cents
+      withBridge('addLineItem')
+        .then(function (B) { return B.addLineItem(placementId, { productId: ppid, productName: name, qty: qty, retailPrice: price }); })
+        .then(function () { if (typeof closeModal === 'function') closeModal(); if (window.showToast) showToast('Piece added'); return reloadAndReopen(placementId); })
+        .catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Could not add piece', true); });
+    },
+    removePiece: function (placementId, lineItemId) {
+      if (!canDelete()) { if (window.showToast) showToast('You do not have permission to remove pieces.', true); return; }
+      if (typeof window.mastConfirm !== 'function') { if (window.showToast) showToast('Dialog unavailable — try again', true); return; }
+      var rec = V2.byId[placementId];
+      var li = rec && rec.lineItems && rec.lineItems[lineItemId];
+      var name = (li && li.productName) || 'this piece';
+      Promise.resolve(window.mastConfirm('Remove "' + name + '" from this placement?', { title: 'Remove piece' })).then(function (ok) {
+        if (!ok) return;
+        return withBridge('removeLineItem')
+          .then(function (B) { return B.removeLineItem(placementId, lineItemId); })
+          .then(function () { if (window.showToast) showToast('Piece removed'); return reloadAndReopen(placementId); });
+      }).catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Could not remove piece', true); });
+    },
+
+    // Payout settlement is the one placement action with no V2 home yet — it
+    // stays single-sourced on classic #galleries. navigateToClassic so the V2
+    // route remap doesn't loop us back to this twin.
     classic: function () {
       if (typeof navigateToClassic === 'function') navigateToClassic('galleries');
       else if (typeof navigateTo === 'function') navigateTo('galleries');
@@ -284,6 +437,11 @@
   };
 
   MastAdmin.registerModule('consignments-v2', {
-    routes: { 'consignments-v2': { tab: 'consignmentsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'consignments-v2': { tab: 'consignmentsV2Tab', setup: function () {
+      ensureTab(); render(); load();
+      // Warm the classic module so window.GalleriesBridge (the write core for
+      // sale/return/add/remove) is ready by the time the user acts.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('consignment'); } catch (e) {} }
+    } } }
   });
 })();
