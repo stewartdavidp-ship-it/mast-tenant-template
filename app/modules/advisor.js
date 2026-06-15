@@ -613,7 +613,7 @@
         if (s.status === 'voided') return;
         // POS-square sales write a real `orders` row (counted above) AND an
         // admin/sales mirror stamped with that orderId — skip the mirror so the
-        // pacing actuals don't double-count (#537). Fair/offline sales have no orderId.
+        // pacing actuals don't double-count (PR 537). Fair/offline sales have no orderId.
         if (s.orderId) return;
         var amt = salesCents(s); // `amount` is already INTEGER CENTS
         totalActual += amt;
