@@ -43,7 +43,7 @@
   function canMatch() { return typeof window.can !== 'function' || window.can('receipts', 'edit'); }
 
   var V2 = { orders: [], byId: {}, payments: [], paymentsById: {}, sales: [], salesById: {},
-             view: 'transactions', date: null, loaded: false, off: null, offPay: null };
+             view: 'transactions', payFilter: 'all', date: null, loaded: false, off: null, offPay: null };
 
   function todayStr() {
     var d = new Date();
@@ -238,13 +238,30 @@
         p[1] + ' <span style="color:var(--warm-gray);">' + p[2] + '</span></button>';
     }).join('');
 
+    // Payments sub-filter (parity with legacy day-close all/matched/unmatched).
+    // "Unmatched" = the actionable chase set (excludes order-owned, already-recorded).
+    var payShown = (V2.view === 'payments') ? pays.filter(payFilterMatch) : pays;
+    var filterPills = '';
+    if (V2.view === 'payments') {
+      var matchedCount = pays.filter(function (p) { return !!p.matchedSaleId; }).length;
+      var fopts = [['all', 'All', pays.length], ['unmatched', 'Unmatched', unmatched.length], ['matched', 'Matched', matchedCount]];
+      filterPills = '<div style="margin:0 0 10px;">' + fopts.map(function (f) {
+        var on = V2.payFilter === f[0];
+        return '<button onclick="ReceiptsV2.setPayFilter(\'' + f[0] + '\')" style="border:1px solid var(--border);' +
+          'background:' + (on ? 'color-mix(in srgb,var(--teal) 16%,transparent)' : 'transparent') + ';' +
+          'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
+          'padding:4px 11px;font-size:0.78rem;cursor:pointer;margin-right:8px;">' +
+          f[1] + ' <span style="color:var(--warm-gray);">' + f[2] + '</span></button>';
+      }).join('') + '</div>';
+    }
+
     var list = (V2.view === 'payments')
       ? window.MastEntity.renderList('orders-v2', {
-          columns: payColumns(), rows: pays, sortKey: 'time', sortDir: 'asc',
+          columns: payColumns(), rows: payShown, sortKey: 'time', sortDir: 'asc',
           rowId: function (p) { return p._key; },
           // Click an unmatched payment to match it to a sale (native, in-pane).
           onRowClickFnName: 'ReceiptsV2.matchPayment',
-          empty: { title: 'No Square payments on ' + d, message: 'Card payments taken on Square appear here.' }
+          empty: { title: 'No ' + (V2.payFilter === 'all' ? '' : V2.payFilter + ' ') + 'Square payments on ' + d, message: 'Card payments taken on Square appear here.' }
         })
       : window.MastEntity.renderList('orders-v2', {
           columns: txColumns(), rows: tx, sortKey: 'time', sortDir: 'asc',
@@ -269,7 +286,16 @@
         { k: 'Unmatched Square', v: unmatched.length ? (U.Num.money(unmatchedAmt) + ' · ' + unmatched.length) : 'None' }
       ]) +
       '<div style="margin:14px 0;">' + pills + '</div>' +
+      filterPills +
       list + hint;
+  }
+
+  // Payments sub-filter predicate. all → everything; matched → linked to a sale;
+  // unmatched → actionable chase set (not matched AND not order-owned).
+  function payFilterMatch(p) {
+    if (V2.payFilter === 'matched') return !!p.matchedSaleId;
+    if (V2.payFilter === 'unmatched') return !p.matchedSaleId && !isOrderOwnedPayment(p);
+    return true;
   }
 
   // ── Native payment ↔ sale matching ──────────────────────────────────────
@@ -336,6 +362,7 @@
   window.ReceiptsV2 = {
     setDate: function (d) { V2.date = d || todayStr(); render(); },
     setView: function (v) { V2.view = v; render(); },
+    setPayFilter: function (f) { V2.payFilter = f || 'all'; render(); },
     open: function (id) {
       var rec = V2.byId[id]; if (!rec) return;
       MastAdmin.loadModule('orders-v2').then(function () {
