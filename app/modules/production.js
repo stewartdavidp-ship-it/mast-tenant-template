@@ -2502,8 +2502,11 @@ function ensureQRLib() {
   });
 }
 
-async function generateStoryQRCodes(storyId, jobId) {
-  var job = productionJobs[jobId];
+async function generateStoryQRCodes(storyId, jobId, jobObj) {
+  // jobObj lets a caller (e.g. StoriesBridge.publish in the V2 twin) pass a
+  // freshly-fetched job so QR generation doesn't depend on the legacy in-memory
+  // productionJobs cache (which is only populated when the Production route ran).
+  var job = jobObj || productionJobs[jobId];
   if (!job || !job.lineItems) return [];
 
   // Find linked products
@@ -3471,6 +3474,89 @@ async function linkProductToBuild(jobId, lineItemId) {
       if (typeof data.title === 'string') updates.title = data.title.trim();
       await MastDB.stories.update(id, updates);
       return updates;
+    },
+    // Save the full curation draft (title + entries) as a DRAFT. Mirrors
+    // saveDraftStory's record shape; the V2 curation canvas (stories-v2) is the
+    // single caller. the V2 twin holds the stories edit permission before calling.
+    saveEntries: async function (storyId, data) {
+      data = data || {};
+      var payload = {
+        title: (data.title || '').trim(),
+        entries: data.entries || {},
+        jobId: data.jobId || null,
+        status: 'draft',
+        updatedAt: new Date().toISOString()
+      };
+      await MastDB.stories.update(storyId, payload);
+      try { await writeAudit('update', 'products', storyId); } catch (e) {}
+      return payload;
+    },
+    // Publish a story — mirrors publishStory's full side effects: operator
+    // aggregation + QR codes + product storyId back-fill. Fetches the job FRESH
+    // (MastDB.productionJobs.get) so it never depends on the legacy in-memory
+    // productionJobs cache. the V2 twin holds the stories edit permission before calling.
+    publish: async function (storyId, data) {
+      data = data || {};
+      var payload = {
+        title: (data.title || '').trim(),
+        entries: data.entries || {},
+        jobId: data.jobId || null,
+        status: 'published',
+        publishedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      var job = null;
+      if (payload.jobId) { try { job = await MastDB.productionJobs.get(payload.jobId); } catch (e) {} }
+      if (job && job.builds) {
+        var ops = {};
+        Object.values(job.builds).forEach(function (b) { if (b.operators) b.operators.forEach(function (o) { ops[o] = true; }); });
+        payload.operators = Object.keys(ops);
+      }
+      if (payload.jobId) {
+        try { var qr = await generateStoryQRCodes(storyId, payload.jobId, job); if (qr && qr.length) payload.qrCodes = qr; } catch (e) {}
+      }
+      await MastDB.stories.update(storyId, payload);
+      try { await writeAudit('update', 'products', storyId); } catch (e) {}
+      if (job && job.lineItems) {
+        var ups = [];
+        Object.values(job.lineItems).forEach(function (li) { if (li.productId && li.productLinked) ups.push(MastDB.products.setStoryId(li.productId, storyId)); });
+        if (ups.length) { try { await Promise.all(ups); } catch (e) { console.error('[StoriesBridge] product storyId back-fill', e); } }
+      }
+      return payload;
+    },
+    // Unpublish — mirrors unpublishStory: status→draft + clears the product
+    // storyId back-fill. the V2 twin holds the stories edit permission before calling.
+    unpublish: async function (storyId) {
+      var story = null;
+      try { story = await MastDB.stories.get(storyId); } catch (e) {}
+      await MastDB.stories.update(storyId, { status: 'draft', updatedAt: new Date().toISOString() });
+      try { await writeAudit('update', 'products', storyId); } catch (e) {}
+      if (story && story.jobId) {
+        var job = null; try { job = await MastDB.productionJobs.get(story.jobId); } catch (e) {}
+        if (job && job.lineItems) {
+          var ups = [];
+          Object.values(job.lineItems).forEach(function (li) { if (li.productId && li.productLinked) ups.push(MastDB.products.removeStoryId(li.productId)); });
+          if (ups.length) { try { await Promise.all(ups); } catch (e) { console.error('[StoriesBridge] product storyId clear', e); } }
+        }
+      }
+      return true;
+    },
+    // Single-sourced freeform photo upload (compress + Storage put) → returns the
+    // download URL. Mirrors uploadStoryMediaFromInput's per-file logic; the V2
+    // curation canvas manages the draft + progress around it.
+    uploadMedia: async function (storyId, file) {
+      if (!storyId) throw new Error('story id required');
+      if (typeof storage === 'undefined') throw new Error('storage not ready');
+      function _shouldCompress(f) { if (!f || !f.type) return false; if (f.type === 'image/svg+xml') return false; if (f.type === 'image/gif') return false; return /^image\//.test(f.type); }
+      function _extForFile(f) { if (!f) return 'bin'; if (f.type === 'image/svg+xml') return 'svg'; if (f.type === 'image/png') return 'png'; if (f.type === 'image/webp') return 'webp'; if (f.type === 'image/gif') return 'gif'; var m = (f.name || '').match(/\.([a-z0-9]{1,8})$/i); return m ? m[1].toLowerCase() : 'jpg'; }
+      function _ct(f, ext) { if (f && f.type && /^image\//.test(f.type)) return f.type; var map = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' }; return map[ext] || 'application/octet-stream'; }
+      var mediaId = MastDB.newKey('_ids');
+      var blob = file;
+      if (_shouldCompress(file)) { try { blob = await compressImage(file); } catch (e) { blob = file; } }
+      var ext = _extForFile(file);
+      var ref = storage.ref(MastDB.storagePath('storyMedia/' + storyId + '/' + mediaId + '.' + ext));
+      await ref.put(blob, { contentType: _ct(file, ext) });
+      return await ref.getDownloadURL();
     }
   };
   window.previewStoryFromCuration = previewStoryFromCuration;
