@@ -21,6 +21,71 @@
     });
   }
 
+  // ── HTML sanitizer (allow-list) ─────────────────────────────────────
+  // Operator-authored rich text (contenteditable output) gets stored and later
+  // injected RAW into emails + public web pages, so it must be sanitized at the
+  // write boundary. Allow-list only: only these tags + per-tag attributes
+  // survive; scripts, event handlers, unknown tags, unsafe URL schemes, styles,
+  // comments — all stripped. In a browser we parse into an inert <template>
+  // (whose content fragment never executes scripts or loads resources) and walk
+  // the tree — the robust path. In a non-DOM context (node/SSR) we fall back to
+  // escaping EVERYTHING (degrades to safe plain text — never emits raw markup).
+  var SANITIZE_ALLOWED = {
+    A: ['href', 'title'], B: [], STRONG: [], I: [], EM: [], U: [], BR: [],
+    P: [], DIV: [], SPAN: [], H1: [], H2: [], H3: [], H4: [],
+    UL: [], OL: [], LI: [], BLOCKQUOTE: [], HR: []
+  };
+  var SANITIZE_DROP = { SCRIPT: 1, STYLE: 1, IFRAME: 1, OBJECT: 1, EMBED: 1, NOSCRIPT: 1, TEMPLATE: 1, LINK: 1, META: 1, SVG: 1, MATH: 1, TITLE: 1, BASE: 1, FORM: 1, INPUT: 1, BUTTON: 1, TEXTAREA: 1, SELECT: 1, OPTION: 1 };
+  // Returns a usable URL for an href, or '' if the scheme is unsafe. http(s),
+  // mailto, tel and scheme-less (relative / anchor / query / protocol-relative)
+  // are allowed; javascript:, data:, vbscript: and any other scheme are dropped.
+  function safeUrl(u) {
+    var s = String(u == null ? '' : u).trim();
+    if (!s) return '';
+    var probe = s.replace(/[\x00-\x20]+/g, '').toLowerCase(); // defeat "java\tscript:" tricks
+    if (/^(https?:|mailto:|tel:)/.test(probe)) return s;
+    if (/^[a-z][a-z0-9+.\-]*:/.test(probe)) return '';            // any other explicit scheme → unsafe
+    return s;                                                       // relative / #anchor / ?query / //host
+  }
+  function sanitizeHtml(html) {
+    html = String(html == null ? '' : html);
+    if (!html) return '';
+    if (typeof document === 'undefined' || !document.createElement) return esc(html);
+    var tpl;
+    try { tpl = document.createElement('template'); tpl.innerHTML = html; }
+    catch (e) { return esc(html); }
+    (function walk(node) {
+      Array.prototype.slice.call(node.childNodes || []).forEach(function (child) {
+        if (!child.parentNode) return;
+        if (child.nodeType === 8) { child.parentNode.removeChild(child); return; } // comment
+        if (child.nodeType !== 1) return;                                          // keep text (3)
+        var tag = child.tagName;
+        if (!Object.prototype.hasOwnProperty.call(SANITIZE_ALLOWED, tag)) {
+          if (SANITIZE_DROP[tag]) { child.parentNode.removeChild(child); return; } // drop element + content
+          walk(child);                                                             // sanitize subtree, then unwrap
+          while (child.firstChild) child.parentNode.insertBefore(child.firstChild, child);
+          child.parentNode.removeChild(child);
+          return;
+        }
+        var allowed = SANITIZE_ALLOWED[tag];
+        Array.prototype.slice.call(child.attributes || []).forEach(function (attr) {
+          var name = attr.name.toLowerCase();
+          if (allowed.indexOf(name) === -1) { child.removeAttribute(attr.name); return; }
+          if (name === 'href') {
+            var ok = safeUrl(attr.value);
+            if (ok) child.setAttribute('href', ok); else child.removeAttribute(attr.name);
+          }
+        });
+        if (tag === 'A' && child.getAttribute('href')) {
+          child.setAttribute('rel', 'noopener noreferrer nofollow');
+          child.setAttribute('target', '_blank');
+        }
+        walk(child);
+      });
+    })(tpl.content);
+    return tpl.innerHTML;
+  }
+
   // ── Number / money / date formatting ────────────────────────────────
   // Display = pretty (06-B7). Raw = canonical for files/export (13).
   var _nf0 = new Intl.NumberFormat('en-US');
@@ -711,7 +776,7 @@
   if (typeof window !== 'undefined') {
     injectStyles(); wireDelegates();
     window.MastUI = {
-      Num: Num, badge: badge, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc,
+      Num: Num, badge: badge, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc, sanitizeHtml: sanitizeHtml,
       tiles: tiles, card: card, cardTable: cardTable, kv: kv, metricTable: metricTable, timeline: timeline, relatedTable: relatedTable,
       imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
       stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader,
@@ -722,6 +787,6 @@
 
   // CommonJS export for node-based unit tests of the pure helpers.
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid, repeatRows: repeatRows, validate: validate };
+    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid, repeatRows: repeatRows, validate: validate, sanitizeHtml: sanitizeHtml, _safeUrl: safeUrl, _sanitizeAllowed: SANITIZE_ALLOWED };
   }
 })();
