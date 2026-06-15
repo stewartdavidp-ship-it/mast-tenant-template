@@ -14,11 +14,12 @@
  * status (active / closed) is a flat operator toggle — no exit-checklists, no
  * guarded advance, no gated lifecycle -> Faceted Record, NOT Process/MastFlow.
  *
- * Read-focused: editing a placement, recording sales/returns, settling payouts
- * and the whole Galleries/Payouts machinery stay single-sourced on legacy
- * #galleries via a "manage in classic view" link. This twin re-hosts the VIEW
- * only — no onSave, no edit form, no sale/return/settlement tooling. Flag-gated
- * (?ui=1) at #consignments-v2, side-by-side; never touches consignment.js.
+ * Read-focused on the placement RECORD (no onSave / edit form), but the
+ * line-item + money actions on a placement — recording sales/returns, adding/
+ * removing pieces, and recording a settlement (payout received) — are NATIVE
+ * here, routed through window.GalleriesBridge (the gated write core / CF call in
+ * consignment.js). No more navigateToClassic hatch. Flag-gated (?ui=1) at
+ * #consignments-v2, side-by-side.
  *
  * Money units: placement line-item retailPrice is stored in CENTS (writer:
  * Math.round($ * 100)); both v2 twins convert it to dollars via N.moneyVal so they
@@ -97,11 +98,11 @@
     return Math.round(rate * 100) + '%';
   }
 
-  // ── native line-item editing (sale / return / add / remove) ─────────
-  // Sales, returns and add/remove of consigned pieces are native here, routed
-  // through window.GalleriesBridge (the gated write core in consignment.js).
-  // Payout settlement is the one action still single-sourced on classic
-  // #galleries (no V2 home yet) — see classic() below.
+  // ── native line-item + money editing (sale / return / add / remove /
+  //    settle) ───────────────────────────────────────────────────────────
+  // Sales, returns, add/remove of consigned pieces AND recording a settlement
+  // (payout received) are native here, all routed through window.GalleriesBridge
+  // (the gated write core / CF call in consignment.js). No classic hatch.
   function canEdit() { return typeof window.can !== 'function' || window.can('galleries', 'edit'); }
   function canDelete() { return typeof window.can !== 'function' || window.can('galleries', 'delete'); }
 
@@ -216,9 +217,19 @@
         var notes = p.notes
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(p.notes) + '</div>'
           : '<span class="mu-sub">No notes.</span>';
-        // Sale / return / add / remove are native (Pieces tab). Payout settlement
-        // is the one action still single-sourced on legacy #galleries (no V2 home yet).
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="ConsignmentsV2.classic()">Settle payout in classic view →</button> <span class="mu-sub">Recording sales, returns &amp; pieces is native — use the Pieces tab.</span></div>';
+        // Sale / return / add / remove are native (Pieces tab); recording a
+        // settlement (payout received) is native here too — routed through the
+        // same gated CF (recordConsignmentSettlement) the classic form uses.
+        var outstanding = outstandingDollars(p);
+        var manage = canEdit()
+          ? '<div style="margin-top:14px;">' +
+              '<button class="btn btn-primary"' + (outstanding > 0 ? '' : ' disabled') +
+                ' onclick="ConsignmentsV2.recordSettlement(\'' + esc(pid) + '\')">Record settlement</button> ' +
+              '<span class="mu-sub">' + (outstanding > 0
+                ? ('Outstanding: ' + (N.money(outstanding) || '$0.00') + ' — books revenue when the payment arrives.')
+                : 'Nothing outstanding to settle.') + '</span>' +
+            '</div>'
+          : '';
 
         // Pieces — the consigned line items (on/under the record; cheap to read here).
         var lineItems = (p.lineItems && typeof p.lineItems === 'object') ? p.lineItems : {};
@@ -426,12 +437,50 @@
       }).catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Could not remove piece', true); });
     },
 
-    // Payout settlement is the one placement action with no V2 home yet — it
-    // stays single-sourced on classic #galleries. navigateToClassic so the V2
-    // route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('galleries');
-      else if (typeof navigateTo === 'function') navigateTo('galleries');
+    // ── native settlement (payout received) ──────────────────────────────
+    // Collect amount + date + notes, then route through GalleriesBridge.record-
+    // Settlement — which mints the idempotencyKey, runs the outstanding-earnings
+    // cap pre-check, and calls the recordConsignmentSettlement CF (the same path
+    // the classic confirmPayout uses; no raw client settlement write here).
+    recordSettlement: function (placementId) {
+      if (!canEdit()) { if (window.showToast) showToast('You do not have permission to record settlements.', true); return; }
+      if (typeof openModal !== 'function') { if (window.showToast) showToast('Dialog unavailable — try again', true); return; }
+      var p = V2.byId[placementId];
+      var outstanding = p ? outstandingDollars(p) : 0;
+      var today = new Date().toISOString().split('T')[0];
+      var name = p ? galleryName(p) : 'this placement';
+      var html = '<div class="modal-header"><h3>Record settlement</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div style="padding:20px;">' +
+        '<div class="mu-sub" style="margin-bottom:14px;">Payout from ' + esc(name) + ' · Outstanding: <strong>' + esc(N.money(outstanding) || '$0.00') + '</strong></div>' +
+        '<div class="form-group" style="margin-bottom:14px;"><label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Amount received ($)</label>' +
+        '<input id="cv2SettleAmount" type="number" min="0" step="0.01" value="' + esc(outstanding > 0 ? outstanding.toFixed(2) : '') + '" class="form-input" style="width:100%;"></div>' +
+        '<div class="form-group" style="margin-bottom:14px;"><label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Received date</label>' +
+        '<input id="cv2SettleDate" type="date" value="' + esc(today) + '" class="form-input" style="width:100%;">' +
+        '<div class="mu-sub" style="margin-top:4px;">Revenue is attributed to the month the payment actually arrived.</div></div>' +
+        '<div class="form-group" style="margin-bottom:14px;"><label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Notes (optional)</label>' +
+        '<input id="cv2SettleNotes" type="text" placeholder="e.g. check #4521" class="form-input" style="width:100%;"></div>' +
+        '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="ConsignmentsV2.confirmSettlement(\'' + esc(placementId) + '\')">Record settlement</button>' +
+        '</div></div>';
+      openModal(html);
+    },
+    confirmSettlement: function (placementId) {
+      var amountEl = document.getElementById('cv2SettleAmount');
+      var dateEl = document.getElementById('cv2SettleDate');
+      var notesEl = document.getElementById('cv2SettleNotes');
+      var amountDollars = amountEl ? parseFloat(amountEl.value) : NaN;
+      var receivedDate = (dateEl && dateEl.value) || '';
+      var notes = (notesEl && notesEl.value) || '';
+      withBridge('recordSettlement')
+        .then(function (B) { return B.recordSettlement(placementId, { amountDollars: amountDollars, receivedDate: receivedDate, notes: notes }); })
+        .then(function (res) {
+          if (typeof closeModal === 'function') closeModal();
+          if (window.showToast) showToast('Settlement of ' + (window.formatCents ? window.formatCents(res.amountCents) : ('$' + (res.amountCents / 100).toFixed(2))) + ' recorded');
+          return reloadAndReopen(placementId);
+        })
+        // Surface the server's reason verbatim (e.g. the over-cap rejection).
+        .catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Could not record settlement', true); });
     },
     exportCsv: function () { return MastEntity.exportRows('consignments-v2', visibleRows(), 'all'); }
   };
@@ -440,7 +489,7 @@
     routes: { 'consignments-v2': { tab: 'consignmentsV2Tab', setup: function () {
       ensureTab(); render(); load();
       // Warm the classic module so window.GalleriesBridge (the write core for
-      // sale/return/add/remove) is ready by the time the user acts.
+      // sale/return/add/remove/settle) is ready by the time the user acts.
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('consignment'); } catch (e) {} }
     } } }
   });

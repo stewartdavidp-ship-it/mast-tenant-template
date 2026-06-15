@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,884** lines
-- **Feature modules:** **119** files in `app/modules/` (**110** routed), **135,187** lines combined
+- **Feature modules:** **119** files in `app/modules/` (**110** routed), **135,336** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -34,8 +34,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/commissions-v2.js` | 632 | commissions-v2 |
 | `modules/composer-v2.js` | 298 | composer-v2 |
 | `modules/composer.js` | 479 | composer |
-| `modules/consignment.js` | 2,304 | galleries |
-| `modules/consignments-v2.js` | 447 | consignments-v2 |
+| `modules/consignment.js` | 2,338 | galleries |
+| `modules/consignments-v2.js` | 496 | consignments-v2 |
 | `modules/contacts-v2.js` | 545 | contacts-v2 |
 | `modules/contacts.js` | 1,733 | contacts |
 | `modules/coupons-v2.js` | 493 | coupons-v2 |
@@ -64,7 +64,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance.js` | 8,537 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/fulfillment-v2.js` | 614 | pack-v2, ship-v2 |
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
-| `modules/galleries-v2.js` | 585 | galleries-v2 |
+| `modules/galleries-v2.js` | 651 | galleries-v2 |
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
 | `modules/homepage-v2.js` | 351 | homepage-v2 |
 | `modules/homepage.js` | 718 | homepage |
