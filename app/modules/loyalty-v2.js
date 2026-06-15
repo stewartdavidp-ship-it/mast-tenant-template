@@ -190,6 +190,7 @@
             [
               { label: 'When', render: function (r) { return r.when ? N.date(r.when) : '—'; } },
               { label: 'Type', render: function (r) { return r.typeHtml; } },
+              { label: 'Via', render: function (r) { return r.viaHtml; } },
               { label: pointName(), align: 'right', render: function (r) { return r.pointsHtml; } }
             ],
             ledger
@@ -214,7 +215,15 @@
       if (isNaN(pts)) pts = 0;
       var when = t.createdAt || t.at || null;
       var type = t.type || (t.source === 'admin-adjust' ? 'adjusted' : (pts < 0 ? 'redeemed' : 'earned'));
-      rows.push({ _t: when, when: when, type: type, points: pts });
+      // Origin label: storefront earns from an external channel stamp
+      // source '<platform>-order:<id>' (e.g. 'shopify-order:123'); native orders
+      // carry an orderId; admin tweaks carry source 'admin-adjust'.
+      var src = String(t.source || '');
+      var om = src.match(/^([a-z]+)-order:/);
+      var via = om ? (om[1].charAt(0).toUpperCase() + om[1].slice(1) + ' order')
+        : src === 'admin-adjust' ? 'Manual'
+          : t.orderId ? 'Order' : '';
+      rows.push({ _t: when, when: when, type: type, points: pts, via: via });
     });
     rows.sort(function (a, b) { return String(b._t || '').localeCompare(String(a._t || '')); });
     return rows.slice(0, 25).map(function (r) {
@@ -223,6 +232,7 @@
       return {
         when: r.when,
         typeHtml: U.badge(String(r.type), tone),
+        viaHtml: r.via ? esc(r.via) : '—',
         pointsHtml: '<span style="font-variant-numeric:tabular-nums;">' + sign + N.count(r.points) + '</span>'
       };
     });
