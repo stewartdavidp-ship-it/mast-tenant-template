@@ -2153,45 +2153,58 @@
     await blogPublishToWebsite();
   }
 
+  // Core publish \u2014 composes the storefront HTML (blogRenderBodyToHtml), denormalizes
+  // the author NAME + slug + featured image, writes blog/published, and stamps the
+  // post doc. Single source for BOTH the legacy Builder (blogPublishToWebsite) and
+  // the native V2 editor (BlogBridge.publishToWebsite) so the published output can
+  // never drift. Operates on a post OBJECT (id-addressable) \u2014 no global state.
+  async function _blogPublishPostToWebsite(post) {
+    if (!post || !post.id) throw new Error('Post not found');
+    var id = post.id;
+    var imgs = Array.isArray(post.inlineImages) ? post.inlineImages
+      : (post.inlineImages ? Object.keys(post.inlineImages).map(function (k) { return post.inlineImages[k]; }) : []);
+    var bodyHtml = blogRenderBodyToHtml(post.body || '', imgs);
+    var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: post.author || 'Author', photoUrl: '', bio: '' };
+    var slug = (post.title || 'untitled').toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 80);
+    var publishedAt = new Date().toISOString();
+    var featImgPub = post.featuredImageId && imageLibrary ? imageLibrary[post.featuredImageId] : null;
+    var publishedData = {
+      title: post.title || 'Untitled',
+      postNumber: post.postNumber || 0,
+      slug: slug,
+      publishedAt: publishedAt,
+      author: author.name,
+      bodyHtml: bodyHtml,
+      tags: post.tags || [],
+      excerpt: post.excerpt || '',
+      image: featImgPub ? (featImgPub.url || '') : ''
+    };
+    await MastDB.blog.published.ref(id).set(publishedData);
+    await MastDB.blog.posts.ref(id).update({ publishedToWebsite: true, publishedAt: publishedAt, updatedAt: publishedAt });
+    // Keep the legacy in-memory list coherent (the bridge path may hit a post that
+    // is the same object as a blogPosts entry, or a fresh MastDB read).
+    var local = (typeof blogPosts !== 'undefined' && blogPosts) ? blogPosts.find(function (p) { return p.id === id; }) : null;
+    if (local) { local.publishedToWebsite = true; local.publishedAt = publishedAt; local.updatedAt = publishedAt; }
+    return { publishedAt: publishedAt, slug: slug };
+  }
+
+  async function _blogUnpublishPost(id) {
+    await MastDB.blog.published.ref(id).remove();
+    var updatedAt = new Date().toISOString();
+    await MastDB.blog.posts.ref(id).update({ publishedToWebsite: false, publishedAt: null, updatedAt: updatedAt });
+    var local = (typeof blogPosts !== 'undefined' && blogPosts) ? blogPosts.find(function (p) { return p.id === id; }) : null;
+    if (local) { local.publishedToWebsite = false; local.publishedAt = null; local.updatedAt = updatedAt; }
+    return { updatedAt: updatedAt };
+  }
+
   async function blogPublishToWebsite() {
     if (!blogCurrentPost) return;
     closeModal();
-
     var editable = document.getElementById('blogBodyEditable');
     if (editable) blogCurrentPost.body = blogSaveBodyFromEditor();
-
     try {
-      var bodyHtml = blogRenderBodyToHtml(blogCurrentPost.body || '', blogCurrentPost.inlineImages || []);
-      var author = BLOG_AUTHORS[blogCurrentPost.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: blogCurrentPost.author || 'Author', photoUrl: '', bio: '' };
-
-      var slug = (blogCurrentPost.title || 'untitled').toLowerCase()
-        .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 80);
-
-      var publishedAt = new Date().toISOString();
-      var featImgPub = blogCurrentPost.featuredImageId && imageLibrary ? imageLibrary[blogCurrentPost.featuredImageId] : null;
-      var publishedData = {
-        title: blogCurrentPost.title || 'Untitled',
-        postNumber: blogCurrentPost.postNumber || 0,
-        slug: slug,
-        publishedAt: publishedAt,
-        author: author.name,
-        bodyHtml: bodyHtml,
-        tags: blogCurrentPost.tags || [],
-        excerpt: blogCurrentPost.excerpt || '',
-        image: featImgPub ? (featImgPub.url || '') : ''
-      };
-
-      await MastDB.blog.published.ref(blogCurrentPostId).set(publishedData);
-
-      blogCurrentPost.publishedToWebsite = true;
-      blogCurrentPost.publishedAt = publishedAt;
-      blogCurrentPost.updatedAt = publishedAt;
-      await MastDB.blog.posts.ref(blogCurrentPostId).update({
-        publishedToWebsite: true,
-        publishedAt: publishedAt,
-        updatedAt: publishedAt
-      });
-
+      await _blogPublishPostToWebsite(blogCurrentPost);
       renderBlogEditor();
       showToast('Published to website! \ud83c\udf10');
     } catch (err) {
@@ -2202,17 +2215,7 @@
   async function blogUnpublishFromWebsite() {
     if (!blogCurrentPost) return;
     try {
-      await MastDB.blog.published.ref(blogCurrentPostId).remove();
-
-      blogCurrentPost.publishedToWebsite = false;
-      blogCurrentPost.publishedAt = null;
-      blogCurrentPost.updatedAt = new Date().toISOString();
-      await MastDB.blog.posts.ref(blogCurrentPostId).update({
-        publishedToWebsite: false,
-        publishedAt: null,
-        updatedAt: blogCurrentPost.updatedAt
-      });
-
+      await _blogUnpublishPost(blogCurrentPostId);
       renderBlogEditor();
       showToast('Unpublished from website');
     } catch (err) {
@@ -2345,10 +2348,28 @@
   // mirrors the Builder's delete; published posts never delete from the twin.
   window.BlogBridge = {
     updateMeta: async function (id, patch) {
+      patch = patch || {};
       var updates = { updatedAt: new Date().toISOString() };
       if (typeof patch.title === 'string') updates.title = patch.title.trim();
       if (typeof patch.excerpt === 'string') updates.excerpt = patch.excerpt.trim();
       if (Array.isArray(patch.tags)) updates.tags = patch.tags;
+      // SEO fields (widened for the native full editor — PR-2). Mirrors the legacy
+      // blogUpdateSlug / MetaDescription / Canonical / OgImage / SchemaType
+      // validation: slug normalized, metaDescription capped at 200, canonical/ogImage
+      // must be http(s) or empty (→ null), schemaType pinned to the two valid values.
+      if (typeof patch.slug === 'string') updates.slug = blogSlugify(patch.slug);
+      if (typeof patch.metaDescription === 'string') updates.metaDescription = String(patch.metaDescription).slice(0, 200);
+      if ('canonical' in patch) {
+        var canon = String(patch.canonical || '').trim();
+        if (canon && !/^https?:\/\//i.test(canon)) throw new Error('Canonical URL must start with http:// or https://');
+        updates.canonical = canon || null;
+      }
+      if ('ogImage' in patch) {
+        var og = String(patch.ogImage || '').trim();
+        if (og && !/^https?:\/\//i.test(og)) throw new Error('OG image URL must start with http:// or https://');
+        updates.ogImage = og || null;
+      }
+      if (typeof patch.schemaType === 'string') updates.schemaType = (patch.schemaType === 'Article') ? 'Article' : 'BlogPosting';
       await MastDB.blog.posts.ref(id).update(updates);
       var local = (typeof blogPosts !== 'undefined' && blogPosts) ? blogPosts.find(function (p) { return p.id === id; }) : null;
       if (local) Object.assign(local, updates);
@@ -2446,6 +2467,107 @@
       var local = (typeof blogPosts !== 'undefined' && blogPosts) ? blogPosts.find(function (p) { return p.id === id; }) : null;
       if (local) Object.assign(local, updates);
       return updates;
+    },
+
+    // ── PR-2: full-editor write layer (author / featured image / SEO / status /
+    // schedule / publish). Each mirrors the legacy Builder handler so the native
+    // editor and the Builder write identically; the native editor never touches
+    // MastDB directly. Callers gate on the blog edit permission. ──
+    _stamp: async function (id, fields) {
+      var updates = Object.assign({ updatedAt: new Date().toISOString() }, fields);
+      await MastDB.blog.posts.ref(id).update(updates);
+      var local = (typeof blogPosts !== 'undefined' && blogPosts) ? blogPosts.find(function (p) { return p.id === id; }) : null;
+      if (local) Object.assign(local, updates);
+      return updates;
+    },
+    setFeaturedImage: function (id, imageId) { return this._stamp(id, { featuredImageId: imageId || null }); },
+    setAuthor: function (id, key) { return this._stamp(id, { author: key }); },
+    // Author photo — a cross-cutting write to admin/users/{uid}/profile (real admin
+    // user) or public/config/brand/authors/{key} (brand fictional author), mirroring
+    // blogChangeAuthorPhoto's persistence + shared-profile-cache invalidation +
+    // TENANT_CONFIG mirror. Returns the saved url.
+    setAuthorPhoto: async function (authorKey, photoUrl) {
+      var key = authorKey;
+      if (!key) throw new Error('No author selected');
+      var isRealUser = (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.uid === key)
+        || (window.adminUsers && window.adminUsers[key]);
+      if (isRealUser) await MastDB.set('admin/users/' + key + '/profile/photoUrl', photoUrl);
+      else await MastDB.set('public/config/brand/authors/' + key + '/photoUrl', photoUrl);
+      if (!BLOG_AUTHORS[key]) BLOG_AUTHORS[key] = { name: key, photoUrl: '', bio: '' };
+      BLOG_AUTHORS[key].photoUrl = photoUrl;
+      if (isRealUser) {
+        if (typeof window.invalidateUserProfileCache === 'function') window.invalidateUserProfileCache(key);
+        if (typeof auth !== 'undefined' && auth.currentUser && auth.currentUser.uid === key) {
+          var av = document.getElementById('userAvatar'); if (av) av.src = photoUrl;
+        }
+      } else {
+        try {
+          if (window.TENANT_CONFIG && TENANT_CONFIG.brand) {
+            TENANT_CONFIG.brand.authors = TENANT_CONFIG.brand.authors || {};
+            TENANT_CONFIG.brand.authors[key] = TENANT_CONFIG.brand.authors[key] || {};
+            TENANT_CONFIG.brand.authors[key].photoUrl = photoUrl;
+          }
+        } catch (e) {}
+      }
+      return photoUrl;
+    },
+    // The author roster the picker offers (brand authors + the enriched uid authors),
+    // resolved by name. Read-only convenience for the native editor. Seeds the
+    // roster first (loadBlogAuthors is idempotent) so the picker works even when the
+    // classic #blog route was never visited.
+    authors: function () {
+      try { loadBlogAuthors(); } catch (e) {}
+      var m = {};
+      Object.keys(BLOG_AUTHORS || {}).forEach(function (k) { m[k] = { name: (BLOG_AUTHORS[k] && BLOG_AUTHORS[k].name) || k, photoUrl: (BLOG_AUTHORS[k] && BLOG_AUTHORS[k].photoUrl) || '', bio: (BLOG_AUTHORS[k] && BLOG_AUTHORS[k].bio) || '' }; });
+      return m;
+    },
+    // Status lifecycle (draft ↔ complete), mirroring blogMarkComplete/blogBackToDraft.
+    setStatus: function (id, status) {
+      var s = (status === 'complete') ? 'complete' : 'draft';
+      return this._stamp(id, { status: s }).then(function () { return s; });
+    },
+    // Schedule / cancel (mirrors blogPublishSelected's schedule branch + blogCancelSchedule).
+    schedule: function (id, iso) { return this._stamp(id, { status: 'scheduled', scheduledAt: iso }); },
+    cancelSchedule: function (id) { return this._stamp(id, { status: 'complete', scheduledAt: null }); },
+    // Publish / unpublish — id-based, single-sourced with the legacy Builder via the
+    // shared _blogPublishPostToWebsite / _blogUnpublishPost cores. Reads the post
+    // FRESH so any just-autosaved body/meta is reflected.
+    publishToWebsite: async function (id) {
+      var raw = await MastDB.get('blog/posts/' + id);
+      var post = (raw && typeof raw.val === 'function') ? raw.val() : raw;
+      if (post && !post.id) post.id = id;
+      return _blogPublishPostToWebsite(post);
+    },
+    unpublish: function (id) { return _blogUnpublishPost(id); },
+    // AI suggest-tags — calls the socialAI CF, merges new tags, persists via the
+    // bridge. Returns { tags, suggested }. (Mirrors blogSuggestTags.)
+    suggestTags: async function (id) {
+      var raw = await MastDB.get('blog/posts/' + id);
+      var post = (raw && typeof raw.val === 'function') ? raw.val() : (raw || {});
+      var tmp = document.createElement('div'); tmp.innerHTML = post.body || '';
+      var cleanBody = (tmp.textContent || tmp.innerText || '').replace(/\[Image \d+\]/g, '').replace(/\[IMG:[^\]]+\]/g, '').replace(/\[Coupon:[^\]]+\]/g, '').trim();
+      var result = await firebase.functions().httpsCallable('socialAI')({ action: 'suggestBlogTags', tenantId: MastDB.tenantId(), body: cleanBody, title: post.title || '' });
+      var suggested = (result && result.data && result.data.tags) || [];
+      var merged = Array.isArray(post.tags) ? post.tags.slice() : [];
+      suggested.forEach(function (t) { if (merged.indexOf(t) === -1) merged.push(t); });
+      await this._stamp(id, { tags: merged });
+      return { tags: merged, suggested: suggested };
+    },
+    // AI polish — calls the socialAI CF and RETURNS the polished body as editor HTML
+    // (image-marker placeholders re-appended); the caller confirms + persists via
+    // setBody. (Mirrors blogPolishWithAI + blogPickVersion('ai').)
+    polishBody: async function (id) {
+      var raw = await MastDB.get('blog/posts/' + id);
+      var post = (raw && typeof raw.val === 'function') ? raw.val() : (raw || {});
+      var structured = blogExtractStructuredText(post.body || '');
+      var cleanBody = structured.replace(/\[Image \d+\]/g, '').replace(/\[Coupon:[^\]]+\]/g, '').trim();
+      var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: post.author || 'Author' };
+      var result = await firebase.functions().httpsCallable('socialAI')({ action: 'blogPolish', tenantId: MastDB.tenantId(), body: cleanBody, authorName: author.name, title: post.title || '' });
+      var polished = (result && result.data && result.data.polished) || cleanBody;
+      var aiHtml = blogStructuredTextToHtml(polished);
+      var imgs = Array.isArray(post.inlineImages) ? post.inlineImages : (post.inlineImages ? Object.keys(post.inlineImages).map(function (k) { return post.inlineImages[k]; }) : []);
+      imgs.forEach(function (img, idx) { var marker = '[Image ' + (idx + 1) + ']'; if (aiHtml.indexOf(marker) === -1) aiHtml += '<p>' + marker + '</p>'; });
+      return aiHtml;
     }
   };
 
