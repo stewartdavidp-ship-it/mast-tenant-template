@@ -325,7 +325,11 @@
         title: 'Students',
         count: N.count(V2.rows.length) + ' student' + (V2.rows.length === 1 ? '' : 's'),
         actionsHtml: '<button class="btn btn-primary" onclick="StudentsV2.create()">+ New student</button>' +
-          '<button class="btn btn-secondary" onclick="StudentsV2.exportCsv()">↓ Export</button>'
+          '<button class="btn btn-secondary" onclick="StudentsV2.exportCsv()">↓ Export</button>' +
+          // Tenant-level config (waiver templates / clearance types / business
+          // documents) lives in the Student settings hub (students-config-v2),
+          // not as a roster facet — the legacy #students "view-tabs", re-homed.
+          '<button class="btn btn-secondary" onclick="StudentsV2.openSettings()">⚙ Settings</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name or contact…" value="' + esc(V2.q) +
@@ -627,6 +631,9 @@
         });
     },
     exportCsv: function () { return MastEntity.exportRows('students-v2', visibleRows(), V2.statusFilter); },
+    // Tenant-level Student settings (waiver templates / clearance types / business
+    // documents) — the legacy #students config view-tabs, re-homed at students-config-v2.
+    openSettings: function () { if (typeof window.navigateTo === 'function') navigateTo('students-config-v2'); else location.hash = '#students-config-v2'; },
 
     // ── Onboarding checklist sub-task editor ──────────────────────────
     chkEdit: function (id, key) { var s = V2.byId[id]; if (s) rerenderPane('onboarding', checklistForm(s, key)); },
