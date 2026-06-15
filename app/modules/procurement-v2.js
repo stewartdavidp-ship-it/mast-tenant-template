@@ -95,7 +95,14 @@
       { name: 'expected', label: 'Expected', type: 'date', list: true, readOnly: true, get: function (po) { return po.expectedDate || null; } },
       { name: 'total', label: 'Total', type: 'money', list: true, readOnly: true, get: function (po) { return poTotal(po); } }
     ],
-    fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
+    // Cold-safe: a drill in from another surface (e.g. a vendor's Purchase
+    // Orders facet, or a lot's PO provenance) can land here before the
+    // Procurement route has ever run its setup load() — so lazy-load on miss
+    // (mirrors sessions-v2, drilled from the calendar before its own route).
+    fetch: function (id) {
+      if (V2.byId[id]) return Promise.resolve(V2.byId[id]);
+      return load().then(function () { return V2.byId[id] || null; });
+    },
     detail: {
       flow: 'procurement',
       flowModule: 'procurementWorkflow',
