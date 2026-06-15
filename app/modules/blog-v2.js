@@ -16,13 +16,16 @@
  * (published / complete / scheduled / draft) is an assigned attribute, so it is
  * a Faceted Record, NOT Process / MastFlow.
  *
- * Read-focused: a post is AUTHORED on a rich Builder/canvas (the rich-text body
- * editor, formatting toolbar, inline-image curation, AI polish, SEO/schema,
- * scheduling + website/Substack publish side effects) that is OUT OF SCOPE for
- * the twin. Per the read-on-page model we convert the LIST to a read-detail
- * only and keep every authoring path single-sourced on legacy #blog via a
- * "manage in classic view" link. This twin re-hosts the VIEW only — no onSave,
- * no edit form, no editor / publish controls. The body is HTML on the doc; we
+ * Create + light edit are NATIVE here: a custom detail.editRender + onSave that
+ * DELEGATE to window.BlogBridge (exposed in blog.js). CREATE composes a basic
+ * post (title / status / tags / excerpt / body) — the plain-text body is escaped
+ * + wrapped by BlogBridge.create (blogPlainToHtml) so it can never render raw on
+ * the storefront. EDIT is LIGHT (meta only — title / excerpt / tags). The rich
+ * Builder/canvas (rich-text body editor, formatting toolbar, inline-image
+ * curation, AI polish, SEO/schema, scheduling + website/Substack publish side
+ * effects) stays single-sourced on legacy #blog via a "Write / publish in
+ * classic view" link — that is the rich-authoring bridge, NOT a create punt. The
+ * body is HTML on the doc; we
  * strip its tags to a plain-text preview (we never inject raw post HTML into the
  * slide-out) and esc() everything. Flag-gated (?ui=1) at #blog-v2, side-by-side;
  * never touches blog.js.
@@ -227,19 +230,34 @@
             UI.card('Body preview', bodyBody + manage) +
           '</div>';
       },
-      // LIGHT edit (Wave 3): meta fields only — title / excerpt / tags. The
-      // body, slug/SEO, scheduling and publish side effects stay on the
-      // Builder (single canvas for everything that can desync).
+      // CREATE: a native composer (title / status / tags / excerpt / body) so the
+      // twin no longer punts new posts to the classic Builder. EDIT stays LIGHT
+      // (meta only — title / excerpt / tags); the body, slug/SEO, scheduling and
+      // publish side effects stay on the Builder (single canvas for everything
+      // that can desync). The body field is plain text — BlogBridge.create
+      // escapes + wraps it (blogPlainToHtml) so it renders safely; rich
+      // formatting + inline images are added later in the Builder.
       editRender: function (p, mode) {
         p = p || {};
         function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        if (mode === 'create') {
+          var statusOpts = [['draft', 'Draft'], ['complete', 'Complete']].map(function (o) {
+            return '<option value="' + o[0] + '">' + o[1] + '</option>';
+          }).join('');
+          return '<div class="mu-editbar"><span class="mu-editpill">NEW</span>New post — rich formatting, images &amp; publishing live in the Builder</div>' +
+            fg('Title *', '<input class="form-input" id="blogV2Title" value="" style="width:100%;" placeholder="Post title">') +
+            fg('Status', '<select class="form-input" id="blogV2Status" style="width:100%;">' + statusOpts + '</select>') +
+            fg('Tags (comma-separated)', '<input class="form-input" id="blogV2Tags" value="" style="width:100%;" placeholder="news, behind-the-scenes">') +
+            fg('Excerpt', '<textarea class="form-input" id="blogV2Excerpt" rows="2" style="width:100%;resize:vertical;" placeholder="Short summary for listings"></textarea>') +
+            fg('Body', '<textarea class="form-input" id="blogV2Body" rows="8" style="width:100%;resize:vertical;" placeholder="Write your post… rich formatting and images are added in the Builder."></textarea>');
+        }
         return '<div class="mu-editbar"><span class="mu-editpill">EDITING</span>Edit post details (body lives in the Builder)</div>' +
           fg('Title *', '<input class="form-input" id="blogV2Title" value="' + esc(postTitle(p) === '(untitled)' ? '' : postTitle(p)) + '" style="width:100%;">') +
           fg('Excerpt', '<textarea class="form-input" id="blogV2Excerpt" rows="3" style="width:100%;resize:vertical;">' + esc(p.excerpt || '') + '</textarea>') +
           fg('Tags (comma-separated)', '<input class="form-input" id="blogV2Tags" value="' + esc(tagsOf(p).join(', ')) + '" style="width:100%;">');
       }
     },
-    onSave: function (rec) {
+    onSave: function (rec, mode) {
       if (typeof window.can === 'function' && !window.can('blog', 'edit')) {
         if (window.showToast) showToast('You don\'t have permission to edit posts.', true); return false;
       }
@@ -247,10 +265,28 @@
       function val(id) { return ((document.getElementById(id) || {}).value || ''); }
       var title = val('blogV2Title').trim();
       if (!title) { if (window.showToast) showToast('Title is required.', true); return false; }
+      var tags = val('blogV2Tags').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+
+      if (mode === 'create') {
+        if (!window.BlogBridge.create) { if (window.showToast) showToast('Blog engine still loading — try again', true); return false; }
+        var data = {
+          title: title,
+          status: val('blogV2Status') === 'complete' ? 'complete' : 'draft',
+          tags: tags,
+          excerpt: val('blogV2Excerpt'),
+          body: val('blogV2Body')
+        };
+        return Promise.resolve(window.BlogBridge.create(data)).then(function (id) {
+          if (window.writeAudit) writeAudit('create', 'blog-post', id);
+          if (window.showToast) showToast('Post created.');
+          reloadSoon(); return true;
+        }).catch(function (e) { console.error('[blog-v2] create', e); if (window.showToast) showToast('Error creating post.', true); return false; });
+      }
+
       var patch = {
         title: title,
         excerpt: val('blogV2Excerpt'),
-        tags: val('blogV2Tags').split(',').map(function (t) { return t.trim(); }).filter(Boolean)
+        tags: tags
       };
       var id = rec._key || rec.id;
       return Promise.resolve(window.BlogBridge.updateMeta(id, patch)).then(function (updates) {
@@ -284,6 +320,7 @@
       })
       .catch(function (e) { console.error('[blog-v2] load', e); V2.loaded = true; render(); });
   }
+  function reloadSoon() { setTimeout(load, 250); }   // let the legacy write settle, then refresh
 
   // Resolve uid-keyed authors to real names/photos from admin/users/{uid}/profile
   // (mirrors blog.js enrichBlogAuthorsFromPosts). Brand-handle authors already
@@ -351,7 +388,7 @@
       MastEntity.renderList('blog-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'BlogV2.sort', onRowClickFnName: 'BlogV2.open',
-        empty: { title: 'No blog posts', message: V2.loaded ? 'Write your first post in the classic Blog view.' : 'Loading…' }
+        empty: { title: 'No blog posts', message: V2.loaded ? 'Click “+ New Post” to write your first post.' : 'Loading…' }
       });
   }
 
@@ -374,13 +411,16 @@
       if (typeof navigateToClassic === 'function') navigateToClassic('blog');
       else if (typeof navigateTo === 'function') navigateTo('blog');
     },
-    // Create a post: authoring lives in the classic Blog editor (this twin is
-    // read-only). Set a one-shot intent the classic module consumes on mount to
-    // open a fresh draft directly.
+    // Create a post NATIVELY (title / status / tags / excerpt / body) — the
+    // write is delegated to BlogBridge.create. Rich formatting, inline images
+    // and publishing are done afterward in the Builder.
     newPost: function () {
-      window._blogOpenNew = true;
-      if (typeof navigateToClassic === 'function') navigateToClassic('blog');
-      else if (typeof navigateTo === 'function') navigateTo('blog');
+      if (typeof window.can === 'function' && !window.can('blog', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to create posts.', true); return;
+      }
+      // Ensure legacy blog.js is loaded so window.BlogBridge.create exists at save.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('blog'); } catch (e) {} }
+      MastEntity.openRecord('blog-v2', {}, 'create');
     },
     // Draft deletion (Wave 3): published/complete posts never delete from the
     // twin — unpublish lives with the Builder's side effects.

@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,858** lines
-- **Feature modules:** **118** files in `app/modules/` (**109** routed), **127,426** lines combined
+- **Feature modules:** **118** files in `app/modules/` (**109** routed), **127,690** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -17,8 +17,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit-v2.js` | 414 | audit-v2, audit-muted-v2 |
 | `modules/audit.js` | 1,721 | audit |
 | `modules/auditlog-v2.js` | 243 | auditlog-v2 |
-| `modules/blog-v2.js` | 412 | blog-v2 |
-| `modules/blog.js` | 2,364 | blog |
+| `modules/blog-v2.js` | 452 | blog-v2 |
+| `modules/blog.js` | 2,400 | blog |
 | `modules/book.js` | 6,460 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand-v2.js` | 308 | brand-v2 |
 | `modules/brand.js` | 668 | brand |
@@ -82,15 +82,15 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/marketing-calendar.js` | 270 | marketing-calendar |
 | `modules/materials-v2.js` | 337 | materials-v2 |
 | `modules/membership-v2.js` | 438 | membership-v2 |
-| `modules/newsletter-v2.js` | 443 | newsletter-v2 |
-| `modules/newsletter.js` | 2,342 | newsletter |
+| `modules/newsletter-v2.js` | 498 | newsletter-v2 |
+| `modules/newsletter.js` | 2,394 | newsletter |
 | `modules/orders-v2.js` | 326 | orders-v2 |
 | `modules/orders.js` | 6,302 | orders, commissions, rma |
 | `modules/passes-v2.js` | 501 | passes-v2 |
 | `modules/pos-v2.js` | 160 | pos-v2 |
 | `modules/procurement-v2.js` | 875 | procurement-v2 |
 | `modules/procurement.js` | 2,378 | procurement |
-| `modules/production.js` | 3,553 | jobs, production, stories, forecast |
+| `modules/production.js` | 3,584 | jobs, production, stories, forecast |
 | `modules/products-v2.js` | 3,528 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
 | `modules/promotions.js` | 529 | promotions |
@@ -104,7 +104,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/shows.js` | 3,580 | show, show-find, show-apply, show-prep, show-execute, show-history |
 | `modules/social-v2.js` | 371 | social-v2 |
 | `modules/social.js` | 1,494 | social |
-| `modules/stories-v2.js` | 289 | stories-v2 |
+| `modules/stories-v2.js` | 339 | stories-v2 |
 | `modules/students-v2.js` | 476 | students-v2 |
 | `modules/students.js` | 1,570 | students |
 | `modules/studio-v2.js` | 446 | studio-v2 |

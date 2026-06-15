@@ -165,6 +165,39 @@
     renderNewsletter();
   }
 
+  // Default-section seeding for a fresh issue. Extracted so BOTH the legacy
+  // Composer (nlCreateIssue) and the native twin write path
+  // (NewsletterBridge.createIssue) seed an identical grid — single source.
+  function nlBuildDefaultSections() {
+    var sections = {};
+    var gridCol = 0, gridRow = 0;
+    NL_DEFAULT_SECTIONS.forEach(function(def, idx) {
+      var secId = MastDB.newKey('_ids');
+      var sizeInfo = NL_CARD_SIZE_MAP[def.type] || NL_CARD_SIZE_MAP['custom'];
+      if (sizeInfo.gridWidth === 2 && gridCol !== 0) { gridRow++; gridCol = 0; }
+      sections[secId] = {
+        id: secId,
+        type: def.type,
+        title: def.title,
+        guidedPrompt: def.guidedPrompt,
+        rawInput: '',
+        aiVersion: null,
+        finalContent: '',
+        usedAI: false,
+        images: [],
+        order: idx,
+        included: true,
+        cardSize: sizeInfo.cardSize,
+        gridWidth: sizeInfo.gridWidth,
+        gridCol: gridCol,
+        gridRow: gridRow
+      };
+      gridCol += sizeInfo.gridWidth;
+      if (gridCol >= 2) { gridCol = 0; gridRow++; }
+    });
+    return sections;
+  }
+
   // ===== CREATE NEW ISSUE =====
   async function nlCreateIssue() {
     try {
@@ -192,34 +225,7 @@
         updatedAt: new Date().toISOString()
       };
 
-      var sections = {};
-      var gridCol = 0, gridRow = 0;
-      NL_DEFAULT_SECTIONS.forEach(function(def, idx) {
-        var secId = MastDB.newKey('_ids');
-        var sizeInfo = NL_CARD_SIZE_MAP[def.type] || NL_CARD_SIZE_MAP['custom'];
-        if (sizeInfo.gridWidth === 2 && gridCol !== 0) { gridRow++; gridCol = 0; }
-        sections[secId] = {
-          id: secId,
-          type: def.type,
-          title: def.title,
-          guidedPrompt: def.guidedPrompt,
-          rawInput: '',
-          aiVersion: null,
-          finalContent: '',
-          usedAI: false,
-          images: [],
-          order: idx,
-          included: true,
-          cardSize: sizeInfo.cardSize,
-          gridWidth: sizeInfo.gridWidth,
-          gridCol: gridCol,
-          gridRow: gridRow
-        };
-        gridCol += sizeInfo.gridWidth;
-        if (gridCol >= 2) { gridCol = 0; gridRow++; }
-      });
-
-      issueData.sections = sections;
+      issueData.sections = nlBuildDefaultSections();
       await MastDB.newsletter.issues.ref(issueId).set(issueData);
 
       nlIssues.unshift(issueData);
@@ -2291,6 +2297,52 @@
       await MastDB.newsletter.subscribers.ref(id).update(updates);
       if (sub) Object.assign(sub, updates);
       return id;
+    },
+    // Native issue create for newsletter-v2. Mirrors nlCreateIssue's record
+    // shape + default-section seeding (shared via nlBuildDefaultSections) so the
+    // legacy grid Composer opens a fully-formed draft. Composing + sending stay
+    // on the Composer; this only mints the draft record (number + title +
+    // subject + default sections). Title falls back to the legacy "Draft — MMM D"
+    // auto-name when blank.
+    createIssue: async function (data) {
+      data = data || {};
+      var counterRef = MastDB.newsletter.meta.issueCounter();
+      var result = await counterRef.transaction(function (current) { return (current || 0) + 1; });
+      var issueNumber = result.snapshot.val();
+      var issueId = MastDB.newsletter.issues.newKey();
+      var draftLabel = 'Draft — ' + new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      var issueData = {
+        id: issueId,
+        issueNumber: issueNumber,
+        title: (data.title || '').trim() || draftLabel,
+        slug: '',
+        status: 'draft',
+        sentAt: null,
+        publishedAt: null,
+        sentSubscriberCount: null,
+        subjectLine: (data.subjectLine || '').trim(),
+        audienceSegmentId: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sections: nlBuildDefaultSections()
+      };
+      await MastDB.newsletter.issues.ref(issueId).set(issueData);
+      if (typeof nlIssues !== 'undefined' && Array.isArray(nlIssues)) nlIssues.unshift(issueData);
+      return issueId;
+    },
+    // Light edit for a DRAFT issue (title / subject line). The grid Composer
+    // owns sections + send; callers gate on status==='draft'.
+    updateIssue: async function (id, data) {
+      data = data || {};
+      var updates = { updatedAt: new Date().toISOString() };
+      if (typeof data.title === 'string') updates.title = data.title.trim();
+      if (typeof data.subjectLine === 'string') updates.subjectLine = data.subjectLine.trim();
+      await MastDB.newsletter.issues.ref(id).update(updates);
+      if (typeof nlIssues !== 'undefined' && Array.isArray(nlIssues)) {
+        var iss = nlIssues.find(function (x) { return x.id === id; });
+        if (iss) Object.assign(iss, updates);
+      }
+      return updates;
     },
     // Draft-issue deletion (marketing-v2 Wave 3). Sent/published issues are
     // the send HISTORY — they never delete; callers gate on status==='draft'.

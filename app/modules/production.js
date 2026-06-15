@@ -3442,6 +3442,37 @@ async function linkProductToBuild(jobId, lineItemId) {
   window.saveDraftStory = saveDraftStory;
   window.publishStory = publishStory;
   window.unpublishStory = unpublishStory;
+
+  // StoriesBridge — delegated write path for stories-v2's native create + light
+  // edit (free/trial tenants reach the twin without the curation canvas as their
+  // only authoring path). CREATE mints a DRAFT skeleton (title only); EDIT
+  // renames it. The photo-curation canvas (entries, captions, QR codes) +
+  // publish side effects stay on the Production module — that's the rich bridge,
+  // not a create punt. Mirrors saveDraftStory's record shape.
+  window.StoriesBridge = {
+    create: async function (data) {
+      data = data || {};
+      var storyId = MastDB.stories.newKey();
+      var story = {
+        title: (data.title || '').trim(),
+        status: 'draft',
+        jobId: data.jobId || null,
+        entries: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        publishedAt: null
+      };
+      await MastDB.stories.set(storyId, story);
+      return storyId;
+    },
+    update: async function (id, data) {
+      data = data || {};
+      var updates = { updatedAt: new Date().toISOString() };
+      if (typeof data.title === 'string') updates.title = data.title.trim();
+      await MastDB.stories.update(id, updates);
+      return updates;
+    }
+  };
   window.previewStoryFromCuration = previewStoryFromCuration;
   window.previewStory = previewStory;
   window.showStoryPreview = showStoryPreview;
