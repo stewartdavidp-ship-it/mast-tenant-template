@@ -14,11 +14,14 @@
  * MastFlow. Flag-gated (`?ui=1`) at #finance-expenses-v2, side-by-side with the
  * legacy #finance-expenses; never touches finance.js.
  *
- * Scope: the per-expense detail surface + per-expense review actions. The
- * list-level bulk-approve / multi-select and the date-period picker stay on the
- * legacy view (the engine list has no row-checkbox control yet). Writes go
- * directly through MastDB.expenses (the same accessor the legacy actions use),
- * plus the best-effort triggerQboPush on approve, mirroring finance.js.
+ * Scope: the per-expense detail surface + per-expense review actions, PLUS the
+ * list-level bulk actions (bulk approve / bulk mark-personal with multi-select +
+ * engine-owned select-all) and the connected-account filter — closing the V1-only
+ * parity gap (legacy finExpBulkApprove/finExpBulkPersonal + setFinExpFilter
+ * 'accountId'). Writes go directly through MastDB.expenses (the same accessor the
+ * legacy actions use), per-id writeAudit, plus the best-effort triggerQboPush on
+ * approve gated on source ∈ {plaid,manual}, mirroring finance.js. The engine's
+ * MastUI.list selectable primitive provides the row checkboxes + select-all.
  */
 (function () {
   'use strict';
@@ -33,6 +36,12 @@
   if (!flagOn()) return;
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
+
+  // RBAC: gate the bulk write actions on the canonical expenses route
+  // (`finance-expenses` lives in the `finance` SECTION_ROUTES section). Mirrors
+  // the local-wrapper idiom in the sibling finance v2 modules.
+  function can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
+  function canEdit() { return can('finance-expenses', 'edit'); }
 
   // Option lists mirror finance.js (FIN_EXP_CATEGORIES/BUSINESS_LINES).
   var CATEGORIES = [
@@ -156,7 +165,10 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'date', sortDir: 'desc', q: '' };
+  // accounts: plaidAccountId → { institution, mask } (account filter source +
+  // row hint), built once per load from MastDB.plaidItems (mirrors finance.js).
+  // sel: _id → true (bulk multi-select). accountId: active account filter.
+  var V2 = { rows: [], byId: {}, sortKey: 'date', sortDir: 'desc', q: '', sel: {}, accountId: '', accounts: {} };
 
   // Materialize the direct-read fields (title + status badge) + keep raw.
   function decorate(ex) {
@@ -165,16 +177,42 @@
     return ex;
   }
 
+  // Build the connected-account lookup (plaidAccountId → institution + mask)
+  // from MastDB.plaidItems, exactly as finance.js does for its Account filter +
+  // row hint. Best-effort: a failure here just hides the account filter.
+  function loadAccounts() {
+    return Promise.resolve(MastDB.plaidItems.list()).then(function (items) {
+      var lookup = {};
+      Object.keys(items || {}).forEach(function (k) {
+        var item = items[k];
+        if (item && item.accounts && item.accounts.forEach) {
+          item.accounts.forEach(function (acct) {
+            if (acct && acct.accountId) lookup[acct.accountId] = { institution: item.institutionName || 'Bank', mask: acct.mask || '????' };
+          });
+        }
+      });
+      V2.accounts = lookup;
+    }).catch(function () { V2.accounts = {}; });
+  }
+
   function load() {
-    // Simplest proven read on admin/expenses (verified on sgtest15): limit only,
-    // sort client-side. Excludes category 'personal' to match the legacy view.
-    Promise.resolve(MastDB.expenses.list({ limit: 500 })).then(function (snap) {
+    // Reset bulk selection on reload (mirrors finance.js loadFinExpenses).
+    V2.sel = {};
+    // Build the account lookup first (used by the filter dropdown + row hint),
+    // then the expense list. Simplest proven read on admin/expenses (verified on
+    // sgtest15): limit only, sort client-side. Excludes 'personal' (legacy parity).
+    loadAccounts().then(function () {
+      return MastDB.expenses.list({ limit: 500 });
+    }).then(function (snap) {
       var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
       var out = [];
       Object.keys(val || {}).forEach(function (k) {
         var ex = val[k]; if (ex && typeof ex === 'object' && ex.category !== 'personal') out.push(decorate(Object.assign({ _id: k }, ex)));
       });
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._id] = r; });
+      // Drop any selected ids that no longer exist; clear a stale account filter.
+      Object.keys(V2.sel).forEach(function (id) { if (!V2.byId[id]) delete V2.sel[id]; });
+      if (V2.accountId && !V2.accounts[V2.accountId]) V2.accountId = '';
       render();
     }).catch(function (e) { console.error('[finance-expenses-v2] load', e); render(); });
   }
@@ -186,6 +224,9 @@
         var d = String(r.date || '').slice(0, 10);
         return d >= V2.range.start && d <= V2.range.end;
       });
+    }
+    if (V2.accountId) {
+      rows = rows.filter(function (r) { return r.plaidAccountId === V2.accountId; });
     }
     if (V2.q) {
       var q = V2.q.toLowerCase();
@@ -221,6 +262,36 @@
       '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(label) + '</div></div>';
   }
 
+  // Connected-account filter <select> (mirrors finance.js setFinExpFilter
+  // 'accountId'). Only rendered when there's at least one connected account.
+  function accountFilter() {
+    var ids = Object.keys(V2.accounts);
+    if (!ids.length) return '';
+    var opts = '<option value="">All accounts</option>' + ids.map(function (acctId) {
+      var a = V2.accounts[acctId];
+      return '<option value="' + esc(acctId) + '"' + (V2.accountId === acctId ? ' selected' : '') + '>' +
+        esc(a.institution) + ' ••' + esc(a.mask) + '</option>';
+    }).join('');
+    return '<select class="form-input" onchange="FinExpV2.setAccount(this.value)" ' +
+      'style="max-width:240px;font-size:0.9rem;">' + opts + '</select>';
+  }
+
+  // Bulk action bar (mirrors finance.js finExpBulkApprove/finExpBulkPersonal):
+  // approve + mark-personal over the selected ids, disabled when none selected.
+  // RBAC-gated — render nothing for non-editors (per-record actions are gated
+  // the same way inside the slide-out). The select-all toggle is owned by the
+  // engine list header (MastUI.list selectable), so this bar is actions only.
+  function bulkBar(rows) {
+    if (!canEdit()) return '';
+    var n = rows.filter(function (r) { return V2.sel[r._id]; }).length;
+    var dis = n === 0 ? ' disabled' : '';
+    return '<div style="display:flex;gap:8px;align-items:center;margin:0 0 10px;flex-wrap:wrap;">' +
+      '<span style="font-size:0.85rem;color:var(--warm-gray);">' + (n ? (N.count(n) + ' selected') : 'Select rows for bulk actions') + '</span>' +
+      '<button class="btn btn-secondary btn-small" id="finExpV2BulkApprove" onclick="FinExpV2.bulkApprove()"' + dis + '>Approve' + (n ? ' (' + n + ')' : '') + '</button>' +
+      '<button class="btn btn-secondary btn-small" id="finExpV2BulkPersonal" onclick="FinExpV2.bulkPersonal()"' + dis + '>Mark personal</button>' +
+      '</div>';
+  }
+
   function render() {
     var tab = ensureTab();
     var rows = visibleRows();
@@ -242,11 +313,19 @@
         tile(N.money(s.total) || '$0.00', 'Total') + tile(N.count(s.count), 'Transactions') + tile(N.count(s.unreviewed), 'Need review') +
       '</div>' +
       '<div style="margin:0 0 10px;">' + periodPills + '</div>' +
-      '<div style="margin:14px 0;"><input class="form-input" placeholder="Search merchant, category, description…" value="' + esc(V2.q) +
-        '" oninput="FinExpV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
+      '<div style="display:flex;gap:10px;margin:14px 0;flex-wrap:wrap;align-items:center;">' +
+        '<input class="form-input" placeholder="Search merchant, category, description…" value="' + esc(V2.q) +
+          '" oninput="FinExpV2.search(this.value)" style="max-width:340px;font-size:0.9rem;">' +
+        accountFilter() +
+      '</div>' +
+      bulkBar(rows) +
       MastEntity.renderList('finance-expenses-v2', {
         rows: rows, sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'FinExpV2.sort', onRowClickFnName: 'FinExpV2.open',
+        // Bulk multi-select (editors only) — engine owns the row checkboxes +
+        // select-all header (MastUI.list selectable).
+        selectable: canEdit(), selectedIds: V2.sel,
+        onSelectFnName: 'FinExpV2.toggleRow', onSelectAllFnName: 'FinExpV2.toggleAll',
         empty: { title: 'No expenses', message: 'Expenses (excluding personal) will appear here.' }
       });
   }
@@ -265,6 +344,30 @@
 
   function afterWrite() { U.slideOut.requestCloseForce(); load(); }
 
+  // Selected ids that are still visible (legacy caps the batch at 100). Reads
+  // from V2.sel; intersects with the currently-visible rows so a filter change
+  // never bulk-mutates rows the operator can't see.
+  function selectedVisibleIds() {
+    return visibleRows().slice(0, 100).filter(function (r) { return V2.sel[r._id]; }).map(function (r) { return r._id; });
+  }
+
+  // Shared bulk writer: per-id MastDB.expenses.update + per-id writeAudit
+  // (matching the per-record V2 idiom) + an optional per-id post hook (e.g.
+  // qboPush, gated on source ∈ {plaid,manual}). The legacy view batches into a
+  // single MastDB.update('', updates) multi-path write; MastDB.expenses has no
+  // multi-path accessor here, so we fan out per-id (same accessor the per-record
+  // approve/personal already use) and await all before reloading.
+  function bulkWrite(ids, patch, perId) {
+    var now = new Date().toISOString();
+    return Promise.all(ids.map(function (id) {
+      var ex = V2.byId[id];
+      return Promise.resolve(MastDB.expenses.update(id, Object.assign({}, patch, { updatedAt: now }))).then(function () {
+        if (window.writeAudit) writeAudit('update', 'expense', id);
+        if (perId) perId(ex);
+      });
+    }));
+  }
+
   window.FinExpV2 = {
     // Wave 4: period window via the shared finance period resolver (no local
     // date math — FinanceBridge owns period semantics).
@@ -282,6 +385,62 @@
       render();
     },
     search: function (v) { V2.q = v || ''; render(); },
+    setAccount: function (v) { V2.accountId = v || ''; render(); },
+    // ── bulk multi-select ──────────────────────────────────────────────
+    toggleRow: function (id, checked) {
+      if (checked) V2.sel[id] = true; else delete V2.sel[id];
+      render();
+    },
+    toggleAll: function (checked) {
+      var vis = visibleRows();
+      if (checked) vis.forEach(function (r) { V2.sel[r._id] = true; });
+      else vis.forEach(function (r) { delete V2.sel[r._id]; });
+      render();
+    },
+    bulkApprove: function () {
+      if (!canEdit()) { if (window.showToast) showToast('Finance write access required.', true); return; }
+      var ids = selectedVisibleIds();
+      if (!ids.length) return;
+      var msg = 'Approve ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : '') + '?';
+      (typeof mastConfirm === 'function' ? mastConfirm(msg, { title: 'Approve expenses', confirmLabel: 'Approve' }) : Promise.resolve(true))
+        .then(function (ok) {
+          if (!ok) return;
+          var btn = document.getElementById('finExpV2BulkApprove');
+          if (btn) { btn.disabled = true; btn.textContent = 'Approving…'; }
+          // Per-id qboPush gated on source ∈ {plaid,manual} (mirrors finance.js).
+          bulkWrite(ids, { reviewed: true }, qboPush).then(function () {
+            V2.sel = {};
+            if (window.showToast) showToast('Approved ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : ''));
+            afterWrite();
+          }).catch(function (e) {
+            console.error('[finance-expenses-v2] bulk approve', e);
+            if (window.showToast) showToast('Approve failed', true);
+            if (btn) { btn.disabled = false; btn.textContent = 'Approve (' + ids.length + ')'; }
+          });
+        });
+    },
+    bulkPersonal: function () {
+      if (!canEdit()) { if (window.showToast) showToast('Finance write access required.', true); return; }
+      var ids = selectedVisibleIds();
+      if (!ids.length) return;
+      var msg = 'Mark ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : '') + ' as personal? They will be excluded from business reports.';
+      (typeof mastConfirm === 'function' ? mastConfirm(msg, { title: 'Mark as personal', confirmLabel: 'Mark personal' }) : Promise.resolve(true))
+        .then(function (ok) {
+          if (!ok) return;
+          var btn = document.getElementById('finExpV2BulkPersonal');
+          if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
+          // Legacy finExpBulkPersonal does NOT qboPush — neither do we (no perId).
+          bulkWrite(ids, { category: 'personal', categorySource: 'user', reviewed: true }).then(function () {
+            V2.sel = {};
+            if (window.showToast) showToast(ids.length + ' marked personal');
+            afterWrite();
+          }).catch(function (e) {
+            console.error('[finance-expenses-v2] bulk personal', e);
+            if (window.showToast) showToast('Failed', true);
+            if (btn) { btn.disabled = false; btn.textContent = 'Mark personal'; }
+          });
+        });
+    },
     open: function (id) {
       MastEntity.get('finance-expenses-v2').fetch(id).then(function (rec) {
         if (rec) MastEntity.openRecord('finance-expenses-v2', rec, 'read');
