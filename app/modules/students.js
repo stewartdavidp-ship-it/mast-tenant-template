@@ -1549,6 +1549,7 @@
       await MastDB.set('students/' + studentId + '/clearances', clearances);
       await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
       studentsLoaded = false;
+      if (window.writeAudit) writeAudit('create', 'student-clearance', studentId);
       return clearances;
     },
     removeClearance: async function (studentId, idx) {
@@ -1559,18 +1560,21 @@
       await MastDB.set('students/' + studentId + '/clearances', clearances);
       await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
       studentsLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'student-clearance', studentId);
       return clearances;
     },
     saveChecklistItem: async function (studentId, fieldKey, fields) {
       await MastDB.update('students/' + studentId + '/onboardingChecklist/' + fieldKey, fields);
       await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
       studentsLoaded = false;
+      if (window.writeAudit) writeAudit('update', 'student-checklist', studentId);
       return fields;
     },
     saveDocument: async function (studentId, docIdx, record) {
       var stu = (await MastDB.get('students/' + studentId)) || {};
       var docs = Array.isArray(stu.documents) ? stu.documents.slice() : [];
       var now = new Date().toISOString();
+      var isNew = !(docIdx != null && docs[docIdx]);
       if (docIdx != null && docs[docIdx]) {
         docs[docIdx] = Object.assign({}, docs[docIdx], record, { updatedAt: now });
       } else {
@@ -1579,6 +1583,7 @@
       await MastDB.set('students/' + studentId + '/documents', docs);
       await MastDB.set('students/' + studentId + '/updatedAt', now);
       studentsLoaded = false;
+      if (window.writeAudit) writeAudit(isNew ? 'create' : 'update', 'student-document', studentId);
       return docs;
     },
     removeDocument: async function (studentId, docIdx) {
@@ -1589,6 +1594,7 @@
       await MastDB.set('students/' + studentId + '/documents', docs);
       await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
       studentsLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'student-document', studentId);
       return docs;
     },
     // Clearance types are a tenant-level settings map (settings/clearanceTypes);
@@ -1597,11 +1603,13 @@
     saveClearanceType: async function (typeId, fields) {
       if (typeId) {
         await MastDB.update('settings/clearanceTypes/' + typeId, fields);
+        if (window.writeAudit) writeAudit('update', 'clearance-type', typeId);
         return Object.assign({ _key: typeId }, fields);
       }
       var key = MastDB.newKey('settings/clearanceTypes');
       fields.createdAt = new Date().toISOString();
       await MastDB.set('settings/clearanceTypes/' + key, fields);
+      if (window.writeAudit) writeAudit('create', 'clearance-type', key);
       return Object.assign({ _key: key }, fields);
     }
   };
