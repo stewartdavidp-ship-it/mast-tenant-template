@@ -2408,10 +2408,9 @@
       driveFileId: driveFields.driveFileId,
       driveFileName: driveFields.driveFileName,
       driveLastModified: driveFields.driveLastModified,
-      updatedAt: new Date().toISOString(),
     };
     try {
-      await MastDB.update('admin/employees/' + empId + '/complianceChecklist/' + fieldKey, fields);
+      await window.TeamBridge.saveCompliance(empId, fieldKey, fields);   // single-sourced write + audit (stamps updatedAt)
       showToast('Compliance item saved');
       document.getElementById('teamComplianceForm').style.display = 'none';
       teamLoaded = false;
@@ -2623,19 +2622,11 @@
       outcome: document.getElementById('refOutcome').value,
       checkedDate: document.getElementById('refCheckedDate').value || null,
       notes: document.getElementById('refNotes').value.trim() || null,
-      updatedAt: new Date().toISOString(),
     };
     try {
-      if (editingRefId) {
-        await MastDB.update('admin/employees/' + empId + '/references/' + editingRefId, fields);
-        showToast('Reference saved');
-      } else {
-        fields.createdAt = new Date().toISOString();
-        var refKey = MastDB.newKey('admin/employees/' + empId + '/references');
-        fields.referenceId = refKey;
-        await MastDB.set('admin/employees/' + empId + '/references/' + refKey, fields);
-        showToast('Reference created');
-      }
+      // Single-sourced write + audit (bridge mints refId/createdAt + stamps updatedAt on create).
+      await window.TeamBridge.addReference(empId, fields, editingRefId || null);
+      showToast(editingRefId ? 'Reference saved' : 'Reference created');
       editingRefId = null;
       teamLoaded = false;
       loadTeam();
@@ -2647,7 +2638,7 @@
   async function deleteReference(empId, refId) {
     if (!await mastConfirm('Delete this reference? This cannot be undone.', { title: 'Delete Reference', danger: true })) return;
     try {
-      await MastDB.remove('admin/employees/' + empId + '/references/' + refId);
+      await window.TeamBridge.removeReference(empId, refId);   // single-sourced write + audit
       showToast('Reference deleted');
       teamLoaded = false;
       loadTeam();
@@ -2850,16 +2841,9 @@
     var fields = collectDocFields();
     if (!fields.title) { showToast('Title is required', true); return; }
     try {
-      if (editingDocId) {
-        await MastDB.update('admin/employees/' + empId + '/documents/' + editingDocId, fields);
-        showToast('Document saved');
-      } else {
-        fields.createdAt = new Date().toISOString();
-        var docKey = MastDB.newKey('admin/employees/' + empId + '/documents');
-        fields.documentId = docKey;
-        await MastDB.set('admin/employees/' + empId + '/documents/' + docKey, fields);
-        showToast('Document created');
-      }
+      // Single-sourced write + audit (bridge mints docId/createdAt + stamps updatedAt on create).
+      await window.TeamBridge.addDocument(empId, fields, editingDocId || null);
+      showToast(editingDocId ? 'Document saved' : 'Document created');
       editingDocId = null;
       teamLoaded = false;
       loadTeam();
@@ -2883,7 +2867,7 @@
   async function deleteEmpDoc(empId, docId) {
     if (!await mastConfirm('Delete this document? This cannot be undone.', { title: 'Delete Document', danger: true })) return;
     try {
-      await MastDB.remove('admin/employees/' + empId + '/documents/' + docId);
+      await window.TeamBridge.removeDocument(empId, docId);   // single-sourced write + audit
       showToast('Document deleted');
       teamLoaded = false;
       loadTeam();
@@ -3111,13 +3095,92 @@
       await writeEmployee(id, fields, false);
       teamLoaded = false;
       return id;
+    },
+    // ── Per-employee HR sub-writes (close the V1-only gap in team-v2) ──────
+    // These make the EXACT writes the legacy renderEmployeeDetail handlers make
+    // (same paths + field shapes), parameterized by a data object so the team-v2
+    // twin's native compliance/document/reference editors stay single-sourced.
+    // Each audits (HR / I-9 / compliance data — auditable by design); legacy
+    // never audited these, so this is a safe additive hardening shared by both
+    // surfaces (the legacy handlers route through here). Mirrors StudentsBridge.
+
+    // Hard delete the employee record (admin/employees/{id}) and all nested
+    // collections (documents / references / complianceChecklist / hoursLog).
+    // The CALLER confirms (mastConfirm danger) — the bridge is the write only.
+    remove: async function (empId) {
+      await MastDB.remove('admin/employees/' + empId);
+      teamLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'employee', empId);
+      return true;
+    },
+    // Per-employee compliance checklist item (I-9 / W-4 / state-withholding /
+    // offer-letter / workers-comp): status + storage location + dates + link.
+    // Path: admin/employees/{id}/complianceChecklist/{fieldKey}. `fields` is the
+    // already-built write shape (the caller collects the form). updatedAt stamped.
+    saveCompliance: async function (empId, fieldKey, fields) {
+      var data = Object.assign({}, fields, { updatedAt: new Date().toISOString() });
+      await MastDB.update('admin/employees/' + empId + '/complianceChecklist/' + fieldKey, data);
+      teamLoaded = false;
+      if (window.writeAudit) writeAudit('update', 'employee-compliance', empId, { field: fieldKey });
+      return data;
+    },
+    // Per-employee document (metadata + link record — NO binary upload; the
+    // legacy form stores a link/Drive-metadata record, same as the tenant docs).
+    // id null/undefined → create (mint push key, stamp createdAt + documentId);
+    // else update in place. Path: admin/employees/{id}/documents/{docId}.
+    addDocument: async function (empId, fields, docId) {
+      var now = new Date().toISOString();
+      var data = Object.assign({}, fields, { updatedAt: now });
+      var isNew = !docId;
+      if (isNew) {
+        docId = MastDB.newKey('admin/employees/' + empId + '/documents');
+        data.createdAt = now;
+        data.documentId = docId;
+        await MastDB.set('admin/employees/' + empId + '/documents/' + docId, data);
+      } else {
+        await MastDB.update('admin/employees/' + empId + '/documents/' + docId, data);
+      }
+      teamLoaded = false;
+      if (window.writeAudit) writeAudit(isNew ? 'create' : 'update', 'employee-document', empId, { documentId: docId });
+      return Object.assign({ _key: docId }, data);
+    },
+    removeDocument: async function (empId, docId) {
+      await MastDB.remove('admin/employees/' + empId + '/documents/' + docId);
+      teamLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'employee-document', empId, { documentId: docId });
+      return true;
+    },
+    // Per-employee reference (name / phone / relationship / outcome / notes).
+    // id null/undefined → create (mint push key, stamp createdAt + referenceId);
+    // else update. Path: admin/employees/{id}/references/{refId}.
+    addReference: async function (empId, fields, refId) {
+      var now = new Date().toISOString();
+      var data = Object.assign({}, fields, { updatedAt: now });
+      var isNew = !refId;
+      if (isNew) {
+        refId = MastDB.newKey('admin/employees/' + empId + '/references');
+        data.createdAt = now;
+        data.referenceId = refId;
+        await MastDB.set('admin/employees/' + empId + '/references/' + refId, data);
+      } else {
+        await MastDB.update('admin/employees/' + empId + '/references/' + refId, data);
+      }
+      teamLoaded = false;
+      if (window.writeAudit) writeAudit(isNew ? 'create' : 'update', 'employee-reference', empId, { referenceId: refId });
+      return Object.assign({ _key: refId }, data);
+    },
+    removeReference: async function (empId, refId) {
+      await MastDB.remove('admin/employees/' + empId + '/references/' + refId);
+      teamLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'employee-reference', empId, { referenceId: refId });
+      return true;
     }
   };
 
   async function deleteEmployee(empId) {
     if (!await mastConfirm('Delete this employee and all their data? This cannot be undone.', { title: 'Delete Employee', danger: true })) return;
     try {
-      await MastDB.remove('admin/employees/' + empId);
+      await window.TeamBridge.remove(empId);   // single-sourced write + audit
       showToast('Employee deleted');
       editingEmployeeId = null;
       selectedEmployeeId = null;
