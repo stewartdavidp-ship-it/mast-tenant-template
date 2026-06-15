@@ -57,6 +57,14 @@
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
 
+  // RBAC: the membership surface gates on its own (legacy) route id 'membership'
+  // (cs-members-v2 twin precedent — can('membership', axis) resolves through the
+  // retention section triad). edit → grant / reactivate / program-config save;
+  // delete → revoke (destructive). The shared MembershipBridge (cart.js) stays
+  // ungated — the cs-members twin gates the same writes on its own 'cs-members'
+  // route, so each twin owns its gate.
+  function canM(axis) { return (typeof window.can === 'function') ? window.can('membership', axis) : true; }
+
   // Status vocabulary mirrors cart.js (active / cancelled / expired — there is no
   // 'paused' state in the real membership data).
   var STATUS_LABEL = { active: 'Active', cancelled: 'Cancelled', expired: 'Expired' };
@@ -134,14 +142,19 @@
         // Mirror legacy renderMembershipAdmin per status: active → Revoke;
         // expired/cancelled → Reactivate. Each delegates to the existing client
         // write via the bridge (cs-reviews-v2 precedent). No CF involved.
+        // RBAC (cs-members-v2 twin precedent): hide the levers a role can't use —
+        // Revoke requires delete (destructive), Reactivate requires edit. View-only
+        // roles see no action button.
         var uid = esc(String(m._uid || ''));
         var actBtns = [];
         if (statusOf(m) === 'active') {
-          actBtns.push('<button class="btn btn-danger btn-small" onclick="MembershipV2.revoke(\'' + uid + '\')">Revoke</button>');
+          if (canM('delete')) actBtns.push('<button class="btn btn-danger btn-small" onclick="MembershipV2.revoke(\'' + uid + '\')">Revoke</button>');
         } else {
-          actBtns.push('<button class="btn btn-primary btn-small" onclick="MembershipV2.reactivate(\'' + uid + '\')">Reactivate</button>');
+          if (canM('edit')) actBtns.push('<button class="btn btn-primary btn-small" onclick="MembershipV2.reactivate(\'' + uid + '\')">Reactivate</button>');
         }
-        var actions = '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + actBtns.join('') + '</div>';
+        var actions = actBtns.length
+          ? '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + actBtns.join('') + '</div>'
+          : '<span class="mu-sub">View-only access.</span>';
 
         return tiles +
           UI.card('Actions', actions) +
@@ -221,6 +234,7 @@
       }
     },
     onSave: function () {
+      if (!canM('edit')) { if (window.showToast) showToast('Membership write access required.', true); return false; }
       if (!window.MembershipBridge) { if (window.showToast) showToast('Membership engine still loading — try again', true); return false; }
       // Collect the form, hand the raw values to the bridge (it owns the exact
       // build + validation + write + audit, identical to legacy _membershipSaveConfig).
@@ -315,13 +329,20 @@
       { k: 'Program', v: esc(c.programName || 'Membership') },
       { k: 'Annual price', v: price }
     ];
+    var body = rows.map(function (r) {
+      return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--text-primary);text-align:right;">' + r.v + '</span></div>';
+    }).join('');
+    var enabledBadge = U.badge(c.enabled ? 'Enabled' : 'Disabled', c.enabled ? 'success' : 'neutral');
+    // Editing the program config is a write — gate the click-to-edit on edit
+    // (cs-members-v2 twin precedent). View-only roles see a plain read card.
+    if (!canM('edit')) {
+      return U.card('Program settings', body, { headerRight: enabledBadge });
+    }
     return U.launchCard({
       title: 'Program settings',
-      body: rows.map(function (r) {
-        return '<div class="mu-sub" style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(r.k) + '</span><span style="color:var(--text-primary);text-align:right;">' + r.v + '</span></div>';
-      }).join(''),
+      body: body,
       onClickFnName: 'MembershipV2.settings', arrow: 'Edit →',
-      headerRight: U.badge(c.enabled ? 'Enabled' : 'Disabled', c.enabled ? 'success' : 'neutral')
+      headerRight: enabledBadge
     });
   }
 
@@ -338,7 +359,8 @@
       U.pageHeader({
         title: 'Membership',
         count: N.count(V2.rows.length) + ' member' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-primary" onclick="MembershipV2.grant()">+ Grant</button>' +
+        // Grant is a write — gate the affordance on edit (cs-members-v2 twin precedent).
+        actionsHtml: (canM('edit') ? '<button class="btn btn-primary" onclick="MembershipV2.grant()">+ Grant</button>' : '') +
           '<button class="btn btn-secondary" onclick="MembershipV2.exportCsv()">&darr; Export</button>'
       }) +
       '<div style="margin:12px 0;">' + settingsCard() + '</div>' +
@@ -357,6 +379,12 @@
   // can't fire two writes (cs-reviews-v2 moderate() precedent).
   function act(action, uid) {
     if (V2.busy) return Promise.resolve();
+    // Single write funnel → final RBAC backstop (revoke is destructive = delete;
+    // grant/reactivate = edit). The shared MembershipBridge is intentionally left
+    // ungated (the cs-members twin gates the same writes on its own 'cs-members'
+    // route), so the gate lives here on the 'membership' route.
+    var axis = (action === 'revoke') ? 'delete' : 'edit';
+    if (!canM(axis)) { if (window.showToast) showToast('Membership ' + (axis === 'delete' ? 'delete' : 'write') + ' access required.', true); return Promise.resolve(); }
     var bridge = window.MembershipBridge;
     if (!bridge || typeof bridge[action] !== 'function') {
       if (window.showToast) showToast('Membership action unavailable', true);
@@ -398,6 +426,7 @@
     },
     // Program config object → straight to edit (the page already IS the read view).
     settings: function () {
+      if (!canM('edit')) { if (window.showToast) showToast('Membership write access required.', true); return; }
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('cart'); } catch (e) {} }
       Promise.resolve((window.MembershipBridge && MembershipBridge.getConfig) ? MembershipBridge.getConfig() : MastDB.get('admin/membership/config'))
         .then(function (c) {
@@ -412,6 +441,7 @@
     // legacy grant modal's lone UID input) → MembershipBridge.grant.
     // Standards-clean: mastPrompt, never the native window dialog.
     grant: function () {
+      if (!canM('edit')) { if (window.showToast) showToast('Membership write access required.', true); return; }
       if (typeof mastPrompt !== 'function') { if (window.showToast) showToast('Grant unavailable', true); return; }
       mastPrompt('Enter the customer UID to grant a membership. Find it in Contacts or the Firebase Auth console.', {
         title: 'Grant Membership', placeholder: 'Firebase UID', confirmLabel: 'Grant'
@@ -422,13 +452,18 @@
       });
     },
     revoke: function (uid) {
+      // Destructive → delete axis (cs-members-v2 twin precedent).
+      if (!canM('delete')) { if (window.showToast) showToast('Membership delete access required.', true); return; }
       return Promise.resolve(
         (typeof mastConfirm === 'function')
           ? mastConfirm('Revoke this membership? The customer will lose all benefits immediately.', { title: 'Revoke Membership', danger: true })
           : true
       ).then(function (ok) { if (ok) return act('revoke', uid); });
     },
-    reactivate: function (uid) { return act('reactivate', uid); },
+    reactivate: function (uid) {
+      if (!canM('edit')) { if (window.showToast) showToast('Membership write access required.', true); return; }
+      return act('reactivate', uid);
+    },
     exportCsv: function () { return MastEntity.exportRows('membership-v2', visibleRows(), 'all'); }
   };
 
