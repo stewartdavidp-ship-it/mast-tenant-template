@@ -2349,6 +2349,98 @@
     removeIssue: async function (id) {
       await MastDB.remove('newsletter/issues/' + id);
       return true;
+    },
+
+    // ── Native composer write layer (V1-editor-elimination program) ──
+    // Single-sources every section/grid/publish write so the native V2 composer
+    // (newsletter-v2) never writes MastDB directly. Section rich-text (finalContent)
+    // is ALWAYS sanitized here via MastUI.sanitizeHtml before it lands — because
+    // both the email builder (nlComposeIssueHtml) and the public web copy
+    // (nlPublishToWebsite) inject section content RAW. The V2 twin gates these on
+    // the newsletter edit permission before calling.
+    _san: function (h) {
+      if (window.MastUI && typeof MastUI.sanitizeHtml === 'function') return MastUI.sanitizeHtml(h);
+      return String(h == null ? '' : h).replace(/[<>]/g, function (c) { return c === '<' ? '&lt;' : '&gt;'; });
+    },
+    // Add a section (mirrors nlAddSection's record shape). Caller supplies the
+    // next order; grid coordinates start at 0,0 and the caller re-packs + persists
+    // layout via reorderSections. Returns the new section object.
+    addSection: async function (issueId, type, order) {
+      type = type || 'custom';
+      var secId = MastDB.newKey('_ids');
+      var sizeInfo = (typeof NL_CARD_SIZE_MAP !== 'undefined' && (NL_CARD_SIZE_MAP[type] || NL_CARD_SIZE_MAP.custom)) || { cardSize: 'medium', gridWidth: 1 };
+      var sec = {
+        id: secId, type: type, title: type === 'coupon' ? 'Special Offer' : 'New Section', guidedPrompt: '',
+        rawInput: '', aiVersion: null, finalContent: '', usedAI: false,
+        images: [], order: (typeof order === 'number' ? order : 0), included: true,
+        cardSize: sizeInfo.cardSize, gridWidth: sizeInfo.gridWidth, gridCol: 0, gridRow: 0, couponCode: null
+      };
+      await MastDB.newsletter.issues.section(issueId, secId).set(sec);
+      return sec;
+    },
+    // Update section fields. finalContent is sanitized; title stays raw (escaped
+    // at render via nlEscHtml). Only provided keys are written.
+    updateSection: async function (issueId, secId, patch) {
+      patch = patch || {};
+      var updates = {};
+      if (typeof patch.title === 'string') updates.title = patch.title;
+      if (typeof patch.finalContent === 'string') updates.finalContent = this._san(patch.finalContent);
+      if (typeof patch.rawInput === 'string') updates.rawInput = patch.rawInput;
+      if (typeof patch.included === 'boolean') updates.included = patch.included;
+      if (typeof patch.cardSize === 'string') updates.cardSize = patch.cardSize;
+      if (typeof patch.gridWidth === 'number') updates.gridWidth = patch.gridWidth;
+      if (Array.isArray(patch.images)) updates.images = patch.images;
+      if ('couponCode' in patch) updates.couponCode = patch.couponCode || null;
+      if (typeof patch.usedAI === 'boolean') updates.usedAI = patch.usedAI;
+      await MastDB.newsletter.issues.section(issueId, secId).update(updates);
+      return updates;
+    },
+    // Delete a section + persist the re-packed layout for the survivors.
+    // remaining = [{ id, order, gridCol, gridRow }, ...] (caller re-packs).
+    deleteSection: async function (issueId, secId, remaining) {
+      var fb = {};
+      fb['newsletter/issues/' + issueId + '/sections/' + secId] = null;
+      (remaining || []).forEach(function (s) {
+        var p = 'newsletter/issues/' + issueId + '/sections/' + s.id + '/';
+        fb[p + 'order'] = s.order; fb[p + 'gridCol'] = s.gridCol; fb[p + 'gridRow'] = s.gridRow;
+      });
+      await MastDB.multiUpdate(fb);
+      return true;
+    },
+    // Persist a re-packed grid order. updates = [{ id, order, gridCol, gridRow }].
+    reorderSections: async function (issueId, updates) {
+      var fb = {};
+      (updates || []).forEach(function (s) {
+        var p = 'newsletter/issues/' + issueId + '/sections/' + s.id + '/';
+        fb[p + 'order'] = s.order; fb[p + 'gridCol'] = s.gridCol; fb[p + 'gridRow'] = s.gridRow;
+      });
+      if (Object.keys(fb).length) await MastDB.multiUpdate(fb);
+      return true;
+    },
+    setAudienceSegment: async function (issueId, segmentId) {
+      await MastDB.newsletter.issues.ref(issueId).update({ segmentId: segmentId || null, updatedAt: new Date().toISOString() });
+      return true;
+    },
+    setAbTest: async function (issueId, ab) {
+      await MastDB.newsletter.issues.ref(issueId).update({ abTest: ab || null, updatedAt: new Date().toISOString() });
+      return true;
+    },
+    // Publish to the public web (mirrors nlPublishToWebsite). Section content is
+    // re-sanitized on the way out (defense-in-depth alongside updateSection).
+    publishToWebsite: async function (issue) {
+      issue = issue || {};
+      var self = this;
+      var sections = issue.sections ? Object.values(issue.sections)
+        .filter(function (s) { return s.included && (s.finalContent || s.rawInput); })
+        .sort(function (a, b) { return (a.order || 0) - (b.order || 0); })
+        .map(function (s) { return { title: s.title, content: self._san(s.finalContent || s.rawInput), images: s.images || [], cardSize: s.cardSize || 'medium', gridWidth: s.gridWidth || 1 }; }) : [];
+      var publishedAt = new Date().toISOString();
+      await MastDB.newsletter.published.ref(issue.id).set({
+        issueNumber: issue.issueNumber, title: issue.title, subjectLine: issue.subjectLine || '',
+        slug: issue.slug, publishedAt: publishedAt, sections: sections
+      });
+      await MastDB.newsletter.issues.ref(issue.id).update({ status: 'published', publishedAt: publishedAt, updatedAt: publishedAt });
+      return { publishedAt: publishedAt, sectionCount: sections.length };
     }
   };
 
