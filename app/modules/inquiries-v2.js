@@ -18,11 +18,14 @@
  * badge. So → Faceted Record, NOT Process/MastFlow.
  *
  * Reply (native): the Overview's Respond card hosts an inline email composer
- * (To / Subject / Message + validation). Send calls the sendInquiryResponse Cloud
- * Function (which emails the customer), and ONLY on a resolved send does it flip
- * `inquiries/{id}.status` → 'responded' + stamp respondedAt, mirror the reply onto
- * the contact timeline (best-effort), then re-open the slide-out fresh. A thrown
- * CF error (email failed) leaves status untouched and re-enables the button so the
+ * (To / Subject / Message + validation). Send DELEGATES to the canonical core
+ * ContactsBridge.respondToInquiry (respondToInquiryCore in contacts.js) — the
+ * same path contacts-v2 uses — which calls the sendInquiryResponse Cloud Function
+ * (emails the customer) and ONLY on a resolved send flips `inquiries/{id}.status`
+ * → 'responded' + stamps respondedAt, mirrors the reply onto the contact timeline,
+ * audits, and invalidates the contacts cache. On success this twin re-opens the
+ * slide-out fresh and refreshes the dashboard new-inquiries card. A thrown CF
+ * error (email failed) leaves status untouched and re-enables the button so the
  * operator can retry — the status never gets ahead of an email that didn't go out.
  * This replaces the old read-only "manage in classic view" escape hatch
  * (navigateToClassic) — the twin is now self-sufficient. Status stays a read-only
@@ -194,6 +197,24 @@
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'createdAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false, busy: false };
 
+  // The inquiry-reply flow (CF email → status flip → interaction log → cache
+  // invalidation → audit) is the canonical core respondToInquiryCore in
+  // contacts.js, exposed as window.ContactsBridge.respondToInquiry. We delegate
+  // to it (same as contacts-v2) instead of re-implementing the flow inline, so
+  // the contacts-cache invalidation and the shared payload/status logic stay in
+  // one place. Load the legacy contacts module first if the bridge isn't up yet.
+  function withBridge(fn) {
+    if (window.ContactsBridge && window.ContactsBridge.respondToInquiry) return fn(window.ContactsBridge);
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      MastAdmin.loadModule('contacts').then(function () {
+        if (window.ContactsBridge && window.ContactsBridge.respondToInquiry) fn(window.ContactsBridge);
+        else if (window.showToast) showToast('Contacts engine still loading — try again', true);
+      }).catch(function () { if (window.showToast) showToast('Contacts engine unavailable', true); });
+    } else if (window.showToast) {
+      showToast('Contacts engine unavailable', true);
+    }
+  }
+
   function load() {
     // One-shot keyed-object read of the public `inquiries` collection (no listener).
     Promise.resolve(MastDB.get('inquiries')).then(function (val) {
@@ -287,8 +308,12 @@
       var c = document.getElementById('inqV2Composer'); if (c) c.style.display = 'none';
       var b = document.getElementById('inqV2ReplyBtn'); if (b) b.style.display = '';
     },
-    // Native reply: email the customer via the sendInquiryResponse CF, then — and
-    // only on a resolved send — flip status → 'responded' + stamp respondedAt.
+    // Native reply: delegate to the canonical ContactsBridge.respondToInquiry
+    // core (CF email → status flip → interaction log → contacts-cache
+    // invalidation → audit). Status is flipped only AFTER the CF resolves, so a
+    // send failure leaves status untouched. We keep the composer UI, RBAC gate,
+    // double-send guard, and pre-send validation here; the flow logic lives once
+    // in contacts.js.
     send: function (id) {
       if (V2.busy) return;
       if (!canRespond()) { if (window.showToast) showToast('You do not have permission to respond to inquiries.', true); return; }
@@ -306,62 +331,45 @@
       function setBtn(disabled, label) { if (sendBtn) { sendBtn.disabled = disabled; sendBtn.textContent = label; } }
       V2.busy = true; setBtn(true, 'Sending…');
 
-      // Preserve operator line breaks (the CF wraps `body` in a branded HTML layout).
-      var bodyHtml = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-      var now = new Date().toISOString();
-
-      // 1) Email the customer. Everything below is gated on this resolving — a
-      //    thrown CF error (send failed) skips the status flip so the record never
-      //    gets ahead of an email that didn't go out.
-      Promise.resolve(firebase.functions().httpsCallable('sendInquiryResponse')({
-        tenantId: (window.MastDB && MastDB.tenantId) ? MastDB.tenantId() : (window.TENANT_ID || ''),
-        contactId: rec.contactId || '',
-        inquiryId: id,
-        subject: subject,
-        body: bodyHtml,
-        toEmail: toEmail
-      })).then(function (result) {
-        var data = (result && result.data) || {};
-        // 2) Email is out (or intentionally skipped by tenant trigger config) →
-        //    flip status + stamp respondedAt.
-        return Promise.resolve(MastDB.set('inquiries/' + id + '/status', 'responded'))
-          .then(function () { return MastDB.set('inquiries/' + id + '/respondedAt', now); })
-          .then(function () {
-            // 3) Best-effort: mirror the reply onto the contact timeline (parity with
-            //    legacy). A timeline-write failure must not undo a sent reply.
-            if (rec.contactId && window.MastDB && MastDB.contacts && MastDB.contacts.setInteraction) {
-              var iid = 'int_' + Date.now().toString(36);
-              return Promise.resolve(MastDB.contacts.setInteraction(rec.contactId, iid, {
-                id: iid, date: now.slice(0, 10), type: 'Email',
-                notes: subject + ': ' + body.substring(0, 500), documents: [],
-                loggedBy: (window.currentUser && currentUser.uid) || 'unknown', createdAt: now
-              })).catch(function (e) { console.warn('[inquiries-v2] interaction log skipped', e); });
-            }
-          })
-          .then(function () {
-            if (window.writeAudit) { try { writeAudit('update', 'inquiry', id); } catch (e) {} }
-            if (window.showToast) showToast(data.skipped === 'email_trigger_disabled'
-              ? 'Inquiry-response emails are off in settings — marked responded (no email sent).'
-              : 'Response sent to ' + toEmail);
-            // reflect locally + re-open fresh + refresh the list badge/sort
-            rec.status = 'responded'; rec.respondedAt = now; V2.byId[id] = rec;
-            V2.busy = false;
-            MastEntity.openRecord('inquiries-v2', rec, 'read');
-            load();
-          })
-          .catch(function (e) {
-            // Email went out but local bookkeeping failed — tell the truth (don't
-            // claim a send failure) and re-enable so the operator can reconcile.
-            V2.busy = false; setBtn(false, 'Send response');
-            console.error('[inquiries-v2] post-send write', e);
-            if (window.showToast) showToast('Response sent, but updating the record failed: ' + ((e && e.message) || e), true);
-          });
-      }).catch(function (e) {
-        // Email send FAILED → status untouched. Re-enable for a retry.
-        V2.busy = false; setBtn(false, 'Send response');
-        console.error('[inquiries-v2] send', e);
-        if (window.showToast) showToast('Failed to send: ' + ((e && e.message) || e), true);
+      withBridge(function (b) {
+        // The core sends the email FIRST and only flips inquiries/{id}.status →
+        // 'responded' (+ respondedAt), logs the contact interaction, audits, and
+        // invalidates the contacts cache once the CF resolves. It throws on send
+        // failure WITHOUT touching status, so we inherit the "never get ahead of
+        // an email that didn't go out" guarantee.
+        Promise.resolve(b.respondToInquiry(rec.contactId || '', {
+          subject: subject,
+          body: body,
+          toEmail: toEmail,
+          inquiryId: id
+        })).then(function (data) {
+          data = data || {};
+          if (window.showToast) showToast(data.skipped === 'email_trigger_disabled'
+            ? 'Inquiry-response emails are off in settings — marked responded (no email sent).'
+            : 'Response sent to ' + toEmail);
+          // reflect locally + re-open fresh + refresh the list badge/sort
+          rec.status = 'responded'; rec.respondedAt = new Date().toISOString(); V2.byId[id] = rec;
+          V2.busy = false;
+          MastEntity.openRecord('inquiries-v2', rec, 'read');
+          load();
+          // Keep the dashboard "new inquiries" card in sync (the core invalidates
+          // the contacts cache for the timeline; the dash card is a caller concern).
+          if (typeof renderDashCardNewInquiries === 'function') { try { renderDashCardNewInquiries(); } catch (e) {} }
+        }).catch(function (e) {
+          // Send failed (or post-send bookkeeping) → status untouched by the core.
+          // Re-enable for a retry.
+          V2.busy = false; setBtn(false, 'Send response');
+          console.error('[inquiries-v2] send', e);
+          if (window.showToast) showToast('Failed to send: ' + ((e && e.message) || e), true);
+        });
       });
+      // If the bridge can't load, withBridge toasts but the button stays disabled;
+      // a watchdog re-enables so the operator isn't stranded.
+      setTimeout(function () {
+        if (V2.busy && !(window.ContactsBridge && window.ContactsBridge.respondToInquiry)) {
+          V2.busy = false; setBtn(false, 'Send response');
+        }
+      }, 8000);
     },
     exportCsv: function () { return MastEntity.exportRows('inquiries-v2', visibleRows(), 'all'); }
   };

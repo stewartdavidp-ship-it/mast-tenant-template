@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **60,866** lines
-- **Feature modules:** **119** files in `app/modules/` (**110** routed), **129,306** lines combined
+- **Core shell:** `app/index.html` — **60,860** lines
+- **Feature modules:** **119** files in `app/modules/` (**110** routed), **129,324** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -37,7 +37,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/consignment.js` | 2,190 | galleries |
 | `modules/consignments-v2.js` | 289 | consignments-v2 |
 | `modules/contacts-v2.js` | 545 | contacts-v2 |
-| `modules/contacts.js` | 1,723 | contacts |
+| `modules/contacts.js` | 1,733 | contacts |
 | `modules/coupons-v2.js` | 493 | coupons-v2 |
 | `modules/cs-faqs-v2.js` | 334 | cs-faqs-v2 |
 | `modules/cs-members-v2.js` | 548 | cs-members-v2 |
@@ -68,7 +68,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
 | `modules/homepage-v2.js` | 351 | homepage-v2 |
 | `modules/homepage.js` | 718 | homepage |
-| `modules/inquiries-v2.js` | 372 | inquiries-v2 |
+| `modules/inquiries-v2.js` | 380 | inquiries-v2 |
 | `modules/instructors-v2.js` | 416 | instructors-v2 |
 | `modules/jobs-v2.js` | 987 | jobs-v2 |
 | `modules/lookbooks-v2.js` | 333 | lookbooks-v2 |
