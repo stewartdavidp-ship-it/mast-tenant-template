@@ -2164,7 +2164,20 @@
     var imgs = Array.isArray(post.inlineImages) ? post.inlineImages
       : (post.inlineImages ? Object.keys(post.inlineImages).map(function (k) { return post.inlineImages[k]; }) : []);
     var bodyHtml = blogRenderBodyToHtml(post.body || '', imgs);
-    var author = BLOG_AUTHORS[post.author] || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: post.author || 'Author', photoUrl: '', bio: '' };
+    // Resolve the author DISPLAY NAME — never leak a raw uid into the public doc.
+    // Seed the roster (idempotent) so the current-user + brand authors resolve even
+    // when publishing outside the #blog route (the V2 editor entry); for an unseeded
+    // admin uid, look up the shared profile. The legacy Builder got the name only
+    // because loadBlog had populated BLOG_AUTHORS — this makes it self-sufficient.
+    try { loadBlogAuthors(); } catch (e) {}
+    var author = BLOG_AUTHORS[post.author];
+    if (!author && post.author && /^[A-Za-z0-9]{20,}$/.test(post.author) && typeof window.getUserProfile === 'function') {
+      try {
+        var prof = await window.getUserProfile(post.author);
+        if (prof) author = { name: prof.displayName || post.author, photoUrl: prof.photoUrl || '', bio: prof.bio || '' };
+      } catch (e) {}
+    }
+    author = author || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: post.author || 'Author', photoUrl: '', bio: '' };
     var slug = (post.title || 'untitled').toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 80);
     var publishedAt = new Date().toISOString();
