@@ -1793,7 +1793,10 @@
     }
 
     var amountCents = Math.round(amountDollars * 100);
-    var settlementId = MastDB.consignments.newKey();
+    // Generated once per confirm action and reused on retry: the CF treats this
+    // as the idempotency key so a double-submit collapses to ONE settlement.
+    // The authoritative settlementId is minted server-side.
+    var idempotencyKey = MastDB.consignments.newKey();
     var receivedAtIso = receivedDate + 'T12:00:00.000Z';
     var now = new Date().toISOString();
 
@@ -1805,62 +1808,49 @@
     }, 0);
     var expectedAmountCents = Math.max(0, totals.makerEarnings - totalPreviouslySettledCents);
 
-    // Outstanding-earnings ceiling. The authoritative cap is server-enforced in the
-    // recordTenantRevenue Cloud Function (so a client bypass can't over-accrue), but
-    // we mirror it here for immediate UX: an operator must not be able to queue a
-    // payout larger than what the placement still owes, which would inflate
-    // cash-basis 'consignment' revenue (and downstream tier/auto-upgrade logic).
-    // makerEarnings can be fractional cents (commission split), so round the ceiling
-    // and allow a 1-cent tolerance for the prefilled full-payout case.
+    // Outstanding-earnings ceiling — fast UX pre-check ONLY. The authoritative
+    // cap (and the settlement write + revenue accrual) is server-enforced
+    // atomically in the recordConsignmentSettlement Cloud Function, so a client
+    // bypass can't over-accrue cash-basis 'consignment' revenue (which would skew
+    // tier/auto-upgrade logic). makerEarnings can be fractional cents (commission
+    // split), so round and allow a 1-cent tolerance for the prefilled full-payout.
     var ceilingCents = Math.round(expectedAmountCents);
     if (amountCents > ceilingCents + 1) {
       showToast('Payout exceeds outstanding earnings (' + formatCurrency(ceilingCents) + ')', 'error');
       return;
     }
 
-    var settlementRecord = {
-      settlementId: settlementId,
-      date: receivedDate,
-      amountReceivedCents: amountCents,
-      expectedAmountCents: expectedAmountCents,
-      method: null,
-      referenceNumber: null,
-      notes: notes || null,
-      createdAt: now,
-      createdBy: (window.currentUser && window.currentUser.uid) || 'admin'
-    };
-
     try {
-      await MastDB.consignments.setField(placementId, 'settlements/' + settlementId, settlementRecord);
-
-      var newTotalSettledCents = totalPreviouslySettledCents + amountCents;
-      await MastDB.consignments.update(placementId, {
-        totalSettled: newTotalSettledCents,
-        lastSettlementDate: receivedDate,
-        updatedAt: now
+      // Single authoritative call: the CF recomputes the cap server-side, mints
+      // the settlementId, and writes the settlement + admin_monthlyRevenue accrual
+      // in one transaction (no more best-effort revenue ping that could drift).
+      var resp = await firebase.functions().httpsCallable('recordConsignmentSettlement')({
+        tenantId: (MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
+        placementId: placementId,
+        idempotencyKey: idempotencyKey,
+        amountReceivedCents: amountCents,
+        receivedAt: receivedAtIso,
+        date: receivedDate,
+        notes: notes || null
       });
+      var result = (resp && resp.data) || {};
+      var newSettlementId = result.settlementId || idempotencyKey;
 
-      // Audit the settlement create (mirrors the manual-sale path in sales.js,
-      // which audits writeAudit('create','sales',saleId)). Non-blocking.
-      if (window.writeAudit) {
-        try { await writeAudit('create', 'consignment-settlement', settlementId); } catch (e) {}
-      }
-
-      try {
-        await firebase.functions().httpsCallable('recordTenantRevenue')({
-          tenantId: (MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
-          channelKey: 'consignment',
-          sourceId: placementId + ':' + settlementId,
-          receivedAt: receivedAtIso,
-          grossCents: amountCents,
-          salesTaxCents: 0,
-          shippingCents: 0,
-          processorFeesCents: 0,
-          marketplaceFeesCents: 0,
-          refundsCents: 0
-        });
-      } catch (revErr) {
-        console.warn('Consignment payout accumulator write failed (non-fatal):', revErr && revErr.message ? revErr.message : revErr);
+      // Optimistically reflect the new settlement locally so the detail re-render
+      // shows it immediately; the consignments listener reconciles to the
+      // server-authoritative record moments later.
+      if (p) {
+        if (!p.settlements || typeof p.settlements !== 'object') p.settlements = {};
+        p.settlements[newSettlementId] = {
+          settlementId: newSettlementId,
+          date: receivedDate,
+          amountReceivedCents: amountCents,
+          expectedAmountCents: ceilingCents,
+          notes: notes || null,
+          createdAt: now
+        };
+        p.totalSettled = totalPreviouslySettledCents + amountCents;
+        p.lastSettlementDate = receivedDate;
       }
 
       closeModal();
@@ -1868,7 +1858,10 @@
       renderPlacementDetail(placementId);
     } catch (err) {
       console.error('Consignment payout error:', err);
-      showToast('Failed to record payout: ' + err.message, 'error');
+      // Surface the server's reason (e.g. over-cap rejection) rather than a
+      // generic failure — the CF is the authority on whether the payout is valid.
+      var msg = (err && err.message) ? err.message : 'Failed to record payout';
+      showToast(msg, 'error');
     }
   }
 
