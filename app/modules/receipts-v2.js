@@ -190,7 +190,14 @@
           return U.badge('Unmatched', 'warning');
         } },
       { key: 'amount', label: 'Amount', align: 'right', sortable: false,
-        render: function (p) { return N.money((p.amount || 0) / 100); } }
+        render: function (p) { return N.money((p.amount || 0) / 100); } },
+      // Square receipt link (parity with legacy day-close). stopPropagation so
+      // opening the receipt doesn't also trigger the row's match action.
+      { key: 'receipt', label: '', sortable: false, render: function (p) {
+          return p.receiptUrl
+            ? '<a href="' + esc(p.receiptUrl) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="font-size:0.78rem;color:var(--teal);">Receipt</a>'
+            : '';
+        } }
     ];
   }
 
