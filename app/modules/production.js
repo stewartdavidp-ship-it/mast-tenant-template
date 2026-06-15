@@ -1531,7 +1531,7 @@ async function doAddBuildNote(jobId, buildId) {
     var job = productionJobs[jobId];
     var existing = (job && job.builds && job.builds[buildId]) ? job.builds[buildId].notes || '' : '';
     var newNotes = existing ? existing + '\n' + text : text;
-    await MastDB.productionJobs.buildField(jobId, buildId, 'notes').set(newNotes);
+    await MastDB.productionJobs.setBuildField(jobId, buildId, 'notes', newNotes);
     await writeAudit('update', 'jobs', jobId);
     closeModal();
     renderActiveBuild(jobId, buildId);
@@ -1833,8 +1833,8 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
 
   // Check double-push guard on the build
   try {
-    var buildSnap = await MastDB.productionJobs.buildField(jobId, buildId, 'inventoryPushed').once('value');
-    if (buildSnap.val()) return results; // already pushed
+    var alreadyPushed = await MastDB.productionJobs.getBuildField(jobId, buildId, 'inventoryPushed');
+    if (alreadyPushed) return results; // already pushed
   } catch (e) { /* proceed */ }
 
   var lineItems = freshJob.lineItems;
@@ -1864,7 +1864,7 @@ async function autoUpdateInventory(jobId, buildId, buildOutput, freshJob) {
 
   // Set guard flag
   if (results.length > 0) {
-    await MastDB.productionJobs.buildField(jobId, buildId, 'inventoryPushed').set(true);
+    await MastDB.productionJobs.setBuildField(jobId, buildId, 'inventoryPushed', true);
     await writeAudit('update', 'jobs', jobId);
   }
   return results;
