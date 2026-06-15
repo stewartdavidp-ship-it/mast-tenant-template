@@ -770,13 +770,30 @@
     return html;
   }
 
-  function blogLoadBodyToEditor(body, inlineImages) {
+  // Canonical body sanitizer (PR 509) \u2014 the strict allowlist walker shared across
+  // every V2 surface. The native V2 blog editor (BlogBridge.setBody / loadBodyHtml)
+  // routes the rich body through THIS, not the weak regex blogSanitizeHtml above,
+  // because the storefront injects post.body RAW. Fail-closed: with no MastUI it
+  // escapes angle brackets (never emits raw markup). The allowlist drops <font>
+  // and inline style/class, so the native editor emits formatting as TAGS
+  // (<b>/<i>/<u>/<h2>\u2026) via execCommand styleWithCSS=false.
+  function blogCanonicalSanitize(html) {
+    if (window.MastUI && typeof MastUI.sanitizeHtml === 'function') return MastUI.sanitizeHtml(html);
+    return String(html == null ? '' : html).replace(/[<>]/g, function (c) { return c === '<' ? '&lt;' : '&gt;'; });
+  }
+
+  // Pure: stored body (placeholder form) \u2192 editor innerHTML, with image marker
+  // spans + coupon marker divs injected. The supplied `sanitize` runs BEFORE the
+  // markers are added (a strict sanitizer would otherwise strip their class /
+  // data-* attrs). Shared by the legacy editor (weak regex sanitizer, unchanged)
+  // and the native V2 editor (canonical sanitizer).
+  function blogStoredBodyToEditorHtml(body, inlineImages, sanitize) {
     if (!body) return '';
     var html = body;
     if (!blogIsHtmlBody(html)) {
       html = blogPlainToHtml(html);
     }
-    html = blogSanitizeHtml(html);
+    html = (typeof sanitize === 'function') ? sanitize(html) : html;
     (inlineImages || []).forEach(function(img, idx) {
       var marker = '[Image ' + (idx + 1) + ']';
       var span = '<span class="blog-img-marker" contenteditable="false" data-image="' + (idx + 1) + '">\ud83d\udcf7 Image ' + (idx + 1) + '</span>';
@@ -799,10 +816,15 @@
     return html;
   }
 
-  function blogSaveBodyFromEditor() {
-    var editable = document.getElementById('blogBodyEditable');
-    if (!editable) return blogCurrentPost ? (blogCurrentPost.body || '') : '';
-    var html = editable.innerHTML || '';
+  function blogLoadBodyToEditor(body, inlineImages) {
+    return blogStoredBodyToEditorHtml(body, inlineImages, blogSanitizeHtml);
+  }
+
+  // Pure: editor innerHTML (marker spans / coupon divs) \u2192 stored body (placeholder
+  // form). No DOM access. Shared by the legacy editor (blogSaveBodyFromEditor) and
+  // the native V2 editor (BlogBridge.setBody), which sanitizes the result.
+  function blogBodyHtmlToStored(html) {
+    html = html || '';
     html = html.replace(/<span[^>]*class="blog-img-marker"[^>]*data-image="(\d+)"[^>]*>[^<]*<\/span>/gi, function(match, num) {
       return '[Image ' + num + ']';
     });
@@ -813,6 +835,12 @@
     html = html.replace(/<(div|p)><br\s*\/?><\/(div|p)>/gi, '<p><br></p>');
     if (html === '<br>' || html === '<div><br></div>') html = '';
     return html;
+  }
+
+  function blogSaveBodyFromEditor() {
+    var editable = document.getElementById('blogBodyEditable');
+    if (!editable) return blogCurrentPost ? (blogCurrentPost.body || '') : '';
+    return blogBodyHtmlToStored(editable.innerHTML || '');
   }
 
   function blogBodyChanged() {
@@ -2374,6 +2402,50 @@
         if (i !== -1) blogPosts.splice(i, 1);
       }
       return true;
+    },
+
+    // ── Native rich-body write layer (V1-editor-elimination program) ──
+    // Single-sources every rich-body / inline-image write so the native V2 blog
+    // editor (blog-v2's blog-editor-v2 drill) never writes MastDB directly. The
+    // body is ALWAYS sanitized here via the canonical MastUI.sanitizeHtml before
+    // it lands — the storefront injects post.body RAW (blogIsHtmlBody treats any
+    // <tag> as HTML), so this is the load-bearing XSS gate. Callers gate on the
+    // blog edit permission.
+    _san: function (h) { return blogCanonicalSanitize(h); },
+    // Stored body → editor innerHTML for the native editor, sanitized with the
+    // CANONICAL sanitizer (defense vs legacy unsanitized data on load). Markers
+    // are injected AFTER sanitize (the strict allowlist would strip class/data-*).
+    loadBodyHtml: function (body, inlineImages) {
+      return blogStoredBodyToEditorHtml(body, inlineImages, blogCanonicalSanitize);
+    },
+    // Stored body + inline images → the EXACT composed storefront HTML
+    // (blogRenderBodyToHtml) for the native preview — single-sourced with
+    // publishToWebsite so preview == published output.
+    previewBodyHtml: function (body, inlineImages) {
+      return blogRenderBodyToHtml(body || '', inlineImages || []);
+    },
+    // Persist the rich body from the native editor. `html` is the contenteditable
+    // innerHTML (marker spans / coupon divs); it is converted to the stored
+    // placeholder form, then sanitized via MastUI.sanitizeHtml before it lands.
+    // inlineImages, when an array, is written alongside. Returns the stored shape.
+    setBody: async function (id, html, inlineImages) {
+      var stored = blogCanonicalSanitize(blogBodyHtmlToStored(html || ''));
+      var updates = { body: stored, updatedAt: new Date().toISOString() };
+      if (Array.isArray(inlineImages)) updates.inlineImages = inlineImages;
+      await MastDB.blog.posts.ref(id).update(updates);
+      var local = (typeof blogPosts !== 'undefined' && blogPosts) ? blogPosts.find(function (p) { return p.id === id; }) : null;
+      if (local) Object.assign(local, updates);
+      return { body: stored, inlineImages: updates.inlineImages };
+    },
+    // Persist the inline-images array (and, when marker positions shifted, the
+    // body too — same sanitize path as setBody).
+    setInlineImages: async function (id, inlineImages, html) {
+      var updates = { inlineImages: Array.isArray(inlineImages) ? inlineImages : [], updatedAt: new Date().toISOString() };
+      if (typeof html === 'string') updates.body = blogCanonicalSanitize(blogBodyHtmlToStored(html));
+      await MastDB.blog.posts.ref(id).update(updates);
+      var local = (typeof blogPosts !== 'undefined' && blogPosts) ? blogPosts.find(function (p) { return p.id === id; }) : null;
+      if (local) Object.assign(local, updates);
+      return updates;
     }
   };
 
