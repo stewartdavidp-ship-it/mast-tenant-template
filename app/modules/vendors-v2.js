@@ -20,15 +20,19 @@
  * DELEGATES to window.VendorsBridge (exposed in procurement.js) so the vendor
  * write (admin/vendors/{id} + roleFlags + active + lead-time coercion) stays
  * single-sourced — this twin never reimplements that logic (mirrors the
- * contacts-v2 / ContactsBridge precedent). Archiving, product-supplier links, and
- * PO/receipt sub-tools remain bespoke and coupled to legacy #procurement and keep
- * a "manage in classic view" link. Flag-gated (?ui=1) at #vendors-v2, side-by-side.
+ * contacts-v2 / ContactsBridge precedent). Archiving and product-supplier links
+ * are also native. The vendor's purchase orders / receipts are a READ-ONLY facet
+ * whose rows drill into the canonical V2 PO surface (procurement-v2, the MastFlow
+ * process record) via MastEntity.drill — the stacked slide-out with Back. There
+ * is NO classic escape hatch: every vendor capability has a native V2 home.
  *
  * Data: vendors live at admin/vendors (keyed by vendorId) — read directly with
  * MastDB.get('admin/vendors') (same path procurement.js reads). The Supplies facet
- * derives from admin/productSuppliers (vendor-keyed via ps.vendorId) — a cheap
- * one-shot keyed-object read loaded alongside vendors. Money is DOLLAR-denominated
- * (procurement fmt is Number(n).toFixed(2), no /100) → MastUI.Num.money(dollars).
+ * derives from admin/productSuppliers (vendor-keyed via ps.vendorId); the Purchase
+ * orders facet derives from admin/purchaseOrders + admin/purchaseReceipts filtered
+ * by po.vendorId (mirror of procurement.renderVendorPos / renderVendorReceipts) —
+ * all cheap one-shot keyed-object reads loaded alongside vendors. Money is DOLLAR-
+ * denominated (procurement fmt is Number(n).toFixed(2), no /100) → N.money(dollars).
  */
 (function () {
   'use strict';
@@ -84,6 +88,36 @@
     if (!id) return [];
     return V2.productSuppliers.filter(function (ps) { return ps && ps.vendorId === id && ps.active !== false; });
   }
+  // Purchase orders to this vendor (mirrors procurement.renderVendorPos:
+  // po.vendorId === vendorId, newest first). One-shot admin/purchaseOrders read.
+  function posFor(v) {
+    var id = v && (v.vendorId || v._key || v.id);
+    if (!id) return [];
+    return V2.purchaseOrders.filter(function (po) { return po && po.vendorId === id; })
+      .sort(function (a, b) { return String(b.orderDate || b.createdAt || '').localeCompare(String(a.orderDate || a.createdAt || '')); });
+  }
+  // Receipts from this vendor (mirrors procurement.renderVendorReceipts: receipts
+  // whose poId belongs to one of this vendor's POs, newest first).
+  function receiptsFor(v) {
+    var poIds = posFor(v).map(function (po) { return po.poId || po._key; });
+    return V2.purchaseReceipts.filter(function (r) { return r && poIds.indexOf(r.poId) >= 0; })
+      .sort(function (a, b) { return String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')); });
+  }
+  // PO total — DOLLAR-denominated (mirrors procurement.poTotal): explicit total,
+  // else sum of lines (qtyOrdered * unitCost).
+  function poTotal(po) {
+    if (typeof po.total === 'number' && po.total > 0) return po.total;
+    var sum = 0;
+    (po.lines || []).forEach(function (l) { sum += (Number(l.qtyOrdered) || 0) * (Number(l.unitCost) || 0); });
+    return sum;
+  }
+  // PO status as a status attribute (matches procurement-v2's tones/labels).
+  var PO_STATUS_TONE = { draft: 'neutral', submitted: 'info', partially_received: 'amber', received: 'success', closed: 'neutral', cancelled: 'danger' };
+  function poStatusLabel(s) { return s === 'partially_received' ? 'partial' : (s || 'draft'); }
+  // Value of a single receipt (sum of received qty × home-currency unit cost).
+  function receiptValue(r) {
+    return (r.lines || []).reduce(function (s, l) { return s + (Number(l.qtyReceivedNow) || 0) * (Number(l.unitCostHomeCurrency) || 0); }, 0);
+  }
   function supplyLabel(ps) {
     if (ps.vendorDescription) return ps.vendorDescription;
     if (ps.targetKind === 'material') {
@@ -115,6 +149,8 @@
       render: function (UI, v) {
         var vid = v.vendorId || v._key || v.id;
         var supplies = suppliesFor(v);
+        var pos = posFor(v);
+        var receipts = receiptsFor(v);
         var tiles = UI.tiles([
           { k: 'Category', v: esc(categoryOf(v)), hero: true },
           { k: 'Terms', v: esc((v.defaultPaymentTerms ? String(v.defaultPaymentTerms) : '—')) },
@@ -122,7 +158,7 @@
           { k: 'Supplies', v: N.count(supplies.length) }
         ]);
         var tabsBar = UI.paneTabsBar([
-          { key: 'ov', label: 'Overview' }, { key: 'supplies', label: 'Supplies' }
+          { key: 'ov', label: 'Overview' }, { key: 'supplies', label: 'Supplies' }, { key: 'pos', label: 'Purchase orders' }
         ], 'ov');
 
         // Overview — identity + contact + commercial terms + tax/account.
@@ -154,8 +190,9 @@
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(v.notes) + '</div>'
           : '<span class="mu-sub">No notes.</span>';
         // Archive / unarchive is NATIVE now (Tier 1.5 P5). Product-supplier links
-        // are managed natively in the Supplies pane (P4). The classic escape hatch
-        // remains only for PO/receipt sub-tools not yet ported.
+        // are managed natively in the Supplies pane (P4); the vendor's POs/receipts
+        // are the read-only Purchase orders facet (drills to procurement-v2). No
+        // classic escape hatch remains.
         var isArchived = statusOf(v) === 'archived';
         var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button class="btn btn-secondary" onclick="VendorsV2.toggleArchive(\'' + esc(vid) + '\',' + (isArchived ? 'true' : 'false') + ')">' + (isArchived ? 'Unarchive vendor' : 'Archive vendor') + '</button>' +
@@ -184,6 +221,34 @@
         ], sorted) : '<span class="mu-sub">No products linked to this vendor.</span>';
         var addSupply = '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="VendorsV2.addSupply(\'' + esc(vid) + '\')">+ Add supply</button></div>';
 
+        // Purchase orders — READ-ONLY mirror of procurement.renderVendorPos. Each
+        // row's PO # drills into the V2 procurement-v2 PO detail (stacked slide-out
+        // with Back), NOT classic. PO writes (new/receive/cancel) live on
+        // procurement-v2; this facet is purely a vendor-scoped view.
+        var posBody = pos.length ? UI.relatedTable([
+          { label: 'PO #', render: function (po) {
+            var id = po.poId || po._key;
+            var label = po.poNumber || String(id).slice(0, 8);
+            return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'procurement-v2\',\'' + esc(id) + '\')">' + esc(label) + '</button>';
+          } },
+          { label: 'Status', render: function (po) { return UI.badge(poStatusLabel(po.status), PO_STATUS_TONE[po.status] || 'neutral'); } },
+          { label: 'Ordered', render: function (po) { return po.orderDate ? N.date(po.orderDate) : '<span class="mu-sub">—</span>'; } },
+          { label: 'Expected', render: function (po) { return po.expectedDate ? N.date(po.expectedDate) : '<span class="mu-sub">—</span>'; } },
+          { label: 'Total', align: 'right', render: function (po) { return N.money(poTotal(po)) || '<span class="mu-sub">—</span>'; } }
+        ], pos) : '<span class="mu-sub">No purchase orders to this vendor.</span>';
+        // Receipts summary — a compact list of goods received from this vendor
+        // (mirror of procurement.renderVendorReceipts; provenance, not actions).
+        var receiptsBody = receipts.length ? UI.relatedTable([
+          { label: 'Received', render: function (r) { return r.receivedAt ? N.date(r.receivedAt) : '<span class="mu-sub">—</span>'; } },
+          { label: 'PO #', render: function (r) {
+            var label = (V2.poById[r.poId] && V2.poById[r.poId].poNumber) || String(r.poId || '').slice(0, 8);
+            return r.poId ? '<button type="button" class="mu-link" onclick="MastEntity.drill(\'procurement-v2\',\'' + esc(r.poId) + '\')">' + esc(label) + '</button>' : '<span class="mu-sub">—</span>';
+          } },
+          { label: 'Invoice', render: function (r) { return r.vendorInvoiceRef ? '<span class="mu-sub">' + esc(r.vendorInvoiceRef) + '</span>' : '<span class="mu-sub">—</span>'; } },
+          { label: 'Lines', align: 'right', render: function (r) { return N.count((r.lines || []).length); } },
+          { label: 'Value', align: 'right', render: function (r) { return N.money(receiptValue(r)) || '<span class="mu-sub">—</span>'; } }
+        ], receipts) : '<span class="mu-sub">No receipts from this vendor yet.</span>';
+
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
             UI.card('Vendor', identity) +
@@ -191,7 +256,11 @@
             UI.card('Terms & account', terms) +
             UI.card('Notes', notesBody + manage) +
           '</div>' +
-          '<div class="mu-pane" data-pane="supplies" hidden>' + UI.cardTable('Supplies (' + supplies.length + ')', suppliesBody) + addSupply + '</div>';
+          '<div class="mu-pane" data-pane="supplies" hidden>' + UI.cardTable('Supplies (' + supplies.length + ')', suppliesBody) + addSupply + '</div>' +
+          '<div class="mu-pane" data-pane="pos" hidden>' +
+            UI.cardTable('Purchase orders (' + pos.length + ')', posBody) +
+            UI.cardTable('Receipts (' + receipts.length + ')', receiptsBody) +
+          '</div>';
       },
       // Native edit form — the legacy New-Vendor modal / vendor edit field set,
       // grouped. Mirrors procurement.openNewVendorModal / renderVendorEditForm:
@@ -268,7 +337,7 @@
   });
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, productSuppliers: [], materials: {}, products: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
+  var V2 = { rows: [], byId: {}, productSuppliers: [], materials: {}, products: {}, purchaseOrders: [], purchaseReceipts: [], poById: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'active', loaded: false };
 
   function load() {
     // Ensure the legacy procurement module is loaded so window.VendorsBridge
@@ -276,13 +345,17 @@
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
     // Vendors + product-suppliers (Supplies facet/count) + materials (target
     // label lookup) load together; all one-shot keyed-object reads at admin/*.
+    // Purchase orders + receipts feed the read-only Purchase orders facet (the PO
+    // detail itself is drilled via procurement-v2, the canonical PO surface).
     return Promise.all([
       Promise.resolve(MastDB.get('admin/vendors')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('admin/productSuppliers')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('admin/materials')).catch(function () { return null; }),
-      Promise.resolve((MastDB.products && MastDB.products.list ? MastDB.products.list() : MastDB.get('public/products'))).catch(function () { return null; })
+      Promise.resolve((MastDB.products && MastDB.products.list ? MastDB.products.list() : MastDB.get('public/products'))).catch(function () { return null; }),
+      Promise.resolve(MastDB.get('admin/purchaseOrders')).catch(function () { return null; }),
+      Promise.resolve(MastDB.get('admin/purchaseReceipts')).catch(function () { return null; })
     ]).then(function (res) {
-      var vv = res[0] || {}, pv = res[1] || {}, mv = res[2] || {};
+      var vv = res[0] || {}, pv = res[1] || {}, mv = res[2] || {}, pos = res[4] || {}, rcpts = res[5] || {};
       // Products live at public/products; list() returns array OR keyed — normalize.
       V2.products = pidMap(res[3]);
       var out = [];
@@ -293,6 +366,9 @@
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r.vendorId] = r; });
       V2.productSuppliers = Object.keys(pv).map(function (k) { var ps = pv[k] || {}; ps.id = ps.id || k; return ps; });
       V2.materials = mv || {};
+      V2.purchaseOrders = Object.keys(pos).map(function (k) { var po = pos[k] || {}; po.poId = po.poId || k; po._key = k; return po; });
+      V2.poById = {}; V2.purchaseOrders.forEach(function (po) { V2.poById[po.poId] = po; });
+      V2.purchaseReceipts = Object.keys(rcpts).map(function (k) { var r = rcpts[k] || {}; r.receiptId = r.receiptId || k; return r; });
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[vendors-v2] load', e); render(); });
   }
@@ -455,14 +531,10 @@
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
       MastEntity.openRecord('vendors-v2', {}, 'create');
     },
-    // Vendor identity create/edit is native. Archiving, product-supplier links,
-    // and PO/receipt sub-tools are still bespoke on legacy #procurement (no V2
-    // home; vendors live under Procurement, no top-level legacy route). Use
-    // navigateToClassic so the V2 route remap doesn't loop us back to a twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('procurement');
-      else if (typeof navigateTo === 'function') navigateTo('procurement');
-    },
+    // Vendor identity create/edit + archiving + product-supplier links are all
+    // native here; the vendor's purchase orders / receipts are now a read-only
+    // facet that drills into the V2 procurement-v2 PO detail. No classic escape
+    // hatch remains — every vendor capability has a native V2 home.
     exportCsv: function () { return MastEntity.exportRows('vendors-v2', visibleRows(), 'all'); }
   };
 
