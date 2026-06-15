@@ -4109,6 +4109,94 @@
     });
   }
 
+  // Data-parameterized milestone-post core (single source for the legacy modal +
+  // the V2 native "Post Milestone" action). Uploads optional photo, writes the
+  // milestone child record, bumps commission status if the stage implies one,
+  // optionally queues a customer email, audits. onPhase(label) is an optional
+  // progress callback. Returns { milestoneId, emailQueued, statusUpdate }.
+  async function _commPostMilestoneCore(commId, opts, onPhase) {
+    var c = commissionsData[commId];
+    if (!c) throw new Error('Commission not found');
+    opts = opts || {};
+    var stage = opts.stage;
+    var copyHtml = (opts.copyHtml || '').trim();
+    var file = opts.file || null;
+    // Only honor sendEmail when there's a real email on file.
+    var hasEmail = !!(c.customerContact && c.customerContact.indexOf('@') !== -1);
+    var sendEmail = !!opts.sendEmail && hasEmail;
+
+    var milestoneId = 'mst_' + Date.now().toString(36);
+    var photoUrl = null;
+    if (file) {
+      if (typeof onPhase === 'function') onPhase('Uploading photo…');
+      var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      var path = MastDB.storagePath('commissions/' + commId + '/milestones/' + milestoneId + '.' + ext);
+      var ref = firebase.storage().ref(path);
+      var task = ref.put(file);
+      await new Promise(function(res, rej) { task.on('state_changed', null, rej, res); });
+      photoUrl = await task.snapshot.ref.getDownloadURL();
+    }
+
+    var now = new Date().toISOString();
+    var user = firebase.auth().currentUser;
+    var postedBy = (user && (user.email || user.uid)) || null;
+
+    var milestone = {
+      stage: stage,
+      postedAt: now,
+      photoUrl: photoUrl,
+      copyHtml: copyHtml,
+      postedBy: postedBy
+    };
+    await MastDB.set('admin/commissions/' + commId + '/milestones/' + milestoneId, milestone);
+
+    // Bump commission status if the stage implies one.
+    var statusEnum = ['design-locked', 'in-fabrication', 'cold-shop', 'balance-invoiced', 'shipped', 'delivered'];
+    var statusUpdate = (statusEnum.indexOf(stage) !== -1 && c.status !== stage) ? stage : null;
+    if (statusUpdate) {
+      await MastDB.commissions.update(commId, { status: statusUpdate, updatedAt: now });
+      if (commissionsData[commId]) commissionsData[commId].status = statusUpdate;
+    }
+
+    var emailQueued = false;
+    if (sendEmail) {
+      if (typeof onPhase === 'function') onPhase('Queuing email…');
+      var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || '';
+      var brandName = (window.TENANT_CONFIG && window.TENANT_CONFIG.brand && window.TENANT_CONFIG.brand.name) || 'The Team';
+      var idemSeed = tenantId + '|' + commId + '|' + stage + '|' + Date.now();
+      var idempotencyKey = await _commSha1Hex(idemSeed);
+      var subject = brandName + ' — ' + _milestoneStageLabel(stage) + ' update on your commission';
+      var photoBlock = photoUrl ? '<p><img src="' + esc(photoUrl) + '" style="max-width:400px;border-radius:6px;"></p>' : '';
+      var htmlBody =
+        '<p>Hi ' + esc(c.customerName || 'there') + ',</p>' +
+        '<p>' + esc(copyHtml).replace(/\n/g, '<br>') + '</p>' +
+        photoBlock +
+        '<p>— ' + esc(brandName) + '</p>';
+      await MastDB.set('emailQueue/' + idempotencyKey, {
+        id: idempotencyKey,
+        emailType: 'commission_milestone',
+        to: c.customerContact,
+        toName: c.customerName || null,
+        subject: subject,
+        htmlBody: htmlBody,
+        fromName: brandName,
+        idempotencyKey: idempotencyKey,
+        queuedAt: now,
+        queuedBy: postedBy,
+        status: 'queued',
+        attemptCount: 0,
+        meta: { commissionId: commId, milestoneId: milestoneId, stage: stage, photoUrl: photoUrl }
+      });
+      await MastDB.update('admin/commissions/' + commId + '/milestones/' + milestoneId, { emailQueuedAt: now, emailIdempotencyKey: idempotencyKey });
+      emailQueued = true;
+    }
+
+    await writeAudit('create', 'commissionMilestone', milestoneId);
+    // Invalidate the legacy milestone cache so both surfaces re-read fresh.
+    delete commMilestonesCache[commId];
+    return { milestoneId: milestoneId, emailQueued: emailQueued, statusUpdate: statusUpdate };
+  }
+
   async function submitCommissionMilestone(commId) {
     var c = commissionsData[commId];
     if (!c) return;
@@ -4123,78 +4211,12 @@
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Posting…'; }
 
     try {
-      var milestoneId = 'mst_' + Date.now().toString(36);
-      var photoUrl = null;
-      if (file) {
-        if (statusEl) statusEl.textContent = 'Uploading photo…';
-        var ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
-        var path = MastDB.storagePath('commissions/' + commId + '/milestones/' + milestoneId + '.' + ext);
-        var ref = firebase.storage().ref(path);
-        var task = ref.put(file);
-        await new Promise(function(res, rej) { task.on('state_changed', null, rej, res); });
-        photoUrl = await task.snapshot.ref.getDownloadURL();
-      }
-
-      var now = new Date().toISOString();
-      var user = firebase.auth().currentUser;
-      var postedBy = (user && (user.email || user.uid)) || null;
-
-      var milestone = {
-        stage: stage,
-        postedAt: now,
-        photoUrl: photoUrl,
-        copyHtml: copyHtml,
-        postedBy: postedBy
-      };
-      await MastDB.set('admin/commissions/' + commId + '/milestones/' + milestoneId, milestone);
-
-      // Bump commission status if the stage implies one.
-      var statusEnum = ['design-locked', 'in-fabrication', 'cold-shop', 'balance-invoiced', 'shipped', 'delivered'];
-      var statusUpdate = (statusEnum.indexOf(stage) !== -1 && c.status !== stage) ? stage : null;
-      if (statusUpdate) {
-        await MastDB.commissions.update(commId, { status: statusUpdate, updatedAt: now });
-        commissionsData[commId].status = statusUpdate;
-      }
-
-      if (sendEmail && c.customerContact && c.customerContact.indexOf('@') !== -1) {
-        if (statusEl) statusEl.textContent = 'Queuing email…';
-        var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || '';
-        var brandName = (window.TENANT_CONFIG && window.TENANT_CONFIG.brand && window.TENANT_CONFIG.brand.name) || 'The Team';
-        var idemSeed = tenantId + '|' + commId + '|' + stage + '|' + Date.now();
-        var idempotencyKey = await _commSha1Hex(idemSeed);
-        var subject = brandName + ' — ' + _milestoneStageLabel(stage) + ' update on your commission';
-        var photoBlock = photoUrl ? '<p><img src="' + esc(photoUrl) + '" style="max-width:400px;border-radius:6px;"></p>' : '';
-        var htmlBody =
-          '<p>Hi ' + esc(c.customerName || 'there') + ',</p>' +
-          '<p>' + esc(copyHtml).replace(/\n/g, '<br>') + '</p>' +
-          photoBlock +
-          '<p>— ' + esc(brandName) + '</p>';
-        await MastDB.set('emailQueue/' + idempotencyKey, {
-          id: idempotencyKey,
-          emailType: 'commission_milestone',
-          to: c.customerContact,
-          toName: c.customerName || null,
-          subject: subject,
-          htmlBody: htmlBody,
-          fromName: brandName,
-          idempotencyKey: idempotencyKey,
-          queuedAt: now,
-          queuedBy: postedBy,
-          status: 'queued',
-          attemptCount: 0,
-          meta: { commissionId: commId, milestoneId: milestoneId, stage: stage, photoUrl: photoUrl }
-        });
-        await MastDB.update('admin/commissions/' + commId + '/milestones/' + milestoneId, { emailQueuedAt: now, emailIdempotencyKey: idempotencyKey });
-        milestone.emailQueuedAt = now;
-        milestone.emailIdempotencyKey = idempotencyKey;
-      }
-
-      await writeAudit('create', 'commissionMilestone', milestoneId);
+      var res = await _commPostMilestoneCore(commId, { stage: stage, copyHtml: copyHtml, file: file, sendEmail: sendEmail },
+        function(label) { if (statusEl) statusEl.textContent = label; });
       closeModal();
-      showToast('Milestone posted' + (sendEmail && c.customerContact && c.customerContact.indexOf('@') !== -1 ? ' — email queued' : ''));
-      delete commMilestonesCache[commId];
+      showToast('Milestone posted' + (res.emailQueued ? ' — email queued' : ''));
       _loadCommissionMilestones(commId);
-      if (statusUpdate) viewCommissionDetail(commId);
+      if (res.statusUpdate) viewCommissionDetail(commId);
     } catch (err) {
       if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = '#ef5350'; }
       if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Post'; }
@@ -4251,34 +4273,47 @@
     '</div>';
   }
 
+  // Data-parameterized terms-token core (single source for the legacy "Send
+  // Terms" button + the V2 native action). Resolves the latest published terms
+  // version and calls the EXISTING mintCommissionTermsToken callable. Returns
+  // { sent, reason }; throws on transport/callable error.
+  async function _commSendTermsTokenCore(commId) {
+    var c = commissionsData[commId];
+    if (!c) throw new Error('Commission not found');
+    if (!c.customerContact || c.customerContact.indexOf('@') === -1) {
+      return { sent: false, reason: 'No customer email on file.' };
+    }
+    var snap = await MastDB.get('admin/commissionTerms');
+    var versions = snap ? Object.keys(snap).map(function(k) { var v = snap[k]; v.id = k; return v; }) : [];
+    var published = versions.filter(function(v) { return v.status === 'published'; });
+    published.sort(function(a, b) { return (b.publishedAt || '').localeCompare(a.publishedAt || ''); });
+    if (!published.length) {
+      return { sent: false, reason: 'No published terms version yet. Create one in Commission Terms.' };
+    }
+    var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID;
+    var res = await firebase.functions().httpsCallable('mintCommissionTermsToken')({
+      tenantId: tenantId,
+      commissionId: commId,
+      customerEmail: c.customerContact,
+      termsVersionId: published[0].id
+    });
+    var data = (res && res.data) || {};
+    if (data.success === false) throw new Error(data.error || 'mint failed');
+    return { sent: true, to: c.customerContact };
+  }
+
   async function sendCommissionTermsToken(commId) {
     var c = commissionsData[commId];
     if (!c) return;
     var statusEl = document.getElementById('commTermsStatus');
-    if (!c.customerContact || c.customerContact.indexOf('@') === -1) {
-      if (statusEl) { statusEl.textContent = 'No customer email on file.'; statusEl.style.color = '#a67c00'; }
-      return;
-    }
     try {
-      var snap = await MastDB.get('admin/commissionTerms');
-      var versions = snap ? Object.keys(snap).map(function(k) { var v = snap[k]; v.id = k; return v; }) : [];
-      var published = versions.filter(function(v) { return v.status === 'published'; });
-      published.sort(function(a, b) { return (b.publishedAt || '').localeCompare(a.publishedAt || ''); });
-      if (!published.length) {
-        if (statusEl) { statusEl.textContent = 'No published terms version yet. Create one in Commission Terms.'; statusEl.style.color = '#a67c00'; }
+      if (statusEl) { statusEl.textContent = 'Sending…'; statusEl.style.color = 'var(--warm-gray)'; }
+      var res = await _commSendTermsTokenCore(commId);
+      if (!res.sent) {
+        if (statusEl) { statusEl.textContent = res.reason; statusEl.style.color = '#a67c00'; }
         return;
       }
-      var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID;
-      if (statusEl) { statusEl.textContent = 'Sending…'; statusEl.style.color = 'var(--warm-gray)'; }
-      var res = await firebase.functions().httpsCallable('mintCommissionTermsToken')({
-        tenantId: tenantId,
-        commissionId: commId,
-        customerEmail: c.customerContact,
-        termsVersionId: published[0].id
-      });
-      var data = (res && res.data) || {};
-      if (data.success === false) throw new Error(data.error || 'mint failed');
-      if (statusEl) { statusEl.textContent = 'Terms link sent to ' + c.customerContact + '.'; statusEl.style.color = 'var(--teal)'; }
+      if (statusEl) { statusEl.textContent = 'Terms link sent to ' + res.to + '.'; statusEl.style.color = 'var(--teal)'; }
       showToast('Terms link sent');
     } catch (err) {
       if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = '#ef5350'; }
@@ -4286,96 +4321,121 @@
   }
   window.sendCommissionTermsToken = sendCommissionTermsToken;
 
+  // Data-parameterized write core (single source for both the legacy DOM form
+  // and the V2 native Proposal editor via CommissionsBridge). Writes the same
+  // three free-text fields + audits exactly as the legacy path did.
+  async function _commSaveProposalCore(commId, fields) {
+    fields = fields || {};
+    var updates = {
+      proposalPrice: (fields.price || '').trim() || null,
+      proposalTimeline: (fields.timeline || '').trim() || null,
+      proposalSpec: (fields.spec || '').trim() || null
+    };
+    await MastDB.commissions.update(commId, updates);
+    if (commissionsData[commId]) Object.assign(commissionsData[commId], updates);
+    await writeAudit('update', 'commission', commId);
+    return updates;
+  }
+
   async function saveCommissionProposal(commId) {
     var price = document.getElementById('commProposalPrice').value.trim();
     var timeline = document.getElementById('commProposalTimeline').value.trim();
     var spec = document.getElementById('commProposalSpec').value.trim();
     var statusEl = document.getElementById('commProposalStatus');
     try {
-      var updates = {};
-      updates['proposalPrice'] = price || null;
-      updates['proposalTimeline'] = timeline || null;
-      updates['proposalSpec'] = spec || null;
-      await MastDB.commissions.update(commId, updates);
-      Object.assign(commissionsData[commId], updates);
+      await _commSaveProposalCore(commId, { price: price, timeline: timeline, spec: spec });
       if (statusEl) { statusEl.textContent = 'Proposal saved.'; statusEl.style.color = 'var(--teal)'; }
-      await writeAudit('update', 'commission', commId);
     } catch (err) {
       if (statusEl) { statusEl.textContent = 'Error: ' + err.message; statusEl.style.color = 'var(--danger)'; }
     }
   }
 
+  // Data-parameterized send core (single source for the legacy "Send Proposal"
+  // button + the V2 native action). Optionally persists the supplied proposal
+  // fields first (so an unsaved edit is captured), then calls the EXISTING
+  // /commissionProposal CF and stamps proposalSentAt. Returns { sent, reason }.
+  // Throws on transport/CF error so callers can surface it.
+  async function _commSendProposalCore(commId, fields) {
+    if (fields) await _commSaveProposalCore(commId, fields);
+    var c = commissionsData[commId];
+    if (!c) throw new Error('Commission not found');
+
+    if (!c.proposalPrice && !c.proposalSpec) {
+      return { sent: false, reason: 'Add price or spec details before sending' };
+    }
+    var contact = c.customerContact || '';
+    if (contact.indexOf('@') === -1) {
+      return { sent: false, reason: 'Customer contact is not an email — copy the proposal and send manually' };
+    }
+
+    var user = firebase.auth().currentUser;
+    if (!user) return { sent: false, reason: 'Sign in required' };
+    var token = await user.getIdToken();
+    var resp = await callCF('/commissionProposal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({
+        commissionId: commId,
+        customerEmail: contact,
+        customerName: c.customerName,
+        pieceName: c.sourcePieceName || 'Custom Piece',
+        price: c.proposalPrice,
+        timeline: c.proposalTimeline,
+        spec: c.proposalSpec
+      })
+    });
+    var result = await resp.json();
+    if (!result.success) return { sent: false, reason: 'Failed to send: ' + (result.error || 'Unknown error') };
+    var sentAt = new Date().toISOString();
+    await MastDB.commissions.update(commId, { proposalSentAt: sentAt });
+    if (commissionsData[commId]) commissionsData[commId].proposalSentAt = sentAt;
+    emitTestingEvent('sendProposal', {});
+    return { sent: true, to: contact };
+  }
+
   async function sendCommissionProposal(commId) {
     var c = commissionsData[commId];
     if (!c) return;
-    // Save first
+    // Save first (DOM form), then send via the shared core.
     await saveCommissionProposal(commId);
-    c = commissionsData[commId];
-
-    if (!c.proposalPrice && !c.proposalSpec) {
-      showToast('Add price or spec details before sending', true);
-      return;
-    }
-
-    var contact = c.customerContact || '';
-    var isEmail = contact.indexOf('@') !== -1;
-    if (!isEmail) {
-      showToast('Customer contact is not an email — copy the proposal and send manually', true);
-      return;
-    }
-
     try {
-      var user = firebase.auth().currentUser;
-      if (!user) { showToast('Sign in required', true); return; }
-      var token = await user.getIdToken();
-
-      var resp = await callCF('/commissionProposal', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({
-          commissionId: commId,
-          customerEmail: contact,
-          customerName: c.customerName,
-          pieceName: c.sourcePieceName || 'Custom Piece',
-          price: c.proposalPrice,
-          timeline: c.proposalTimeline,
-          spec: c.proposalSpec
-        })
-      });
-      var result = await resp.json();
-      if (result.success) {
-        await MastDB.commissions.update(commId, { proposalSentAt: new Date().toISOString() });
-        commissionsData[commId].proposalSentAt = new Date().toISOString();
-        showToast('Proposal sent to ' + contact);
-        emitTestingEvent('sendProposal', {});
-        viewCommissionDetail(commId); // Refresh
-      } else {
-        showToast('Failed to send: ' + (result.error || 'Unknown error'), true);
-      }
+      var res = await _commSendProposalCore(commId, null);
+      if (res.sent) { showToast('Proposal sent to ' + res.to); viewCommissionDetail(commId); }
+      else showToast(res.reason, true);
     } catch (err) {
       showToast('Error sending proposal: ' + err.message, true);
     }
+  }
+
+  // Data-parameterized create-job core (single source for the legacy "Create
+  // Production Job" button + the V2 native action). Creates the production job,
+  // links it onto the commission, audits. Returns the new jobId.
+  async function _commCreateJobCore(commId) {
+    var c = commissionsData[commId];
+    if (!c) throw new Error('Commission not found');
+    var jobId = MastDB.productionJobs.newKey();
+    var jobData = {
+      name: 'Commission: ' + (c.sourcePieceName || 'Custom Piece') + ' for ' + (c.customerName || 'Customer'),
+      status: 'active',
+      type: 'commission',
+      commissionId: commId,
+      items: [],
+      createdAt: new Date().toISOString()
+    };
+    await MastDB.productionJobs.set(jobId, jobData);
+    await MastDB.commissions.update(commId, { productionJobId: jobId });
+    if (commissionsData[commId]) commissionsData[commId].productionJobId = jobId;
+    emitTestingEvent('createCommissionJob', {});
+    await writeAudit('create', 'productionJob', jobId);
+    return jobId;
   }
 
   async function createCommissionJob(commId) {
     var c = commissionsData[commId];
     if (!c) return;
     try {
-      var jobId = MastDB.productionJobs.newKey();
-      var jobData = {
-        name: 'Commission: ' + (c.sourcePieceName || 'Custom Piece') + ' for ' + (c.customerName || 'Customer'),
-        status: 'active',
-        type: 'commission',
-        commissionId: commId,
-        items: [],
-        createdAt: new Date().toISOString()
-      };
-      await MastDB.productionJobs.set(jobId, jobData);
-      await MastDB.commissions.update(commId, { productionJobId: jobId });
-      commissionsData[commId].productionJobId = jobId;
+      await _commCreateJobCore(commId);
       showToast('Production job created');
-      emitTestingEvent('createCommissionJob', {});
-      await writeAudit('create', 'productionJob', jobId);
       viewCommissionDetail(commId); // Refresh
     } catch (err) {
       showToast('Error creating job: ' + err.message, true);
@@ -4399,25 +4459,36 @@
     openModal(html);
   }
 
+  // Data-parameterized doc-link core (single source for the legacy modal + the
+  // V2 native "Link Google Doc" action). Resolves Drive metadata, pushes the
+  // doc record, audits. Returns the new doc key.
+  async function _commLinkDocCore(commId, url) {
+    url = (url || '').trim();
+    if (!url) throw new Error('Paste a Google Drive URL');
+    var meta = await fetchDriveFileMetadata(url);
+    var docData = {
+      type: 'drive',
+      name: meta ? meta.name : url.split('/').pop() || 'Google Doc',
+      url: url,
+      webViewLink: meta ? meta.webViewLink : url,
+      mimeType: meta ? meta.mimeType : null,
+      addedAt: new Date().toISOString()
+    };
+    var docRef = MastDB.commissions.documents(commId).push();
+    await docRef.set(docData);
+    if (commissionsData[commId]) {
+      if (!commissionsData[commId].documents) commissionsData[commId].documents = {};
+      commissionsData[commId].documents[docRef.key] = docData;
+    }
+    await writeAudit('update', 'commission', commId);
+    return docRef.key;
+  }
+
   async function saveCommissionDocLink(commId) {
     var url = document.getElementById('commDocDriveUrl').value.trim();
     if (!url) { showToast('Paste a Google Drive URL', true); return; }
-
     try {
-      var meta = await fetchDriveFileMetadata(url);
-      var docData = {
-        type: 'drive',
-        name: meta ? meta.name : url.split('/').pop() || 'Google Doc',
-        url: url,
-        webViewLink: meta ? meta.webViewLink : url,
-        mimeType: meta ? meta.mimeType : null,
-        addedAt: new Date().toISOString()
-      };
-      var docRef = MastDB.commissions.documents(commId).push();
-      await docRef.set(docData);
-      if (!commissionsData[commId].documents) commissionsData[commId].documents = {};
-      commissionsData[commId].documents[docRef.key] = docData;
-      await writeAudit('update', 'commission', commId);
+      await _commLinkDocCore(commId, url);
       closeModal();
       showToast('Document linked');
       viewCommissionDetail(commId);
@@ -4444,6 +4515,44 @@
     openModal(html);
   }
 
+  // Data-parameterized upload core (single source for the legacy modal + the V2
+  // native "Upload File" action). Uploads to Storage, pushes the doc record,
+  // audits. onProgress(pct) is optional. Returns the new doc key. Throws on
+  // oversize / transport error so callers can surface it.
+  async function _commUploadDocCore(commId, file, onProgress) {
+    if (!file) throw new Error('Select a file first');
+    if (file.size > 10 * 1024 * 1024) throw new Error('File must be under 10 MB');
+    var fileName = Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    var storageRef = storage.ref(MastDB.storagePath('commission-docs/' + commId + '/' + fileName));
+    var uploadTask = storageRef.put(file);
+    await new Promise(function(resolve, reject) {
+      uploadTask.on('state_changed',
+        function(snapshot) {
+          if (typeof onProgress === 'function') onProgress(Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100));
+        },
+        reject,
+        resolve
+      );
+    });
+    var downloadUrl = await uploadTask.snapshot.ref.getDownloadURL();
+    var docData = {
+      type: 'upload',
+      name: file.name,
+      url: downloadUrl,
+      mimeType: file.type || null,
+      size: file.size,
+      addedAt: new Date().toISOString()
+    };
+    var docRef = MastDB.commissions.documents(commId).push();
+    await docRef.set(docData);
+    if (commissionsData[commId]) {
+      if (!commissionsData[commId].documents) commissionsData[commId].documents = {};
+      commissionsData[commId].documents[docRef.key] = docData;
+    }
+    await writeAudit('update', 'commission', commId);
+    return docRef.key;
+  }
+
   async function uploadCommissionDoc(commId) {
     var fileInput = document.getElementById('commDocFileInput');
     var statusEl = document.getElementById('commDocUploadStatus');
@@ -4461,37 +4570,9 @@
     if (statusEl) { statusEl.textContent = 'Uploading...'; statusEl.style.color = 'var(--warm-gray)'; }
 
     try {
-      var ext = file.name.split('.').pop() || 'bin';
-      var fileName = Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-      var storageRef = storage.ref(MastDB.storagePath('commission-docs/' + commId + '/' + fileName));
-      var uploadTask = storageRef.put(file);
-
-      await new Promise(function(resolve, reject) {
-        uploadTask.on('state_changed',
-          function(snapshot) {
-            var pct = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-            if (statusEl) statusEl.textContent = 'Uploading... ' + pct + '%';
-          },
-          reject,
-          resolve
-        );
+      await _commUploadDocCore(commId, file, function(pct) {
+        if (statusEl) statusEl.textContent = 'Uploading... ' + pct + '%';
       });
-
-      var downloadUrl = await uploadTask.snapshot.ref.getDownloadURL();
-
-      var docData = {
-        type: 'upload',
-        name: file.name,
-        url: downloadUrl,
-        mimeType: file.type || null,
-        size: file.size,
-        addedAt: new Date().toISOString()
-      };
-      var docRef = MastDB.commissions.documents(commId).push();
-      await docRef.set(docData);
-      if (!commissionsData[commId].documents) commissionsData[commId].documents = {};
-      commissionsData[commId].documents[docRef.key] = docData;
-      await writeAudit('update', 'commission', commId);
       closeModal();
       showToast('File uploaded');
       viewCommissionDetail(commId);
@@ -4501,14 +4582,20 @@
     }
   }
 
+  // Data-parameterized remove-doc core (single source for the legacy + V2
+  // actions; the confirm prompt stays with each caller).
+  async function _commRemoveDocCore(commId, docId) {
+    await MastDB.commissions.documents(commId, docId).remove();
+    if (commissionsData[commId] && commissionsData[commId].documents) {
+      delete commissionsData[commId].documents[docId];
+    }
+    await writeAudit('update', 'commission', commId);
+  }
+
   async function removeCommissionDoc(commId, docId) {
     if (!await mastConfirm('Remove this document?', { title: 'Remove Document', danger: true })) return;
     try {
-      await MastDB.commissions.documents(commId, docId).remove();
-      if (commissionsData[commId] && commissionsData[commId].documents) {
-        delete commissionsData[commId].documents[docId];
-      }
-      await writeAudit('update', 'commission', commId);
+      await _commRemoveDocCore(commId, docId);
       showToast('Document removed');
       viewCommissionDetail(commId);
     } catch (err) {
@@ -5940,6 +6027,87 @@
   window.saveNewCommission = saveNewCommission;
   window.closeCommissionDetail = closeCommissionDetail;
   window.updateCommissionStatus = updateCommissionStatus;
+
+  // ============================================================
+  // CommissionsBridge — data-object entry to the SAME write cores
+  // ============================================================
+  //
+  // The commissions-v2 redesign twin (flag-gated #commissions-v2) is a Process
+  // surface and must NOT reimplement the proposal / docs / job / milestone /
+  // proposal-email / terms-token capture logic. This bridge exposes those write
+  // actions parameterized by data (the legacy handlers read the form DOM, so
+  // they can't be called with an object). It mirrors window.ProcurementBridge /
+  // window.FinanceBridge: thin, additive, delegates to the shared cores above.
+  // It changes NO behavior on the legacy surface.
+  //
+  // The cores read commissionsData[commId] for the live record (status, contact,
+  // existing proposal). When the twin drives the flow, legacy loadCommissions()
+  // may not have run, so each bridge method seeds that cache from the supplied
+  // record (or a fresh single-record fetch) before calling the core. Settlement
+  // (deposit/balance paid timestamps) is server-side and has NO bridge method —
+  // there is intentionally no money-write here.
+  function _bridgeSeed(commId, record) {
+    if (record && typeof record === 'object') {
+      var prev = commissionsData[commId] || {};
+      commissionsData[commId] = Object.assign({}, prev, record, { id: commId });
+      return Promise.resolve(commissionsData[commId]);
+    }
+    if (commissionsData[commId]) return Promise.resolve(commissionsData[commId]);
+    return Promise.resolve(MastDB.commissions.get(commId)).then(function (c) {
+      commissionsData[commId] = Object.assign({ id: commId }, c || {});
+      return commissionsData[commId];
+    });
+  }
+
+  window.CommissionsBridge = {
+    // saveProposal(commId, {price,timeline,spec}, record?) → resolves to the
+    // persisted updates. proposalPrice is FREE-TEXT (matches legacy).
+    saveProposal: function (commId, fields, record) {
+      return _bridgeSeed(commId, record).then(function () { return _commSaveProposalCore(commId, fields); });
+    },
+    // sendProposal(commId, fields?, record?) → { sent, to } | { sent:false, reason }.
+    // Persists fields first (if given) then calls the EXISTING /commissionProposal CF.
+    sendProposal: function (commId, fields, record) {
+      return _bridgeSeed(commId, record).then(function () { return _commSendProposalCore(commId, fields || null); });
+    },
+    // createJob(commId, record?) → new production jobId.
+    createJob: function (commId, record) {
+      return _bridgeSeed(commId, record).then(function () { return _commCreateJobCore(commId); });
+    },
+    // linkDoc(commId, url, record?) → new doc key.
+    linkDoc: function (commId, url, record) {
+      return _bridgeSeed(commId, record).then(function () { return _commLinkDocCore(commId, url); });
+    },
+    // uploadDoc(commId, file, onProgress?, record?) → new doc key.
+    uploadDoc: function (commId, file, onProgress, record) {
+      return _bridgeSeed(commId, record).then(function () { return _commUploadDocCore(commId, file, onProgress); });
+    },
+    // removeDoc(commId, docId, record?) → void. (Confirm prompt stays on the caller.)
+    removeDoc: function (commId, docId, record) {
+      return _bridgeSeed(commId, record).then(function () { return _commRemoveDocCore(commId, docId); });
+    },
+    // postMilestone(commId, {stage,copyHtml,file,sendEmail}, onPhase?, record?) →
+    // { milestoneId, emailQueued, statusUpdate }.
+    postMilestone: function (commId, opts, onPhase, record) {
+      return _bridgeSeed(commId, record).then(function () { return _commPostMilestoneCore(commId, opts, onPhase); });
+    },
+    // sendTermsToken(commId, record?) → { sent, to } | { sent:false, reason }.
+    // Calls the EXISTING mintCommissionTermsToken callable.
+    sendTermsToken: function (commId, record) {
+      return _bridgeSeed(commId, record).then(function () { return _commSendTermsTokenCore(commId); });
+    },
+    // listMilestones(commId) → [milestone] sorted newest-first (read-only).
+    listMilestones: function (commId) {
+      return Promise.resolve(MastDB.get('admin/commissions/' + commId + '/milestones')).then(function (snap) {
+        var ms = snap ? Object.keys(snap).map(function (k) { var m = snap[k]; m.id = k; return m; }) : [];
+        ms.sort(function (a, b) { return (b.postedAt || '').localeCompare(a.postedAt || ''); });
+        return ms;
+      });
+    },
+    // milestoneStages() → the canonical stage list (key/label/template) so the
+    // twin's Post-Milestone form matches the legacy modal exactly.
+    milestoneStages: function () { return COMMISSION_MILESTONE_STAGES.slice(); }
+  };
   window.renderDashCardNewOrders = renderDashCardNewOrders;
   window.renderDashCardReadyToShip = renderDashCardReadyToShip;
   window.loadRmaData = loadRmaData;

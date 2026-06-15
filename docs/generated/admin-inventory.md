@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,871** lines
-- **Feature modules:** **119** files in `app/modules/` (**110** routed), **132,446** lines combined
+- **Feature modules:** **119** files in `app/modules/` (**110** routed), **132,950** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -31,7 +31,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/classes-v2.js` | 1,055 | classes-v2, book-reports-v2, classes-rooms-v2, classes-settings-v2 |
 | `modules/commission-terms-v2.js` | 267 | commission-terms-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
-| `modules/commissions-v2.js` | 296 | commissions-v2 |
+| `modules/commissions-v2.js` | 632 | commissions-v2 |
 | `modules/composer-v2.js` | 298 | composer-v2 |
 | `modules/composer.js` | 479 | composer |
 | `modules/consignment.js` | 2,288 | galleries |
@@ -85,7 +85,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/newsletter-v2.js` | 874 | newsletter-v2 |
 | `modules/newsletter.js` | 2,621 | newsletter |
 | `modules/orders-v2.js` | 351 | orders-v2 |
-| `modules/orders.js` | 6,302 | orders, commissions, rma |
+| `modules/orders.js` | 6,470 | orders, commissions, rma |
 | `modules/passes-v2.js` | 501 | passes-v2 |
 | `modules/pos-v2.js` | 160 | pos-v2 |
 | `modules/procurement-v2.js` | 882 | procurement-v2 |
