@@ -11,11 +11,17 @@
  * Data note: reads MastDB.orders (root orders/{id}) — the same source of
  * truth as orders-v2/pickship — NOT legacy admin/orders (which holds only
  * QBO-webhook test docs; see pickship.workflow.js recordPath note). Square
- * payments come from MastDB.squarePayments (admin/square-payments).
+ * payments come from MastDB.squarePayments (admin/square-payments); match
+ * candidates from MastDB.sales (admin/sales).
  *
- * TEMP-LINK DEBT (tracked in sales-v2-build-plan.md): manual payment↔sale
- * matching (writes into the legacy admin/sales model) stays on the classic
- * screen — header link below. Native V2 matching lands with the Day Close P2.
+ * Native payment↔sale matching (no more classic hatch): clicking an unmatched
+ * Square payment opens an in-pane candidate finder; committing routes through
+ * the admin-gated `matchSquarePayment` Cloud Function — which holds the
+ * money-critical guards (idempotency, double-count incl. order-owned, audited
+ * accept-variance, accumulator-routed revenue). The CF NEVER default-overwrites
+ * recognized revenue; the UI surfaces an amount mismatch and requires an
+ * explicit, reasoned accept before passing acceptVariance. See
+ * reference_money_flow_architecture.md.
  *
  * Flag-gated (`uiRedesign`), side-by-side route `#receipts-v2`.
  */
@@ -32,8 +38,12 @@
   if (!flagOn()) return;
 
   var U = window.MastUI;
+  function esc(s) { return U._esc ? U._esc(s) : String(s == null ? '' : s); }
+  function toast(m, isErr) { if (window.showToast) window.showToast(m, isErr); }
+  function canMatch() { return typeof window.can !== 'function' || window.can('receipts', 'edit'); }
 
-  var V2 = { orders: [], byId: {}, payments: [], view: 'transactions', date: null, loaded: false, off: null, offPay: null };
+  var V2 = { orders: [], byId: {}, payments: [], paymentsById: {}, sales: [], salesById: {},
+             view: 'transactions', date: null, loaded: false, off: null, offPay: null };
 
   function todayStr() {
     var d = new Date();
@@ -76,8 +86,54 @@
           var p = tree[k]; if (!p || typeof p !== 'object') return;
           out.push(Object.assign({ _key: k }, p));
         });
-        V2.payments = out; render();
+        V2.payments = out;
+        V2.paymentsById = {}; out.forEach(function (p) { V2.paymentsById[p._key] = p; });
+        render();
       }).catch(function (e) { console.error('[receipts-v2] square payments', e); });
+    }
+    // admin/sales rows — the legacy POS sale records that Square payments match
+    // against (the candidate finder reads these). Reconciliation-only; reads.
+    var sl = window.MastDB && MastDB.sales;
+    if (sl && typeof sl.list === 'function') {
+      Promise.resolve(sl.list(200)).then(function (tree) {
+        var out = [];
+        Object.keys(tree || {}).forEach(function (k) {
+          var s = tree[k]; if (!s || typeof s !== 'object') return;
+          out.push(Object.assign({ _key: k }, s));
+        });
+        V2.sales = out;
+        V2.salesById = {}; out.forEach(function (s) { V2.salesById[s._key] = s; });
+      }).catch(function (e) { console.error('[receipts-v2] sales', e); });
+    }
+  }
+
+  // Reload just the reconciliation collections after a successful match, so the
+  // matched/unmatched badges + candidate list reflect the new state.
+  function reloadMatchData() {
+    var sp = window.MastDB && MastDB.squarePayments;
+    if (sp && typeof sp.list === 'function') {
+      Promise.resolve(sp.list(200)).then(function (tree) {
+        var out = [];
+        Object.keys(tree || {}).forEach(function (k) {
+          var p = tree[k]; if (!p || typeof p !== 'object') return;
+          out.push(Object.assign({ _key: k }, p));
+        });
+        V2.payments = out;
+        V2.paymentsById = {}; out.forEach(function (p) { V2.paymentsById[p._key] = p; });
+        render();
+      }).catch(function (e) { console.error('[receipts-v2] reload payments', e); });
+    }
+    var sl = window.MastDB && MastDB.sales;
+    if (sl && typeof sl.list === 'function') {
+      Promise.resolve(sl.list(200)).then(function (tree) {
+        var out = [];
+        Object.keys(tree || {}).forEach(function (k) {
+          var s = tree[k]; if (!s || typeof s !== 'object') return;
+          out.push(Object.assign({ _key: k }, s));
+        });
+        V2.sales = out;
+        V2.salesById = {}; out.forEach(function (s) { V2.salesById[s._key] = s; });
+      }).catch(function (e) { console.error('[receipts-v2] reload sales', e); });
     }
   }
 
@@ -170,6 +226,8 @@
       ? window.MastEntity.renderList('orders-v2', {
           columns: payColumns(), rows: pays, sortKey: 'time', sortDir: 'asc',
           rowId: function (p) { return p._key; },
+          // Click an unmatched payment to match it to a sale (native, in-pane).
+          onRowClickFnName: 'ReceiptsV2.matchPayment',
           empty: { title: 'No Square payments on ' + d, message: 'Card payments taken on Square appear here.' }
         })
       : window.MastEntity.renderList('orders-v2', {
@@ -178,13 +236,15 @@
           empty: { title: 'No payment activity on ' + d, message: 'Pick another day to reconcile.' }
         });
 
+    var hint = (V2.view === 'payments' && unmatched.length)
+      ? '<div style="margin:6px 0 0;font-size:0.78rem;color:var(--warm-gray);">Click an unmatched payment to match it to a sale.</div>'
+      : '';
+
     tab.innerHTML =
       U.pageHeader({ title: 'Day Close',
         subtitle: 'match payouts and reconcile receipts',
-        // Tracked temp-link (debt): manual payment↔sale matching is classic-only until Day Close P2.
         actionsHtml: '<input type="date" class="form-input" value="' + d + '" onchange="ReceiptsV2.setDate(this.value)" ' +
-            'style="padding:6px 10px;font-size:0.85rem;width:auto;">' +
-          '<button class="btn btn-secondary" onclick="ReceiptsV2.classicMatch()">Match payments (classic) ↗</button>' }) +
+            'style="padding:6px 10px;font-size:0.85rem;width:auto;">' }) +
       U.tiles([
         { k: 'Gross (' + d + ')', v: U.Num.money(gross), hero: true },
         { k: 'Stripe', v: U.Num.money(byProc.Stripe) },
@@ -193,7 +253,68 @@
         { k: 'Unmatched Square', v: unmatched.length ? (U.Num.money(unmatchedAmt) + ' · ' + unmatched.length) : 'None' }
       ]) +
       '<div style="margin:14px 0;">' + pills + '</div>' +
-      list;
+      list + hint;
+  }
+
+  // ── Native payment ↔ sale matching ──────────────────────────────────────
+  // Candidate finder: unmatched, non-voided sales (square/unset payment type),
+  // ranked by time proximity to the payment. Mirrors the legacy finder, minus
+  // the classic-screen hop. Top 20.
+  function candidatesFor(payment) {
+    var payTime = new Date(payment.createdAt).getTime();
+    var out = [];
+    V2.sales.forEach(function (s) {
+      if (s.squarePaymentId) return;                                  // already matched
+      if (String(s.status || '').toLowerCase() === 'voided') return;
+      if (s.paymentType && s.paymentType !== 'square') return;        // non-card sale
+      var saleTime = new Date(s.timestamp || s.createdAt || 0).getTime();
+      var deltaMin = isNaN(saleTime) || isNaN(payTime) ? Infinity : Math.abs(saleTime - payTime) / 60000;
+      out.push({ saleId: s._key, sale: s, deltaMin: deltaMin, amount: Number(s.amount || 0) });
+    });
+    out.sort(function (a, b) { return a.deltaMin - b.deltaMin; });
+    return out.slice(0, 20);
+  }
+
+  function paintMatchPanel(payment) {
+    var root = document.getElementById('rmMatchRoot'); if (!root) return;
+    var payCents = Number(payment.amount || 0);
+    var cands = candidatesFor(payment);
+    var rows;
+    if (!cands.length) {
+      rows = '<div style="padding:16px;color:var(--warm-gray);font-size:0.9rem;">No unmatched sales found. Create the sale first, or pick another payment.</div>';
+    } else {
+      rows = cands.map(function (c) {
+        var s = c.sale;
+        var match = c.amount === payCents;
+        var when = (s.timestamp || s.createdAt) ? new Date(s.timestamp || s.createdAt).toLocaleString() : '—';
+        var delta = c.deltaMin === Infinity ? '' : (c.deltaMin < 1 ? '<1 min' : Math.round(c.deltaMin) + ' min') + ' apart';
+        var items = (s.items || []).map(function (i) { return i.productName; }).filter(Boolean).join(', ');
+        return '<div onclick="ReceiptsV2.commitMatch(\'' + esc(payment._key) + '\',\'' + esc(c.saleId) + '\')" ' +
+          'style="padding:11px 12px;border:1px solid ' + (match ? 'var(--teal)' : 'var(--border)') + ';' +
+          'border-radius:8px;cursor:pointer;margin-bottom:8px;' + (match ? 'background:color-mix(in srgb,var(--teal) 8%,transparent);' : '') + '">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+            '<span style="font-weight:600;">' + U.Num.money(c.amount / 100) + '</span>' +
+            '<span style="font-size:0.78rem;color:var(--warm-gray);">' + delta + '</span>' +
+          '</div>' +
+          '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(when) + '</div>' +
+          (items ? '<div style="font-size:0.78rem;margin-top:2px;">' + esc(items) + '</div>' : '') +
+          (match
+            ? '<div style="font-size:0.78rem;color:var(--teal);margin-top:4px;">✓ Amount matches</div>'
+            : '<div style="font-size:0.78rem;color:var(--amber);margin-top:4px;">⚠ Mismatch — sale ' + U.Num.money(c.amount / 100) + ' vs payment ' + U.Num.money(payCents / 100) + '</div>') +
+          '</div>';
+      }).join('');
+    }
+    root.innerHTML =
+      '<div style="padding:14px;border:1px solid var(--border);border-radius:10px;margin-bottom:16px;background:var(--surface,transparent);">' +
+        '<div style="font-size:0.72rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--warm-gray);">Square payment</div>' +
+        '<div style="font-weight:700;font-size:1.15rem;">' + U.Num.money(payCents / 100) + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + (payment.createdAt ? new Date(payment.createdAt).toLocaleString() : '—') + '</div>' +
+      '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Select a sale to match:</div>' +
+      rows +
+      '<div style="margin-top:14px;text-align:right;">' +
+        '<button class="btn btn-secondary" onclick="window.MastUI.slideOut.requestClose()">Cancel</button>' +
+      '</div>';
   }
 
   window.ReceiptsV2 = {
@@ -205,7 +326,80 @@
         window.MastEntity.openRecord('orders-v2', rec, 'read');
       }).catch(function (e) { console.error('[receipts-v2] open', e); });
     },
-    classicMatch: function () { if (window.navigateToClassic) navigateToClassic('receipts'); },
+    matchPayment: function (paymentKey) {
+      var payment = V2.paymentsById[paymentKey]; if (!payment) return;
+      if (payment.matchedSaleId) { toast('Payment already matched.'); return; }
+      if (!canMatch()) { toast('You don\'t have permission to match payments.', true); return; }
+      V2._activePayment = payment;
+      window.MastUI.slideOut.open({
+        title: 'Match Square payment',
+        subtitle: U.Num.money(Number(payment.amount || 0) / 100),
+        size: 'md', mode: 'read', deepLink: false,
+        bodyHtml: '<div id="rmMatchRoot"></div>',
+        onClose: function () { V2._activePayment = null; }
+      });
+      paintMatchPanel(payment);
+    },
+    commitMatch: function (paymentKey, saleId) {
+      var payment = V2.paymentsById[paymentKey];
+      var sale = V2.salesById[saleId];
+      if (!payment || !sale) { toast('Match target not found — refresh and retry.', true); return; }
+      if (!canMatch()) { toast('You don\'t have permission to match payments.', true); return; }
+      var payCents = Number(payment.amount || 0);
+      var saleCents = Number(sale.amount || 0);
+      var differ = payCents !== saleCents;
+
+      Promise.resolve().then(function () {
+        if (!differ) return { accept: false, reason: '' };
+        // Money-critical: never silently overwrite recognized revenue. Require an
+        // explicit, reasoned accept; the CF demands acceptVariance + reason.
+        var delta = payCents - saleCents;
+        var dir = delta > 0 ? 'increase' : 'decrease';
+        var msg = 'Square amount ' + U.Num.money(payCents / 100) + " differs from the sale's "
+          + U.Num.money(saleCents / 100) + ' (' + dir + ' of ' + U.Num.money(Math.abs(delta) / 100) + ').\n\n'
+          + 'Matching will overwrite the sale\'s recognized revenue to ' + U.Num.money(payCents / 100)
+          + ' and record an audited variance. Continue?';
+        if (typeof window.mastConfirm !== 'function') {
+          toast('Cannot confirm amount mismatch — match aborted.', true); return null;
+        }
+        return window.mastConfirm(msg, {
+          title: 'Amount mismatch', danger: true,
+          confirmLabel: 'Overwrite to ' + U.Num.money(payCents / 100), cancelLabel: 'Cancel'
+        }).then(function (ok) {
+          if (!ok) return null; // declined — abort
+          if (typeof window.mastPrompt !== 'function') return { accept: true, reason: 'Operator-accepted Square variance' };
+          return window.mastPrompt('Reason for the amount variance (required, audited):', {
+            title: 'Variance reason', confirmLabel: 'Confirm',
+            placeholder: 'e.g. tip added at terminal'
+          }).then(function (reason) {
+            if (reason == null || !String(reason).trim()) { toast('A reason is required — match aborted.', true); return null; }
+            return { accept: true, reason: String(reason).trim() };
+          });
+        });
+      }).then(function (decision) {
+        if (!decision) return; // aborted/declined
+        if (!window.firebase || !firebase.functions) { toast('Cloud functions unavailable.', true); return; }
+        toast('Matching…');
+        return firebase.functions().httpsCallable('matchSquarePayment')({
+          tenantId: (window.MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
+          paymentId: payment.paymentId || paymentKey,
+          saleId: saleId,
+          acceptVariance: !!decision.accept,
+          varianceReason: decision.reason || ''
+        }).then(function (res) {
+          var r = (res && res.data) || {};
+          var note = r.orderOwned ? 'Payment linked (order owns the revenue).' : 'Payment matched to sale.';
+          if (r.amountChanged) note = 'Payment matched — sale revenue updated to ' + U.Num.money((r.newAmountCents || payCents) / 100) + '.';
+          toast(note);
+          try { window.MastUI.slideOut.requestClose(); } catch (e) {}
+          reloadMatchData();
+        });
+      }).catch(function (err) {
+        var m = (err && err.message) ? err.message : 'Match failed';
+        console.error('[receipts-v2] commitMatch', err);
+        toast(m, true);
+      });
+    },
     refresh: render
   };
 
