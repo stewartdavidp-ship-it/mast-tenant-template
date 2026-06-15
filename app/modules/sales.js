@@ -767,6 +767,11 @@ async function executeManualMatch(paymentKey, saleId) {
     updates['admin/square-payments/' + paymentKey + '/matchedSaleId'] = saleId;
 
     await MastDB.multiUpdate(updates);
+    // Audit the money-mutating match commit (sale amount/status + payment link).
+    // Mirror siblings reconcileSale/voidSale ('pos' entity); writeAudit is
+    // self-guarded and never throws, so this can't break the match flow.
+    await writeAudit('reconcile', 'pos', saleId);
+    await writeAudit('match', 'square-payment', payment.paymentId || paymentKey);
     showToast('Payment matched to sale.');
     var modal = document.getElementById('manualMatchModal');
     if (modal) modal.remove();
