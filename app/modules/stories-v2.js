@@ -13,14 +13,18 @@
  * dates) with no governed lifecycle — its status (published / draft) is an
  * assigned attribute, so it is a Faceted Record, NOT Process / MastFlow.
  *
- * Create + light edit are NATIVE here: a custom detail.editRender + onSave that
- * DELEGATE to window.StoriesBridge (exposed in production.js). CREATE mints a
- * DRAFT skeleton (title only); EDIT renames it. The rich photo-curation canvas
- * (the entries gallery, milestone captions, QR-code generation, publish side
- * effects) is deeply coupled to the Production module + storefront and stays
- * single-sourced on legacy #stories via the "Manage in classic view" link —
- * that is the rich-authoring bridge, NOT a create punt. Flag-gated (?ui=1) at
- * #stories-v2, side-by-side; never touches production.js beyond the bridge.
+ * Authoring is FULLY NATIVE here — there is no classic escape hatch. Create +
+ * rename use detail.editRender + onSave; the rich photo-curation canvas (the
+ * 3 photo sources — build media / content-composer images / freeform upload —
+ * the entries assembler with milestone+caption+reorder, and Publish/Unpublish
+ * with operator-credit aggregation + QR-code generation + product back-fill) is
+ * a route:null DRILLED slide-out (story-curation-v2), opened via MastEntity.drill
+ * from the read detail (the products-v2 image-drill pattern). EVERY write delegates
+ * to window.StoriesBridge (exposed in production.js) — the twin never writes
+ * MastDB directly for stories, so the legacy write logic + storefront contract
+ * stay single-sourced and lint-rbac CHECK C stays green. Genuine backend bits
+ * (Firebase Storage upload, QR lib, LabelKeeper print) stay server/CDN calls
+ * triggered from the native UI. Flag-gated (?ui=1) at #stories-v2.
  *
  * Data: stories live at public/stories (MastDB.stories = _makeEntity('public/
  * stories', 200)); read one-shot via MastDB.get('public/stories') -> keyed object.
@@ -143,14 +147,18 @@
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(ex) + '</div>'
           : '<span class="mu-sub">No caption or milestone text yet.</span>';
 
-        // Photo-curation authoring (entries, captions, QR codes, publish) stays
-        // on legacy #stories. Use navigateToClassic so the V2 route remap doesn't
-        // loop us back to this twin.
-        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<button class="btn btn-secondary" onclick="StoriesV2.classic()">Manage in classic view &rarr;</button>' +
-          (statusOf(s) === 'draft' && (typeof window.can !== 'function' || window.can('stories', 'delete'))
-            ? '<button class="btn btn-secondary" style="color:var(--text-danger);" onclick="StoriesV2.removeDraft(\'' + esc(sid) + '\')">Delete draft</button>' : '') +
-          '</div><div id="storyCampChip_' + esc(sid) + '"></div>';
+        // Native action bar — Curate opens the drilled photo-curation canvas;
+        // Publish/Unpublish + Delete are gated. No classic escape hatch.
+        var canEdit = (typeof window.can !== 'function' || window.can('stories', 'edit'));
+        var canDel = (typeof window.can !== 'function' || window.can('stories', 'delete'));
+        var ec = entryCount(s);
+        var bar = '';
+        if (canEdit) bar += '<button class="btn btn-primary" onclick="StoriesV2.curate(\'' + esc(sid) + '\')">📸 Curate photos &amp; entries</button>';
+        bar += '<button class="btn btn-secondary" onclick="StoriesV2.preview(\'' + esc(sid) + '\')">👁 Preview</button>';
+        if (canEdit && statusOf(s) === 'published') bar += '<button class="btn btn-secondary" onclick="StoriesV2.unpublish(\'' + esc(sid) + '\')">Unpublish</button>';
+        else if (canEdit && statusOf(s) === 'draft' && ec > 0) bar += '<button class="btn btn-primary" onclick="StoriesV2.publishFromDetail(\'' + esc(sid) + '\')">🚀 Publish</button>';
+        if (statusOf(s) === 'draft' && canDel) bar += '<button class="btn btn-secondary" style="color:var(--text-danger);" onclick="StoriesV2.removeDraft(\'' + esc(sid) + '\')">Delete draft</button>';
+        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' + bar + '</div><div id="storyCampChip_' + esc(sid) + '"></div>';
         // Part-of-campaign chip — single-sourced renderer in campaigns.js (Wave 3).
         setTimeout(function () {
           if (window.MastAdmin && MastAdmin.loadModule) {
@@ -160,23 +168,51 @@
           }
         }, 0);
 
+        // Artists (operator credits) — name resolved best-effort, falls back to id.
+        var ops = (s.operators && s.operators.length) ? s.operators : [];
+        var artistsCard = ops.length
+          ? UI.card('Artists', '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + ops.map(function (op) {
+              var nm = (window.operators && window.operators[op] && window.operators[op].name) || op;
+              return '<span style="background:var(--cream);padding:4px 10px;border-radius:12px;font-size:0.85rem;">' + esc(nm) + '</span>';
+            }).join('') + '</div>')
+          : '';
+
+        // QR codes (present once published with linked products) — reuse the
+        // global print/copy/print-card helpers from production.js.
+        var qrs = (s.qrCodes && s.qrCodes.length) ? s.qrCodes : [];
+        var qrCard = qrs.length
+          ? UI.card('QR codes', '<p class="mu-sub" style="margin:0 0 12px;">Scan to view the product page with this story.</p>' +
+              '<div style="display:flex;gap:16px;flex-wrap:wrap;">' + qrs.map(function (qr) {
+                return '<div style="text-align:center;background:white;padding:12px;border-radius:8px;border:1px solid var(--cream-dark);">' +
+                  '<img src="' + esc(qr.dataUrl) + '" style="width:140px;height:140px;" alt="QR code">' +
+                  '<div style="font-size:0.85rem;font-weight:600;margin-top:6px;">' + esc(qr.productName || '') + '</div>' +
+                  '<div style="display:flex;gap:6px;margin-top:8px;justify-content:center;flex-wrap:wrap;">' +
+                    '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="StoriesV2.qrPrint(\'' + esc(qr.dataUrl) + '\',\'' + esc(qr.productName || '') + '\')">🖨 Print</button>' +
+                    '<button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 8px;" onclick="StoriesV2.qrCopy(\'' + esc(qr.url || '') + '\')">📋 Copy URL</button>' +
+                    '<button class="btn btn-primary" style="font-size:0.72rem;padding:3px 8px;" onclick="StoriesV2.qrCard(\'' + esc(qr.productId || '') + '\',\'' + esc(qr.productName || '') + '\',\'' + esc(qr.url || '') + '\')">🃏 Print Card</button>' +
+                  '</div>' +
+                '</div>';
+              }).join('') + '</div>')
+          : '';
+
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
             UI.card('Cover', coverBlock) +
             UI.card('Story', vitals) +
             UI.card('Excerpt', excerptBody + manage) +
+            artistsCard +
+            qrCard +
           '</div>';
       },
-      // CREATE (title → draft skeleton) + light EDIT (rename) are NATIVE, so the
-      // twin no longer punts new stories to the classic view. The photo-curation
-      // canvas (entries, captions, QR codes) + publish side effects stay
-      // single-sourced on legacy #stories via the "Manage in classic view" link.
+      // CREATE (title → draft skeleton) + light EDIT (rename). After creating,
+      // open the native curation canvas (Curate button on the read detail) to add
+      // photos, captions, and publish — all native, no classic view.
       editRender: function (s, mode) {
         s = s || {};
         function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
         var lead = mode === 'create'
-          ? 'New story — add photos, captions &amp; publish in the classic curation view after creating'
-          : 'Rename this story (photos &amp; publishing live in the classic curation view)';
+          ? 'New story — add photos, captions &amp; publish in the curation canvas after creating'
+          : 'Rename this story (photos &amp; publishing live in the curation canvas)';
         return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + lead + '</div>' +
           fg('Title *', '<input class="form-input" id="storyV2Title" value="' + esc(mode === 'create' ? '' : (storyTitle(s) === 'Untitled story' ? '' : storyTitle(s))) + '" style="width:100%;" placeholder="Story title">');
       }
@@ -204,6 +240,188 @@
       }).catch(function (e) { console.error('[stories-v2] update', e); if (window.showToast) showToast('Error updating story.', true); return false; });
     }
   });
+
+  // ── curation canvas (route:null drilled heavy-edit SO) ──────────────
+  // The native photo-curation surface, modeled on products-v2's image drill.
+  // Opened via MastEntity.drill('story-curation-v2', storyId) from the read
+  // detail. Reads the story + its job's build media + content-composer images;
+  // every write delegates to StoriesBridge. CUR holds the working draft (the
+  // module-global the handlers mutate, mirroring legacy storyDraft).
+  var CUR = null;
+
+  // Async loader: resolve story + (job → builds → build media) + content images,
+  // seed CUR.draft from existing entries, return the drill record.
+  function loadCuration(id) {
+    return Promise.resolve(MastDB.stories.get(id)).then(function (story) {
+      if (!story) return null;
+      story = Object.assign({}, story);
+      var jobId = story.jobId || null;
+      var jobP = jobId ? Promise.resolve(MastDB.productionJobs.get(jobId)).catch(function () { return null; }) : Promise.resolve(null);
+      return jobP.then(function (job) {
+        var builds = (job && job.builds) || {};
+        var buildKeys = Object.keys(builds).sort(function (a, b) { return (builds[a].buildNumber || 0) - (builds[b].buildNumber || 0); });
+        var mediaP = Promise.all(buildKeys.map(function (bk) {
+          return Promise.resolve(MastDB.buildMedia.get(bk)).then(function (m) { return { bk: bk, m: m || {} }; }).catch(function () { return { bk: bk, m: {} }; });
+        }));
+        var ciP = story.sourceContentId
+          ? Promise.resolve(MastDB.get('admin/content/' + story.sourceContentId)).then(function (c) {
+              var cv = (c && typeof c.val === 'function') ? c.val() : c;
+              var imgs = (cv && Array.isArray(cv.images)) ? cv.images : [];
+              return imgs.filter(Boolean).map(function (im) { return typeof im === 'string' ? { url: im } : im; }).filter(function (im) { return im && im.url; });
+            }).catch(function () { return []; })
+          : Promise.resolve([]);
+        return Promise.all([mediaP, ciP]).then(function (res) {
+          var allMedia = {}; res[0].forEach(function (x) { allMedia[x.bk] = x.m; });
+          var contentImages = res[1] || [];
+          if (Array.isArray(story.images)) {
+            story.images.forEach(function (im) {
+              if (!im) return; var url = typeof im === 'string' ? im : im.url; if (!url) return;
+              if (!contentImages.some(function (c) { return c.url === url; })) contentImages.push({ url: url });
+            });
+          }
+          var draft = story.entries ? Object.keys(story.entries).map(function (ek) {
+            var e = story.entries[ek] || {};
+            return { id: ek, mediaUrl: e.mediaUrl || '', milestone: e.milestone || '', caption: e.caption || '', buildId: e.buildId || '', source: e.source || 'build', order: e.order || 0 };
+          }).sort(function (a, b) { return a.order - b.order; }) : [];
+          CUR = { storyId: id, story: story, job: job, jobId: jobId, builds: builds, buildKeys: buildKeys, allMedia: allMedia, contentImages: contentImages, draft: draft };
+          return { _key: id, _title: ((story.title || 'Untitled story') + ' · Curate') };
+        });
+      });
+    });
+  }
+
+  function curEntriesMap() {
+    var entries = {};
+    CUR.draft.forEach(function (e) {
+      entries[e.id] = { order: e.order, milestone: e.milestone, mediaUrl: e.mediaUrl, mediaType: e.mediaUrl ? 'photo' : 'text', caption: e.caption, buildId: e.buildId, source: e.source || 'build' };
+    });
+    return entries;
+  }
+
+  // Surgical re-render of just the entries list node (mirrors legacy
+  // renderStoryEntries) — keeps focus/scroll on milestone/caption edits.
+  function renderCurEntries() {
+    var el = document.getElementById('storyV2EntriesList');
+    if (!el || !CUR) return;
+    if (!CUR.draft.length) {
+      el.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);font-style:italic;">Select photos above to add them, or add a text-only entry.</p>';
+      return;
+    }
+    el.innerHTML = CUR.draft.map(function (entry, idx) {
+      var thumb = entry.mediaUrl
+        ? '<img class="story-entry-thumb" src="' + esc(entry.mediaUrl) + '" alt="">'
+        : '<div class="story-entry-thumb" style="background:var(--cream-dark);display:flex;align-items:center;justify-content:center;font-size:0.78rem;color:var(--warm-gray);">Text</div>';
+      return '<div class="story-entry-card" data-idx="' + idx + '">' + thumb +
+        '<div class="story-entry-fields">' +
+          '<input type="text" placeholder="Milestone (e.g. body formed…)" value="' + esc(entry.milestone) + '" onchange="StoriesV2.curUpdate(' + idx + ',\'milestone\',this.value)">' +
+          '<textarea rows="2" placeholder="Caption…" onchange="StoriesV2.curUpdate(' + idx + ',\'caption\',this.value)">' + esc(entry.caption) + '</textarea>' +
+        '</div>' +
+        '<div class="story-entry-actions">' +
+          '<button class="btn btn-small btn-secondary" onclick="StoriesV2.curMove(' + idx + ',-1)"' + (idx === 0 ? ' disabled' : '') + '>↑</button>' +
+          '<button class="btn btn-small btn-secondary" onclick="StoriesV2.curMove(' + idx + ',1)"' + (idx === CUR.draft.length - 1 ? ' disabled' : '') + '>↓</button>' +
+          '<button class="btn btn-small btn-danger" onclick="StoriesV2.curRemove(' + idx + ')">×</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Re-sync the .selected highlight on EVERY source thumb from the draft, so a
+  // photo that appears in two sources (build + content) stays consistent after
+  // an add/remove from either grid.
+  function syncCurThumbs() {
+    document.querySelectorAll('.media-select-thumb').forEach(function (thumb) {
+      var url = thumb.getAttribute('data-url');
+      var inDraft = CUR && CUR.draft.some(function (e) { return e.mediaUrl === url; });
+      if (inDraft) thumb.classList.add('selected'); else thumb.classList.remove('selected');
+    });
+  }
+
+  function curationHtml(UI, r) {
+    var id = r && r._key;
+    if (!CUR || CUR.storyId !== id) return '<p class="mu-sub">Loading…</p>';
+    var totalBuildPhotos = 0;
+    CUR.buildKeys.forEach(function (bk) { totalBuildPhotos += Object.keys(CUR.allMedia[bk] || {}).length; });
+    var selectedMediaIds = {};
+    CUR.draft.forEach(function (e) { if (e.mediaUrl) selectedMediaIds[e.mediaUrl] = true; });
+
+    var provenance = CUR.job ? ('From job: <strong>' + esc(CUR.job.name || 'Untitled') + '</strong>')
+      : (CUR.story && CUR.story.sourceContentId ? 'From content composer' : 'Freeform story');
+    var html = '<div class="mu-sub" style="margin-bottom:14px;">' + provenance + '</div>';
+
+    html += '<div class="form-group" style="margin-bottom:16px;"><label class="form-label">Story title</label>' +
+      '<input class="form-input" id="storyV2CurTitle" value="' + esc((CUR.story && CUR.story.title) || '') + '" placeholder="Give your story a title…" style="width:100%;"></div>';
+
+    // Source 1 — build media
+    if (CUR.job && totalBuildPhotos > 0) {
+      var s1 = '<p class="mu-sub" style="margin:0 0 12px;">Tap photos to add or remove them.</p>';
+      CUR.buildKeys.forEach(function (bk) {
+        var b = CUR.builds[bk] || {}; var media = CUR.allMedia[bk] || {};
+        var mKeys = Object.keys(media).sort(function (a, c) { return (media[a].uploadedAt || '').localeCompare(media[c].uploadedAt || ''); });
+        if (!mKeys.length) return;
+        s1 += '<div style="margin-bottom:12px;"><div style="font-size:0.85rem;font-weight:600;margin-bottom:6px;">Build #' + (b.buildNumber || '?') + (b.sessionDate ? ' — ' + esc(b.sessionDate) : '') + ' (' + mKeys.length + ')</div><div class="media-select-grid">';
+        mKeys.forEach(function (mk) {
+          var m = media[mk]; var sel = selectedMediaIds[m.url] ? ' selected' : '';
+          s1 += '<div class="media-select-thumb' + sel + '" data-url="' + esc(m.url) + '" data-buildid="' + esc(bk) + '" data-source="build" onclick="StoriesV2.curToggle(this)"><img src="' + esc(m.url) + '" alt=""><div class="check-overlay">✓</div></div>';
+        });
+        s1 += '</div></div>';
+      });
+      html += UI.card('From build media (' + totalBuildPhotos + ')', s1);
+    }
+
+    // Source 2 — content-composer images
+    if (CUR.contentImages.length) {
+      var s2 = '<div class="media-select-grid">' + CUR.contentImages.map(function (im) {
+        var sel = selectedMediaIds[im.url] ? ' selected' : '';
+        return '<div class="media-select-thumb' + sel + '" data-url="' + esc(im.url) + '" data-source="content" onclick="StoriesV2.curToggle(this)"><img src="' + esc(im.url) + '" alt=""><div class="check-overlay">✓</div></div>';
+      }).join('') + '</div>';
+      html += UI.card('From content composer (' + CUR.contentImages.length + ')', s2);
+    }
+
+    // Source 3 — freeform upload (always available; story already has an id)
+    var s3 = '<label class="btn btn-secondary btn-small" style="cursor:pointer;margin:0;"><input type="file" accept="image/*" multiple style="display:none;" onchange="StoriesV2.curUpload(this)">+ Add photos</label>' +
+      '<p class="mu-sub" style="margin:8px 0 0;">Photos you upload here are tied to this story.</p><div id="storyV2UploadProgress" style="margin-top:8px;"></div>';
+    html += UI.card('Upload new', s3);
+
+    // Entries assembler
+    html += UI.card('Story entries', '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><button class="btn btn-secondary btn-small" onclick="StoriesV2.curAddText()">+ Text entry</button></div><div id="storyV2EntriesList"></div>');
+
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding-top:14px;">' +
+      '<button class="btn btn-secondary" onclick="StoriesV2.curPreview()">👁 Preview</button>' +
+      '<button class="btn btn-secondary" onclick="StoriesV2.curSave()">💾 Save draft</button>' +
+      '<button class="btn btn-primary" onclick="StoriesV2.curPublish()">🚀 Publish</button>' +
+    '</div>';
+
+    setTimeout(renderCurEntries, 0);
+    return html;
+  }
+
+  MastEntity.define('story-curation-v2', {
+    label: 'Curate', labelPlural: 'Curate', size: 'lg', route: null,
+    recordId: function (r) { return r._key; },
+    fields: [{ name: '_title', label: 'Story', type: 'text', list: true, group: 'Story', readOnly: true }],
+    fetch: function (id) { return loadCuration(id); },
+    detail: { render: function (UI, r) { return curationHtml(UI, r); } }
+  });
+
+  // Persist the curation draft (Save = draft, Publish = published) via the
+  // bridge, mutate the cached record, then re-open the read detail fresh.
+  function curPersist(publish) {
+    if (typeof window.can === 'function' && !window.can('stories', 'edit')) { if (window.showToast) showToast('You don\'t have permission to edit stories.', true); return; }
+    if (!window.StoriesBridge || !(publish ? StoriesBridge.publish : StoriesBridge.saveEntries)) { if (window.showToast) showToast('Stories engine still loading — try again', true); return; }
+    if (!CUR) return;
+    var sid = CUR.storyId;
+    var title = ((document.getElementById('storyV2CurTitle') || {}).value || '').trim();
+    CUR.draft.forEach(function (e, i) { e.order = i; });
+    var data = { title: title, entries: curEntriesMap(), jobId: CUR.jobId || null };
+    var op = publish ? StoriesBridge.publish(sid, data) : StoriesBridge.saveEntries(sid, data);
+    Promise.resolve(op).then(function (payload) {
+      if (CUR && CUR.story) Object.assign(CUR.story, payload || {});
+      var live = V2.byId[sid]; if (live && payload) Object.assign(live, payload);
+      if (window.showToast) showToast(publish ? 'Story published!' : 'Story draft saved.');
+      reloadSoon();
+      MastEntity.get('stories-v2').fetch(sid).then(function (rec) { if (rec) MastEntity.openRecord('stories-v2', rec, 'read'); });
+    }).catch(function (e) { console.error('[stories-v2] curPersist', e); if (window.showToast) showToast('Error saving story.', true); });
+  }
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, jobs: {}, sortKey: 'updatedAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false };
@@ -293,15 +511,97 @@
         if (rec) MastEntity.openRecord('stories-v2', rec, 'read');
       });
     },
-    // Photo-curation authoring → classic Stories view. Use navigateToClassic so
-    // the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('stories');
-      else if (typeof navigateTo === 'function') navigateTo('stories');
+    // ── native curation canvas (drilled SO) ──
+    curate: function (id) {
+      if (typeof window.can === 'function' && !window.can('stories', 'edit')) { if (window.showToast) showToast('You don\'t have permission to edit stories.', true); return; }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
+      MastEntity.drill('story-curation-v2', id);
     },
+    curToggle: function (el) {
+      el.classList.toggle('selected');
+      var url = el.getAttribute('data-url'), buildId = el.getAttribute('data-buildid') || '', source = el.getAttribute('data-source') || 'build';
+      if (el.classList.contains('selected')) {
+        CUR.draft.push({ id: MastDB.newKey('_ids'), mediaUrl: url, milestone: '', caption: '', buildId: buildId, source: source, order: CUR.draft.length });
+      } else {
+        CUR.draft = CUR.draft.filter(function (e) { return e.mediaUrl !== url; });
+        CUR.draft.forEach(function (e, i) { e.order = i; });
+      }
+      renderCurEntries();
+      syncCurThumbs();
+    },
+    curAddText: function () { CUR.draft.push({ id: MastDB.newKey('_ids'), mediaUrl: '', milestone: '', caption: '', buildId: '', source: 'text', order: CUR.draft.length }); renderCurEntries(); },
+    curUpdate: function (idx, field, value) { if (CUR.draft[idx]) CUR.draft[idx][field] = value; },
+    curMove: function (idx, dir) {
+      var n = idx + dir; if (n < 0 || n >= CUR.draft.length) return;
+      var t = CUR.draft[idx]; CUR.draft[idx] = CUR.draft[n]; CUR.draft[n] = t;
+      CUR.draft.forEach(function (e, i) { e.order = i; }); renderCurEntries();
+    },
+    curRemove: function (idx) {
+      CUR.draft.splice(idx, 1); CUR.draft.forEach(function (e, i) { e.order = i; }); renderCurEntries();
+      syncCurThumbs();
+    },
+    curUpload: function (input) {
+      if (typeof window.can === 'function' && !window.can('stories', 'edit')) { if (window.showToast) showToast('You don\'t have permission to edit stories.', true); return; }
+      var files = Array.prototype.slice.call(input.files || []); input.value = '';
+      if (!files.length) return;
+      if (!window.StoriesBridge || !StoriesBridge.uploadMedia || !CUR) { if (window.showToast) showToast('Stories engine still loading — try again', true); return; }
+      var prog = document.getElementById('storyV2UploadProgress'), did = 0;
+      (function next(i) {
+        if (i >= files.length) { if (did && window.showToast) showToast(did + ' photo' + (did === 1 ? '' : 's') + ' uploaded — save the draft to keep changes.'); return; }
+        var f = files[i];
+        if (!/^image\//.test(f.type)) { return next(i + 1); }
+        var node = null;
+        if (prog) { node = document.createElement('div'); node.style.cssText = 'font-size:0.78rem;color:var(--warm-gray);margin-bottom:4px;'; node.textContent = 'Uploading ' + f.name + '…'; prog.appendChild(node); }
+        Promise.resolve(StoriesBridge.uploadMedia(CUR.storyId, f)).then(function (url) {
+          CUR.draft.push({ id: MastDB.newKey('_ids'), mediaUrl: url, milestone: '', caption: '', buildId: '', source: 'upload', order: CUR.draft.length });
+          renderCurEntries(); if (node) node.textContent = '✓ ' + f.name; did++;
+        }).catch(function (e) { if (node) node.textContent = '✗ ' + f.name + ' — ' + (e && e.message); }).then(function () { next(i + 1); });
+      })(0);
+    },
+    curPreview: function () {
+      if (!CUR) return;
+      var title = ((document.getElementById('storyV2CurTitle') || {}).value || '');
+      var entries = CUR.draft.slice().sort(function (a, b) { return a.order - b.order; });
+      if (typeof window.showStoryPreview === 'function') window.showStoryPreview(title, entries);
+    },
+    curSave: function () { curPersist(false); },
+    curPublish: function () { curPersist(true); },
+    // ── detail-level publish / preview / QR (no curation needed) ──
+    preview: function (id) {
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
+      if (typeof window.previewStory === 'function') { window.previewStory(id); return; }
+      var s = V2.byId[id]; if (s && typeof window.showStoryPreview === 'function') window.showStoryPreview(s.title || '', entriesOf(s));
+    },
+    publishFromDetail: function (id) {
+      if (typeof window.can === 'function' && !window.can('stories', 'edit')) { if (window.showToast) showToast('You don\'t have permission to edit stories.', true); return; }
+      if (!window.StoriesBridge || !StoriesBridge.publish) { if (window.showToast) showToast('Stories engine still loading — try again', true); return; }
+      var s = V2.byId[id]; if (!s) return;
+      Promise.resolve(StoriesBridge.publish(id, { title: s.title, entries: s.entries || {}, jobId: s.jobId || null })).then(function (payload) {
+        Object.assign(s, payload || {});
+        if (window.showToast) showToast('Story published!');
+        reloadSoon();
+        MastEntity.get('stories-v2').fetch(id).then(function (rec) { if (rec) MastEntity.openRecord('stories-v2', rec, 'read'); });
+      }).catch(function (e) { console.error('[stories-v2] publish', e); if (window.showToast) showToast('Error publishing.', true); });
+    },
+    unpublish: function (id) {
+      if (typeof window.can === 'function' && !window.can('stories', 'edit')) { if (window.showToast) showToast('You don\'t have permission to edit stories.', true); return; }
+      if (!window.StoriesBridge || !StoriesBridge.unpublish) { if (window.showToast) showToast('Stories engine still loading — try again', true); return; }
+      Promise.resolve(window.mastConfirm ? mastConfirm('Unpublish this story? It will be removed from linked product pages.', { title: 'Unpublish story?', confirmLabel: 'Unpublish' }) : true).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(StoriesBridge.unpublish(id)).then(function () {
+          var s = V2.byId[id]; if (s) { s.status = 'draft'; s.updatedAt = new Date().toISOString(); }
+          if (window.showToast) showToast('Story unpublished.');
+          reloadSoon();
+          MastEntity.get('stories-v2').fetch(id).then(function (rec) { if (rec) MastEntity.openRecord('stories-v2', rec, 'read'); });
+        });
+      }).catch(function (e) { console.error('[stories-v2] unpublish', e); if (window.showToast) showToast('Error.', true); });
+    },
+    qrPrint: function (dataUrl, name) { if (typeof window.printStoryQR === 'function') window.printStoryQR(dataUrl, name); },
+    qrCopy: function (url) { if (typeof window.copyStoryQRUrl === 'function') window.copyStoryQRUrl(url); else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { if (window.showToast) showToast('URL copied'); }); },
+    qrCard: function (pid, name, url) { if (typeof window.printProductCard === 'function') window.printProductCard(pid, name, url); else if (window.showToast) showToast('Print Card unavailable', true); },
     // Create a story NATIVELY (title → draft skeleton); the write delegates to
-    // StoriesBridge.create. Photos / captions / publishing are added afterward
-    // in the classic curation view.
+    // StoriesBridge.create. Photos / captions / publishing are then added in the
+    // native curation canvas (the Curate button on the story detail).
     newStory: function () {
       if (typeof window.can === 'function' && !window.can('stories', 'edit')) {
         if (window.showToast) showToast('You don\'t have permission to create stories.', true); return;
