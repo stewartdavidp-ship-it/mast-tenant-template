@@ -1099,18 +1099,12 @@
     // nested. Use a separate path-based update so we don't blow away smsOptIn.
   }
 
-  // Override toggleNewsletter to use a deep update via _ref directly.
+  // Override toggleNewsletter to use the shared CustomersBridge.setMarketingOptIn
+  // core (deep set on the nested marketing object) — single-sourced with the V2
+  // twin's opt-in toggles.
   toggleNewsletter = function(customerId, currentlyOn) {
     var newVal = !currentlyOn;
-    MastDB.set('admin/customers/' + customerId + '/marketing/newsletterOptIn', newVal).then(function() {
-      return MastDB.set('admin/customers/' + customerId + '/updatedAt', new Date().toISOString());
-    }).then(function() {
-      var c = customersData.find(function(x) { return x && x.id === customerId; });
-      if (c) {
-        if (!c.marketing) c.marketing = {};
-        c.marketing.newsletterOptIn = newVal;
-        c.updatedAt = new Date().toISOString();
-      }
+    CustomersBridge.setMarketingOptIn(customerId, 'newsletter', newVal).then(function() {
       setTimeout(function() {
         if (currentView === 'detail' && selectedCustomerId === customerId && detailTab === 'overview') renderPreservingEdits();
       }, 0);
@@ -3136,11 +3130,8 @@
     if (name === null) return;
     name = name.trim();
     if (!name || name === seg.name) return;
-    var now = new Date().toISOString();
     try {
-      await MastDB.update('admin/customerSegments/' + segId, { name: name, updatedAt: now });
-      seg.name = name;
-      seg.updatedAt = now;
+      await CustomersBridge.renameSegment(segId, name);
       render();
       try { renderTable(); } catch (_e) {}
       requestAnimationFrame(renderTable);
@@ -3279,6 +3270,33 @@
       segmentsData = segmentsData.filter(function (x) { return x.id !== segId; });
       return true;
     },
+    renameSegment: async function (segId, name) {
+      name = (name || '').trim();
+      if (!name) throw new Error('Segment name required');
+      var now = new Date().toISOString();
+      await MastDB.update('admin/customerSegments/' + segId, { name: name, updatedAt: now });
+      var seg = segmentsData.find(function (x) { return x.id === segId; });
+      if (seg) { seg.name = name; seg.updatedAt = now; }
+      return true;
+    },
+    // Marketing opt-in (newsletter + SMS) — a deep set on the nested marketing
+    // object so a single-channel write never clobbers the other channel. Same
+    // write legacy's toggleNewsletter performs; SMS reuses the identical path.
+    // This is the SINGLE source for both the legacy toggle and the V2 twin.
+    setMarketingOptIn: async function (customerId, channel, value) {
+      var key = (channel === 'sms') ? 'smsOptIn' : 'newsletterOptIn';
+      var val = !!value;
+      var now = new Date().toISOString();
+      await MastDB.set('admin/customers/' + customerId + '/marketing/' + key, val);
+      await MastDB.set('admin/customers/' + customerId + '/updatedAt', now);
+      var c = customersData.find(function (x) { return x && x.id === customerId; });
+      if (c) { if (!c.marketing) c.marketing = {}; c.marketing[key] = val; c.updatedAt = now; }
+      return val;
+    },
+    // Add/link a contact to this customer — opens the contacts add-contact flow
+    // with the customer pre-linked (legacy addContactToCustomer). Navigation +
+    // modal only; the atomic contact write lives in contacts.js.
+    addContact: function (customerId) { return addContactToCustomer(customerId); },
     recomputeStats: async function () {
       var fn = firebase.functions().httpsCallable('recomputeAllCustomerStats');
       var res = await fn({ tenantId: MastDB.tenantId() });
