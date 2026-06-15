@@ -117,11 +117,27 @@
         if (typeof window.can === 'function' && !window.can('customers', 'edit')) return '';
         var id = r._key || r.id;
         var esc2 = window.MastUI._esc;
+        var nlOn = !!(r.marketing && r.marketing.newsletterOptIn);
+        var smsOn = !!(r.marketing && r.marketing.smsOptIn);
+        function optRow(label, channel, on) {
+          return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;">' +
+            '<span style="font-size:0.85rem;">' + label +
+              ' <span style="font-size:0.72rem;color:var(--warm-gray);">' + (on ? '· opted in' : '· not opted in') + '</span></span>' +
+            '<button class="btn btn-secondary btn-small" onclick="CustomersV2.toggleOptIn(\'' + channel + '\',\'' + esc2(id) + '\',' + (on ? 'true' : 'false') + ')">' +
+              (on ? 'Opt out' : 'Opt in') + '</button>' +
+          '</div>';
+        }
+        var marketingCard = window.MastUI.card('Marketing & contacts',
+          optRow('Newsletter', 'newsletter', nlOn) +
+          optRow('SMS', 'sms', smsOn) +
+          '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">' +
+            '<button class="btn btn-secondary btn-small" onclick="CustomersV2.addContact(\'' + esc2(id) + '\')">+ Add / link a contact</button>' +
+          '</div>');
         var tags = (r.tags || []).map(function (t) {
           return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.78rem;padding:2px 8px;border-radius:999px;border:1px solid var(--border);color:var(--warm-gray);margin:2px 4px 2px 0;">' + esc2(t) +
             '<button style="background:none;border:none;color:var(--warm-gray);cursor:pointer;padding:0;font-size:0.78rem;" onclick="CustomersV2.removeTag(\'' + esc2(id) + '\',\'' + esc2(t) + '\')">&times;</button></span>';
         }).join('');
-        return window.MastUI.card('Tags & notes',
+        return marketingCard + window.MastUI.card('Tags & notes',
           '<div style="margin-bottom:8px;">' + (tags || '<span class="mu-sub">No tags.</span>') + '</div>' +
           '<div style="display:flex;gap:8px;margin-bottom:12px;">' +
             '<input class="form-input" id="custV2NewTag" placeholder="Add a tag…" style="max-width:200px;font-size:0.85rem;">' +
@@ -177,9 +193,19 @@
     onSave: function (rec) {
       var id = rec._key || rec.id;
       if (!id || !window.MastDB || !MastDB.update) return true;
-      // Edit persists operator-editable identity/contact fields only.
-      return MastDB.update('admin/customers/' + id, { displayName: rec.displayName, phone: rec.phone })
-        .then(function () { return true; });
+      // Edit persists operator-editable identity/contact fields. primaryEmail is
+      // an editable Identity field (and the legacy customer edit covers name +
+      // email + phone) — dropping it here silently ignored email changes.
+      // Normalize empty → null to match legacy (`newEmail || null`). This is an
+      // UPDATE of an existing record (not a create), so it does not touch the
+      // byEmail identity index / customer-resolver path.
+      var email = (rec.primaryEmail == null ? '' : String(rec.primaryEmail)).trim();
+      return MastDB.update('admin/customers/' + id, {
+        displayName: rec.displayName,
+        primaryEmail: email || null,
+        phone: rec.phone,
+        updatedAt: new Date().toISOString()
+      }).then(function () { return true; });
     }
   });
 
@@ -293,6 +319,8 @@
             }).join('') +
           '</select>' +
           '<button class="btn btn-secondary" onclick="CustomersV2.saveSegment()">Save segment</button>' +
+          (V2.segmentId ? '<button class="btn btn-secondary" onclick="CustomersV2.renameSegment()">Rename</button>' +
+            '<button class="btn btn-secondary" onclick="CustomersV2.deleteSegment()" style="color:var(--danger);">Delete</button>' : '') +
           '<button class="btn btn-secondary" onclick="navigateTo(\'duplicates-v2\')">Duplicates →</button>' +
           '<button class="btn btn-secondary" onclick="CustomersV2.recompute()">Recompute stats</button>' +
           '<button class="btn btn-secondary" onclick="CustomersV2.exportCsv()">↓ Export</button>' +
@@ -333,6 +361,47 @@
         }).catch(function (e) { if (window.showToast) showToast(e && e.message || 'Could not save segment', true); });
       });
     },
+    // Rename the active saved segment (CustomersBridge.renameSegment \u2014 plain
+    // client write, same as legacy manage-segments). Single-sourced.
+    renameSegment: function () {
+      var segId = V2.segmentId;
+      if (!segId) { if (window.showToast) showToast('Pick a segment to rename', true); return; }
+      if (typeof window.can === 'function' && !window.can('customers', 'edit')) { if (window.showToast) showToast('You don\u2019t have permission', true); return; }
+      var seg = V2.segments.filter(function (g) { return g.id === segId; })[0];
+      withBridge(function (b) {
+        if (!b.renameSegment) { if (window.showToast) showToast('Rename unavailable', true); return; }
+        Promise.resolve(window.mastPrompt ? mastPrompt('Rename segment:', { title: 'Rename segment', confirmLabel: 'Rename', defaultValue: (seg && seg.name) || '' }) : null).then(function (name) {
+          if (name == null) return;
+          name = String(name).trim();
+          if (!name || (seg && name === seg.name)) return;
+          return Promise.resolve(b.renameSegment(segId, name)).then(function () {
+            if (seg) seg.name = name;
+            if (window.showToast) showToast('Segment renamed');
+            render();
+          });
+        }).catch(function (e) { if (window.showToast) showToast(e && e.message || 'Rename failed', true); });
+      });
+    },
+    // Delete the active saved segment (CustomersBridge.deleteSegment \u2014 already
+    // on the bridge; the twin previously only saved/applied).
+    deleteSegment: function () {
+      var segId = V2.segmentId;
+      if (!segId) { if (window.showToast) showToast('Pick a segment to delete', true); return; }
+      if (typeof window.can === 'function' && !window.can('customers', 'edit')) { if (window.showToast) showToast('You don\u2019t have permission', true); return; }
+      var seg = V2.segments.filter(function (g) { return g.id === segId; })[0];
+      withBridge(function (b) {
+        if (!b.deleteSegment) { if (window.showToast) showToast('Delete unavailable', true); return; }
+        Promise.resolve(window.mastConfirm ? mastConfirm('Delete segment "' + ((seg && seg.name) || '') + '"?', { title: 'Delete segment', confirmLabel: 'Delete', danger: true }) : true).then(function (ok) {
+          if (!ok) return;
+          return Promise.resolve(b.deleteSegment(segId)).then(function () {
+            V2.segments = V2.segments.filter(function (g) { return g.id !== segId; });
+            V2.segmentId = null;
+            if (window.showToast) showToast('Segment deleted');
+            render();
+          });
+        }).catch(function (e) { if (window.showToast) showToast(e && e.message || 'Delete failed', true); });
+      });
+    },
     recompute: function () {
       if (typeof window.can === 'function' && !window.can('customers', 'edit')) { if (window.showToast) showToast('You don\u2019t have permission', true); return; }
       withBridge(function (b) {
@@ -368,6 +437,30 @@
           if (window.showToast) showToast('Notes saved');
           refreshOpen(id);
         });
+      });
+    },
+    // Marketing opt-in (newsletter / SMS) — single-sourced through
+    // CustomersBridge.setMarketingOptIn (deep set, never clobbers the sibling
+    // channel). `currentlyOn` is the value at render; we flip it.
+    toggleOptIn: function (channel, id, currentlyOn) {
+      if (typeof window.can === 'function' && !window.can('customers', 'edit')) { if (window.showToast) showToast('You don’t have permission', true); return; }
+      var on = (currentlyOn === true || currentlyOn === 'true');
+      withBridge(function (b) {
+        if (!b.setMarketingOptIn) { if (window.showToast) showToast('Opt-in unavailable', true); return; }
+        Promise.resolve(b.setMarketingOptIn(id, channel, !on)).then(function (val) {
+          var label = channel === 'sms' ? 'SMS' : 'Newsletter';
+          if (window.showToast) showToast(val ? ('Opted in to ' + label) : ('Opted out of ' + label));
+          refreshOpen(id);
+        }).catch(function (e) { if (window.showToast) showToast('Toggle failed: ' + (e && e.message || e), true); });
+      });
+    },
+    // Add / link a contact — opens the contacts add-contact flow with this
+    // customer pre-linked (CustomersBridge.addContact → legacy addContactToCustomer).
+    addContact: function (id) {
+      if (typeof window.can === 'function' && !window.can('customers', 'edit')) { if (window.showToast) showToast('You don’t have permission', true); return; }
+      withBridge(function (b) {
+        if (!b.addContact) { if (window.showToast) showToast('Add-contact unavailable', true); return; }
+        b.addContact(id);
       });
     },
     adjustWallet: function (kind, id) {
