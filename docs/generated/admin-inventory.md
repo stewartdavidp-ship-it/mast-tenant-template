@@ -6,12 +6,12 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,884** lines
-- **Feature modules:** **119** files in `app/modules/` (**110** routed), **133,416** lines combined
+- **Feature modules:** **119** files in `app/modules/` (**110** routed), **133,437** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
 | `modules/accounting.js` | 1,551 | — |
-| `modules/advisor.js` | 1,408 | advisor |
+| `modules/advisor.js` | 1,429 | advisor |
 | `modules/analytics-v2.js` | 221 | analytics-v2 |
 | `modules/audit-feedback.js` | 849 | suppressions |
 | `modules/audit-v2.js` | 414 | audit-v2, audit-muted-v2 |
