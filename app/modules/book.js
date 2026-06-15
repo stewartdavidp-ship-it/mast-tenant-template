@@ -4744,6 +4744,183 @@
     });
     await MastDB.enrollments.update(enrollId, { incidents: incidents });
   }
+  // ── Per-session reschedule / reassign / ad-hoc create cores ──────────
+  // Native V2 scheduling for a SINGLE materialized occurrence (sessions-v2
+  // twin). These were classic-only: legacy reassignment lived in the
+  // assignToSession overlay (saveSessionAssignment reads the DOM) and there
+  // was no per-occurrence date/time/capacity/location edit nor a single-
+  // session create at all (only the class materializer). State-free cores —
+  // caller owns confirm/toast/refresh — that REUSE the legacy checkConflicts
+  // (the conflict logic is not reimplemented) and mirror the EXACT write
+  // saveSessionAssignment / materializeSessions make. Money-free surface.
+
+  // Populate instructors/resources maps + data WITHOUT the legacy DOM render
+  // (loadInstructors/loadResources write to #bookInstructorsTable etc. which
+  // don't exist on the V2 surface). checkConflicts resolves friendly names
+  // from instructorsMap/resourcesMap, and the assign skill-grouping reads
+  // instructorsData + the skill catalog — so seed all of them here.
+  async function _ensureSchedRefsCore() {
+    if (!skillCatalogLoaded) { try { await loadSkillCatalog(); } catch (e) {} }
+    if (!instructorsLoaded || !instructorsData.length) {
+      try {
+        var idata = (await MastDB.instructors.list(100)) || {};
+        instructorsData = Object.keys(idata).map(function (id) { var i = idata[id]; i.id = id; return i; });
+        instructorsMap = {}; instructorsData.forEach(function (i) { instructorsMap[i.id] = i; });
+        instructorsLoaded = true;
+      } catch (e) { console.warn('[Book] sched refs: instructors', e); }
+    }
+    if (!resourcesLoaded || !resourcesData.length) {
+      try {
+        var rdata = (await MastDB.resources.list(100)) || {};
+        resourcesData = Object.keys(rdata).map(function (id) { var r = rdata[id]; r.id = id; return r; });
+        resourcesMap = {}; resourcesData.forEach(function (r) { resourcesMap[r.id] = r; });
+        resourcesLoaded = true;
+      } catch (e) { console.warn('[Book] sched refs: resources', e); }
+    }
+  }
+
+  // Active-only instructor / resource pick-lists for the V2 form. Instructors
+  // carry their required-skill gaps vs the parent class so the form can group
+  // qualified / missing-skills (mirrors assignToSession's optgroups) — a guide,
+  // never a block (substitutes / shadows / co-teaches all allowed).
+  async function _sessSchedRefsCore(classId) {
+    await _ensureSchedRefsCore();
+    var cls = classId ? (await MastDB.classes.get(classId).catch(function () { return null; })) : null;
+    var reqSkills = (cls && Array.isArray(cls.requiredSkills)) ? cls.requiredSkills : [];
+    var instructors = instructorsData
+      .filter(function (i) { return i.status === 'active'; })
+      .map(function (i) {
+        var missing = reqSkills.length ? _missingSkills(i, reqSkills) : [];
+        return { id: i.id, name: i.name || '', qualified: missing.length === 0, missing: missing.map(_skillLabel) };
+      });
+    var resources = resourcesData
+      .filter(function (r) { return r.status === 'active'; })
+      .map(function (r) { return { id: r.id, name: r.name || '', type: r.type || '' }; });
+    return { instructors: instructors, resources: resources };
+  }
+
+  // Normalize the V2 additional-staff payload exactly like saveSessionAssignment:
+  // linked instructorId XOR freeform name, role from the allow-list, optional notes;
+  // drop entries with neither id nor name.
+  function _normalizeStaff(arr) {
+    return (Array.isArray(arr) ? arr : []).map(function (e) {
+      e = e || {};
+      return {
+        instructorId: e.instructorId || null,
+        freeformName: e.instructorId ? null : (e.freeformName || '').trim() || null,
+        role: STAFF_ROLES.indexOf(e.role) !== -1 ? e.role : 'assist',
+        notes: (e.notes || '').trim() || null
+      };
+    }).filter(function (e) { return e.instructorId || e.freeformName; });
+  }
+
+  // Reassign a single occurrence's instructor + resource + additionalStaff —
+  // the exact write saveSessionAssignment makes, minus the DOM/overlay/toast.
+  // Runs the legacy checkConflicts and RETURNS the conflict strings (warn, not
+  // block — matches legacy: surfaced but proceeds). Returns { conflicts }.
+  async function _sessReassignCore(sessionId, payload) {
+    await _ensureSchedRefsCore();
+    var session = (await MastDB.classSessions.get(sessionId)) || {};
+    payload = payload || {};
+    var instrId = payload.instructorId || null;
+    var resId = payload.resourceId || null;
+    var cleanedStaff = _normalizeStaff(payload.additionalStaff);
+    var conflicts = await checkConflicts(session.date, session.startTime, session.endTime, instrId, resId, sessionId, cleanedStaff);
+    await MastDB.classSessions.update(sessionId, {
+      instructorId: instrId,
+      instructorName: instrId && instructorsMap[instrId] ? instructorsMap[instrId].name : null,
+      resourceId: resId,
+      resourceName: resId && resourcesMap[resId] ? resourcesMap[resId].name : null,
+      additionalStaff: cleanedStaff
+    });
+    if (window.writeAudit) writeAudit('update', 'classSession', sessionId, { action: 'reassign' });
+    return { conflicts: conflicts };
+  }
+
+  // Reschedule a single occurrence — date / start-end time / capacity /
+  // location. PATCH-style (preserves enrolled, status, instructor, etc.).
+  // Conflict-checks the NEW slot against the session's own assignment and
+  // RETURNS the conflicts (warn, not block). Returns { conflicts }.
+  async function _sessRescheduleCore(sessionId, payload) {
+    await _ensureSchedRefsCore();
+    var session = (await MastDB.classSessions.get(sessionId)) || {};
+    payload = payload || {};
+    var patch = {};
+    if (payload.date != null) patch.date = String(payload.date).slice(0, 10);
+    if (payload.startTime != null) patch.startTime = payload.startTime || null;
+    if (payload.endTime != null) patch.endTime = payload.endTime || null;
+    if (payload.capacity != null && payload.capacity !== '') {
+      var cap = parseInt(payload.capacity, 10);
+      if (!isNaN(cap) && cap >= 0) patch.capacity = cap;
+    }
+    if (payload.location != null) patch.location = (payload.location || '').trim() || null;
+    var date = patch.date != null ? patch.date : session.date;
+    var startTime = patch.startTime != null ? patch.startTime : session.startTime;
+    var endTime = patch.endTime != null ? patch.endTime : session.endTime;
+    var conflicts = await checkConflicts(date, startTime, endTime, session.instructorId || null, session.resourceId || null, sessionId, session.additionalStaff);
+    await MastDB.classSessions.update(sessionId, patch);
+    if (window.writeAudit) writeAudit('update', 'classSession', sessionId, { action: 'reschedule' });
+    return { conflicts: conflicts };
+  }
+
+  // Add an ad-hoc one-off session for a class — a single occurrence OUTSIDE
+  // the class schedule (legacy only ever materialized from the schedule). The
+  // record shape mirrors materializeSessions exactly (so it reads/runs/closes
+  // identically downstream); end time is derived from the class duration when
+  // not given. Conflict-checks the slot and RETURNS conflicts (warn, not
+  // block). Returns { id, conflicts }.
+  async function _sessCreateCore(classId, payload) {
+    if (!classId) throw new Error('Pick a class for the session.');
+    payload = payload || {};
+    var date = payload.date ? String(payload.date).slice(0, 10) : '';
+    var startTime = payload.startTime || '';
+    if (!date || !startTime) throw new Error('Date and start time are required.');
+    await _ensureSchedRefsCore();
+    var cls = (await MastDB.classes.get(classId)) || {};
+    var duration = parseInt(cls.duration, 10) || 60;
+    var endTime = payload.endTime || _calcEndTime(startTime, duration);
+    var cap = parseInt(payload.capacity, 10);
+    if (isNaN(cap) || cap < 0) cap = parseInt(cls.capacity, 10) || 8;
+    var instrId = payload.instructorId || cls.instructorId || null;
+    var resId = payload.resourceId || cls.resourceId || null;
+    var conflicts = await checkConflicts(date, startTime, endTime, instrId, resId, null, null);
+    var sessionId = MastDB.classSessions.newKey();
+    await MastDB.classSessions.set(sessionId, {
+      classId: classId,
+      date: date,
+      startTime: startTime,
+      endTime: endTime,
+      capacity: cap,
+      enrolled: 0,
+      waitlisted: 0,
+      status: 'scheduled',
+      instructorId: instrId,
+      instructorName: instrId && instructorsMap[instrId] ? instructorsMap[instrId].name : (cls.instructorName || null),
+      resourceId: resId,
+      resourceName: resId && resourcesMap[resId] ? resourcesMap[resId].name : (cls.resourceName || null),
+      location: (payload.location || '').trim() || null,
+      materialsCostCents: cls.materialsCostCents || null,
+      materialsIncluded: cls.materialsIncluded || false,
+      materialsNote: cls.materialsNote || null,
+      cancelReason: null,
+      notes: null,
+      adHoc: true,
+      createdAt: new Date().toISOString()
+    });
+    if (window.writeAudit) writeAudit('create', 'classSession', sessionId, { classId: classId, adHoc: true });
+    return { id: sessionId, conflicts: conflicts };
+  }
+
+  // End-time-from-duration helper (mirrors the materializer's calcEndTime;
+  // hoisted so _sessCreateCore can reuse it).
+  function _calcEndTime(startTime, durationMin) {
+    var parts = String(startTime).split(':');
+    var totalMin = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0) + (durationMin || 60);
+    var h = Math.floor(totalMin / 60) % 24;
+    var m = totalMin % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  }
+
   // Run-session verbs for the sessions-v2 twin (extends the Wave-2 bridge).
   window.SessionsBridge = Object.assign(window.SessionsBridge || {}, {
     checkIn: function (id, opts) { return _sessCheckInCore(id, opts); },
@@ -4752,7 +4929,13 @@
     closeOut: function (id, status) { return _sessCloseOutCore(id, status); },
     closeOutAll: function (sessionId) { return _sessCloseOutAllCore(sessionId); },
     close: function (sessionId, notes) { return _sessCloseSessionCore(sessionId, notes); },
-    addIncident: function (id, inc) { return _sessAddIncidentCore(id, inc); }
+    addIncident: function (id, inc) { return _sessAddIncidentCore(id, inc); },
+    // Per-session scheduling (reschedule / reassign / ad-hoc create). All
+    // reuse the legacy checkConflicts and return { conflicts } (warn-not-block).
+    schedRefs: function (classId) { return _sessSchedRefsCore(classId); },
+    reassign: function (sessionId, payload) { return _sessReassignCore(sessionId, payload); },
+    reschedule: function (sessionId, payload) { return _sessRescheduleCore(sessionId, payload); },
+    createSession: function (classId, payload) { return _sessCreateCore(classId, payload); }
   });
 
   window._bookCheckIn = async function(enrollId) {

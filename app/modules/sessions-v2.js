@@ -178,9 +178,98 @@
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' + UI.card('Session', overview + viewClass + ops) +
           UI.card('Roster', roster) + '</div>';
+      },
+      // ── Native per-session EDIT (reschedule + reassign) ────────────────
+      // Reschedule = date / start-end time / capacity / location; reassign =
+      // instructor / resource / additionalStaff (co-teachers / assistants —
+      // the ONLY surface where additionalStaff is editable). Create mode adds a
+      // class picker (ad-hoc one-off outside the class schedule). Persisted via
+      // SessionsBridge (reschedule / reassign / createSession) → the legacy
+      // saveSessionAssignment + materializer write shapes, single-sourced; the
+      // conflict check is the legacy checkConflicts (warn, not block).
+      editRender: function (s, mode) {
+        s = s || {};
+        var isCreate = mode === 'create';
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        function row3(a, b, c) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + c + '</div>'; }
+        // Class picker (create only) — pre-fills duration/capacity defaults on save.
+        var classPicker = '';
+        if (isCreate) {
+          var clsKeys = Object.keys(V2.classMeta).sort(function (a, b) { return String(V2.classes[a] || '').localeCompare(String(V2.classes[b] || '')); });
+          var clsOpts = '<option value="">— Pick a class —</option>' + clsKeys.map(function (k) {
+            return '<option value="' + esc(k) + '"' + (s.classId === k ? ' selected' : '') + '>' + esc(V2.classes[k] || k) + '</option>';
+          }).join('');
+          classPicker = fg('Class *', '<select class="form-input" id="sessV2EClass" style="width:100%;">' + clsOpts + '</select>');
+        }
+        // Instructor picker — qualified vs missing-skills grouping when the class
+        // has requiredSkills (a guide, never a block; mirrors assignToSession).
+        var cls = (s.classId && V2.classMeta[s.classId]) || null;
+        var reqSkills = (cls && Array.isArray(cls.requiredSkills)) ? cls.requiredSkills : [];
+        var instrList = Object.keys(V2.instructors).map(function (k) {
+          return Object.assign({ id: k }, V2.instructors[k]);
+        }).filter(function (i) { return i.status === 'active'; });
+        function instrOpt(i) {
+          return '<option value="' + esc(i.id) + '"' + (s.instructorId === i.id ? ' selected' : '') + '>' + esc(i.name || i.id) + '</option>';
+        }
+        var instrOpts;
+        if (!reqSkills.length || isCreate) {
+          instrOpts = '<option value="">— No instructor —</option>' + instrList.map(instrOpt).join('');
+        } else {
+          var qual = [], unqual = [];
+          instrList.forEach(function (i) {
+            var have = {}; (Array.isArray(i.skills) ? i.skills : []).forEach(function (sl) { have[sl] = true; });
+            var missing = reqSkills.filter(function (sl) { return !have[sl]; });
+            (missing.length ? unqual : qual).push(i);
+          });
+          instrOpts = '<option value="">— No instructor —</option>';
+          if (qual.length) instrOpts += '<optgroup label="Qualified (' + qual.length + ')">' + qual.map(instrOpt).join('') + '</optgroup>';
+          if (unqual.length) instrOpts += '<optgroup label="Missing required skills (' + unqual.length + ')">' + unqual.map(instrOpt).join('') + '</optgroup>';
+        }
+        var resList = Object.keys(V2.resources).map(function (k) { return Object.assign({ id: k }, V2.resources[k]); })
+          .filter(function (r) { return r.status === 'active'; });
+        var resOpts = '<option value="">— No room/equipment —</option>' + resList.map(function (r) {
+          return '<option value="' + esc(r.id) + '"' + (s.resourceId === r.id ? ' selected' : '') + '>' + esc(r.name || r.id) + (r.type ? ' (' + esc(r.type) + ')' : '') + '</option>';
+        }).join('');
+
+        // Seed the additional-staff editor scratch state (cloned so cancel can't
+        // mutate the on-disk record). Rendered into #sessV2StaffList post-DOM.
+        SessionsV2._staffState = Array.isArray(s.additionalStaff) ? JSON.parse(JSON.stringify(s.additionalStaff)) : [];
+        setTimeout(function () { SessionsV2._renderStaff(); }, 0);
+
+        var cap = capacityOf(s);
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (isCreate ? 'NEW' : 'EDITING') + '</span>' + (isCreate ? 'New ad-hoc session' : 'Reschedule &amp; reassign this session') + '</div>' +
+          classPicker +
+          '<div class="mu-editbar" style="margin-top:14px;"><span class="mu-editpill">WHEN</span>Date, time &amp; capacity</div>' +
+          row3(
+            fg('Date *', '<input class="form-input" type="date" id="sessV2EDate" value="' + esc(dateStr(s)) + '" style="width:100%;">', true),
+            fg('Start time *', '<input class="form-input" type="time" id="sessV2EStart" value="' + esc(s.startTime || '') + '" style="width:100%;">', true),
+            fg('End time', '<input class="form-input" type="time" id="sessV2EEnd" value="' + esc(s.endTime || '') + '" style="width:100%;">', true)
+          ) +
+          row2(
+            fg('Capacity', '<input class="form-input" type="number" min="0" id="sessV2ECapacity" value="' + (cap != null ? esc(cap) : '') + '" style="width:100%;" placeholder="Class default">', true),
+            fg('Location', '<input class="form-input" id="sessV2ELocation" value="' + esc(s.location || '') + '" style="width:100%;" placeholder="e.g. Studio B (overrides room)">', true)
+          ) +
+          '<div class="mu-editbar" style="margin-top:14px;"><span class="mu-editpill">WHO</span>Instructor, room &amp; co-teachers</div>' +
+          row2(
+            fg('Instructor', '<select class="form-input" id="sessV2EInstr" style="width:100%;">' + instrOpts + '</select>', true),
+            fg('Room / equipment', '<select class="form-input" id="sessV2ERes" style="width:100%;">' + resOpts + '</select>', true)
+          ) +
+          '<div class="form-group"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">' +
+            '<label class="form-label" style="margin:0;">Additional staff</label>' +
+            '<button type="button" class="btn btn-secondary btn-small" onclick="SessionsV2._addStaff()">+ Add staff</button></div>' +
+            '<div id="sessV2StaffList"></div>' +
+            '<div class="mu-sub" style="margin-top:4px;">Co-teachers, assistants, shadows &amp; observers. Only the primary instructor is checked against required skills.</div>' +
+          '</div>' +
+          '<div class="mu-sub" style="margin-top:10px;">Schedule conflicts (instructor or room double-booked) are flagged on save, but won’t block it.</div>';
       }
+    },
+    // Top-level onSave (engine reads s.onSave) → the Edit button appears in read
+    // mode and the in-place editor saves through SessionsV2._save (reschedule +
+    // reassign, or ad-hoc create) → SessionsBridge → legacy write shapes.
+    onSave: function (rec, mode) {
+      return SessionsV2._save(rec, mode);
     }
-    // No onSave → no Edit button (scheduling / editing an occurrence stays on legacy #book).
   });
 
   // ── module state + data ─────────────────────────────────────────────
@@ -188,7 +277,11 @@
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
-  var V2 = { rows: [], byId: {}, classes: {}, today: todayStr(), sortKey: 'date', sortDir: 'desc', q: '', statusFilter: 'all', whenFilter: 'all', loaded: false };
+  // classMeta[id] = the full class record (for the create picker + per-class
+  // duration default); classes[id] = the resolved NAME (kept for cheap list
+  // display). instructors / resources feed the reschedule/reassign/create form
+  // pickers — loaded once here so the editor never reads legacy DOM.
+  var V2 = { rows: [], byId: {}, classes: {}, classMeta: {}, instructors: {}, resources: {}, today: todayStr(), sortKey: 'date', sortDir: 'desc', q: '', statusFilter: 'all', whenFilter: 'all', loaded: false };
 
   // Run-once data load shared by route setup and cold drills (fetch gate).
   var _loadPromise = null;
@@ -208,12 +301,18 @@
     // the class NAME; public/classSessions is the occurrence list.
     return Promise.all([
       Promise.resolve(MastDB.get('public/classSessions')).catch(function () { return null; }),
-      Promise.resolve(MastDB.get('public/classes')).catch(function () { return null; })
+      Promise.resolve(MastDB.get('public/classes')).catch(function () { return null; }),
+      // Instructor / resource pickers for the reschedule/reassign/create form.
+      Promise.resolve(MastDB.instructors.list(100)).catch(function () { return {}; }),
+      Promise.resolve(MastDB.resources.list(100)).catch(function () { return {}; })
     ]).then(function (res) {
       var sv = res[0] || {}, cv = res[1] || {};
-      V2.classes = {};
+      function toMap(x) { return (x && typeof x.val === 'function') ? (x.val() || {}) : (x || {}); }
+      V2.instructors = toMap(res[2]);
+      V2.resources = toMap(res[3]);
+      V2.classes = {}; V2.classMeta = {};
       Object.keys(cv).forEach(function (k) {
-        var c = cv[k]; if (c && typeof c === 'object') V2.classes[k] = c.name || c.title || c.className || k;
+        var c = cv[k]; if (c && typeof c === 'object') { V2.classes[k] = c.name || c.title || c.className || k; V2.classMeta[k] = c; }
       });
       var out = [];
       Object.keys(sv).forEach(function (k) {
@@ -224,6 +323,8 @@
       V2.loaded = true;
     }).catch(function (e) { console.error('[sessions-v2] load', e); });
   }
+  // Refresh the cache after a legacy write settles (mirrors classes-v2).
+  function reloadSoon() { V2.loaded = false; _loadPromise = null; setTimeout(load, 250); }
 
   function visibleRows() {
     var rows = V2.rows;
@@ -274,7 +375,9 @@
       U.pageHeader({
         title: 'Schedule',
         count: N.count(V2.rows.length) + ' session' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="SessionsV2.exportCsv()">↓ Export</button>'
+        actionsHtml:
+          (can('calendar', 'edit') ? '<button class="btn btn-primary" onclick="SessionsV2.create()">+ New session</button> ' : '') +
+          '<button class="btn btn-secondary" onclick="SessionsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + lensPills +
         '<span style="width:1px;background:var(--border,rgba(127,127,127,0.3));margin:0 4px;"></span>' + statusPills +
@@ -473,6 +576,126 @@
         var el3 = document.getElementById('sessV2Roster');
         if (el3) el3.innerHTML = '<span class="mu-sub">Could not load the roster.</span>';
       });
+    },
+    // ── Per-session reschedule / reassign + ad-hoc create ───────────────
+    // Open a blank create form (ad-hoc one-off session). Class is picked in the
+    // form. Mirrors classes-v2.create → MastEntity.openRecord(...,'create').
+    create: function (seed) {
+      if (!can('calendar', 'edit')) { if (window.showToast) showToast('Schedule write access required.', true); return; }
+      ensureLoaded().then(function () { MastEntity.openRecord('sessions-v2', seed || {}, 'create'); });
+    },
+    // additionalStaff editor — scratch state + in-place rows (mirrors the legacy
+    // _assignStaff* editor; the ONLY surface where additionalStaff is editable).
+    _staffState: [],
+    _STAFF_ROLES: ['shadow', 'assist', 'co-teach', 'observer'],
+    _renderStaff: function () {
+      var list = document.getElementById('sessV2StaffList');
+      if (!list) return;
+      var st = SessionsV2._staffState || [];
+      if (!st.length) { list.innerHTML = '<div class="mu-sub" style="padding:4px 0;">No additional staff.</div>'; return; }
+      var instrs = Object.keys(V2.instructors).map(function (k) { return Object.assign({ id: k }, V2.instructors[k]); })
+        .filter(function (i) { return i.status === 'active'; });
+      list.innerHTML = st.map(function (entry, idx) {
+        var instrOpts = '<option value="">— Freeform name —</option>' + instrs.map(function (i) {
+          return '<option value="' + esc(i.id) + '"' + (entry.instructorId === i.id ? ' selected' : '') + '>' + esc(i.name || i.id) + '</option>';
+        }).join('');
+        var roleOpts = SessionsV2._STAFF_ROLES.map(function (r) {
+          return '<option value="' + r + '"' + (entry.role === r ? ' selected' : '') + '>' + r + '</option>';
+        }).join('');
+        return '<div style="margin-bottom:10px;">' +
+          '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">' +
+            '<select class="form-input" style="flex:1;min-width:120px;" onchange="SessionsV2._staffField(' + idx + ',\'instructorId\',this.value)">' + instrOpts + '</select>' +
+            '<select class="form-input" style="flex:0 0 130px;" onchange="SessionsV2._staffField(' + idx + ',\'role\',this.value)">' + roleOpts + '</select>' +
+            '<button type="button" class="btn btn-secondary btn-small" onclick="SessionsV2._removeStaff(' + idx + ')">Remove</button>' +
+          '</div>' +
+          (entry.instructorId ? '' :
+            '<input type="text" class="form-input" style="margin-bottom:6px;" placeholder="Name (for staff not in the instructor list)" value="' + esc(entry.freeformName || '') + '" oninput="SessionsV2._staffField(' + idx + ',\'freeformName\',this.value)">') +
+          '<input type="text" class="form-input" placeholder="Notes (optional)" value="' + esc(entry.notes || '') + '" oninput="SessionsV2._staffField(' + idx + ',\'notes\',this.value)">' +
+          '</div>';
+      }).join('');
+    },
+    _addStaff: function () { SessionsV2._staffState.push({ instructorId: null, freeformName: '', role: 'assist', notes: '' }); SessionsV2._renderStaff(); },
+    _removeStaff: function (idx) { SessionsV2._staffState.splice(idx, 1); SessionsV2._renderStaff(); },
+    _staffField: function (idx, field, value) {
+      var e = SessionsV2._staffState[idx]; if (!e) return;
+      if (field === 'instructorId') {
+        e.instructorId = value || null;
+        if (value) e.freeformName = '';
+        SessionsV2._renderStaff(); // toggles the freeform input → full re-render
+      } else { e[field] = value; }
+    },
+    // Persist a reschedule + reassign (edit) or an ad-hoc session (create) via
+    // SessionsBridge → legacy write shapes. Conflicts are WARNED (toast), never
+    // blocking — matching legacy saveSessionAssignment. Returns a Promise<bool>.
+    _save: function (rec, mode) {
+      if (!can('calendar', 'edit')) { if (window.showToast) showToast('Schedule write access required.', true); return false; }
+      if (!window.SessionsBridge || !window.SessionsBridge.reschedule) { if (window.showToast) showToast('Schedule engine still loading — try again', true); return false; }
+      function v(id) { return ((document.getElementById(id) || {}).value || ''); }
+      var date = v('sessV2EDate'), startTime = v('sessV2EStart');
+      if (!date || !startTime) { if (window.showToast) showToast('Date and start time are required.', true); return false; }
+      // Read the additional-staff scratch state directly (kept in sync by the
+      // onchange/oninput handlers).
+      var staff = (SessionsV2._staffState || []).slice();
+      var when = { date: date, startTime: startTime, endTime: v('sessV2EEnd') || null,
+                   capacity: v('sessV2ECapacity'), location: v('sessV2ELocation') };
+      var instrId = v('sessV2EInstr') || null, resId = v('sessV2ERes') || null;
+
+      function warnConflicts(res) {
+        var c = res && res.conflicts;
+        if (Array.isArray(c) && c.length && window.showToast) {
+          showToast('Saved — conflict: ' + c[0] + (c.length > 1 ? ' (+' + (c.length - 1) + ' more)' : ''), true);
+        }
+        return res;
+      }
+
+      if (mode === 'create') {
+        var classId = v('sessV2EClass');
+        if (!classId) { if (window.showToast) showToast('Pick a class for the session.', true); return false; }
+        return Promise.resolve(window.SessionsBridge.createSession(classId, {
+          date: when.date, startTime: when.startTime, endTime: when.endTime,
+          capacity: when.capacity, location: when.location, instructorId: instrId, resourceId: resId,
+          additionalStaff: staff
+        })).then(function (res) {
+          // createSession doesn't write additionalStaff in its core (the
+          // materializer shape has none); if any was added, reassign to persist it.
+          var id = res && res.id;
+          var after = (id && staff.length)
+            ? Promise.resolve(window.SessionsBridge.reassign(id, { instructorId: instrId, resourceId: resId, additionalStaff: staff }))
+            : Promise.resolve(null);
+          return after.then(function () { warnConflicts(res); if (window.showToast) showToast('Session created.'); reloadSoon(); return true; });
+        }).catch(function (e) { console.error('[sessions-v2] create', e); if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); return false; });
+      }
+
+      var sid = rec._key || rec.id;
+      // reschedule (date/time/capacity/location) then reassign (instructor/
+      // resource/additionalStaff). Two PATCH writes, both single-sourced.
+      return Promise.resolve(window.SessionsBridge.reschedule(sid, when))
+        .then(function (r1) {
+          return Promise.resolve(window.SessionsBridge.reassign(sid, { instructorId: instrId, resourceId: resId, additionalStaff: staff }))
+            .then(function (r2) {
+              // Surface the union of conflicts from both writes (dedup the first).
+              var all = [].concat((r1 && r1.conflicts) || [], (r2 && r2.conflicts) || []);
+              warnConflicts({ conflicts: all });
+              // Mutate the live cached record so the post-save read re-render shows
+              // the edit at once; reloadSoon refreshes for the next open.
+              var live = V2.byId[sid] || rec;
+              live.date = when.date; live.startTime = when.startTime;
+              if (when.endTime) live.endTime = when.endTime;
+              if (when.capacity !== '' && !isNaN(parseInt(when.capacity, 10))) live.capacity = parseInt(when.capacity, 10);
+              live.location = (when.location || '').trim() || null;
+              live.instructorId = instrId;
+              live.instructorName = instrId && V2.instructors[instrId] ? (V2.instructors[instrId].name || null) : null;
+              live.resourceId = resId;
+              live.resourceName = resId && V2.resources[resId] ? (V2.resources[resId].name || null) : null;
+              live.additionalStaff = (staff || []).map(function (x) {
+                return { instructorId: x.instructorId || null, freeformName: x.instructorId ? null : (x.freeformName || '').trim() || null,
+                         role: SessionsV2._STAFF_ROLES.indexOf(x.role) !== -1 ? x.role : 'assist', notes: (x.notes || '').trim() || null };
+              }).filter(function (x) { return x.instructorId || x.freeformName; });
+              if (window.showToast) showToast('Session updated.');
+              reloadSoon();
+              return true;
+            });
+        }).catch(function (e) { console.error('[sessions-v2] save', e); if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); return false; });
     },
     exportCsv: function () { return MastEntity.exportRows('sessions-v2', visibleRows(), 'all'); }
   };
