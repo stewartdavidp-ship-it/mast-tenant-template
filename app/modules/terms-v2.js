@@ -19,8 +19,9 @@
  * write (public/content/terms). The bridge lives in sales.js, so the route setup
  * loadModule('sales') (mirrors materials-v2 / ContactsBridge) and the publish call
  * guards on window.TermsBridge. Flag-gated (?ui=1) at #terms-v2, side-by-side with
- * the legacy #terms (sidebar "Policies"). categoryRules editing remains legacy-only
- * (navigateToClassic kept solely for that slice).
+ * the legacy #terms (sidebar "Policies"). Per-category return rules (categoryRules[])
+ * are NATIVE too: a sub-editor folded into the returns slice (category picker + rule
+ * selector + add/remove), collected in its onSave. No classic escape hatch remains.
  */
 (function () {
   'use strict';
@@ -50,6 +51,16 @@
   function ruleLabel(v) { var m = CAT_RULES.filter(function (o) { return o.value === v; })[0]; return m ? m.label : (v || 'Not set'); }
   function byId(id) { return document.getElementById(id) || {}; }
   function isSet(t) { return t && String(t).trim() ? 'Set' : 'Not set'; }
+  // RBAC: terms is a slice of the legacy 'terms' route (Sales section) — gate on
+  // that route name (mirrors students-v2 gating on 'students', not 'students-v2').
+  function can(axis) { return (typeof window.can === 'function') ? window.can('terms', axis) : true; }
+  // Product categories source the picker. window.CATEGORIES (public/config/categories,
+  // loaded at app boot) is the live source; fall back to the legacy hardcoded set
+  // so the editor still works on a fresh tenant (mirrors sales.js _openTermsEditor).
+  var CAT_FALLBACK = ['ceramics', 'glass', 'jewelry', 'textiles', 'other'];
+  function categoryList() {
+    return (window.CATEGORIES && window.CATEGORIES.length) ? window.CATEGORIES.slice() : CAT_FALLBACK.slice();
+  }
 
   // ── module state ────────────────────────────────────────────────────
   var V2 = { cfg: null, loaded: false };
@@ -92,10 +103,11 @@
           fg('Shipping return policy', '<select class="form-input" id="tcRetShipping" style="width:100%;">' + shipOpts + '</select>') +
           '<label class="form-group" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;"><input type="checkbox" id="tcRetAnyReason"' + (c.anyReason ? ' checked' : '') + ' onchange="document.getElementById(\'tcRetReasonsWrap\').style.display=this.checked?\'none\':\'\';"> Accept returns for any reason</label>' +
           '<div id="tcRetReasonsWrap" class="form-group"' + (c.anyReason ? ' style="display:none;"' : '') + '><label class="form-label">Allowed return reasons (one per line)</label><textarea class="form-input" id="tcRetReasons" rows="3" placeholder="Defective item&#10;Wrong size&#10;Changed mind" style="width:100%;resize:vertical;">' + esc((c.allowedReturnReasons || []).join('\n')) + '</textarea></div>' +
-          '<div class="mu-sub" style="margin-top:6px;">Category-specific rules are preserved; <a href="#" onclick="TermsV2.classic();return false;">edit them in the classic Policies view</a>.</div>';
+          catRulesEditor(c.categoryRules || []);
       }
     },
     onSave: function () {
+      if (!can('edit')) { showToast('Edit access required.', true); return false; }
       var days = parseInt(byId('tcRetDays').value, 10);
       var restock = parseInt(byId('tcRetRestock').value, 10);
       if (isNaN(days) || days < 0 || days > 365) { showToast('Return window must be 0–365 days', true); return false; }
@@ -103,9 +115,51 @@
       var anyReason = !!byId('tcRetAnyReason').checked;
       var reasonsText = (byId('tcRetReasons').value || '').trim();
       var reasons = (!anyReason && reasonsText) ? reasonsText.split('\n').map(function (r) { return r.trim(); }).filter(Boolean) : [];
-      return persist({ returnWindowDays: days, restockingFeePercent: restock, shippingReturnPolicy: byId('tcRetShipping').value, anyReason: anyReason, allowedReturnReasons: reasons }, 'returns');
+      return persist({ returnWindowDays: days, restockingFeePercent: restock, shippingReturnPolicy: byId('tcRetShipping').value, anyReason: anyReason, allowedReturnReasons: reasons, categoryRules: collectCatRules() }, 'returns');
     }
   });
+
+  // ── per-category return-rules sub-editor (folded into the returns slice) ──
+  // Mirrors legacy sales.js _openTermsEditor: a dynamic list of {category, rule}
+  // rows (category picker + rule selector + remove), with "+ Add rule". Rows are
+  // collected in the returns onSave and persisted as termsConfig.categoryRules
+  // (same shape the storefront publish reads via buildPublicTermsHtml).
+  function catRuleRow(category, rule) {
+    var cats = categoryList();
+    // If a stored category is no longer in the live list, keep it as an option so
+    // an existing rule is editable rather than silently dropped.
+    if (category && cats.indexOf(category) === -1) cats.unshift(category);
+    var catOpts = '<option value="">Select category…</option>' + cats.map(function (cv) {
+      return '<option value="' + esc(cv) + '"' + (category === cv ? ' selected' : '') + '>' + esc(cv) + '</option>';
+    }).join('');
+    var ruleOpts = CAT_RULES.map(function (o) {
+      return '<option value="' + esc(o.value) + '"' + ((rule || 'full_refund') === o.value ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+    }).join('');
+    return '<div class="tc-cat-rule-row" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">' +
+      '<select class="form-input tc-cat-select" style="flex:1;min-width:120px;">' + catOpts + '</select>' +
+      '<select class="form-input tc-rule-select" style="flex:1;min-width:120px;">' + ruleOpts + '</select>' +
+      '<button type="button" class="btn btn-small btn-danger" onclick="this.closest(\'.tc-cat-rule-row\').remove();" title="Remove rule">Remove</button>' +
+      '</div>';
+  }
+  function catRulesEditor(rules) {
+    var rowsHtml = (rules || []).map(function (cr) { return catRuleRow(cr.category, cr.rule); }).join('');
+    return '<div class="form-group" style="margin-top:6px;border-top:1px solid var(--border,rgba(127,127,127,.18));padding-top:12px;">' +
+      '<label class="form-label">Category-specific rules</label>' +
+      '<div class="mu-sub" style="margin:0 0 8px;">Override the default return policy for specific product categories.</div>' +
+      '<div id="tcCatRules">' + rowsHtml + '</div>' +
+      '<button type="button" class="btn btn-small btn-secondary" style="margin-top:4px;" onclick="TermsV2.addCatRule()">+ Add rule</button>' +
+      '</div>';
+  }
+  function collectCatRules() {
+    var out = [];
+    var rows = document.querySelectorAll('#tcCatRules .tc-cat-rule-row');
+    Array.prototype.forEach.call(rows, function (row) {
+      var catSel = row.querySelector('.tc-cat-select');
+      var ruleSel = row.querySelector('.tc-rule-select');
+      if (catSel && ruleSel && catSel.value) out.push({ category: catSel.value, rule: ruleSel.value });
+    });
+    return out;
+  }
 
   MastEntity.define('terms-text-v2', {
     label: 'Policies', labelPlural: 'Policies', size: 'lg', route: 'terms-v2',
@@ -128,6 +182,7 @@
       }
     },
     onSave: function () {
+      if (!can('edit')) { showToast('Edit access required.', true); return false; }
       return persist({
         giftCardTerms: (byId('tcTxtGift').value || '').trim() || null,
         loyaltyTerms: (byId('tcTxtLoyalty').value || '').trim() || null,
@@ -192,15 +247,25 @@
   window.TermsV2 = {
     // Config slice → straight to edit (the page is already the read view).
     edit: function (which) {
+      if (!can('edit')) { showToast('Edit access required.', true); return; }
       var key = which === 'text' ? 'terms-text-v2' : 'terms-returns-v2';
       Promise.resolve(MastDB.termsConfig.get()).then(function (c) {
         V2.cfg = stamp(Object.assign(V2.cfg || {}, c || {}));
         MastEntity.openRecord(key, V2.cfg, 'edit');
       });
     },
+    // Append an empty per-category rule row to the open returns editor.
+    addCatRule: function () {
+      var box = document.getElementById('tcCatRules');
+      if (!box) return;
+      var tmp = document.createElement('div');
+      tmp.innerHTML = catRuleRow('', 'full_refund');
+      box.appendChild(tmp.firstChild);
+    },
     // Native publish → delegates to the legacy storefront write via TermsBridge
     // (sales.js). The twin NEVER reimplements the public/content/terms write.
     publish: function () {
+      if (!can('edit')) { showToast('Edit access required.', true); return; }
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('sales'); } catch (e) {} }
       if (!window.TermsBridge) { if (window.showToast) showToast('Publish engine still loading — try again', true); return; }
       var msg = 'Publish your current policy settings to the public storefront terms page? This updates what customers see.';
@@ -218,8 +283,6 @@
         });
       }).catch(function (e) { console.error('[terms-v2] publish', e); if (window.showToast) showToast('Publish failed', true); });
     },
-    // categoryRules editing remains legacy-only — keep classic re-entry for it.
-    classic: function () { if (typeof navigateToClassic === 'function') navigateToClassic('terms'); else if (typeof navigateTo === 'function') navigateTo('terms'); },
     refresh: function () { render(); }
   };
 
