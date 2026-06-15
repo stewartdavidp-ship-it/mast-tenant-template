@@ -61,6 +61,11 @@
     return 'Other';
   }
   function rowTotal(o) { return U.Num.moneyVal(o, 'totalCents', 'total') || 0; }
+  // A Square payment carrying squareOrderId belongs to an online Square order:
+  // squareWebhook already accrued its revenue under sourceId `square:<orderId>`.
+  // It is NOT a day-close "unmatched" item to chase — hand-matching it to a
+  // standalone sale would double-count (matchSquarePayment now blocks that).
+  function isOrderOwnedPayment(p) { return !!(p && p.squareOrderId); }
 
   function load() {
     var o = window.MastDB && MastDB.orders;
@@ -178,7 +183,11 @@
       { key: 'paymentId', label: 'Payment', sortable: false, render: function (p) { return (p.paymentId || p._key).slice(0, 16); } },
       { key: 'sourceType', label: 'Source', sortable: false, render: function (p) { return (p.sourceType || '—').replace(/_/g, ' '); } },
       { key: 'matched', label: 'Matched', sortable: false, render: function (p) {
-          return p.matchedSaleId ? U.badge('Matched', 'success') : U.badge('Unmatched', 'warning');
+          if (p.matchedSaleId) return U.badge('Matched', 'success');
+          // Online-order payments are already recorded under the order — not a
+          // chase item. Label distinctly so they aren't read as "needs action".
+          if (isOrderOwnedPayment(p)) return U.badge('Online order', 'info');
+          return U.badge('Unmatched', 'warning');
         } },
       { key: 'amount', label: 'Amount', align: 'right', sortable: false,
         render: function (p) { return N.money((p.amount || 0) / 100); } }
@@ -210,7 +219,7 @@
       if (s === 'cancelled' || s === 'refunded') return;
       var amt = rowTotal(o); gross += amt; byProc[processorOf(o)] += amt;
     });
-    var unmatched = pays.filter(function (p) { return !p.matchedSaleId; });
+    var unmatched = pays.filter(function (p) { return !p.matchedSaleId && !isOrderOwnedPayment(p); });
     var unmatchedAmt = 0; unmatched.forEach(function (p) { unmatchedAmt += (p.amount || 0) / 100; });
 
     var pills = [['transactions', 'Transactions', tx.length], ['payments', 'Square payments', pays.length]].map(function (p) {
@@ -329,6 +338,10 @@
     matchPayment: function (paymentKey) {
       var payment = V2.paymentsById[paymentKey]; if (!payment) return;
       if (payment.matchedSaleId) { toast('Payment already matched.'); return; }
+      // An online-order payment's revenue is already recorded under its order;
+      // hand-matching it to a standalone sale would double-count. The CF blocks
+      // this server-side — don't even offer the matcher here.
+      if (isOrderOwnedPayment(payment)) { toast('This payment belongs to an online order — revenue is already recorded.'); return; }
       if (!canMatch()) { toast('You don\'t have permission to match payments.', true); return; }
       V2._activePayment = payment;
       window.MastUI.slideOut.open({
