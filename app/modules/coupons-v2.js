@@ -24,9 +24,14 @@
  * call + the SAME validation. coupons writes DIRECTLY (no Bridge) because the
  * inline save is a plain MastDB write with no domain wrapper to fork. The
  * write/create handlers are RBAC-gated with can('coupons','edit') (the legacy
- * route axis), mirroring the shows.js gate convention. Only share/QR export has
- * NO V2 home (bespoke openCouponShareModal modal) and keeps a "share in classic
- * view" link via navigateToClassic. Flag-gated (?ui=1) at #coupons-v2,
+ * route axis), mirroring the shows.js gate convention. Share/QR export is also
+ * NATIVE now (CouponsV2.share → a modal re-hosting the legacy
+ * openCouponShareModal): QR preview, copy claim link, copy HTML embed, download
+ * coupon image (with QR) + download QR — all client-side via the bundled
+ * window.MastCouponCard util + the app's existing api.qrserver.com QR mechanism
+ * (no JS QR library is bundled), so it needs no Cloud Function. The
+ * navigateToClassic('coupons') escape hatch has been REMOVED — coupons has no
+ * remaining classic dependency. Flag-gated (?ui=1) at #coupons-v2,
  * side-by-side; never touches the legacy coupons code in index.html.
  *
  * Data: coupons live at admin/coupons (MastDB.coupons -> that path), keyed by the
@@ -152,10 +157,12 @@
         var note = c.description
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(c.description) + '</div>'
           : '<span class="mu-sub">No admin note.</span>';
-        // Create/edit is NATIVE now (the Edit button on this slide-out). Only
-        // share/QR export has no V2 home — it stays a bespoke modal on legacy
-        // #coupons. navigateToClassic so the V2 route remap doesn't loop here.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="CouponsV2.classic()">Share / QR in classic view →</button></div>';
+        // Create/edit AND share/QR are NATIVE now (the buttons on this
+        // slide-out). Share/QR re-hosts the legacy openCouponShareModal: QR
+        // preview, copy claim link, copy HTML embed, download coupon image
+        // (with QR) + download QR — all client-side via window.MastCouponCard.
+        var code = esc(c.code || c._key || '');
+        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" data-cp-code="' + code + '" onclick="CouponsV2.share(this.dataset.cpCode)">🔗 Share / QR code</button></div>';
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
@@ -372,12 +379,110 @@
       grp.style.display = cb.checked ? 'none' : '';
       if (cb.checked) { var m = document.getElementById('cpV2MaxUses'); if (m) m.value = ''; }
     },
-    // Only share / QR export has no V2 home (bespoke openCouponShareModal) →
-    // classic Coupons view. Create + edit are native here. navigateToClassic so
-    // the V2 route remap doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('coupons');
-      else if (typeof navigateTo === 'function') navigateTo('coupons');
+    // Native share / QR — re-hosts the legacy openCouponShareModal entirely
+    // client-side, reusing the bundled window.MastCouponCard util (preview card
+    // + claim-URL + HTML embed + canvas PNG) and the app's existing QR mechanism
+    // (api.qrserver.com image URL — no JS QR library is bundled). Read-only (no
+    // mutation) so no can() gate, matching the legacy share affordance. The
+    // navigateToClassic escape hatch is gone — this is now the V2 home for it.
+    share: function (code) {
+      code = code || '';
+      var c = V2.byId[code];
+      if (!c) { if (window.showToast) showToast('Coupon not found', true); return; }
+      if (!window.MastCouponCard) { if (window.showToast) showToast('Coupon card engine still loading — try again', true); return; }
+      if (typeof openModal !== 'function') { if (window.showToast) showToast('Cannot open share dialog here.', true); return; }
+      var MCC = window.MastCouponCard;
+      var couponObj = Object.assign({}, c, { code: code, _code: code });
+      var claimUrl = MCC.getClaimUrl(code, 'share');
+      var qrPreviewUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(claimUrl);
+
+      var html =
+        '<div class="modal-header">' +
+          '<h3>Share coupon: ' + esc(code) + '</h3>' +
+          '<button class="modal-close" onclick="closeModal()">&times;</button>' +
+        '</div>' +
+        '<div class="modal-body">' +
+          // Preview card (same renderer the public storefront / emails use)
+          '<div style="margin-bottom:16px;">' + MCC.renderHtml(couponObj, { showCta: false }) + '</div>' +
+          // Inline QR preview
+          '<div style="text-align:center;margin-bottom:18px;">' +
+            '<img src="' + esc(qrPreviewUrl) + '" alt="QR code for ' + esc(code) + '" width="180" height="180" ' +
+              'style="border:1px solid var(--cream-dark);border-radius:8px;background:var(--surface-card);padding:6px;" />' +
+            '<div class="mu-sub" style="margin-top:6px;">Scan to claim</div>' +
+          '</div>' +
+          // Export / share options (mirrors legacy openCouponShareModal)
+          '<div style="display:flex;flex-direction:column;gap:10px;">' +
+            '<button class="btn btn-primary" id="cpV2ShareCopyLink" style="display:flex;align-items:center;gap:8px;justify-content:center;">🔗 Copy claim link</button>' +
+            '<button class="btn btn-outline" id="cpV2ShareCopyHtml" style="display:flex;align-items:center;gap:8px;justify-content:center;">📋 Copy HTML embed</button>' +
+            '<button class="btn btn-secondary" id="cpV2ShareDownloadImg" style="display:flex;align-items:center;gap:8px;justify-content:center;">🖼️ Download coupon image (with QR)</button>' +
+            '<button class="btn btn-secondary" id="cpV2ShareDownloadQr" style="display:flex;align-items:center;gap:8px;justify-content:center;">📱 Download QR code</button>' +
+          '</div>' +
+          '<div id="cpV2ShareStatus" style="margin-top:12px;text-align:center;font-size:0.85rem;color:var(--teal);display:none;"></div>' +
+        '</div>';
+
+      openModal(html);
+
+      function setStatus(msg) {
+        var el = document.getElementById('cpV2ShareStatus');
+        if (el) { el.textContent = msg; el.style.display = ''; setTimeout(function () { el.style.display = 'none'; }, 3000); }
+      }
+      function copyText(text, okMsg) {
+        function fallback() {
+          var ta = document.createElement('textarea');
+          ta.value = text; document.body.appendChild(ta); ta.select();
+          try { document.execCommand('copy'); } catch (e) {}
+          document.body.removeChild(ta); setStatus(okMsg);
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { setStatus(okMsg); }).catch(fallback);
+        } else { fallback(); }
+      }
+
+      var copyLinkBtn = document.getElementById('cpV2ShareCopyLink');
+      if (copyLinkBtn) copyLinkBtn.addEventListener('click', function () { copyText(claimUrl, 'Link copied to clipboard!'); });
+
+      var copyHtmlBtn = document.getElementById('cpV2ShareCopyHtml');
+      if (copyHtmlBtn) copyHtmlBtn.addEventListener('click', function () {
+        var embed = MCC.renderHtml(couponObj, { emailSafe: true, showCta: true, source: 'share' });
+        copyText(embed, 'HTML embed copied! Paste into any email builder or CMS.');
+      });
+
+      var dlImgBtn = document.getElementById('cpV2ShareDownloadImg');
+      if (dlImgBtn) dlImgBtn.addEventListener('click', function () {
+        var btn = this, label = btn.innerHTML;
+        btn.disabled = true; btn.textContent = 'Generating…';
+        MCC.renderToCanvas(couponObj, { showQr: true, source: 'share' }).then(function (canvas) {
+          canvas.toBlob(function (blob) {
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob); a.download = 'coupon-' + code + '.png';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+            btn.disabled = false; btn.innerHTML = label; setStatus('Image downloaded!');
+          }, 'image/png');
+        }).catch(function (e) {
+          console.error('[coupons-v2] share image', e);
+          btn.disabled = false; btn.innerHTML = label;
+          if (window.showToast) showToast('Failed to generate image', true);
+        });
+      });
+
+      var dlQrBtn = document.getElementById('cpV2ShareDownloadQr');
+      if (dlQrBtn) dlQrBtn.addEventListener('click', function () {
+        var btn = this, label = btn.innerHTML;
+        btn.disabled = true; btn.textContent = 'Downloading…';
+        var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(claimUrl);
+        fetch(qrUrl).then(function (r) { return r.blob(); }).then(function (blob) {
+          var a = document.createElement('a');
+          a.href = URL.createObjectURL(blob); a.download = 'coupon-qr-' + code + '.png';
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          URL.revokeObjectURL(a.href);
+          btn.disabled = false; btn.innerHTML = label; setStatus('QR code downloaded!');
+        }).catch(function (e) {
+          console.error('[coupons-v2] share qr', e);
+          btn.disabled = false; btn.innerHTML = label;
+          if (window.showToast) showToast('Failed to download QR code', true);
+        });
+      });
     },
     exportCsv: function () { return MastEntity.exportRows('coupons-v2', visibleRows(), 'all'); }
   };
