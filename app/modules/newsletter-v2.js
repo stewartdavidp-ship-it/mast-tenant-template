@@ -240,8 +240,12 @@
           { k: 'Updated', v: n.updatedAt ? N.date(n.updatedAt) : '—' },
           { k: 'Published', v: n.publishedAt ? N.date(n.publishedAt) : '—' }
         ]);
-        var compose = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="NewsletterV2.classic()">' +
-          (st === 'draft' ? 'Edit / send in classic view →' : 'View in classic view →') + '</button></div>' +
+        var canEd = (typeof window.can !== 'function' || window.can('newsletter', 'edit'));
+        var cbtns = '';
+        if (st === 'draft' && canEd) cbtns += '<button class="btn btn-primary" onclick="NewsletterV2.compose(\'' + esc(id) + '\')">📝 Compose sections</button> ';
+        cbtns += '<button class="btn btn-secondary" onclick="NewsletterV2.classic()">' +
+          (st === 'draft' ? 'Audience &amp; send (classic) →' : 'View in classic view →') + '</button>';
+        var compose = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' + cbtns + '</div>' +
           '<div id="nlIssueCampChip_' + esc(id) + '"></div>';
         // Part-of-campaign chip — single-sourced renderer in campaigns.js.
         setTimeout(function () {
@@ -251,7 +255,7 @@
             }).catch(function () {});
           }
         }, 0);
-        return tiles + actions + UI.card('Issue', meta) + UI.card('Compose', '<span class="mu-sub">The grid builder (sections, A/B tests, send) lives in the classic view.</span>' + compose);
+        return tiles + actions + UI.card('Issue', meta) + UI.card('Compose', '<span class="mu-sub">Edit sections + content natively; audience &amp; send still run in the classic view (coming next).</span>' + compose);
       },
       // CREATE (a draft issue) + light EDIT (title / subject line) are NATIVE, so
       // the twin no longer punts new issues to the classic Composer. The grid
@@ -296,6 +300,122 @@
         if (window.showToast) showToast('Issue updated.'); reloadSoon(); return true;
       }).catch(function (e) { console.error('[newsletter-v2] updateIssue', e); if (window.showToast) showToast('Error updating issue.', true); return false; });
     }
+  });
+
+  // ── native composer (newsletter-compose-v2 — route:null drilled SO) ──
+  // The native grid/section editor (V1-editor-elimination program, composer PR-2).
+  // Opened via MastEntity.drill('newsletter-compose-v2', issueId) from the issue
+  // detail. Sections render as an ORDERED LIST — the email output stacks sections
+  // single-column by order (nlComposeIssueHtml), so a list is functionally
+  // identical to the legacy 2-col canvas (which is editor-only decoration). EVERY
+  // write delegates to NewsletterBridge (content sanitized via MastUI.sanitizeHtml).
+  // Rich text reuses the legacy window.nlFormatCmd / nlInsertLink helpers
+  // (execCommand + a custom link modal — no native dialogs). Audience + A/B + SEND
+  // remain on the classic view until composer PR-3.
+  var CMP = null, _cmpTimer = null;
+  var CMP_TYPES = [
+    ['studio-update', '🔥', 'What We\'ve Been Making'], ['new-products', '✨', 'New Products'],
+    ['event-recap', '🎪', 'Event Recap'], ['upcoming-events', '📅', 'Upcoming Events'],
+    ['behind-process', '🔧', 'Behind the Process'], ['featured-piece', '💎', 'Featured Piece'],
+    ['from-studio', '💌', 'From the Studio'], ['coupon', '🎟️', 'Coupon / Offer'], ['custom', '📝', 'Custom Section']
+  ];
+  var CMP_ICON = {}; CMP_TYPES.forEach(function (t) { CMP_ICON[t[0]] = t[1]; });
+  var CMP_CHAR = { small: 150, medium: 300, large: 600, full: 800 };
+  function cmpIcon(t) { return CMP_ICON[t] || '📝'; }
+  function cmpLimit(sz) { return CMP_CHAR[sz] || 300; }
+  function cmpStrip(html) { var d = document.createElement('div'); d.innerHTML = html || ''; return (d.textContent || d.innerText || ''); }
+  function cmpSan(html) { return (U && U.sanitizeHtml) ? U.sanitizeHtml(html) : esc(html); }
+
+  function loadCompose(id) {
+    return Promise.resolve(MastDB.get('newsletter/issues/' + id)).then(function (n) {
+      var iv = (n && typeof n.val === 'function') ? n.val() : n;
+      if (!iv) return null;
+      iv = Object.assign({ _key: id }, iv);
+      var secs = iv.sections ? Object.keys(iv.sections).map(function (k) { var s = Object.assign({}, iv.sections[k]); s.id = s.id || k; return s; }).sort(function (a, b) { return (a.order || 0) - (b.order || 0); }) : [];
+      CMP = { issueId: id, issue: iv, sections: secs };
+      return { _key: id, _title: ((iv.title || 'Issue') + ' · Compose') };
+    });
+  }
+  function reopenCompose() {
+    if (!CMP) return;
+    MastEntity.openRecord('newsletter-compose-v2', { _key: CMP.issueId, _title: ((CMP.issue.title || 'Issue') + ' · Compose') }, 'read', true);
+  }
+  // Capture any unsaved DOM edits into CMP + persist, BEFORE a structural
+  // re-render (add/delete/move/size) re-injects content from CMP.
+  function cmpFlushAll() {
+    if (!CMP) return;
+    CMP.sections.forEach(function (s) {
+      var el = document.getElementById('cmpEd_' + s.id);
+      if (el && (el.innerHTML || '') !== s.finalContent) {
+        var html = el.innerHTML || ''; s.finalContent = cmpSan(html);
+        if (window.NewsletterBridge) Promise.resolve(NewsletterBridge.updateSection(CMP.issueId, s.id, { finalContent: html })).catch(function () {});
+      }
+      var ti = document.getElementById('cmpTitle_' + s.id);
+      if (ti && ti.value !== s.title) { s.title = ti.value; if (window.NewsletterBridge) Promise.resolve(NewsletterBridge.updateSection(CMP.issueId, s.id, { title: ti.value })).catch(function () {}); }
+    });
+    var it = document.getElementById('cmpIssTitle'), isub = document.getElementById('cmpIssSubject');
+    if (it || isub) {
+      var t = it ? it.value.trim() : CMP.issue.title, sub = isub ? isub.value.trim() : CMP.issue.subjectLine;
+      if (t !== CMP.issue.title || sub !== CMP.issue.subjectLine) {
+        CMP.issue.title = t; CMP.issue.subjectLine = sub;
+        if (window.NewsletterBridge) Promise.resolve(NewsletterBridge.updateIssue(CMP.issueId, { title: t, subjectLine: sub })).catch(function () {});
+      }
+    }
+  }
+
+  function cmpToolbar(idp) {
+    return '<div class="nl-format-toolbar">' +
+      '<button class="nl-format-btn" id="' + idp + 'Bold" onmousedown="event.preventDefault();nlFormatCmd(\'' + idp + '\',\'bold\')" title="Bold"><b>B</b></button>' +
+      '<button class="nl-format-btn" id="' + idp + 'Italic" onmousedown="event.preventDefault();nlFormatCmd(\'' + idp + '\',\'italic\')" title="Italic"><i>I</i></button>' +
+      '<span class="nl-format-sep"></span>' +
+      '<button class="nl-format-btn nl-format-btn-wide" id="' + idp + 'Link" onmousedown="event.preventDefault();nlInsertLink(\'' + idp + '\')" title="Insert link">🔗</button>' +
+      '</div>';
+  }
+  function composeSectionCard(s) {
+    var sid = s.id, sz = s.cardSize || 'medium', limit = cmpLimit(sz), idp = 'cmp_' + sid;
+    var content = cmpSan(s.finalContent || '');
+    var textLen = cmpStrip(content).length;
+    var sizeOpts = ['small', 'medium', 'large', 'full'].map(function (o) { return '<option value="' + o + '"' + (sz === o ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+    var header = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">' +
+      '<span style="font-size:1.0rem;">' + cmpIcon(s.type) + '</span>' +
+      '<input class="form-input" id="cmpTitle_' + esc(sid) + '" value="' + esc(s.title || '') + '" onchange="NewsletterV2.cmpSetField(\'' + esc(sid) + '\',\'title\',this.value)" style="flex:1;min-width:140px;" placeholder="Section title">' +
+      '<select class="form-input" onchange="NewsletterV2.cmpSetSize(\'' + esc(sid) + '\',this.value)" style="width:auto;" title="Card size (sets the char limit)">' + sizeOpts + '</select>' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);display:flex;align-items:center;gap:4px;"><input type="checkbox"' + (s.included !== false ? ' checked' : '') + ' onchange="NewsletterV2.cmpSetField(\'' + esc(sid) + '\',\'included\',this.checked)"> Include</label>' +
+      '<button class="btn btn-small btn-secondary" onclick="NewsletterV2.cmpMove(\'' + esc(sid) + '\',-1)" title="Move up">↑</button>' +
+      '<button class="btn btn-small btn-secondary" onclick="NewsletterV2.cmpMove(\'' + esc(sid) + '\',1)" title="Move down">↓</button>' +
+      '<button class="btn btn-small btn-secondary" style="color:var(--text-danger);" onclick="NewsletterV2.cmpDelete(\'' + esc(sid) + '\')" title="Delete section">×</button>' +
+      '</div>';
+    var editor = cmpToolbar(idp) +
+      '<div class="nl-section-editable" id="cmpEd_' + esc(sid) + '" contenteditable="true" data-char-limit="' + limit + '"' +
+      ' oninput="NewsletterV2.cmpInput(\'' + esc(sid) + '\',' + limit + ')" onkeyup="nlUpdateToolbarState(\'' + idp + '\')" onmouseup="nlUpdateToolbarState(\'' + idp + '\')"' +
+      ' onblur="NewsletterV2.cmpFlush(\'' + esc(sid) + '\')">' + content + '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;gap:8px;">' +
+        '<button class="btn btn-small btn-secondary" onclick="NewsletterV2.cmpPolish(\'' + esc(sid) + '\')">✨ Polish with AI</button>' +
+        '<span class="nl-editor-char-counter" id="cmpCnt_' + esc(sid) + '">' + textLen + '/' + limit + '</span>' +
+      '</div>';
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px;">' + header + editor + '</div>';
+  }
+  function composeHtml(UI, r) {
+    if (!CMP || CMP.issueId !== (r && r._key)) return '<p class="mu-sub">Loading…</p>';
+    var iss = CMP.issue;
+    var head = '<div class="form-group"><label class="form-label">Issue title</label><input class="form-input" id="cmpIssTitle" value="' + esc(iss.title || '') + '" onchange="NewsletterV2.cmpSaveMeta()" style="width:100%;"></div>' +
+      '<div class="form-group"><label class="form-label">Subject line</label><input class="form-input" id="cmpIssSubject" value="' + esc(iss.subjectLine || '') + '" onchange="NewsletterV2.cmpSaveMeta()" style="width:100%;" placeholder="Email subject line"></div>';
+    var sections = CMP.sections.length ? CMP.sections.map(composeSectionCard).join('') : '<p class="mu-sub" style="padding:8px 0;">No sections yet — add one below.</p>';
+    var addBtns = CMP_TYPES.map(function (t) { return '<button class="btn btn-small btn-secondary" onclick="NewsletterV2.cmpAdd(\'' + t[0] + '\')">' + t[1] + ' ' + esc(t[2]) + '</button>'; }).join(' ');
+    return UI.card('Issue', head) +
+      UI.card('Sections', sections) +
+      UI.card('Add a section', '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + addBtns + '</div>') +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;padding-top:14px;">' +
+        '<button class="btn btn-secondary" onclick="NewsletterV2.cmpPreview()">👁 Preview</button>' +
+        '<button class="btn btn-primary" onclick="NewsletterV2.cmpPublishWeb()">🌐 Publish to website</button>' +
+      '</div>';
+  }
+  MastEntity.define('newsletter-compose-v2', {
+    label: 'Compose', labelPlural: 'Compose', size: 'lg', route: null,
+    recordId: function (r) { return r._key; },
+    fields: [{ name: '_title', label: 'Issue', type: 'text', list: true, group: 'Issue', readOnly: true }],
+    fetch: function (id) { return loadCompose(id); },
+    detail: { render: function (UI, r) { return composeHtml(UI, r); } }
   });
 
   // ── module state + data ─────────────────────────────────────────────
@@ -460,6 +580,142 @@
       // Ensure legacy newsletter.js is loaded so window.NewsletterBridge.createIssue exists at save.
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('newsletter'); } catch (e) {} }
       MastEntity.openRecord('newsletter-issues-v2', {}, 'create');
+    },
+    // ── native composer (PR-2): drilled section/grid editor ──
+    compose: function (id) {
+      if (typeof window.can === 'function' && !window.can('newsletter', 'edit')) { if (window.showToast) showToast('You don\'t have permission to edit issues.', true); return; }
+      // AWAIT the legacy module so window.NewsletterBridge + the reused rich-text
+      // globals (nlFormatCmd / nlInsertLink / nlUpdateToolbarState) exist before the
+      // composer's inline toolbar handlers can fire.
+      function go() { MastEntity.drill('newsletter-compose-v2', id); }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        Promise.resolve(MastAdmin.loadModule('newsletter')).then(go).catch(go);
+      } else go();
+    },
+    cmpSaveMeta: function () {
+      if (!CMP || !window.NewsletterBridge) return;
+      var title = ((document.getElementById('cmpIssTitle') || {}).value || '').trim();
+      var subjectLine = ((document.getElementById('cmpIssSubject') || {}).value || '').trim();
+      CMP.issue.title = title; CMP.issue.subjectLine = subjectLine;
+      Promise.resolve(NewsletterBridge.updateIssue(CMP.issueId, { title: title, subjectLine: subjectLine })).catch(function (e) { console.error('[newsletter-v2] cmpSaveMeta', e); });
+    },
+    cmpInput: function (sid, limit) {
+      var el = document.getElementById('cmpEd_' + sid); if (!el) return;
+      var len = cmpStrip(el.innerHTML).length;
+      var cnt = document.getElementById('cmpCnt_' + sid);
+      if (cnt) { cnt.textContent = len + '/' + limit; cnt.style.color = len >= limit ? 'var(--text-danger)' : (len >= limit * 0.8 ? 'var(--amber)' : 'var(--warm-gray)'); }
+      if (typeof nlUpdateToolbarState === 'function') nlUpdateToolbarState('cmp_' + sid);
+      clearTimeout(_cmpTimer); _cmpTimer = setTimeout(function () { NewsletterV2._cmpSave(sid); }, 500);
+    },
+    cmpFlush: function (sid) { clearTimeout(_cmpTimer); NewsletterV2._cmpSave(sid); },
+    _cmpSave: function (sid) {
+      if (!CMP || !window.NewsletterBridge) return;
+      var el = document.getElementById('cmpEd_' + sid); if (!el) return;
+      var html = el.innerHTML || '';
+      var sec = CMP.sections.filter(function (s) { return s.id === sid; })[0];
+      if (sec) sec.finalContent = cmpSan(html);
+      Promise.resolve(NewsletterBridge.updateSection(CMP.issueId, sid, { finalContent: html })).catch(function (e) { console.error('[newsletter-v2] cmpSave', e); });
+    },
+    cmpSetField: function (sid, field, value) {
+      if (!CMP || !window.NewsletterBridge) return;
+      var patch = {}; patch[field] = value;
+      var sec = CMP.sections.filter(function (s) { return s.id === sid; })[0];
+      if (sec) sec[field] = value;
+      Promise.resolve(NewsletterBridge.updateSection(CMP.issueId, sid, patch)).catch(function (e) { console.error('[newsletter-v2] cmpSetField', e); });
+    },
+    cmpSetSize: function (sid, value) {
+      if (!CMP || !window.NewsletterBridge) return;
+      cmpFlushAll();
+      var sec = CMP.sections.filter(function (s) { return s.id === sid; })[0];
+      if (sec) sec.cardSize = value;
+      Promise.resolve(NewsletterBridge.updateSection(CMP.issueId, sid, { cardSize: value })).then(function () { reopenCompose(); }).catch(function (e) { console.error('[newsletter-v2] cmpSetSize', e); });
+    },
+    cmpAdd: function (type) {
+      if (!CMP || !window.NewsletterBridge || !NewsletterBridge.addSection) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return; }
+      cmpFlushAll();
+      var nextOrder = CMP.sections.reduce(function (m, s) { return Math.max(m, s.order || 0); }, -1) + 1;
+      Promise.resolve(NewsletterBridge.addSection(CMP.issueId, type, nextOrder)).then(function (sec) {
+        CMP.sections.push(sec); reopenCompose();
+      }).catch(function (e) { console.error('[newsletter-v2] cmpAdd', e); if (window.showToast) showToast('Error adding section.', true); });
+    },
+    cmpDelete: function (sid) {
+      if (!CMP || !window.NewsletterBridge) return;
+      Promise.resolve(window.mastConfirm ? mastConfirm('Delete this section?', { title: 'Delete section?', confirmLabel: 'Delete', dangerous: true }) : true).then(function (ok) {
+        if (!ok) return;
+        cmpFlushAll();
+        CMP.sections = CMP.sections.filter(function (s) { return s.id !== sid; });
+        CMP.sections.forEach(function (s, i) { s.order = i; });
+        var remaining = CMP.sections.map(function (s) { return { id: s.id, order: s.order, gridCol: s.gridCol || 0, gridRow: s.gridRow || 0 }; });
+        return Promise.resolve(NewsletterBridge.deleteSection(CMP.issueId, sid, remaining)).then(function () { reopenCompose(); });
+      }).catch(function (e) { console.error('[newsletter-v2] cmpDelete', e); if (window.showToast) showToast('Error deleting section.', true); });
+    },
+    cmpMove: function (sid, dir) {
+      if (!CMP || !window.NewsletterBridge) return;
+      cmpFlushAll();
+      var i = CMP.sections.findIndex(function (s) { return s.id === sid; });
+      var j = i + dir; if (i < 0 || j < 0 || j >= CMP.sections.length) return;
+      var t = CMP.sections[i]; CMP.sections[i] = CMP.sections[j]; CMP.sections[j] = t;
+      CMP.sections.forEach(function (s, k) { s.order = k; });
+      var updates = CMP.sections.map(function (s) { return { id: s.id, order: s.order, gridCol: s.gridCol || 0, gridRow: s.gridRow || 0 }; });
+      Promise.resolve(NewsletterBridge.reorderSections(CMP.issueId, updates)).then(function () { reopenCompose(); }).catch(function (e) { console.error('[newsletter-v2] cmpMove', e); });
+    },
+    cmpPolish: function (sid) {
+      if (!CMP) return;
+      var el = document.getElementById('cmpEd_' + sid); if (!el) return;
+      var text = cmpStrip(el.innerHTML).trim();
+      if (!text) { if (window.showToast) showToast('Write some content first', true); return; }
+      var sec = CMP.sections.filter(function (s) { return s.id === sid; })[0];
+      var btn = (typeof event !== 'undefined' && event && event.target) ? event.target : null;
+      if (btn) { btn.disabled = true; btn.textContent = 'Polishing…'; }
+      function done() { if (btn) { btn.disabled = false; btn.textContent = '✨ Polish with AI'; } }
+      try {
+        var fn = firebase.functions().httpsCallable('socialAI');
+        Promise.resolve(fn({ action: 'newsletterPolish', tenantId: MastDB.tenantId(), rawInput: text, sectionType: sec ? sec.type : 'custom' })).then(function (res) {
+          var polished = (res && res.data && res.data.polished) ? res.data.polished : text;
+          el.innerHTML = cmpSan(polished);
+          var lim = cmpLimit((sec && sec.cardSize) || 'medium'), len = cmpStrip(el.innerHTML).length;
+          var cnt = document.getElementById('cmpCnt_' + sid);
+          if (cnt) { cnt.textContent = len + '/' + lim; cnt.style.color = len >= lim ? 'var(--text-danger)' : (len >= lim * 0.8 ? 'var(--amber)' : 'var(--warm-gray)'); }
+          NewsletterV2._cmpSave(sid);
+          done(); if (window.showToast) showToast('Polished ✨');
+        }).catch(function (e) { console.error('[newsletter-v2] cmpPolish', e); done(); if (window.showToast) showToast('AI polish unavailable — use content as-is', true); });
+      } catch (e) { console.error('[newsletter-v2] cmpPolish', e); done(); }
+    },
+    cmpPreview: function () {
+      if (!CMP) return;
+      var secs = CMP.sections.filter(function (s) { return s.included !== false && (s.finalContent || '').trim(); });
+      var body = secs.map(function (s) {
+        return '<div style="padding:16px 0;border-bottom:1px solid rgba(0,0,0,0.08);">' + (s.title ? '<div style="font-size:18px;font-weight:700;margin:0 0 8px;">' + esc(s.title) + '</div>' : '') + cmpSan(s.finalContent || '') + '</div>';
+      }).join('');
+      var doc = '<!doctype html><html><head><meta charset="utf-8"><title>' + esc(CMP.issue.title || 'Preview') + '</title></head>' +
+        '<body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:rgb(34,34,34);">' +
+        '<div style="font-size:22px;font-weight:700;margin:0 0 12px;">' + esc(CMP.issue.title || '') + '</div>' + (body || '<p>No included sections with content yet.</p>') + '</body></html>';
+      var w = window.open('', '_blank');
+      if (w) { w.document.write(doc); w.document.close(); } else if (window.showToast) showToast('Allow pop-ups to preview', true);
+    },
+    cmpPublishWeb: function () {
+      if (!CMP || !window.NewsletterBridge || !NewsletterBridge.publishToWebsite) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return; }
+      if (typeof window.can === 'function' && !window.can('newsletter', 'edit')) { if (window.showToast) showToast('You don\'t have permission.', true); return; }
+      cmpFlushAll();
+      if (!CMP.issue.title || !CMP.issue.title.trim()) { if (window.showToast) showToast('Add an issue title before publishing', true); return; }
+      var pub = CMP.sections.filter(function (s) { return s.included !== false && (s.finalContent || '').trim(); });
+      if (!pub.length) { if (window.showToast) showToast('Add content to at least one section before publishing', true); return; }
+      var sectionsMap = {}; CMP.sections.forEach(function (s) { sectionsMap[s.id] = s; });
+      var issueForPublish = Object.assign({}, CMP.issue, { id: CMP.issueId, sections: sectionsMap });
+      Promise.resolve(window.mastConfirm ? mastConfirm('Publish this issue to the public website (/news)?', { title: 'Publish to website?', confirmLabel: 'Publish' }) : true).then(function (ok) {
+        if (!ok) return;
+        return Promise.resolve(NewsletterBridge.publishToWebsite(issueForPublish)).then(function (res) {
+          if (window.writeAudit) writeAudit('update', 'newsletter-issue', CMP.issueId);
+          if (window.showToast) showToast('Published to website 🌐 (' + ((res && res.sectionCount) || 0) + ' section' + (((res && res.sectionCount) || 0) === 1 ? '' : 's') + ')');
+          var sid = CMP.issueId;
+          // Refresh the cached record so the cache-first issue fetch re-opens the
+          // PUBLISHED state (not the stale draft) — reloadSoon's reload is deferred.
+          var cached = V2.issuesById[sid];
+          if (cached) { cached.status = 'published'; cached.publishedAt = (res && res.publishedAt) || new Date().toISOString(); cached.updatedAt = cached.publishedAt; }
+          reloadSoon();
+          MastEntity.get('newsletter-issues-v2').fetch(sid).then(function (rec) { if (rec) MastEntity.openRecord('newsletter-issues-v2', rec, 'read'); });
+        });
+      }).catch(function (e) { console.error('[newsletter-v2] cmpPublishWeb', e); if (window.showToast) showToast('Error publishing.', true); });
     },
     sortIssues: function (key) {
       if (V2.issueSortKey === key) V2.issueSortDir = (V2.issueSortDir === 'asc' ? 'desc' : 'asc');
