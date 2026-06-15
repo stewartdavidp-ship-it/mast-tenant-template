@@ -1772,6 +1772,10 @@
   }
 
   async function confirmPayout(placementId) {
+    if (typeof window.can === 'function' && !window.can('galleries', 'edit')) {
+      showToast('You do not have permission to manage consignments.', 'error');
+      return;
+    }
     var amountEl = document.getElementById('payoutAmount');
     var dateEl = document.getElementById('payoutDate');
     var notesEl = document.getElementById('payoutNotes');
@@ -1801,6 +1805,19 @@
     }, 0);
     var expectedAmountCents = Math.max(0, totals.makerEarnings - totalPreviouslySettledCents);
 
+    // Outstanding-earnings ceiling. The authoritative cap is server-enforced in the
+    // recordTenantRevenue Cloud Function (so a client bypass can't over-accrue), but
+    // we mirror it here for immediate UX: an operator must not be able to queue a
+    // payout larger than what the placement still owes, which would inflate
+    // cash-basis 'consignment' revenue (and downstream tier/auto-upgrade logic).
+    // makerEarnings can be fractional cents (commission split), so round the ceiling
+    // and allow a 1-cent tolerance for the prefilled full-payout case.
+    var ceilingCents = Math.round(expectedAmountCents);
+    if (amountCents > ceilingCents + 1) {
+      showToast('Payout exceeds outstanding earnings (' + formatCurrency(ceilingCents) + ')', 'error');
+      return;
+    }
+
     var settlementRecord = {
       settlementId: settlementId,
       date: receivedDate,
@@ -1822,6 +1839,12 @@
         lastSettlementDate: receivedDate,
         updatedAt: now
       });
+
+      // Audit the settlement create (mirrors the manual-sale path in sales.js,
+      // which audits writeAudit('create','sales',saleId)). Non-blocking.
+      if (window.writeAudit) {
+        try { await writeAudit('create', 'consignment-settlement', settlementId); } catch (e) {}
+      }
 
       try {
         await firebase.functions().httpsCallable('recordTenantRevenue')({
