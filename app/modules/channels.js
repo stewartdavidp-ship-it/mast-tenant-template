@@ -2463,6 +2463,11 @@
       if (dateFrom && d < dateFrom) return;
       if (dateTo && d > dateTo) return;
       if (sale.status === 'voided') return;
+      // POS-square sales write a real `orders` row (counted in the orders loop
+      // above, canonical money record) AND an admin/sales mirror stamped with
+      // that orderId — skip the mirror so a 'pos'-matching channel isn't
+      // double-counted. Fair/offline sales have no orderId and still count.
+      if (sale.orderId) return;
       var hint = sale.eventId ? 'craft-fair' : (sale.source || 'direct-pos');
       if (matchesChannel(hint)) {
         gross += sale.amount || 0;

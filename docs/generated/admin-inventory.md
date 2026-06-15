@@ -6,12 +6,12 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,876** lines
-- **Feature modules:** **119** files in `app/modules/` (**110** routed), **133,175** lines combined
+- **Feature modules:** **119** files in `app/modules/` (**110** routed), **133,183** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
 | `modules/accounting.js` | 1,551 | — |
-| `modules/advisor.js` | 1,405 | advisor |
+| `modules/advisor.js` | 1,408 | advisor |
 | `modules/analytics-v2.js` | 221 | analytics-v2 |
 | `modules/audit-feedback.js` | 849 | suppressions |
 | `modules/audit-v2.js` | 414 | audit-v2, audit-muted-v2 |
@@ -27,7 +27,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/campaigns.js` | 560 | campaigns |
 | `modules/cart.js` | 1,577 | wallet, gift-cards, loyalty, membership |
 | `modules/channels-v2.js` | 620 | channels-v2 |
-| `modules/channels.js` | 2,904 | channels |
+| `modules/channels.js` | 2,909 | channels |
 | `modules/classes-v2.js` | 1,055 | classes-v2, book-reports-v2, classes-rooms-v2, classes-settings-v2 |
 | `modules/commission-terms-v2.js` | 267 | commission-terms-v2 |
 | `modules/commission-terms.js` | 317 | commission-terms |
