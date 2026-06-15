@@ -31,12 +31,30 @@
     shipped: 'teal', delivered: 'success', cancelled: 'neutral', refunded: 'danger',
     payment_failed: 'danger'
   };
+  // Friendly channel label for an order. External orders (Shopify/Etsy/Square,
+  // ingested by the orders/paid webhook) carry externalSource.platform; native
+  // orders use `source` ('direct' = the Mast storefront, wholesale = bulk buyers).
+  var CHANNEL_LABEL = { shopify: 'Shopify', etsy: 'Etsy', square: 'Square' };
+  function channelLabel(o) {
+    var ext = o && o.externalSource;
+    if (ext && ext.platform) {
+      return CHANNEL_LABEL[ext.platform] || (ext.platform.charAt(0).toUpperCase() + ext.platform.slice(1));
+    }
+    var s = o && o.source;
+    if ((o && o.isWholesale) || s === 'wholesale_catalog') return 'Wholesale';
+    if (!s || s === 'direct') return 'Online';
+    return CHANNEL_LABEL[s] || String(s);
+  }
   MastEntity.define('orders-v2', {
     label: 'Order', labelPlural: 'Orders', size: 'xl',
     recordId: function (o) { return o._key || o.id; },
     fields: [
       { name: 'orderNumber', label: 'Order', type: 'text', list: true, required: true, group: 'Order', readOnly: true },
       { name: 'email', label: 'Customer', type: 'text', list: true, group: 'Order', readOnly: true },
+      // Channel badge so externally-sourced orders (Shopify/Etsy/Square) are
+      // distinguishable at a glance from native storefront ('Online') orders.
+      { name: 'channel', label: 'Channel', type: 'tags', list: true, sortable: false, group: 'Order', readOnly: true,
+        get: function (o) { return [channelLabel(o)]; } },
       { name: 'items', label: 'Items', type: 'number', list: true, group: 'Order',
         get: function (o) { return Array.isArray(o.items) ? o.items.reduce(function (s, li) { return s + (li.qty || 1); }, 0) : (o.itemCount || 0); } },
       { name: 'total', label: 'Total', type: 'money', list: true, group: 'Order',
@@ -78,12 +96,19 @@
       tiles: function (r) {
         var N = window.MastUI.Num;
         var n = Array.isArray(r.items) ? r.items.reduce(function (s, li) { return s + (li.qty || 1); }, 0) : 0;
-        return [
+        var t = [
           { k: 'Total', v: N.money(N.moneyVal(r, 'totalCents', 'total')) || '—', hero: true },
           { k: 'Items', v: n },
           { k: 'Payment', v: r.paymentMethod || '—' },
-          { k: 'Source', v: r.source || '—' }
+          { k: 'Channel', v: channelLabel(r) }
         ];
+        // Loyalty earned on this order (set by the storefront / orders-paid webhook).
+        // 'pending' = points are earned but the buyer has no linked Mast account yet.
+        var le = r.loyaltyEarned;
+        if (le && le.points) {
+          t.push({ k: 'Earned', v: N.count(le.points) + ' ' + (le.pointName || 'pts') + (le.claimed === false ? ' (pending)' : '') });
+        }
+        return t;
       },
       lineItems: function (r) {
         var N = window.MastUI.Num;
