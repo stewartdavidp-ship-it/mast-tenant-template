@@ -81,7 +81,8 @@ const MODULE_GATE_BASELINE = new Set([
   'procurement.js', 'promotions.js', 'social.js', 'wholesale.js',
   // UI-redesign (?ui=1) proof modules — flag-gated; gate or retire as they graduate:
   'customers-v2.js', 'orders-v2.js', 'cs-tickets-v2.js', 'duplicates-v2.js',
-  'finance-expenses-v2.js', 'promotions-v2.js', 'wallet-v2.js',
+  // finance-expenses-v2.js graduated: bulk approve/mark-personal are can()-gated.
+  'promotions-v2.js', 'wallet-v2.js',
 ]);
 
 const html = fs.readFileSync('app/index.html', 'utf8');
