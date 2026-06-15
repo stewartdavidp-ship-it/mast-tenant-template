@@ -1261,8 +1261,11 @@ async function openInquiryResponseModal(contactId, interactionKey, directInquiry
 }
 
 // State-free send core — CF email + interaction record + inquiry status.
-// Shared with contacts-v2 via ContactsBridge.respondToInquiry. Throws on
-// validation/CF failure.
+// Shared with contacts-v2 AND inquiries-v2 via ContactsBridge.respondToInquiry.
+// Throws on validation/CF failure (status is NOT flipped if the email CF throws —
+// the status never gets ahead of an email that didn't go out). Returns the CF
+// result object (e.g. { skipped: 'email_trigger_disabled' }) so callers can
+// surface tenant trigger-config outcomes; ignore it if you don't need it.
 async function respondToInquiryCore(contactId, input) {
   input = input || {};
   var subject = (input.subject || '').trim();
@@ -1276,8 +1279,9 @@ async function respondToInquiryCore(contactId, input) {
   // Convert plain text body to HTML (preserve line breaks)
   var bodyHtml = body.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
 
-  // Call Cloud Function to send email
-  await firebase.functions().httpsCallable('sendInquiryResponse')({
+  // Call Cloud Function to send email. A thrown error (send failed) skips
+  // everything below so the record never gets ahead of an email that didn't go.
+  var cfResult = await firebase.functions().httpsCallable('sendInquiryResponse')({
     tenantId: MastDB.tenantId(),
     contactId: contactId,
     inquiryId: inquiryId,
@@ -1286,25 +1290,31 @@ async function respondToInquiryCore(contactId, input) {
     toEmail: toEmail
   });
 
-  // Record as interaction on the contact
-  var interactionId = 'int_' + Date.now().toString(36);
+  // Record as interaction on the contact (only when we have a contact to attach
+  // it to — inquiry leads may have no linked contact yet).
   var now = new Date().toISOString();
-  await MastDB.contacts.setInteraction(contactId, interactionId, {
-    id: interactionId,
-    date: now.slice(0, 10),
-    type: 'Email',
-    notes: subject + ': ' + body.substring(0, 500),
-    documents: [],
-    loggedBy: currentUser ? currentUser.uid : 'unknown',
-    createdAt: now
-  });
+  if (contactId) {
+    var interactionId = 'int_' + Date.now().toString(36);
+    await MastDB.contacts.setInteraction(contactId, interactionId, {
+      id: interactionId,
+      date: now.slice(0, 10),
+      type: 'Email',
+      notes: subject + ': ' + body.substring(0, 500),
+      documents: [],
+      loggedBy: currentUser ? currentUser.uid : 'unknown',
+      createdAt: now
+    });
+  }
 
   // Update inquiry status to 'responded'
   if (inquiryId) {
     await MastDB.set('inquiries/' + inquiryId + '/status', 'responded');
     await MastDB.set('inquiries/' + inquiryId + '/respondedAt', now);
+    if (window.writeAudit) { try { await writeAudit('update', 'inquiry', inquiryId); } catch (e) {} }
   }
+  // Invalidate the contacts cache so the freshly-logged interaction shows.
   contactsLoaded = false;
+  return (cfResult && cfResult.data) || {};
 }
 
 async function sendInquiryResponse() {
