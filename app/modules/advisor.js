@@ -547,7 +547,10 @@
       var daysElapsed = Math.max(1, Math.min(daysTotal, Math.round((Math.min(new Date(today).getTime(), new Date(rangeEnd).getTime()) - new Date(rangeStart).getTime()) / 86400000) + 1));
       var daysRemaining = Math.max(0, daysTotal - daysElapsed);
 
-      // Aggregate plan targets for period
+      // Aggregate plan targets for period. Plan targets (`monthly[mk].target`
+      // and `byChannel`) are stored in INTEGER CENTS — same convention the
+      // planning MCP uses to author/read them (it divides by 100 for $ display)
+      // and the same unit fmtMoney() expects. Keep actuals in cents to match.
       var totalTarget = 0;
       var channelTargets = {};
       var monthly = (planData.revenueTargets && planData.revenueTargets.monthly) || {};
@@ -573,11 +576,32 @@
       var channelActuals = {};
       var totalActual = 0;
 
+      // Normalize every actual to INTEGER CENTS (the unit targets are stored in
+      // and fmtMoney expects) via the canonical finance.js normalizers. Orders
+      // and admin/sales used to be summed into one accumulator in mismatched
+      // units — orders as `o.total` DOLLARS, sales as `s.amount` CENTS — so a
+      // $100 order added 100 while an $85 sale added 8500, corrupting the total,
+      // per-channel actuals, projection and pace once both channels had data.
+      // orderRevenueCents prefers `totalCents`, falling back to `total*100`, so
+      // it also handles seed orders whose `total` already holds cents. finance.js
+      // is route-lazy (FinanceBridge may be absent if the advisor view loads
+      // first), so fall back to inline copies that mirror the same logic.
+      var _fb = window.FinanceBridge || {};
+      var orderRevenueCents = typeof _fb.orderRevenueCents === 'function' ? _fb.orderRevenueCents : function(o) {
+        if (!o) return 0;
+        if (typeof o.totalCents === 'number') return o.totalCents;
+        if (typeof o.total === 'number') return Math.round(o.total * 100);
+        return 0;
+      };
+      var salesCents = typeof _fb.salesCents === 'function' ? _fb.salesCents : function(s) {
+        return Math.round(Number(s && s.amount) || 0);
+      };
+
       Object.values(orders).forEach(function(o) {
         var d = (o.createdAt || '').split('T')[0];
         if (d < rangeStart || d > rangeEnd) return;
         if (o.status === 'cancelled' || o.status === 'refunded') return;
-        var amt = o.total || 0;
+        var amt = orderRevenueCents(o);
         totalActual += amt;
         var ch = o.source === 'wholesale' ? 'wholesale' : 'online';
         channelActuals[ch] = (channelActuals[ch] || 0) + amt;
@@ -589,12 +613,9 @@
         if (s.status === 'voided') return;
         // POS-square sales write a real `orders` row (counted above) AND an
         // admin/sales mirror stamped with that orderId — skip the mirror so the
-        // pacing actuals don't double-count. Fair/offline sales have no orderId.
+        // pacing actuals don't double-count (#537). Fair/offline sales have no orderId.
         if (s.orderId) return;
-        // admin/sales `amount` is INTEGER CENTS; orders contribute `o.total`
-        // DOLLARS and totalTarget is in dollars, so convert to dollars to keep
-        // the pacing math unit-consistent (was adding manual/Fair sales at 100×).
-        var amt = (Number(s.amount) || 0) / 100;
+        var amt = salesCents(s); // `amount` is already INTEGER CENTS
         totalActual += amt;
         var ch = s.eventId ? 'craft-fairs' : 'online';
         channelActuals[ch] = (channelActuals[ch] || 0) + amt;
