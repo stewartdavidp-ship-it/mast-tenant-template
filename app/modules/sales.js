@@ -1365,100 +1365,39 @@ async function saveManualSale(eventId) {
     showToast('You do not have permission to record sales.', true);
     return;
   }
-  var ev = salesEventsData[eventId];
-  if (!ev) return;
+  // Read the modal DOM, then delegate the writes to the single-sourced bridge
+  // (SalesEventsBridge.recordManualSale) the sales-events-v2 twin shares — the
+  // same pattern applyEventReconciliation uses for closeAndReconcile. The bridge
+  // owns the validation + the sale record / sold-count / inventory / audit /
+  // revenue-accumulator writes; this stays the modal driver (read DOM, toast,
+  // update the legacy local cache, re-render). Validation failures surface as
+  // thrown errors carrying the same messages the modal showed before.
   var pid = document.getElementById('manualSaleProduct').value;
   var qty = parseInt(document.getElementById('manualSaleQty').value) || 1;
   var amountDollars = parseFloat(document.getElementById('manualSaleAmount').value) || 0;
-  if (amountDollars < 0 || amountDollars > 100000) {
-    showToast('Amount must be between $0 and $100,000.', true);
-    return;
-  }
   var paymentType = document.getElementById('manualSalePayment').value;
   var saleDate = document.getElementById('manualSaleDate').value;
   var notes = (document.getElementById('manualSaleNotes').value || '').trim();
 
-  if (!pid) { showToast('Select a product.', true); return; }
-  var alloc = ev.allocations[pid];
-  if (!alloc) { showToast('Product not found in allocations.', true); return; }
-  var remaining = (alloc.quantity || 0) - (alloc.sold || 0);
-  if (qty > remaining) {
-    showToast('Only ' + remaining + ' remaining \u2014 cannot sell ' + qty + '.', true);
-    return;
-  }
-
-  var amountCents = Math.round(amountDollars * 100);
-  var now = new Date().toISOString();
-  var saleId = 'manual_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-
-  var receivedAtIso = saleDate ? saleDate + 'T12:00:00.000Z' : now;
-
   try {
-    // 1. Write sale record
-    var saleRecord = {
-      saleId: saleId,
-      eventId: eventId,
-      status: 'captured',
-      source: 'manual-reconciliation',
-      paymentType: paymentType,
-      amount: amountCents,
-      receivedAt: receivedAtIso,
-      timestamp: receivedAtIso,
-      createdAt: now,
-      createdBy: currentUser ? currentUser.uid : 'admin',
-      items: [{ productId: pid, productName: alloc.productName || pid, quantity: qty, price: amountCents }]
-    };
-    if (notes) saleRecord.notes = notes;
-    await MastDB.sales.set(saleId, saleRecord);
-
-    // 2. Update event allocation sold count
-    var newSold = (alloc.sold || 0) + qty;
-    await MastDB.salesEvents.allocationField(eventId, pid, 'sold').set(newSold);
-
-    // 3. Decrement main inventory
-    var stockRef = MastDB.inventory.stockAvailable(pid);
-    await stockRef.transaction(function(current) { return Math.max(0, (current || 0) - qty); });
-
-    // 4. Audit
-    await writeAudit('create', 'sales', saleId);
-
-    // 5. Revenue accumulator write-through (Path B billing). Manual sales count
-    // AT receivedDate per cash-received-basis rule. Card sales still subtract
-    // an estimated Square processing fee (2.9% + $0.10) so the admin projection
-    // tracks closer to reality until the nightly reconciler runs.
-    try {
-      var processorFeesCents = 0;
-      if (paymentType === 'card') {
-        processorFeesCents = Math.round(amountCents * 0.029) + 10;
-      }
-      await firebase.functions().httpsCallable('recordTenantRevenue')({
-        tenantId: (MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
-        channelKey: 'manual',
-        sourceId: saleId,
-        receivedAt: receivedAtIso,
-        grossCents: amountCents,
-        salesTaxCents: 0,
-        shippingCents: 0,
-        processorFeesCents: processorFeesCents,
-        marketplaceFeesCents: 0,
-        refundsCents: 0
-      });
-    } catch (revErr) {
-      console.warn('Manual sale accumulator write failed (non-fatal):', revErr && revErr.message ? revErr.message : revErr);
-    }
+    var res = await window.SalesEventsBridge.recordManualSale(eventId, {
+      pid: pid, qty: qty, amountDollars: amountDollars,
+      paymentType: paymentType, saleDate: saleDate, notes: notes
+    });
 
     closeModal();
-    showToast('Manual sale recorded \u2014 ' + qty + ' \u00D7 ' + (alloc.productName || pid));
+    showToast('Manual sale recorded — ' + res.qty + ' × ' + res.productName);
 
-    // 6. Refresh — local data update + re-render
+    // Refresh — local data update + re-render. The bridge fetched fresh, so use
+    // its returned newSold / saleRecord rather than recomputing here.
     if (salesEventsData[eventId] && salesEventsData[eventId].allocations && salesEventsData[eventId].allocations[pid]) {
-      salesEventsData[eventId].allocations[pid].sold = newSold;
+      salesEventsData[eventId].allocations[pid].sold = res.newSold;
     }
-    sales[saleId] = saleRecord;
+    sales[res.saleId] = res.saleRecord;
     renderSalesEventDetail(eventId);
   } catch (err) {
     console.error('Manual sale error:', err);
-    showToast('Failed to save sale: ' + err.message, true);
+    showToast(err.message || 'Failed to save sale.', true);
   }
 }
 
@@ -2952,6 +2891,101 @@ async function exitPackingMode() {
         MastDB.locations.update(eventLocId, { status: 'archived', updatedAt: now }).catch(function () {});
       }
       return { totalReturned: totalReturned, totalDamaged: totalDamaged, totalUnaccounted: totalUnaccounted };
+    },
+
+    // Record an offline / out-of-band sale against an event (cash, check, Venmo,
+    // Square card, or a Net-30 wholesale invoice) that never went through PoS —
+    // the single source for the writes legacy saveManualSale makes, now DOM-free
+    // so the sales-events-v2 twin can record one natively. Mirrors saveManualSale
+    // EXACTLY: writes the captured sale record, bumps the allocation sold counter,
+    // decrements on-hand inventory, audits the create, and write-throughs the
+    // revenue accumulator CF (recordTenantRevenue — an already-deployed
+    // browser-callable, also used by sales.js + consignment.js; non-fatal on
+    // failure, exactly as legacy). Validates against a FRESH read of the event so
+    // a stale sold count can't oversell (the twin + legacy surface can both be
+    // open). Allowed for active AND closed events — closed events still take
+    // late-arriving wholesale payments (mirrors the legacy "+ Manual Sale" button,
+    // which shows on both active and closed).
+    //   opts: { pid, qty, amountDollars, paymentType, saleDate, notes }
+    // Returns { saleId, productName, qty, newSold, amountCents, saleRecord }.
+    recordManualSale: async function (eventId, opts) {
+      if (!_canEditSalesEvents()) throw new Error('You do not have permission to record sales.');
+      opts = opts || {};
+      var pid = opts.pid;
+      if (!pid) throw new Error('Select a product.');
+      var qty = parseInt(opts.qty, 10) || 1;
+      var amountDollars = parseFloat(opts.amountDollars) || 0;
+      if (amountDollars < 0 || amountDollars > 100000) throw new Error('Amount must be between $0 and $100,000.');
+      var paymentType = opts.paymentType || 'cash';
+      var saleDate = opts.saleDate || '';
+      var notes = (opts.notes || '').trim();
+
+      // Fetch fresh — never trust a cached sold count.
+      var ev = await MastDB.salesEvents.get(eventId);
+      var alloc = ev && ev.allocations && ev.allocations[pid];
+      if (!alloc) throw new Error('Product not found in allocations.');
+      var remaining = (alloc.quantity || 0) - (alloc.sold || 0);
+      if (qty > remaining) throw new Error('Only ' + remaining + ' remaining — cannot sell ' + qty + '.');
+
+      var amountCents = Math.round(amountDollars * 100);
+      var now = new Date().toISOString();
+      var saleId = 'manual_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      var receivedAtIso = saleDate ? saleDate + 'T12:00:00.000Z' : now;
+
+      // 1. Write sale record
+      var saleRecord = {
+        saleId: saleId,
+        eventId: eventId,
+        status: 'captured',
+        source: 'manual-reconciliation',
+        paymentType: paymentType,
+        amount: amountCents,
+        receivedAt: receivedAtIso,
+        timestamp: receivedAtIso,
+        createdAt: now,
+        createdBy: currentUser ? currentUser.uid : 'admin',
+        items: [{ productId: pid, productName: alloc.productName || pid, quantity: qty, price: amountCents }]
+      };
+      if (notes) saleRecord.notes = notes;
+      await MastDB.sales.set(saleId, saleRecord);
+
+      // 2. Update event allocation sold count
+      var newSold = (alloc.sold || 0) + qty;
+      await MastDB.salesEvents.allocationField(eventId, pid, 'sold').set(newSold);
+
+      // 3. Decrement main inventory
+      var stockRef = MastDB.inventory.stockAvailable(pid);
+      await stockRef.transaction(function (current) { return Math.max(0, (current || 0) - qty); });
+
+      // 4. Audit
+      await writeAudit('create', 'sales', saleId);
+
+      // 5. Revenue accumulator write-through (Path B billing). Manual sales count
+      // AT receivedDate per cash-received-basis rule. Card sales still subtract
+      // an estimated Square processing fee (2.9% + $0.10) so the admin projection
+      // tracks closer to reality until the nightly reconciler runs.
+      try {
+        var processorFeesCents = 0;
+        if (paymentType === 'card') {
+          processorFeesCents = Math.round(amountCents * 0.029) + 10;
+        }
+        await firebase.functions().httpsCallable('recordTenantRevenue')({
+          tenantId: (MastDB && MastDB.tenantId && MastDB.tenantId()) || undefined,
+          channelKey: 'manual',
+          sourceId: saleId,
+          receivedAt: receivedAtIso,
+          grossCents: amountCents,
+          salesTaxCents: 0,
+          shippingCents: 0,
+          processorFeesCents: processorFeesCents,
+          marketplaceFeesCents: 0,
+          refundsCents: 0
+        });
+      } catch (revErr) {
+        console.warn('Manual sale accumulator write failed (non-fatal):', revErr && revErr.message ? revErr.message : revErr);
+      }
+
+      return { saleId: saleId, productName: alloc.productName || pid, qty: qty, newSold: newSold, amountCents: amountCents, saleRecord: saleRecord };
     }
   };
 

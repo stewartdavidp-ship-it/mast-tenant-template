@@ -31,11 +31,16 @@
  *    storefront PoS (../pos/?eventId=…). There is NO Cloud Function and NO till
  *    provisioning — the storefront PoS reads ?eventId and links live sales.
  *
- * Camera-vision packing (legacy "Start Packing" overlay) and offline manual-sale
- * entry are NOT re-hosted here — they are separate from the pack/launch/status
- * surface this twin closes, and manual sale carries the recordTenantRevenue
- * accumulator call (its own follow-up). The Allocations tab is the native
- * equivalent of building the packing list. Flag-gated (?ui=1) at #sales-events-v2.
+ *  - Offline manual sale (Overview action on active + closed events): record a
+ *    cash / check / Venmo / Square / wholesale-invoice sale not captured by PoS,
+ *    via SalesEventsBridge.recordManualSale (single-sourced with legacy
+ *    saveManualSale — same writes: sale record + allocation sold bump + inventory
+ *    decrement + audit + the non-fatal recordTenantRevenue accumulator call).
+ *
+ * Camera-vision packing (legacy "Start Packing" overlay) is NOT re-hosted here —
+ * it is separate from the pack/launch/status surface this twin closes. The
+ * Allocations tab is the native equivalent of building the packing list.
+ * Flag-gated (?ui=1) at #sales-events-v2.
  *
  * Data: events live at admin/salesEvents (MastDB.salesEvents). Revenue + the
  * Sales facet are derived from admin/sales (sale.eventId === event id, excluding
@@ -63,11 +68,12 @@
   var STATUS_TONE = { planning: 'info', packed: 'amber', active: 'success', closed: 'neutral' };
 
   // ── module state + data ─────────────────────────────────────────────
-  // reconOpen holds the event id whose Overview pane is showing the close/
-  // reconcile form (instead of the status actions); products/productById feed
-  // the Allocations "add product" picker.
+  // reconOpen / manualSaleOpen hold the event id whose Overview pane is showing
+  // the close/reconcile form or the offline-sale form (instead of the status
+  // actions — mutually exclusive); products/productById feed the Allocations
+  // "add product" picker.
   var V2 = { rows: [], byId: {}, salesByEvent: {}, products: [], productById: {},
-             sortKey: 'date', sortDir: 'desc', q: '', statusFilter: 'all', reconOpen: null, loaded: false };
+             sortKey: 'date', sortDir: 'desc', q: '', statusFilter: 'all', reconOpen: null, manualSaleOpen: null, loaded: false };
 
   function eventName(ev) { return (ev && ev.name) || '(unnamed)'; }
   function statusOf(ev) { return (ev && ev.status) || 'planning'; }
@@ -170,11 +176,20 @@
       hint = 'Starting the fair links PoS sales to this event.';
     } else if (st === 'active') {
       btns.push('<button class="btn btn-primary" onclick="SalesEventsV2.openPoS(' + jid + ')">💰 Open PoS ↗</button>');
+      btns.push('<button class="btn btn-secondary" onclick="SalesEventsV2.manualSaleBegin(' + jid + ')">🧾 Record manual sale</button>');
       btns.push('<button class="btn btn-danger" onclick="SalesEventsV2.closeBegin(' + jid + ')">🏁 Close &amp; reconcile</button>');
-      hint = 'Open PoS records live sales; close &amp; reconcile when the event ends.';
+      hint = 'Open PoS records live sales; record a manual sale for offline payments (cash / check / Venmo); close &amp; reconcile when the event ends.';
     } else if (st === 'closed') {
+      // Closed events still take late-arriving offline payments (e.g. a Net-30
+      // wholesale invoice that landed after the event) — keep the manual-sale
+      // entry available alongside the read-only summary. Mirrors the legacy
+      // surface, which shows "+ Manual Sale" on closed events too.
       return '<span class="mu-sub">Closed' + (ev.closedAt ? ' on ' + N.date(ev.closedAt) : '') + '. ' +
-        N.count(stats.sold) + ' sold of ' + N.count(stats.packed) + ' packed.</span>';
+        N.count(stats.sold) + ' sold of ' + N.count(stats.packed) + ' packed.</span>' +
+        '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" onclick="SalesEventsV2.manualSaleBegin(' + jid + ')">🧾 Record manual sale</button>' +
+        '</div>' +
+        '<div class="mu-sub" style="margin-top:8px;">Record a late or offline payment (e.g. a wholesale invoice that arrived after the event).</div>';
     }
     return '<div style="display:flex;gap:8px;flex-wrap:wrap;">' + btns.join('') + '</div>' +
       (hint ? '<div class="mu-sub" style="margin-top:8px;">' + hint + '</div>' : '');
@@ -204,6 +219,54 @@
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">' +
         '<button class="btn btn-secondary" onclick="SalesEventsV2.closeCancel(' + jid + ')">Cancel</button>' +
         '<button class="btn btn-danger" onclick="SalesEventsV2.closeConfirm(' + jid + ')">Close &amp; reconcile</button>' +
+      '</div>';
+  }
+
+  // ── Overview: native offline-sale form (replaces the legacy "Add Manual Sale"
+  // modal). Records a cash / check / Venmo / Square / wholesale-invoice sale that
+  // never went through PoS. Mirrors the legacy showManualSaleModal field set
+  // (product + remaining count, qty, amount $, payment type, received date,
+  // notes) and delegates the writes to SalesEventsBridge.recordManualSale on
+  // confirm. Available on active AND closed events (closed ones still take late
+  // wholesale payments).
+  function manualSaleFormInner(ev) {
+    var id = recordIdOf(ev);
+    var allocs = ev.allocations || {};
+    var opts = Object.keys(allocs).map(function (pid) {
+      var a = allocs[pid] || {};
+      var remaining = (a.quantity || 0) - (a.sold || 0);
+      return '<option value="' + esc(pid) + '">' + esc(a.productName || pid) + ' (' + remaining + ' remaining)</option>';
+    }).join('');
+    if (!opts) return '<span class="mu-sub">No products allocated to this event — add items in the Allocations tab first.</span>';
+    var today = new Date().toISOString().slice(0, 10);
+    var jid = "'" + id + "'";
+    function fg(label, inner, hint, flex) {
+      return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner +
+        (hint ? '<div class="mu-sub" style="margin-top:4px;">' + hint + '</div>' : '') + '</div>';
+    }
+    function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+    return '<div class="mu-editbar"><span class="mu-editpill">SALE</span>Record an offline sale not captured by PoS — cash, check, Venmo, Square, or a wholesale invoice.</div>' +
+      fg('Product', '<select class="form-input" id="seV2MsProduct" style="width:100%;">' + opts + '</select>') +
+      row2(
+        fg('Quantity', '<input class="form-input" type="number" id="seV2MsQty" value="1" min="1" style="width:100%;">', '', true),
+        fg('Amount ($)', '<input class="form-input" type="number" id="seV2MsAmount" step="0.01" min="0" placeholder="0.00" style="width:100%;">', '', true)
+      ) +
+      row2(
+        fg('Payment type',
+          '<select class="form-input" id="seV2MsPayment" style="width:100%;">' +
+            '<option value="cash">Cash</option>' +
+            '<option value="check">Check</option>' +
+            '<option value="venmo">Venmo / Cash App / Zelle</option>' +
+            '<option value="card">Square (Card)</option>' +
+            '<option value="wholesale-invoice">Wholesale Invoice (Net-30)</option>' +
+          '</select>', '', true),
+        fg('Payment received date', '<input class="form-input" type="date" id="seV2MsDate" value="' + today + '" style="width:100%;">',
+          'For wholesale: use the date payment arrived, not the invoice date.', true)
+      ) +
+      fg('Notes (optional)', '<input class="form-input" id="seV2MsNotes" placeholder="e.g. Cash sale while reader was offline" style="width:100%;">') +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">' +
+        '<button class="btn btn-secondary" onclick="SalesEventsV2.manualSaleCancel(' + jid + ')">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="SalesEventsV2.manualSaleConfirm(' + jid + ')">Save sale</button>' +
       '</div>';
   }
 
@@ -303,9 +366,11 @@
           { key: 'ov', label: 'Overview' }, { key: 'alloc', label: 'Allocations' }, { key: 'sales', label: 'Sales' }
         ], 'ov');
 
-        // Overview — native actions (or the close/reconcile form) + event details
-        // + packed/sold/sell-through + notes.
-        var actionsInner = (V2.reconOpen === id) ? reconFormInner(ev) : statusActions(ev);
+        // Overview — native actions (or the close/reconcile form, or the offline
+        // manual-sale form) + event details + packed/sold/sell-through + notes.
+        var actionsInner = (V2.reconOpen === id) ? reconFormInner(ev)
+          : (V2.manualSaleOpen === id) ? manualSaleFormInner(ev)
+          : statusActions(ev);
 
         var details = UI.kv([
           { k: 'Status', v: UI.badge(STATUS_LABEL[statusOf(ev)] || 'Planning', STATUS_TONE[statusOf(ev)] || 'neutral') },
@@ -501,7 +566,7 @@
     filter: function (f) { V2.statusFilter = f; render(); },
     search: function (v) { V2.q = v || ''; render(); },
     open: function (id) {
-      V2.reconOpen = null;
+      V2.reconOpen = null; V2.manualSaleOpen = null;
       MastEntity.get('sales-events-v2').fetch(id).then(function (rec) {
         if (rec) MastEntity.openRecord('sales-events-v2', rec, 'read');
       });
@@ -585,6 +650,43 @@
         if (window.showToast) showToast(msg + '.');
         reloadThenOpen(id);
       }).catch(actionErr);
+    },
+
+    // ── Offline manual sale (native; replaces the legacy "Add Manual Sale" modal) ──
+    // Show the in-pane form in the Overview Actions card (toggling manualSaleOpen,
+    // exactly like reconOpen). Available on active + closed events; needs at least
+    // one allocated product to sell against.
+    manualSaleBegin: function (id) {
+      if (!canEditEvents()) return notPermitted();
+      var ev = V2.byId[id]; if (!ev) return;
+      if (!ev.allocations || !Object.keys(ev.allocations).length) {
+        if (window.showToast) showToast('No products allocated — add items in the Allocations tab first.', true); return;
+      }
+      V2.reconOpen = null; V2.manualSaleOpen = id; reopen(id);
+    },
+    manualSaleCancel: function (id) { V2.manualSaleOpen = null; reopen(id); },
+    manualSaleConfirm: function (id) {
+      if (!canEditEvents()) return notPermitted();
+      if (!window.SalesEventsBridge) return engineLoading();
+      var val = function (elId) { var el = document.getElementById(elId); return el ? el.value : ''; };
+      var opts = {
+        pid: val('seV2MsProduct'),
+        qty: parseInt(val('seV2MsQty'), 10) || 1,
+        amountDollars: parseFloat(val('seV2MsAmount')) || 0,
+        paymentType: val('seV2MsPayment') || 'cash',
+        saleDate: val('seV2MsDate'),
+        notes: (val('seV2MsNotes') || '').trim()
+      };
+      Promise.resolve(window.SalesEventsBridge.recordManualSale(id, opts)).then(function (res) {
+        V2.manualSaleOpen = null;
+        if (window.showToast) showToast('Manual sale recorded — ' + res.qty + ' × ' + res.productName + '.');
+        reloadThenOpen(id);
+      }).catch(function (e) {
+        // Surface the bridge's validation message directly (e.g. "Only 2
+        // remaining — cannot sell 3.") rather than the generic actionErr prefix.
+        console.error('[sales-events-v2] manualSale', e);
+        if (window.showToast) showToast((e && e.message) || 'Failed to save sale.', true);
+      });
     },
 
     // ── Allocations CRUD (native) ──
