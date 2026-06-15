@@ -1272,7 +1272,10 @@
 
   function showSignatureDetailModal(sigId) {
     MastDB.get('admin/waiverSignatures/' + sigId).then(function(snapVal) {
-      var sig = snap.val();
+      // MastDB.get resolves to the VALUE (not a Firebase snapshot); the old
+      // `snap.val()` referenced an undefined `snap` and threw before the modal
+      // could open. Read the resolved value directly.
+      var sig = snapVal;
       if (!sig) { showToast('Signature not found', true); return; }
       var h = '<div id="sigDetailOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)this.remove()">';
       h += '<div style="background:var(--cream,var(--cream));border-radius:12px;padding:24px;max-width:600px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2);">';

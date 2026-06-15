@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260614-221732-da9c4e8"></script>
+  <script src="../shared/mastdb.js?v=20260614-222126-8cf67f0"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,25 +184,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260614-221732-da9c4e8"></script>
-  <script src="../shared/brand-sync.js?v=20260614-221732-da9c4e8"></script>
+  <script src="../shared/customer-filters.js?v=20260614-222126-8cf67f0"></script>
+  <script src="../shared/brand-sync.js?v=20260614-222126-8cf67f0"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260614-221732-da9c4e8"></script>
+  <script src="../shared/variant-reconcile.js?v=20260614-222126-8cf67f0"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260614-221732-da9c4e8"></script>
-  <script src="../shared/mast-io.js?v=20260614-221732-da9c4e8"></script>
-  <script src="../shared/mast-entity.js?v=20260614-221732-da9c4e8"></script>
+  <script src="../shared/mast-ui.js?v=20260614-222126-8cf67f0"></script>
+  <script src="../shared/mast-io.js?v=20260614-222126-8cf67f0"></script>
+  <script src="../shared/mast-entity.js?v=20260614-222126-8cf67f0"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260614-221732-da9c4e8"></script>
+  <script src="../shared/product-readiness.core.js?v=20260614-222126-8cf67f0"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11631,6 +11631,7 @@
     <div id="inquiriesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: inquiries -->
     <div id="wholesaleV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: wholesale accounts (read-focused) -->
     <div id="studentsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: students roster (read-focused) -->
+    <div id="studentsConfigV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: Student settings hub (waiver templates / clearance types / business documents) -->
     <div id="galleriesV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: galleries & consignment (read-focused) -->
     <div id="instructorsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: instructors roster (read-focused) -->
     <div id="contactsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: contacts CRM (read-focused) -->
@@ -22337,7 +22338,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260614-221732-da9c4e8';
+var MAST_MODULES_V = '20260614-222126-8cf67f0';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22394,6 +22395,7 @@ var MODULE_MANIFEST = {
   'sessions-v2': { src: 'modules/sessions-v2.js', routes: ['sessions-v2'] }, // UI-redesign conversion: class sessions read detail (flag-gated)
   'inquiries-v2': { src: 'modules/inquiries-v2.js', routes: ['inquiries-v2'] }, // UI-redesign conversion: inquiries/leads read detail (flag-gated)
   'students-v2': { src: 'modules/students-v2.js', routes: ['students-v2'] }, // UI-redesign conversion: students roster (read-focused Faceted Record)
+  'students-config-v2': { src: 'modules/students-config-v2.js', routes: ['students-config-v2'] }, // UI-redesign conversion: tenant Student SETTINGS hub (waiver templates / clearance types / business documents) — finishes retiring legacy #students config view-tabs
   'galleries-v2': { src: 'modules/galleries-v2.js', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
   'instructors-v2': { src: 'modules/instructors-v2.js', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
   'wholesale-v2': { src: 'modules/wholesale-v2.js', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
