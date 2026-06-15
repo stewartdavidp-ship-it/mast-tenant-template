@@ -28,7 +28,9 @@
  *
  * Data: vendors live at admin/vendors (keyed by vendorId) — read directly with
  * MastDB.get('admin/vendors') (same path procurement.js reads). The Supplies facet
- * derives from admin/productSuppliers (vendor-keyed via ps.vendorId); the Purchase
+ * derives from admin/productSuppliers (vendor-keyed via ps.vendorId) and renders a
+ * read-only per-supplier price-history sparkline from ps.priceHistory[] (the same
+ * Trend cell legacy procurement.renderVendorProducts shows); the Purchase
  * orders facet derives from admin/purchaseOrders + admin/purchaseReceipts filtered
  * by po.vendorId (mirror of procurement.renderVendorPos / renderVendorReceipts) —
  * all cheap one-shot keyed-object reads loaded alongside vendors. Money is DOLLAR-
@@ -127,6 +129,38 @@
     var p = V2.products[ps.targetId];
     return (p && p.name) || ps.targetId || '—';
   }
+  // Inline SVG price-history sparkline for a product-supplier's priceHistory[]
+  // (each point { unitCost, recordedAt, source, ref }). Read-only mirror of
+  // procurement.priceSparkline: maps positive unitCosts to a polyline, colors the
+  // stroke by overall trend (rising = amber, falling = teal, flat = text) — all
+  // design tokens, no hardcoded hex. Returns '' when there are <2 priced points
+  // (the cost cell already shows the latest value). priceHistory rides on the
+  // already-loaded admin/productSuppliers object (no extra read); the trailing
+  // window is capped so a very long history can't blow up the inline SVG.
+  var SPARK_MAX_PTS = 40;
+  function priceSparkline(history, width, height) {
+    width = width || 80; height = height || 22;
+    var all = (Array.isArray(history) ? history : [])
+      .map(function (h) { return Number(h && h.unitCost) || 0; })
+      .filter(function (n) { return n > 0; });
+    var pts = all.length > SPARK_MAX_PTS ? all.slice(all.length - SPARK_MAX_PTS) : all;
+    if (pts.length < 2) return '';
+    var min = Math.min.apply(null, pts), max = Math.max.apply(null, pts);
+    var span = max - min || 1;
+    var stepX = width / (pts.length - 1);
+    var path = pts.map(function (v, i) {
+      var x = i * stepX;
+      var y = height - ((v - min) / span) * (height - 2) - 1;
+      return (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    var lastVal = pts[pts.length - 1], firstVal = pts[0];
+    var trend = lastVal > firstVal ? 'var(--amber-light)' : (lastVal < firstVal ? 'var(--teal)' : 'var(--text)');
+    var label = (lastVal > firstVal ? 'rising' : (lastVal < firstVal ? 'falling' : 'flat')) + ', ' + pts.length + ' observations';
+    return '<svg width="' + width + '" height="' + height + '" style="vertical-align:middle;" role="img" aria-label="price trend ' + label + '">' +
+      '<title>Price trend (' + label + ')</title>' +
+      '<path d="' + path + '" fill="none" stroke="' + trend + '" stroke-width="1.5" />' +
+    '</svg>';
+  }
 
   // ── schema (read-only Faceted/Flat Record) ──────────────────────────
   MastEntity.define('vendors-v2', {
@@ -213,6 +247,15 @@
           { label: 'MOQ', align: 'right', render: function (ps) { return ps.moq != null ? N.count(ps.moq) : '<span class="mu-sub">—</span>'; } },
           { label: 'Lead', align: 'right', render: function (ps) { return ps.leadTimeDays != null ? esc(ps.leadTimeDays + 'd') : '<span class="mu-sub">—</span>'; } },
           { label: 'Cost', align: 'right', render: function (ps) { return N.money(ps.unitCost) || '<span class="mu-sub">—</span>'; } },
+          { label: 'Trend', align: 'right', render: function (ps) {
+            // Per-supplier price-history sparkline (read-only; mirror of legacy
+            // procurement renderVendorProducts "Trend" cell). priceHistory rides
+            // on the already-loaded ps object — no extra read.
+            var hist = Array.isArray(ps.priceHistory) ? ps.priceHistory : [];
+            var spark = priceSparkline(hist);
+            if (!spark) return '<span class="mu-sub">—</span>';
+            return spark + ' <span class="mu-sub" style="font-size:0.72rem;">' + N.count(hist.length) + ' obs</span>';
+          } },
           { label: '', align: 'right', render: function (ps) {
             var id = ps.id || ps.psId;
             return '<button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="VendorsV2.editSupply(\'' + esc(vid) + '\',\'' + esc(id) + '\')">Edit</button> ' +
