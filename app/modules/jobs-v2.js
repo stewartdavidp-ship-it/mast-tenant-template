@@ -842,7 +842,6 @@
     setPurpose: function (p) { V2.purpose = p; render(); },
     open: function (id) { var rec = V2.byId[id]; if (rec) window.MastEntity.openRecord('jobs-v2', rec, 'read'); },
     exportCsv: function () { return window.MastEntity.exportRows('jobs-v2', visibleRows(), V2.status); },
-    openClassicStories: function () { if (typeof navigateToClassic === 'function') navigateToClassic('stories'); else if (typeof navigateTo === 'function') navigateTo('stories'); },
     hold: function (id) {
       if (!_guardEdit()) return;
       JobsBridge.setStatus(id, 'on-hold').then(function () { if (window.MastAdmin) MastAdmin.showToast('Put on hold'); return reopenJob(id); })
