@@ -450,7 +450,7 @@
     var loaded = (window.BlogBridge && BlogBridge.loadBodyHtml) ? BlogBridge.loadBodyHtml(p.body || '', p.inlineImages || []) : esc(bodyPlainText(p));
     return bedToolbar() +
       '<div id="blogV2Body" contenteditable="true" data-placeholder="Write your post…" ' +
-        'oninput="BlogV2.bodyInput()" onblur="BlogV2.bodyFlush()" ' +
+        'oninput="BlogV2.bodyInput()" onblur="BlogV2.bodyFlush()" onpaste="BlogV2.bodyPaste(event)" ' +
         'style="min-height:280px;border:1px solid var(--border);border-radius:8px;padding:14px;font-size:0.9rem;line-height:1.6;color:var(--text-primary);outline:none;overflow-wrap:break-word;">' + loaded + '</div>' +
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px;">' +
         '<span class="mu-sub" id="blogV2WordCount"></span>' +
@@ -710,6 +710,21 @@
     },
     bodyInput: function () { BlogV2._bodyDirty(); },
     bodyFlush: function () { clearTimeout(_bedTimer); return BlogV2._bodySave(); },
+    // Defense-in-depth: sanitize clipboard HTML at paste time so a hostile
+    // `<img onerror>` etc. can't fire in the admin session before the write-time
+    // gate. Falls back to plain text. (Store + storefront also sanitize.)
+    bodyPaste: function (ev) {
+      try {
+        var cd = ev.clipboardData || window.clipboardData; if (!cd) return;
+        var html = cd.getData('text/html');
+        var clean = html
+          ? ((window.MastUI && MastUI.sanitizeHtml) ? MastUI.sanitizeHtml(html) : esc(cd.getData('text/plain') || ''))
+          : esc(cd.getData('text/plain') || '').replace(/\n/g, '<br>');
+        ev.preventDefault();
+        document.execCommand('insertHTML', false, clean);
+        BlogV2._bodyDirty();
+      } catch (e) { /* let the browser handle paste if anything goes wrong */ }
+    },
     _bodyDirty: function () {
       clearTimeout(_bedTimer);
       _bedTimer = setTimeout(function () { BlogV2._bodySave(); }, 600);
@@ -982,12 +997,13 @@
       var patch = {}; patch[field] = value;
       Promise.resolve(BlogBridge.updateMeta(BED.id, patch)).then(function (upd) {
         Object.assign(BED.post, upd || patch);
+        if (V2.byId[BED.id]) Object.assign(V2.byId[BED.id], upd || patch);
       }).catch(function (e) { if (window.showToast) showToast((e && e.message) || 'Error saving.', true); });
     },
     setAuthor: function (key) {
       if (!BED || !window.BlogBridge || !BlogV2._canEdit()) return;
       Promise.resolve(BlogV2.bodyFlush()).then(function () { return BlogBridge.setAuthor(BED.id, key); }).then(function () {
-        BED.post.author = key; BlogV2._reopen();
+        BED.post.author = key; if (V2.byId[BED.id]) V2.byId[BED.id].author = key; BlogV2._reopen();
       }).catch(function (e) { console.error('[blog-v2] setAuthor', e); if (window.showToast) showToast('Error.', true); });
     },
     changeAuthorPhoto: function () {
