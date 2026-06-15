@@ -1558,8 +1558,7 @@ async function doAddMilestone(jobId, buildId) {
   var text = document.getElementById('milestoneText').value.trim();
   if (!text) { closeModal(); return; }
   try {
-    var ref = MastDB.productionJobs.subRef(jobId, 'builds', buildId, 'milestones').push();
-    await ref.set({ text: text, timestamp: new Date().toISOString() });
+    await MastDB.push(MastDB.productionJobs.sub(jobId, 'builds', buildId, 'milestones'), { text: text, timestamp: new Date().toISOString() });
     await writeAudit('update', 'jobs', jobId);
     closeModal();
     renderActiveBuild(jobId, buildId);
@@ -1812,7 +1811,7 @@ async function autoFulfillLinkedRequests(jobId, freshJob, tallies) {
 
       await fulfillProductionRequest(li.productionRequestId, req.orderId || '', operatorName);
       // Mark fulfilled on line item to prevent double-advance
-      await MastDB.productionJobs.subRef(jobId, 'lineItems', liKey, 'requestFulfilled').set(true);
+      await MastDB.productionJobs.updateLineItem(jobId, liKey, { requestFulfilled: true });
       await writeAudit('update', 'buildJobs', li.productionRequestId);
 
       var orderNum = '';
