@@ -2170,14 +2170,18 @@
     // admin uid, look up the shared profile. The legacy Builder got the name only
     // because loadBlog had populated BLOG_AUTHORS — this makes it self-sufficient.
     try { loadBlogAuthors(); } catch (e) {}
+    var uidish = post.author && /^[A-Za-z0-9]{20,}$/.test(post.author);
     var author = BLOG_AUTHORS[post.author];
-    if (!author && post.author && /^[A-Za-z0-9]{20,}$/.test(post.author) && typeof window.getUserProfile === 'function') {
+    if (!author && uidish && typeof window.getUserProfile === 'function') {
       try {
         var prof = await window.getUserProfile(post.author);
-        if (prof) author = { name: prof.displayName || post.author, photoUrl: prof.photoUrl || '', bio: prof.bio || '' };
+        // A profile with no displayName must NOT fall back to the raw uid.
+        if (prof) author = { name: prof.displayName || prof.email || 'Author', photoUrl: prof.photoUrl || '', bio: prof.bio || '' };
       } catch (e) {}
     }
-    author = author || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: post.author || 'Author', photoUrl: '', bio: '' };
+    // Never leak a raw uid as the public author name: a uid-shaped key that didn't
+    // resolve to a profile/roster entry falls back to the neutral 'Author'.
+    author = author || BLOG_AUTHORS[Object.keys(BLOG_AUTHORS)[0]] || { name: (uidish ? 'Author' : (post.author || 'Author')), photoUrl: '', bio: '' };
     var slug = (post.title || 'untitled').toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').substring(0, 80);
     var publishedAt = new Date().toISOString();
@@ -2298,6 +2302,10 @@
   window.blogBackToDraft = blogBackToDraft;
   window.blogOpenPublishDialog = blogOpenPublishDialog;
   window.blogPublishSelected = blogPublishSelected;
+  // Exposed so the legacy Builder's inline onclick="blogUnpublishFromWebsite()"
+  // (renderBlogEditor) resolves against window — it's IIFE-scoped otherwise and
+  // the button silently threw ReferenceError (pre-existing; surfaced in review).
+  window.blogUnpublishFromWebsite = blogUnpublishFromWebsite;
   window.blogBodyChanged = blogBodyChanged;
 
   // ============================================================
