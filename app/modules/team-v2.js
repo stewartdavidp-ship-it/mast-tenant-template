@@ -63,6 +63,22 @@
     { key: 'i9', label: 'I-9' }, { key: 'w4', label: 'W-4' }, { key: 'stateWithholding', label: 'State Withholding' },
     { key: 'offerLetter', label: 'Offer Letter' }, { key: 'workersComp', label: "Workers' Comp Certificate" }
   ];
+  // Mirror team.js select vocabularies exactly so the native sub-editors write
+  // the same option values the legacy forms do.
+  var COMPLIANCE_STATUSES = [
+    { value: 'missing', label: 'Missing' }, { value: 'completed', label: 'Completed' }, { value: 'not-applicable', label: 'Not Applicable' }
+  ];
+  var STORAGE_OPTIONS = [
+    { value: '', label: 'Not specified' },
+    { value: 'physical', label: 'Physical' }, { value: 'google-drive', label: 'Google Drive' },
+    { value: 'dropbox', label: 'Dropbox' }, { value: 'gusto', label: 'Gusto' }, { value: 'other', label: 'Other' }
+  ];
+  var DOC_TYPES = ['employment', 'tax', 'certification', 'insurance', 'license', 'legal', 'compliance', 'financial', 'other'];
+  var DOC_STATUSES = [
+    { value: 'current', label: 'Current' }, { value: 'pending', label: 'Pending' },
+    { value: 'expired', label: 'Expired' }, { value: 'not-applicable', label: 'Not Applicable' }
+  ];
+  var REFERENCE_OUTCOMES = ['positive', 'neutral', 'concerning', 'not-checked'];
 
   // helpers (mirror team.js)
   function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
@@ -78,12 +94,235 @@
   }
   function countOf(v) { return Array.isArray(v) ? v.length : (v && typeof v === 'object' ? Object.keys(v).length : 0); }
 
+  // ── Sub-editor helpers (native compliance / documents / references) ──────
+  // Documents + references can be a push-key MAP (the legacy writer's shape) or
+  // an array (older data); normalize to a list with a stable id for the bridge.
+  function collOf(v, idField) {
+    if (Array.isArray(v)) return v.map(function (r, i) { return Object.assign({ _id: (r && (r[idField] || r._key)) || String(i) }, r); });
+    if (v && typeof v === 'object') return Object.keys(v).map(function (k) { return Object.assign({ _id: k }, v[k]); });
+    return [];
+  }
+  // Normalize an array-shaped (legacy) collection into a push-key map keyed by
+  // its id field, so the live cache can be patched by id after a sub-write. The
+  // canonical stored shape IS a map (the writer mints push keys); reloadSoon()
+  // re-reads the authoritative shape right after.
+  function mapFromColl(v, idField) {
+    var out = {};
+    if (Array.isArray(v)) v.forEach(function (r, i) { var k = (r && (r[idField] || r._key)) || ('k_' + i); out[k] = r; });
+    else if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { out[k] = v[k]; });
+    return out;
+  }
+  // Re-render a single faceted-record pane in place after a sub-edit (mirrors
+  // students-v2 rerenderPane). The engine renders the detail into #mastSlideOutBody.
+  function rerenderPane(key, inner) {
+    var body = document.getElementById('mastSlideOutBody');
+    var el = body && body.querySelector('.mu-pane[data-pane="' + key + '"]');
+    if (el) el.innerHTML = inner;
+  }
+  function bridge() {
+    if (window.TeamBridge && typeof window.TeamBridge.saveCompliance === 'function') return window.TeamBridge;
+    if (window.showToast) showToast('Team engine still loading — try again', true);
+    return null;
+  }
+  // Small form-control helpers (kept local; mirror students-v2's so the
+  // sub-editors read uniformly).
+  function fgRow(label, inner) { return '<div class="form-group" style="margin-bottom:10px;"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+  function txtH(id, v, ph) { return '<input class="form-input" id="' + id + '" value="' + esc(v == null ? '' : v) + '" style="width:100%;"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '>'; }
+  function taH(id, v) { return '<textarea class="form-input" id="' + id + '" rows="2" style="width:100%;resize:vertical;">' + esc(v == null ? '' : v) + '</textarea>'; }
+  function dateH(id, v) { return '<input class="form-input" type="date" id="' + id + '" value="' + esc(v || '') + '" style="width:100%;">'; }
+  function selH(id, options, sel) {
+    return '<select class="form-input" id="' + id + '" style="width:100%;">' + options.map(function (o) {
+      var v = (o && typeof o === 'object') ? o.value : o;
+      var l = (o && typeof o === 'object') ? o.label : cap(String(o).replace('-', ' '));
+      return '<option value="' + esc(v) + '"' + (String(sel) === String(v) ? ' selected' : '') + '>' + esc(l) + '</option>';
+    }).join('') + '</select>';
+  }
+  function formButtons(saveCall, cancelCall, saveLabel) {
+    return '<div style="display:flex;gap:8px;margin-top:14px;"><button class="btn btn-primary btn-small" onclick="' + saveCall + '">' + esc(saveLabel || 'Save') + '</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="' + cancelCall + '">Cancel</button></div>';
+  }
+  function val(id) { return ((document.getElementById(id) || {}).value || ''); }
+
+  // ── Faceted-record pane builders ─────────────────────────────────────────
+  // Each pane body is a pure builder so the native sub-editors can re-render it
+  // in place after a write (rerenderPane) — mirrors students-v2.
+  function paneDiv(key, inner, hidden) {
+    return '<div class="mu-pane" data-pane="' + key + '"' + (hidden ? ' hidden' : '') + '>' + inner + '</div>';
+  }
+  function tilesFor(e) {
+    var monthly = calcMonthlyCost(e);
+    return U.tiles([
+      { k: 'Pay', v: esc(fmtRate(e.payRate, e.payType)), hero: true },
+      { k: 'Type', v: esc(cap(String(e.payType || 'not set').replace('-', ' '))) },
+      { k: 'Schedule', v: e.scheduledHoursPerWeek ? (e.scheduledHoursPerWeek + ' hrs/wk') : '—' },
+      { k: 'Monthly', v: monthly > 0 ? esc(fmtDollars(monthly)) : '—' }
+    ]);
+  }
+  function overviewPane(UI, e) {
+    var monthly = calcMonthlyCost(e);
+    var employment = UI.kv([
+      { k: 'Job title', v: e.jobTitle ? esc(e.jobTitle) : '—' },
+      { k: 'Employment type', v: esc(cap(String(e.employmentType || '').replace('-', ' '))) || '—' },
+      { k: 'Started', v: e.startDate ? esc(e.startDate) : '—' },
+      { k: 'Status', v: cap(e.status || 'active') + (e.status === 'terminated' && e.terminationDate ? ' (' + esc(e.terminationDate) + ')' : '') },
+      { k: 'Pay', v: esc(fmtRate(e.payRate, e.payType)) },
+      { k: 'Pay frequency', v: esc(cap(String(e.payFrequency || 'not set').replace('-', ' '))) },
+      { k: 'Schedule', v: e.scheduledHoursPerWeek ? (e.scheduledHoursPerWeek + ' hrs/week') : '—' },
+      { k: 'Monthly cost', v: monthly > 0 ? esc(fmtDollars(monthly)) : '—' }
+    ]);
+    var addr = e.address && e.address.street
+      ? esc(e.address.street + (e.address.city ? ', ' + e.address.city : '') + (e.address.state ? ', ' + e.address.state : '') + (e.address.zip ? ' ' + e.address.zip : ''))
+      : '—';
+    var emerg = (e.emergencyContact && e.emergencyContact.name)
+      ? esc(e.emergencyContact.name + (e.emergencyContact.phone ? ' · ' + e.emergencyContact.phone : '') + (e.emergencyContact.relationship ? ' (' + e.emergencyContact.relationship + ')' : ''))
+      : '—';
+    var contact = UI.kv([
+      { k: 'Phone', v: e.phone ? esc(e.phone) : '—' },
+      { k: 'Address', v: addr },
+      { k: 'SSN', v: e.ssnLast4 ? ('•••-••-' + esc(e.ssnLast4)) : '—' },
+      { k: 'Emergency', v: emerg }
+    ]);
+    return UI.card('Employment', employment) + UI.card('Contact & personal', contact);
+  }
+
+  // ── Compliance pane (NATIVE per-employee EDIT — closes the V1-only gap) ──
+  // The I-9 / W-4 / state-withholding / offer-letter / workers-comp status +
+  // storage location + dates + link, editable inline → TeamBridge.saveCompliance.
+  function compliancePane(UI, e) {
+    var canEdit = canEditTeam();
+    var gaps = 0;
+    var compRows = COMPLIANCE_FIELDS.map(function (f) {
+      var item = (e.complianceChecklist || {})[f.key] || {};
+      var st = item.status || 'missing';
+      if (st !== 'completed' && st !== 'not-applicable') gaps++;
+      var tone = st === 'completed' ? 'success' : st === 'not-applicable' ? 'neutral' : 'amber';
+      var label = st === 'completed' ? 'Complete' : st === 'not-applicable' ? 'N/A' : 'Missing';
+      return { key: f.key, label: f.label, badge: UI.badge(label, tone),
+        loc: item.storageLocation ? cap(String(item.storageLocation).replace('-', ' ')) : '', url: item.url || '' };
+    });
+    var cols = [
+      { label: 'Requirement', render: function (r) { return esc(r.label); } },
+      { label: 'Storage', render: function (r) {
+        var loc = r.loc ? '<span class="mu-sub">' + esc(r.loc) + '</span>' : '<span class="mu-sub">—</span>';
+        return loc + (r.url ? ' <a href="' + esc(r.url) + '" target="_blank" rel="noopener" class="mu-sub" style="color:var(--teal);">🔗</a>' : ''); } },
+      { label: 'Status', render: function (r) { return r.badge; } }
+    ];
+    if (canEdit) cols.push({ label: '', align: 'right', render: function (r) {
+      return '<button class="btn btn-small btn-secondary" onclick="TeamV2.compEdit(\'' + esc(e._key) + '\',\'' + esc(r.key) + '\')">Edit</button>'; } });
+    var compTable = UI.relatedTable(cols, compRows);
+    var compBadge = gaps > 0 ? (gaps + ' gap' + (gaps !== 1 ? 's' : '')) : 'Complete';
+    return UI.cardTable('Compliance — ' + compBadge, compTable);
+  }
+  function complianceForm(UI, e, fieldKey) {
+    var f = COMPLIANCE_FIELDS.filter(function (x) { return x.key === fieldKey; })[0] || { key: fieldKey, label: fieldKey };
+    var item = (e.complianceChecklist || {})[fieldKey] || {};
+    var inner =
+      fgRow('Status', selH('teamV2CompStatus', COMPLIANCE_STATUSES, item.status || 'missing')) +
+      fgRow('Storage location', selH('teamV2CompStorage', STORAGE_OPTIONS, item.storageLocation || '')) +
+      fgRow('Completed date', dateH('teamV2CompDate', item.completedDate)) +
+      fgRow('Expiry date', dateH('teamV2CompExpiry', item.expiryDate)) +
+      fgRow('Document link', txtH('teamV2CompUrl', item.url, 'https://… (Drive / payroll system)')) +
+      fgRow('Notes', taH('teamV2CompNotes', item.notes)) +
+      formButtons('TeamV2.compSave(\'' + esc(e._key) + '\',\'' + esc(fieldKey) + '\')', 'TeamV2.compCancel(\'' + esc(e._key) + '\')', 'Save');
+    return UI.card('Edit: ' + esc(f.label), inner);
+  }
+
+  // ── Documents pane (NATIVE per-employee add/edit — metadata + link record) ──
+  // No binary upload: the legacy form (and this) stores a document link /
+  // Drive-metadata record (url), same as the tenant Business Documents surface.
+  function documentsPane(UI, e) {
+    var canEdit = canEditTeam();
+    var docs = collOf(e.documents, 'documentId');
+    var addBtn = canEdit ? '<button class="btn btn-small btn-secondary" onclick="TeamV2.docAdd(\'' + esc(e._key) + '\')">+ New</button>' : '';
+    var cols = [
+      { label: 'Document', render: function (d) { return esc(d.title || 'Untitled') + (d.driveFileName ? ' <span class="mu-sub">· 📄 ' + esc(d.driveFileName) + '</span>' : ''); } },
+      { label: 'Type', render: function (d) { return '<span class="mu-sub">' + esc(cap(d.type || 'other')) + '</span>'; } },
+      { label: 'Status', render: function (d) {
+        var st = d.status || 'current';
+        var tone = st === 'current' ? 'success' : st === 'expired' ? 'danger' : st === 'not-applicable' ? 'neutral' : 'amber';
+        return UI.badge(cap(String(st).replace('-', ' ')), tone); } }
+    ];
+    if (canEdit) cols.push({ label: '', align: 'right', render: function (d) {
+      return '<button class="btn btn-small btn-secondary" onclick="TeamV2.docEdit(\'' + esc(e._key) + '\',\'' + esc(d._id) + '\')">Edit</button> ' +
+        '<button class="btn btn-small btn-danger" onclick="TeamV2.docRemove(\'' + esc(e._key) + '\',\'' + esc(d._id) + '\')">Remove</button>'; } });
+    var table = docs.length ? UI.relatedTable(cols, docs) : '<span class="mu-sub">No documents on file.</span>';
+    return UI.card('Documents (' + docs.length + ')', table, { headerRight: addBtn });
+  }
+  function documentForm(UI, e, docId) {
+    var docs = collOf(e.documents, 'documentId');
+    var d = docId ? (docs.filter(function (x) { return String(x._id) === String(docId); })[0] || {}) : {};
+    var isNew = !docId;
+    var inner =
+      fgRow('Title *', txtH('teamV2DocTitle', d.title, 'e.g. Offer letter')) +
+      fgRow('Type', selH('teamV2DocType', DOC_TYPES, d.type || 'other')) +
+      fgRow('Status', selH('teamV2DocStatus', DOC_STATUSES, d.status || 'current')) +
+      fgRow('Storage location', selH('teamV2DocStorage', STORAGE_OPTIONS, d.storageLocation || '')) +
+      fgRow('On-file date', dateH('teamV2DocOnFile', d.onFileDate)) +
+      fgRow('Expiry date', dateH('teamV2DocExpiry', d.expiryDate)) +
+      fgRow('Document link', txtH('teamV2DocUrl', d.url, 'https://… (Drive / payroll system)')) +
+      fgRow('Description', taH('teamV2DocDesc', d.description)) +
+      fgRow('Notes', taH('teamV2DocNotes', d.notes)) +
+      formButtons('TeamV2.docSave(\'' + esc(e._key) + '\',' + (isNew ? 'null' : '\'' + esc(docId) + '\'') + ')', 'TeamV2.docCancel(\'' + esc(e._key) + '\')', isNew ? 'Add document' : 'Save');
+    return UI.card(isNew ? 'New document' : 'Edit document', inner);
+  }
+
+  // ── References pane (NATIVE per-employee add/edit) ──────────────────────
+  function referencesPane(UI, e) {
+    var canEdit = canEditTeam();
+    var refs = collOf(e.references, 'referenceId');
+    var addBtn = canEdit ? '<button class="btn btn-small btn-secondary" onclick="TeamV2.refAdd(\'' + esc(e._key) + '\')">+ New</button>' : '';
+    var cols = [
+      { label: 'Reference', render: function (r) { return esc(r.name || 'Unnamed') + (r.relationship ? ' <span class="mu-sub">· ' + esc(r.relationship) + '</span>' : ''); } },
+      { label: 'Contact', render: function (r) { return '<span class="mu-sub">' + (r.phone ? esc(r.phone) : '—') + '</span>'; } },
+      { label: 'Outcome', render: function (r) {
+        var o = r.outcome || 'not-checked';
+        var tone = o === 'positive' ? 'success' : o === 'concerning' ? 'danger' : o === 'neutral' ? 'amber' : 'neutral';
+        return UI.badge(cap(String(o).replace('-', ' ')), tone); } }
+    ];
+    if (canEdit) cols.push({ label: '', align: 'right', render: function (r) {
+      return '<button class="btn btn-small btn-secondary" onclick="TeamV2.refEdit(\'' + esc(e._key) + '\',\'' + esc(r._id) + '\')">Edit</button> ' +
+        '<button class="btn btn-small btn-danger" onclick="TeamV2.refRemove(\'' + esc(e._key) + '\',\'' + esc(r._id) + '\')">Remove</button>'; } });
+    var table = refs.length ? UI.relatedTable(cols, refs) : '<span class="mu-sub">No references on file.</span>';
+    return UI.card('References (' + refs.length + ')', table, { headerRight: addBtn });
+  }
+  function referenceForm(UI, e, refId) {
+    var refs = collOf(e.references, 'referenceId');
+    var r = refId ? (refs.filter(function (x) { return String(x._id) === String(refId); })[0] || {}) : {};
+    var isNew = !refId;
+    var inner =
+      fgRow('Name *', txtH('teamV2RefName', r.name, 'Reference name')) +
+      fgRow('Phone', txtH('teamV2RefPhone', r.phone, '555-555-5555')) +
+      fgRow('Relationship', txtH('teamV2RefRel', r.relationship, 'e.g. Former employer')) +
+      fgRow('Outcome', selH('teamV2RefOutcome', REFERENCE_OUTCOMES, r.outcome || 'not-checked')) +
+      fgRow('Checked date', dateH('teamV2RefDate', r.checkedDate)) +
+      fgRow('Notes', taH('teamV2RefNotes', r.notes)) +
+      formButtons('TeamV2.refSave(\'' + esc(e._key) + '\',' + (isNew ? 'null' : '\'' + esc(refId) + '\'') + ')', 'TeamV2.refCancel(\'' + esc(e._key) + '\')', isNew ? 'Add reference' : 'Save');
+    return UI.card(isNew ? 'New reference' : 'Edit reference', inner);
+  }
+
+  // ── Records pane (counts + re-hosted sub-surface lenses) ────────────────
+  function recordsPane(UI, e) {
+    var hours = countOf(e.hoursLog);
+    var records = UI.kv([
+      { k: 'Documents', v: N.count(countOf(e.documents)) },
+      { k: 'References', v: N.count(countOf(e.references)) },
+      { k: 'Hours log entries', v: N.count(hours) }
+    ]);
+    return UI.card('Records', records) +
+      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary" onclick="TeamV2.setLens(\'timeclock\')">Time clock →</button>' +
+        '<button class="btn btn-secondary" onclick="TeamV2.setLens(\'pto\')">PTO →</button>' +
+        (canEditTeam() ? '<button class="btn btn-secondary" onclick="TeamV2.setLens(\'burden\')">Labor burden →</button>' : '') +
+      '</div>';
+  }
+
   // Native create + edit of the employee RECORD — the legacy form field set
   // (Identity & Contact / Emergency Contact / Employment / Pay), grouped like
-  // openAddEmployeeForm. Heavy sub-surfaces (Time Clock, PTO, Documents,
-  // Onboarding, Labor Burden, compliance-checklist edits) have their own
-  // domain logic and NO V2 home — they stay on legacy via TeamV2.classic().
-  // A partial update preserves those nested collections + onboardingChecklist.
+  // openAddEmployeeForm. The heavy roster-level sub-surfaces (Time Clock, PTO,
+  // Labor Burden, Onboarding) stay re-hosted via TeamPanels lenses; the
+  // per-employee compliance / documents / references editors are NATIVE here
+  // (TeamBridge.saveCompliance / addDocument / addReference). A partial update
+  // preserves those nested collections + onboardingChecklist.
   // Hoisted so MastEntity.define can attach edit ONLY when can('team','edit')
   // (the engine shows the Edit button iff schema.onSave is a function — see
   // shared/mast-entity.js L513). Pay is sensitive; a viewer w/o edit sees no
@@ -211,73 +450,25 @@
     fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
     detail: {
       render: function (UI, e) {
-        var monthly = calcMonthlyCost(e);
-        var tiles = UI.tiles([
-          { k: 'Pay', v: esc(fmtRate(e.payRate, e.payType)), hero: true },
-          { k: 'Type', v: esc(cap(String(e.payType || 'not set').replace('-', ' '))) },
-          { k: 'Schedule', v: e.scheduledHoursPerWeek ? (e.scheduledHoursPerWeek + ' hrs/wk') : '—' },
-          { k: 'Monthly', v: monthly > 0 ? esc(fmtDollars(monthly)) : '—' }
-        ]);
-        var tabsBar = UI.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'compliance', label: 'Compliance' }, { key: 'records', label: 'Records' }], 'ov');
-
-        var employment = UI.kv([
-          { k: 'Job title', v: e.jobTitle ? esc(e.jobTitle) : '—' },
-          { k: 'Employment type', v: esc(cap(String(e.employmentType || '').replace('-', ' '))) || '—' },
-          { k: 'Started', v: e.startDate ? esc(e.startDate) : '—' },
-          { k: 'Status', v: cap(e.status || 'active') + (e.status === 'terminated' && e.terminationDate ? ' (' + esc(e.terminationDate) + ')' : '') },
-          { k: 'Pay', v: esc(fmtRate(e.payRate, e.payType)) },
-          { k: 'Pay frequency', v: esc(cap(String(e.payFrequency || 'not set').replace('-', ' '))) },
-          { k: 'Schedule', v: e.scheduledHoursPerWeek ? (e.scheduledHoursPerWeek + ' hrs/week') : '—' },
-          { k: 'Monthly cost', v: monthly > 0 ? esc(fmtDollars(monthly)) : '—' }
-        ]);
-        var addr = e.address && e.address.street
-          ? esc(e.address.street + (e.address.city ? ', ' + e.address.city : '') + (e.address.state ? ', ' + e.address.state : '') + (e.address.zip ? ' ' + e.address.zip : ''))
-          : '—';
-        var emerg = (e.emergencyContact && e.emergencyContact.name)
-          ? esc(e.emergencyContact.name + (e.emergencyContact.phone ? ' · ' + e.emergencyContact.phone : '') + (e.emergencyContact.relationship ? ' (' + e.emergencyContact.relationship + ')' : ''))
-          : '—';
-        var contact = UI.kv([
-          { k: 'Phone', v: e.phone ? esc(e.phone) : '—' },
-          { k: 'Address', v: addr },
-          { k: 'SSN', v: e.ssnLast4 ? ('•••-••-' + esc(e.ssnLast4)) : '—' },
-          { k: 'Emergency', v: emerg }
-        ]);
-
-        // Compliance checklist (read-only)
-        var gaps = 0;
-        var compRows = COMPLIANCE_FIELDS.map(function (f) {
-          var item = (e.complianceChecklist || {})[f.key] || {};
-          var st = item.status || 'missing';
-          if (st !== 'completed' && st !== 'not-applicable') gaps++;
-          var tone = st === 'completed' ? 'success' : st === 'not-applicable' ? 'neutral' : 'amber';
-          var label = st === 'completed' ? 'Complete' : st === 'not-applicable' ? 'N/A' : 'Missing';
-          return { label: f.label, badge: UI.badge(label, tone), loc: item.storageLocation ? cap(String(item.storageLocation).replace('-', ' ')) : '' };
-        });
-        var compTable = UI.relatedTable([
-          { label: 'Requirement', render: function (r) { return esc(r.label); } },
-          { label: 'Storage', render: function (r) { return r.loc ? '<span class="mu-sub">' + esc(r.loc) + '</span>' : '<span class="mu-sub">—</span>'; } },
-          { label: 'Status', render: function (r) { return r.badge; } }
-        ], compRows);
-        var compBadge = gaps > 0 ? (gaps + ' gap' + (gaps !== 1 ? 's' : '')) : 'Complete';
-
-        // Records summary (counts; full management stays on legacy #team)
-        var docs = countOf(e.documents), hours = countOf(e.hoursLog), refs = countOf(e.references);
-        var records = UI.kv([
-          { k: 'Documents', v: N.count(docs) },
-          { k: 'Hours log entries', v: N.count(hours) },
-          { k: 'References', v: N.count(refs) }
-        ]);
-
+        var tiles = tilesFor(e);
+        var tabsBar = UI.paneTabsBar([
+          { key: 'ov', label: 'Overview' }, { key: 'compliance', label: 'Compliance' },
+          { key: 'documents', label: 'Documents' }, { key: 'references', label: 'References' },
+          { key: 'records', label: 'Records' }
+        ], 'ov');
+        // Delete is the HARD remove (legacy edit can set status=terminated; this
+        // is the destructive remove of admin/employees/{id}). Gated separately on
+        // can('team','delete'), mirroring students-v2's danger zone.
+        var dangerZone = can('team', 'delete')
+          ? UI.card('Danger zone', '<button class="btn btn-danger btn-small" onclick="TeamV2.remove(\'' + esc(e._key || e.id) + '\')">Delete employee</button>' +
+            '<div class="mu-sub" style="margin-top:6px;">Permanently removes this employee and all their records, compliance, and documents. This cannot be undone.</div>')
+          : '';
         return tiles + tabsBar +
-          '<div class="mu-pane" data-pane="ov">' + UI.card('Employment', employment) + UI.card('Contact & personal', contact) + '</div>' +
-          '<div class="mu-pane" data-pane="compliance" hidden>' + UI.cardTable('Compliance — ' + compBadge, compTable) +
-            '<div style="margin-top:10px;"><button class="btn btn-secondary" onclick="TeamV2.setLens(\'docs\')">Manage compliance documents →</button></div></div>' +
-          '<div class="mu-pane" data-pane="records" hidden>' + UI.card('Records', records) +
-            '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">' +
-              '<button class="btn btn-secondary" onclick="TeamV2.setLens(\'timeclock\')">Time clock →</button>' +
-              '<button class="btn btn-secondary" onclick="TeamV2.setLens(\'pto\')">PTO →</button>' +
-              (canEditTeam() ? '<button class="btn btn-secondary" onclick="TeamV2.setLens(\'burden\')">Labor burden →</button>' : '') +
-            '</div></div>';
+          paneDiv('ov', overviewPane(UI, e), false) +
+          paneDiv('compliance', compliancePane(UI, e), true) +
+          paneDiv('documents', documentsPane(UI, e), true) +
+          paneDiv('references', referencesPane(UI, e), true) +
+          paneDiv('records', recordsPane(UI, e), true) + dangerZone;
       }
     }
   };
@@ -406,6 +597,152 @@
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('team'); } catch (e) {} }
       MastEntity.openRecord('team-v2', {}, 'create');
     },
+
+    // ── Delete employee (HARD remove) — gated can('team','delete') ──────────
+    remove: function (id) {
+      if (!can('team', 'delete')) { if (window.showToast) showToast('Delete access required.', true); return; }
+      var b = bridge(); if (!b || !b.remove) return;
+      var rec = V2.byId[id] || {};
+      var nm = rec.fullName || 'this employee';
+      mastConfirm('Delete the employee "' + nm + '" and all their records, compliance, and documents? This cannot be undone.',
+        { title: 'Delete Employee', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(b.remove(id)).then(function () {
+          delete V2.byId[id];
+          V2.rows = V2.rows.filter(function (x) { return (x._key || x.id) !== id; });
+          if (window.showToast) showToast('Employee deleted');
+          try { U.slideOut.requestClose(); } catch (_) {}
+          render();
+        }).catch(function (e) { if (window.showToast) showToast('Delete failed: ' + (e && e.message || e), true); });
+      });
+    },
+
+    // ── Per-employee compliance editor (NATIVE) ─────────────────────────────
+    compEdit: function (id, key) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var e = V2.byId[id]; if (e) rerenderPane('compliance', complianceForm(U, e, key));
+    },
+    compCancel: function (id) { var e = V2.byId[id]; if (e) rerenderPane('compliance', compliancePane(U, e)); },
+    compSave: function (id, key) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var b = bridge(); if (!b) return;
+      var fields = {
+        status: val('teamV2CompStatus') || 'missing',
+        storageLocation: val('teamV2CompStorage') || null,
+        completedDate: val('teamV2CompDate') || null,
+        expiryDate: val('teamV2CompExpiry') || null,
+        url: val('teamV2CompUrl').trim() || null,
+        notes: val('teamV2CompNotes').trim() || null
+      };
+      Promise.resolve(b.saveCompliance(id, key, fields)).then(function (saved) {
+        var e = V2.byId[id]; if (!e) return;
+        e.complianceChecklist = e.complianceChecklist || {};
+        e.complianceChecklist[key] = Object.assign({}, e.complianceChecklist[key], saved);
+        if (window.showToast) showToast('Compliance item saved');
+        rerenderPane('compliance', compliancePane(U, e));
+        reloadSoon();
+      }).catch(function (err) { if (window.showToast) showToast('Error: ' + (err && err.message || err), true); });
+    },
+
+    // ── Per-employee document editor (NATIVE — metadata + link record) ──────
+    docAdd: function (id) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var e = V2.byId[id]; if (e) rerenderPane('documents', documentForm(U, e, null));
+    },
+    docEdit: function (id, docId) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var e = V2.byId[id]; if (e) rerenderPane('documents', documentForm(U, e, docId));
+    },
+    docCancel: function (id) { var e = V2.byId[id]; if (e) rerenderPane('documents', documentsPane(U, e)); },
+    docSave: function (id, docId) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var b = bridge(); if (!b) return;
+      var title = val('teamV2DocTitle').trim();
+      if (!title) { if (window.showToast) showToast('Title is required', true); return; }
+      var fields = {
+        title: title,
+        type: val('teamV2DocType') || 'other',
+        status: val('teamV2DocStatus') || 'current',
+        storageLocation: val('teamV2DocStorage') || null,
+        onFileDate: val('teamV2DocOnFile') || null,
+        expiryDate: val('teamV2DocExpiry') || null,
+        url: val('teamV2DocUrl').trim() || null,
+        description: val('teamV2DocDesc').trim() || null,
+        notes: val('teamV2DocNotes').trim() || null
+      };
+      Promise.resolve(b.addDocument(id, fields, docId || null)).then(function (saved) {
+        var e = V2.byId[id]; if (!e) return;
+        if (!e.documents || Array.isArray(e.documents)) e.documents = mapFromColl(e.documents, 'documentId');
+        e.documents[saved._key] = saved;
+        if (window.showToast) showToast(docId ? 'Document saved' : 'Document added');
+        rerenderPane('documents', documentsPane(U, e));
+        rerenderPane('records', recordsPane(U, e));   // count lives on Records
+        reloadSoon();
+      }).catch(function (err) { if (window.showToast) showToast('Error: ' + (err && err.message || err), true); });
+    },
+    docRemove: function (id, docId) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var b = bridge(); if (!b) return;
+      mastConfirm('Delete this document?', { title: 'Delete document', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(b.removeDocument(id, docId)).then(function () {
+          var e = V2.byId[id]; if (e && e.documents) { if (Array.isArray(e.documents)) e.documents = mapFromColl(e.documents, 'documentId'); delete e.documents[docId]; }
+          if (window.showToast) showToast('Document deleted');
+          rerenderPane('documents', documentsPane(U, e || { _key: id }));
+          rerenderPane('records', recordsPane(U, e || { _key: id }));
+          reloadSoon();
+        }).catch(function (err) { if (window.showToast) showToast('Error: ' + (err && err.message || err), true); });
+      });
+    },
+
+    // ── Per-employee reference editor (NATIVE) ──────────────────────────────
+    refAdd: function (id) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var e = V2.byId[id]; if (e) rerenderPane('references', referenceForm(U, e, null));
+    },
+    refEdit: function (id, refId) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var e = V2.byId[id]; if (e) rerenderPane('references', referenceForm(U, e, refId));
+    },
+    refCancel: function (id) { var e = V2.byId[id]; if (e) rerenderPane('references', referencesPane(U, e)); },
+    refSave: function (id, refId) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var b = bridge(); if (!b) return;
+      var name = val('teamV2RefName').trim();
+      if (!name) { if (window.showToast) showToast('Name is required', true); return; }
+      var fields = {
+        name: name,
+        phone: val('teamV2RefPhone').trim() || null,
+        relationship: val('teamV2RefRel').trim() || null,
+        outcome: val('teamV2RefOutcome') || 'not-checked',
+        checkedDate: val('teamV2RefDate') || null,
+        notes: val('teamV2RefNotes').trim() || null
+      };
+      Promise.resolve(b.addReference(id, fields, refId || null)).then(function (saved) {
+        var e = V2.byId[id]; if (!e) return;
+        if (!e.references || Array.isArray(e.references)) e.references = mapFromColl(e.references, 'referenceId');
+        e.references[saved._key] = saved;
+        if (window.showToast) showToast(refId ? 'Reference saved' : 'Reference added');
+        rerenderPane('references', referencesPane(U, e));
+        rerenderPane('records', recordsPane(U, e));
+        reloadSoon();
+      }).catch(function (err) { if (window.showToast) showToast('Error: ' + (err && err.message || err), true); });
+    },
+    refRemove: function (id, refId) {
+      if (!canEditTeam()) { if (window.showToast) showToast('Edit access required.', true); return; }
+      var b = bridge(); if (!b) return;
+      mastConfirm('Delete this reference?', { title: 'Delete reference', confirmLabel: 'Delete', danger: true }).then(function (ok) {
+        if (!ok) return;
+        Promise.resolve(b.removeReference(id, refId)).then(function () {
+          var e = V2.byId[id]; if (e && e.references) { if (Array.isArray(e.references)) e.references = mapFromColl(e.references, 'referenceId'); delete e.references[refId]; }
+          if (window.showToast) showToast('Reference deleted');
+          rerenderPane('references', referencesPane(U, e || { _key: id }));
+          rerenderPane('records', recordsPane(U, e || { _key: id }));
+          reloadSoon();
+        }).catch(function (err) { if (window.showToast) showToast('Error: ' + (err && err.message || err), true); });
+      });
+    },
+
     // Sub-surface lenses (classic burn-down Wave B): re-hosted legacy panels.
     setLens: function (l) {
       V2.lens = l;
