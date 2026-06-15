@@ -29,7 +29,11 @@
  * openCouponShareModal): QR preview, copy claim link, copy HTML embed, download
  * coupon image (with QR) + download QR — all client-side via the bundled
  * window.MastCouponCard util + the app's existing api.qrserver.com QR mechanism
- * (no JS QR library is bundled), so it needs no Cloud Function. The
+ * (no JS QR library is bundled), so it needs no Cloud Function. Delete is NATIVE
+ * too (CouponsV2.del on the slide-out): a danger mastConfirm → the SAME write the
+ * legacy deleteCoupon makes — writeAudit('delete','coupons',code) +
+ * MastDB.coupons.remove(code) (keyed by CODE) — RBAC-gated can('coupons','delete'),
+ * closing the last V1→V2 parity gap (parity with promotions-v2's deleteSale). The
  * navigateToClassic('coupons') escape hatch has been REMOVED — coupons has no
  * remaining classic dependency. Flag-gated (?ui=1) at #coupons-v2,
  * side-by-side; never touches the legacy coupons code in index.html.
@@ -162,7 +166,17 @@
         // preview, copy claim link, copy HTML embed, download coupon image
         // (with QR) + download QR — all client-side via window.MastCouponCard.
         var code = esc(c.code || c._key || '');
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" data-cp-code="' + code + '" onclick="CouponsV2.share(this.dataset.cpCode)">🔗 Share / QR code</button></div>';
+        // Delete is RBAC-gated on the can('coupons','delete') axis (the legacy
+        // confirmDeleteCoupon/deleteCoupon affordance had no separate gate, but
+        // V2 routes deletes through can()); mirrors promotions-v2's deleteSale.
+        var canDelete = (typeof window.can !== 'function') || window.can('coupons', 'delete');
+        var deleteBtn = canDelete
+          ? '<button class="btn btn-danger" data-cp-code="' + code + '" onclick="CouponsV2.del(this.dataset.cpCode)">Delete</button>'
+          : '';
+        var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" data-cp-code="' + code + '" onclick="CouponsV2.share(this.dataset.cpCode)">🔗 Share / QR code</button>' +
+          deleteBtn +
+          '</div>';
 
         return tiles + tabsBar +
           '<div class="mu-pane" data-pane="ov">' +
@@ -483,6 +497,41 @@
           if (window.showToast) showToast('Failed to download QR code', true);
         });
       });
+    },
+    // Native delete — closes the V1 gap (legacy confirmDeleteCoupon /
+    // deleteCoupon had no V2 twin; the navigateToClassic hatch is gone). Mirrors
+    // promotions-v2's deleteSale: a danger mastConfirm, then the EXACT legacy
+    // write — writeAudit('delete','coupons',code) + MastDB.coupons.remove(code)
+    // (coupons are keyed by CODE) — then close the slide-out, drop the cache row,
+    // and reload the list. RBAC-gated with can('coupons','delete').
+    del: function (code) {
+      code = code || '';
+      var c = V2.byId[code];
+      if (!c) { if (window.showToast) showToast('Coupon not found', true); return; }
+      if (typeof window.can === 'function' && !window.can('coupons', 'delete')) {
+        if (window.showToast) showToast('You do not have permission to delete coupons.', true);
+        return;
+      }
+      var doIt = function () {
+        // Match legacy deleteCoupon order: audit first, then remove.
+        Promise.resolve(typeof writeAudit === 'function' ? writeAudit('delete', 'coupons', code) : null)
+          .then(function () { return MastDB.coupons.remove(code); })
+          .then(function () {
+            delete V2.byId[code];
+            if (window.showToast) showToast('Coupon deleted.');
+            if (U.slideOut && U.slideOut.requestCloseForce) U.slideOut.requestCloseForce();
+            reloadSoon();
+          })
+          .catch(function (e) {
+            console.error('[coupons-v2] delete', e);
+            if (window.showToast) showToast('Error deleting coupon.', true);
+          });
+      };
+      var msg = 'Permanently delete coupon “' + code + '”? This cannot be undone.';
+      (typeof mastConfirm === 'function'
+        ? mastConfirm(msg, { title: 'Delete coupon', confirmLabel: 'Delete', danger: true })
+        : Promise.resolve(true)
+      ).then(function (ok) { if (ok) doIt(); });
     },
     exportCsv: function () { return MastEntity.exportRows('coupons-v2', visibleRows(), 'all'); }
   };
