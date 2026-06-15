@@ -540,7 +540,12 @@
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
-  var V2 = { rows: [], byId: {}, sessionsByClass: {}, instructors: {}, resources: {}, enrollments: [], waiverTemplates: {}, certTypes: {}, skillCatalog: {}, editImageUrl: null, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', lens: 'catalog', loaded: false };
+  var V2 = { rows: [], byId: {}, sessionsByClass: {}, instructors: {}, resources: {}, enrollments: [], waiverTemplates: {}, certTypes: {}, skillCatalog: {}, editImageUrl: null, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', lens: 'catalog', loaded: false,
+    // Reports lens async data (orders for the order-line revenue join + session
+    // incidents). Loaded lazily on first Reports-lens entry, NOT in the main
+    // load() — the catalog/rooms/settings lenses never need it. reportRange
+    // mirrors legacy book.js #reportDateRange ('30'|'90'|'365'|'all', default 30).
+    reportData: null, reportRange: '30', reportLoading: false };
 
   // Run-once data load shared by route setup and cold drills (fetch gate).
   var _loadPromise = null;
@@ -716,11 +721,87 @@
     return U.cardTable('Rooms & equipment (' + rows.length + ')', table);
   }
 
-  // ── Reports lens — attendance / revenue / fill, computed from the loaded
-  // classes + sessions + enrollments. Revenue = SUM(enrollment pricePaidCents)
-  // (seat revenue; the legacy tab's order-line join, sessionLogs depth and
-  // incidents stay classic — debt register). Read-only.
+  // ── Reports lens data (orders + incidents) ────────────────────────────────
+  // The headline revenue figure comes from an ORDER-LINE JOIN (sum of class/pass
+  // order items), NOT enrollment seat price — matching legacy book.js
+  // renderReports so V1 and V2 report the SAME number. Incidents come from the
+  // per-session completion logs. Both are async, so they load lazily on first
+  // Reports-lens entry (not in the catalog-path load()) and re-render when ready.
+  //
+  // Read bounds mirror legacy exactly: orders capped at 500 (MastDB.orders.list
+  // is a bounded limitToLast read), incidents walked only for the ≤50 most-recent
+  // completed sessions (legacy `logIds = completedSessionIds.slice(0, 50)`).
+  // Read-only — no writes anywhere in the Reports lens.
+  var INCIDENT_TYPE_LABELS = { equipment_damage: 'Equipment damage', safety: 'Safety', conduct: 'Conduct', medical: 'Medical' };
+  // Severity → V2 design-token tone (no hardcoded hex; lint-ux-standards ratchet).
+  var SEVERITY_TONE = { low: 'success', medium: 'warning', high: 'amber', critical: 'danger' };
+  function sevTone(sev) { return SEVERITY_TONE[String(sev || '').toLowerCase()] || 'neutral'; }
+
+  function loadReportsData() {
+    if (V2.reportLoading) return;
+    V2.reportLoading = true;
+    // Completed sessions across all classes (incidents live on their logs).
+    var sessions = [];
+    Object.keys(V2.sessionsByClass).forEach(function (cid) { sessions = sessions.concat(V2.sessionsByClass[cid]); });
+    var completedSessionIds = sessions
+      .filter(function (s) { return String(s.status || '').toLowerCase() === 'completed'; })
+      .map(function (s) { return s.id; });
+    // Bound the incident sweep to the 50 most-recent completed sessions (legacy parity).
+    var logIds = completedSessionIds.slice(0, 50);
+
+    function toMap(x) { return (x && typeof x.val === 'function') ? (x.val() || {}) : (x || {}); }
+
+    // Orders: bounded 500-row read (matches legacy MastDB.orders.list(500)).
+    var ordersP = (MastDB.orders && MastDB.orders.list)
+      ? Promise.resolve(MastDB.orders.list(500)).then(toMap).catch(function () { return {}; })
+      : Promise.resolve({});
+
+    // Incidents: per-session bounded reads (limitToLast(100) inside the accessor),
+    // only for the bounded log-id slice. Failures per-session are skipped.
+    var incidentsP = Promise.all(logIds.map(function (sid) {
+      if (!MastDB.sessionLogs || !MastDB.sessionLogs.incidents) return Promise.resolve([]);
+      return Promise.resolve(MastDB.sessionLogs.incidents(sid)).then(function (snap) {
+        var data = (snap && typeof snap.val === 'function') ? (snap.val() || {}) : (snap || {});
+        return Object.keys(data).map(function (k) {
+          var inc = Object.assign({ _key: k, _sessionId: sid }, data[k]);
+          return inc;
+        });
+      }).catch(function () { return []; });
+    })).then(function (lists) {
+      var all = []; lists.forEach(function (l) { all = all.concat(l); }); return all;
+    });
+
+    Promise.all([ordersP, incidentsP]).then(function (res) {
+      var ordMap = res[0] || {};
+      V2.reportData = {
+        orders: Object.keys(ordMap).map(function (k) { return Object.assign({ id: k }, ordMap[k]); }),
+        incidents: res[1] || []
+      };
+      V2.reportLoading = false;
+      // Re-render only if we're still on the Reports lens (operator may have moved on).
+      if (V2.lens === 'reports') render();
+    }).catch(function (e) {
+      console.error('[classes-v2] loadReportsData', e);
+      V2.reportData = { orders: [], incidents: [] };
+      V2.reportLoading = false;
+      if (V2.lens === 'reports') render();
+    });
+  }
+
+  // ── Reports lens — attendance / revenue / fill, at PARITY with the legacy
+  // book.js Reports tab. Revenue = order-line join (SUM of class/pass order
+  // items), with an overdue-completion-reports warning section and an incidents
+  // summary. All computed client-side from loaded classes + sessions +
+  // enrollments + the lazily-loaded orders/incidents (V2.reportData). Read-only.
   function renderReports() {
+    // Kick the async orders+incidents read on first Reports-lens entry — but
+    // only once the main classes/sessions data is in (incidents are read off the
+    // completed-session list). The headline revenue + incidents summary fill in
+    // on the re-render once the read resolves.
+    if (V2.loaded && !V2.reportData && !V2.reportLoading) loadReportsData();
+    var rd = V2.reportData;
+    var loadingMore = !rd;
+
     var sessions = [];
     Object.keys(V2.sessionsByClass).forEach(function (cid) { sessions = sessions.concat(V2.sessionsByClass[cid]); });
     var completedSessions = sessions.filter(function (s) { return String(s.status || '').toLowerCase() === 'completed'; });
@@ -729,28 +810,137 @@
     var noShow = en.filter(function (e) { return e.status === 'no-show'; }).length;
     var attRate = (attended + noShow) ? Math.round(attended / (attended + noShow) * 100) : null;
     var active = en.filter(function (e) { return e.status === 'confirmed' || e.status === 'waitlisted' || e.status === 'checked-in'; }).length;
-    var revenueCents = en.reduce(function (sum, e) {
+
+    // Date-range cutoff (legacy book.js #reportDateRange — default 30 days).
+    var rangeVal = V2.reportRange || '30';
+    var cutoffDate = null;
+    if (rangeVal !== 'all') {
+      var dC = new Date(); dC.setDate(dC.getDate() - parseInt(rangeVal, 10));
+      cutoffDate = dC.getFullYear() + '-' + String(dC.getMonth() + 1).padStart(2, '0') + '-' + String(dC.getDate()).padStart(2, '0');
+    }
+
+    // ── REVENUE: order-line join (legacy parity) ──────────────────────────────
+    // Walk orders, keep those in-range (o.completedAt || o.createdAt), and sum
+    // class/pass line items: item.total || (item.priceCents/100). The headline
+    // figure here MATCHES legacy book.js — NOT enrollment seat price. Per-class
+    // revenue counts only bookingType==='class' items keyed by item.classId.
+    var orders = (rd && rd.orders) || [];
+    var filteredOrders = orders.filter(function (o) {
+      if (!o.completedAt && !o.createdAt) return false;
+      if (cutoffDate) { return (o.completedAt || o.createdAt || '').substring(0, 10) >= cutoffDate; }
+      return true;
+    });
+    function orderItems(o) { return o.items ? (Array.isArray(o.items) ? o.items : Object.keys(o.items).map(function (k) { return o.items[k]; })) : []; }
+    var revenue = 0;                 // dollars, class+pass (headline)
+    var classRevByCid = {};          // dollars, per-class (bookingType==='class')
+    filteredOrders.forEach(function (o) {
+      orderItems(o).forEach(function (item) {
+        if (item.bookingType === 'class' || item.bookingType === 'pass') {
+          revenue += (item.total || ((item.priceCents || 0) / 100) || 0);
+        }
+        if (item.bookingType === 'class' && item.classId) {
+          classRevByCid[item.classId] = (classRevByCid[item.classId] || 0) + (item.total || ((item.priceCents || 0) / 100) || 0);
+        }
+      });
+    });
+
+    // Seat revenue (V2 value-add) kept as a secondary lens-only signal.
+    var seatRevenueCents = en.reduce(function (sum, e) {
       if (e.status === 'cancelled' || e.status === 'cancelled_by_session') return sum;
       return sum + (parseInt(e.pricePaidCents, 10) || 0);
     }, 0);
 
+    // ── OVERDUE COMPLETION REPORTS (legacy parity) ────────────────────────────
+    // Scheduled sessions whose date is past today and not yet completed —
+    // surfaces missed completion reports. Walks the UNFILTERED sessions list so a
+    // past-date session outside the date range still shows (legacy behaviour).
+    var todayS = V2.today;
+    var overdueSessions = sessions.filter(function (s) {
+      return String(s.status || '').toLowerCase() === 'scheduled' && s.date && String(s.date).slice(0, 10) < todayS;
+    }).sort(function (a, b) { return String(a.date || '').localeCompare(String(b.date || '')); });
+
+    // ── INCIDENTS (legacy parity) ─────────────────────────────────────────────
+    // Per-session incidents from the completion logs, date-filtered on
+    // createdAt. Severity counts + the 5 most-recent incidents.
+    var incidents = (rd && rd.incidents) || [];
+    var filteredIncidents = cutoffDate
+      ? incidents.filter(function (inc) { return (inc.createdAt || '').substring(0, 10) >= cutoffDate; })
+      : incidents;
+
+    var rangeLabel = (rangeVal === 'all') ? 'all time' : ('last ' + rangeVal + ' days');
     var tiles = U.tiles([
-      { k: 'Seat revenue', v: N.money(revenueCents / 100) || '$0.00', hero: true },
+      { k: 'Class revenue (' + rangeLabel + ')', v: loadingMore ? '…' : (N.money(revenue) || '$0.00'), hero: true },
       { k: 'Attendance rate', v: attRate == null ? '—' : (attRate + '%') },
       { k: 'Active enrollments', v: N.count(active) },
-      { k: 'Sessions completed', v: N.count(completedSessions.length) }
+      { k: 'Sessions completed', v: N.count(completedSessions.length) },
+      { k: 'Overdue reports', v: N.count(overdueSessions.length) }
     ]);
 
-    // Per-class: enrollments, fill rate (confirmed seats vs capacity over
-    // non-cancelled sessions), seat revenue. Sorted by revenue.
+    // Date-range selector (parity with legacy #reportDateRange).
+    var rangeOpts = [['30', 'Last 30 days'], ['90', 'Last 90 days'], ['365', 'Last year'], ['all', 'All time']];
+    var rangeSel = '<div class="mu-sub" style="margin-bottom:14px;display:flex;align-items:center;gap:8px;">Reporting window:' +
+      '<select class="form-input" style="font-size:0.85rem;padding:6px 10px;max-width:160px;" onchange="ClassesV2.reportRange(this.value)">' +
+      rangeOpts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === rangeVal ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') +
+      '</select></div>';
+
+    // ── Overdue-completion warning section ────────────────────────────────────
+    var overdueSection = '';
+    if (overdueSessions.length > 0) {
+      var overdueRows = overdueSessions.slice(0, 10).map(function (s) {
+        var cls = V2.byId[s.classId] || {};
+        var name = className(cls) !== '(untitled)' ? className(cls) : (s.classId || '(unknown class)');
+        var daysLate = Math.round((new Date(todayS) - new Date(s.date)) / 86400000);
+        return { s: s, name: name, when: esc(s.date) + (s.startTime ? ' · ' + fmtTime(s.startTime) : ''), late: daysLate };
+      });
+      var overdueTable = U.relatedTable([
+        { label: 'Class', render: function (r) {
+            return r.s.id
+              ? '<button type="button" class="mu-link" onclick="MastEntity.drill(\'sessions-v2\',\'' + esc(r.s.id) + '\')">' + esc(r.name) + '</button>'
+              : esc(r.name);
+        } },
+        { label: 'When', render: function (r) { return r.when; } },
+        { label: 'Overdue', align: 'right', render: function (r) { return r.late + ' day' + (r.late === 1 ? '' : 's'); } }
+      ], overdueRows);
+      var moreNote = overdueSessions.length > overdueRows.length
+        ? '<div class="mu-sub" style="text-align:center;padding:4px;">+ ' + (overdueSessions.length - overdueRows.length) + ' more not shown</div>' : '';
+      overdueSection = U.cardTable(
+        '⚠ ' + overdueSessions.length + ' session' + (overdueSessions.length === 1 ? '' : 's') + ' awaiting completion report',
+        '<div class="mu-sub" style="margin-bottom:10px;">Past-date sessions still marked “scheduled”. Open the session to submit a completion report or cancel it.</div>' +
+        overdueTable + moreNote
+      );
+    }
+
+    // ── Incidents summary section ─────────────────────────────────────────────
+    var incidentsSection = '';
+    if (loadingMore) {
+      incidentsSection = U.cardTable('Incidents', '<span class="mu-sub">Loading incident reports…</span>');
+    } else if (filteredIncidents.length > 0) {
+      var sevCounts = { low: 0, medium: 0, high: 0, critical: 0 };
+      filteredIncidents.forEach(function (inc) { sevCounts[inc.severity] = (sevCounts[inc.severity] || 0) + 1; });
+      var sevBadges = ['critical', 'high', 'medium', 'low'].filter(function (sev) { return sevCounts[sev] > 0; })
+        .map(function (sev) { return U.badge(sev + ': ' + sevCounts[sev], sevTone(sev)); }).join(' ');
+      var recentInc = filteredIncidents.slice().sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }).slice(0, 5);
+      var incTable = U.relatedTable([
+        { label: 'Severity', render: function (inc) { return U.badge(inc.severity || 'unknown', sevTone(inc.severity)); } },
+        { label: 'Type', render: function (inc) { return esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type || '—'); } },
+        { label: 'Description', render: function (inc) { return esc(inc.description || '—'); } },
+        { label: 'Status', render: function (inc) { return esc(inc.followUpStatus || 'open'); } }
+      ], recentInc);
+      incidentsSection = U.cardTable('Incidents (' + filteredIncidents.length + ')',
+        '<div style="margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;">' + sevBadges + '</div>' + incTable);
+    }
+
+    // ── Per-class table: enrollments, fill rate, order-line revenue ───────────
+    // Revenue column is the order-line class revenue (parity), with seat revenue
+    // alongside for the lens reader. Sorted by order-line revenue.
     var perClass = V2.rows.map(function (c) {
       var cid = c._key;
       var cEn = en.filter(function (e) { return e.classId === cid && e.status !== 'cancelled' && e.status !== 'cancelled_by_session'; });
-      var cRev = cEn.reduce(function (s, e) { return s + (parseInt(e.pricePaidCents, 10) || 0); }, 0);
+      var cSeat = cEn.reduce(function (s, e) { return s + (parseInt(e.pricePaidCents, 10) || 0); }, 0);
       var cSess = (V2.sessionsByClass[cid] || []).filter(function (s) { return String(s.status || '').toLowerCase() !== 'cancelled'; });
       var seatCap = cSess.reduce(function (s, x) { return s + (parseInt(x.capacity, 10) || 0); }, 0);
       var seatFilled = cSess.reduce(function (s, x) { return s + sessEnrolled(x); }, 0);
-      return { c: c, enrolls: cEn.length, rev: cRev, fill: seatCap ? Math.round(seatFilled / seatCap * 100) : null };
+      return { c: c, enrolls: cEn.length, rev: classRevByCid[cid] || 0, seat: cSeat, fill: seatCap ? Math.round(seatFilled / seatCap * 100) : null };
     }).filter(function (r) { return r.enrolls > 0 || (V2.sessionsByClass[r.c._key] || []).length > 0; })
       .sort(function (a, b) { return b.rev - a.rev; });
 
@@ -760,7 +950,8 @@
       } },
       { label: 'Enrollments', align: 'right', render: function (r) { return N.count(r.enrolls); } },
       { label: 'Fill rate', align: 'right', render: function (r) { return r.fill == null ? '—' : (r.fill + '%'); } },
-      { label: 'Seat revenue', align: 'right', render: function (r) { return N.money(r.rev / 100) || '—'; } }
+      { label: 'Revenue', align: 'right', render: function (r) { return loadingMore ? '…' : (N.money(r.rev) || '—'); } },
+      { label: 'Seat revenue', align: 'right', render: function (r) { return N.money(r.seat / 100) || '—'; } }
     ], perClass);
 
     // Repeat students — students with 2+ non-cancelled seats (email-keyed).
@@ -780,8 +971,11 @@
         ], repeats)
       : '<span class="mu-sub">No repeat students yet.</span>';
 
-    return tiles +
+    return rangeSel + tiles +
+      overdueSection +
+      incidentsSection +
       U.cardTable('By class', perClass.length ? table : '<span class="mu-sub">No class activity yet.</span>') +
+      U.cardTable('Seat revenue', '<span class="mu-sub">Seat revenue (sum of enrollment price paid): <strong>' + (N.money(seatRevenueCents / 100) || '$0.00') + '</strong>. The headline figure above is the order-line total — class &amp; pass purchases booked through checkout.</span>') +
       U.cardTable('Repeat students', repeatBody);
   }
 
@@ -797,6 +991,12 @@
       // Rooms can change via drilled SOs (create/edit/delete on resources-v2);
       // refresh the hub's copy when entering the lens so the roster is current.
       if (V2.lens === 'rooms') { load(); }
+      render();
+    },
+    // Reports date-range change — applied client-side over the already-loaded
+    // orders/incidents (no re-fetch); re-renders the lens.
+    reportRange: function (v) {
+      V2.reportRange = (['30', '90', '365', 'all'].indexOf(String(v)) >= 0) ? String(v) : '30';
       render();
     },
     // Create delegates to the resources-v2 surface (its intake + bridge own
