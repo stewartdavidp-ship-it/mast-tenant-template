@@ -1330,7 +1330,7 @@
         }
         if (job.status === 'failed') {
           html += '<div style="color:var(--danger);margin-bottom:8px;">' + esc(job.error || 'Unknown error') + '</div>';
-          html += '<button class="btn btn-secondary" onclick="event.stopPropagation(); wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.78rem;">Retry Import</button>';
+          html += '<button class="btn btn-secondary" onclick="event.stopPropagation(); wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.78rem;">Re-scan &amp; Import</button>';
         }
 
         // Timing
@@ -1416,7 +1416,7 @@
       var pendingMs = Date.now() - new Date(job.createdAt).getTime();
       if (pendingMs > 2 * 60 * 60 * 1000) {
         html += '<div style="font-size:0.85rem;color:var(--danger);margin-bottom:4px;">&#9888; This job has been queued for over 2 hours. It may be stuck.</div>';
-        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.78rem;">Retry</button>';
+        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.78rem;">Re-scan</button>';
       } else {
         html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Queued for processing. The import runs every 30 minutes.</div>';
       }
@@ -1425,7 +1425,7 @@
       var processMs = Date.now() - new Date(job.claimedAt || job.createdAt).getTime();
       if (processMs > 2 * 60 * 60 * 1000) {
         html += '<div style="font-size:0.85rem;color:var(--danger);margin-bottom:4px;">&#9888; Scan has been running for over 2 hours. It may be stuck.</div>';
-        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.78rem;">Reset &amp; Retry</button>';
+        html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="font-size:0.78rem;">Re-scan &amp; Retry</button>';
       } else {
         html += '<div style="font-size:0.85rem;color:var(--warm-gray);">Scanning your website for products, images, and content...</div>';
         html += renderProgressBar(30);
@@ -1440,7 +1440,7 @@
       }
     } else if (job.status === 'failed') {
       html += '<div style="font-size:0.85rem;color:var(--danger);margin-top:4px;">' + esc(job.error || 'Import encountered an error.') + '</div>';
-      html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="margin-top:8px;font-size:0.78rem;">Retry Import</button>';
+      html += '<button class="btn btn-secondary" onclick="wpRetryImport(\'' + esc(job.id) + '\')" style="margin-top:8px;font-size:0.78rem;">Re-scan &amp; Import</button>';
     }
 
     html += '</div>';
@@ -2552,10 +2552,51 @@
 
   window.wpRetryImport = async function(jobId) {
     try {
-      await MastDB.set('webPresence/importJobs/' + jobId + '/status', 'pending');
-      await MastDB.remove('webPresence/importJobs/' + jobId + '/error');
-      await MastDB.remove('webPresence/importJobs/' + jobId + '/claimedAt');
-      showToast('Import job re-queued.');
+      var job = importJobs && importJobs.find(function(j) { return j.id === jobId; });
+      if (!job) { try { job = await MastDB.get('webPresence/importJobs/' + jobId); } catch (e) {} }
+      if (!job || !job.url) { showToast('Could not find that import job to retry.', true); return; }
+
+      // A plain status flip never re-runs the import: processImportJob is an
+      // onDocumentCreated trigger, and even when it does run it replays the FROZEN
+      // webPresence/siteAnalysis/importPlan — so a customer who fixed their site (or
+      // whose first import dropped categories) gets the identical stale result.
+      // Re-scan properly by creating a NEW job carrying forceRescan:true, which makes
+      // processImportJob ignore the stored plan and re-run live discovery via the
+      // legacy crawl path. The bypass is server-guarded by crawlManifest presence
+      // (without it, forceRescan would no-op on the stale plan), so re-derive a manifest
+      // when the original job lacks one.
+      var manifest = job.crawlManifest || null;
+      if (!manifest) {
+        showToast('Re-analyzing your site…');
+        try {
+          await firebase.functions().httpsCallable('analyzeExistingSite', { timeout: 120000 })({
+            url: job.url, tenantId: MastDB.tenantId()
+          });
+          manifest = await MastDB.get('webPresence/siteAnalysis/crawlManifest');
+        } catch (e) { /* fall through — backend may still hold a usable importPlan */ }
+      }
+
+      var newId = MastDB.newKey('webPresence/importJobs');
+      var now = new Date().toISOString();
+      var jobData = {
+        id: newId,
+        url: job.url,
+        tenantId: MastDB.tenantId(),
+        status: 'pending',
+        forceRescan: true,
+        createdAt: now,
+        claimedAt: null,
+        completedAt: null,
+        error: null,
+        notifyPhone: job.notifyPhone || null,
+        crawlManifest: manifest || null,
+        discovered: null,
+        imported: null
+      };
+      if (job.mode) jobData.mode = job.mode; // preserve engagement mode (storefront | pim-only | draft-only)
+      await MastDB.set('webPresence/importJobs/' + newId, jobData);
+
+      showToast('Re-scan queued — re-discovering your site and re-importing.');
       await loadImportJobs();
       renderWebsite();
     } catch (err) {
