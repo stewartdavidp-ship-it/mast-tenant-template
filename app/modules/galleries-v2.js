@@ -227,7 +227,7 @@
           // name echoed back.
           { label: 'Placement', render: function (r) {
               var label = 'Placed ' + (r.p.createdAt ? N.date(r.p.createdAt) : '(undated)');
-              return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'consignments-v2\',\'' + esc(r.p._key || '') + '\')">' + esc(label) + '</button>';
+              return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'consignments-v2\',\'' + esc(r.p.placementId || r.p._key || '') + '\')">' + esc(label) + '</button>';
             } },
           { label: 'Status', render: function (r) { return UI.badge(r.status, r.status === 'active' ? 'success' : 'neutral'); } },
           { label: 'Pieces', align: 'right', render: function (r) { return N.count(r.placed) || '0'; } },
@@ -238,7 +238,7 @@
           { label: '', render: function (r) {
               if (r.p.galleryId) return '';
               return '<button type="button" class="mu-link" title="This placement is matched by name only — stamp the gallery link (audited)" ' +
-                'onclick="event.stopPropagation();GalleriesV2.linkPlacement(\'' + esc(g._key) + '\',\'' + esc(r.p._key || '') + '\')">link ⚭</button>';
+                'onclick="event.stopPropagation();GalleriesV2.linkPlacement(\'' + esc(g._key) + '\',\'' + esc(r.p.placementId || r.p._key || '') + '\')">link ⚭</button>';
             } }
         ], pieceRows) : '<span class="mu-sub">No placements yet — add one below.</span>';
 
@@ -260,7 +260,7 @@
         var dueCols = [
           { label: 'Placement', render: function (r) {
               var label = 'Placed ' + (r.p.createdAt ? N.date(r.p.createdAt) : '(undated)');
-              return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'consignments-v2\',\'' + esc(r.p._key || '') + '\')">' + esc(label) + '</button>';
+              return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'consignments-v2\',\'' + esc(r.p.placementId || r.p._key || '') + '\')">' + esc(label) + '</button>';
             } },
           { label: 'Maker earned', align: 'right', render: function (r) { return N.money(r.earned) || '$0.00'; } },
           { label: 'Settled', align: 'right', render: function (r) { return N.money(r.settled) || '$0.00'; } },
