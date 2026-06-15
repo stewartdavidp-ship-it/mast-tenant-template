@@ -7,15 +7,25 @@
  * (MastEntity.renderList) and a row click opens a READ-ONLY Faceted Record
  * slide-out (detail.render composing MastUI primitives).
  *
- * Variant (doc 17 §1a): an email log is a send LOG — no governed lifecycle, no
- * writes at all (legacy "Resend" is a side action, not a record mutation, and is
- * intentionally dropped from this read-only twin). So: read-focused Faceted
- * Record, NO onSave, NO Edit affordance. Flag-gated (?ui=1), side-by-side with
- * legacy #email-log; never touches it.
+ * Variant (doc 17 §1a): an email log is a send LOG — no governed record lifecycle
+ * and no record mutations. It STAYS a read-focused Faceted Record (NO onSave, NO
+ * Edit affordance). Two legacy capabilities the first cut dropped are restored
+ * here because their absence was a silent V1-only parity gap:
+ *
+ *   • Resend — a SIDE action (not a record write): it asks the existing
+ *     `sendTestEmail` callable to send a fresh test email to the same recipient
+ *     (identical to legacy email-log.js resendEmail). RBAC-gated via
+ *     can('email-log-v2','edit'), confirm-dialogued (it sends a real email), and
+ *     audited via writeAudit. Surfaced on the detail Overview pane.
+ *   • Adjustable date range — the first cut HARD-CODED the last 30 days, so older
+ *     emails were unviewable in V2. Restored the legacy From/To date pickers plus
+ *     the "← Load older 30d" pager (shifts From back 30d). Pure client query.
+ *
+ * Flag-gated (?ui=1), side-by-side with legacy #email-log; never touches it.
  *
  * Read path mirrors legacy EXACTLY: MastDB.query('emails') ordered by createdAt
- * over a default last-30-days window, bounded by limitToLast (the explicit
- * limit). Sort is client-side (createdAt desc default).
+ * over the operator-chosen [From, To] window (default last 30 days), bounded by
+ * limitToLast (the explicit limit). Sort is client-side (createdAt desc default).
  */
 (function () {
   'use strict';
@@ -65,7 +75,10 @@
     fetch: function (id) { return Promise.resolve(V2.byId[id] || null); },
     detail: {
       // Read-focused Faceted Record — tiles + Overview/Content facets. NO edit
-      // (a send log is view-only). Composes MastUI primitives only.
+      // (a send-log row is immutable). Composes MastUI primitives only. The
+      // Overview pane carries a Resend SIDE action (RBAC-gated, confirm + audit
+      // in EmailLogV2.resend) — that's a CF call, not a record mutation, so the
+      // read-only model holds (no onSave, no Edit button).
       render: function (UI, e) {
         var status = e.status || 'unknown';
         var tiles = UI.tiles([
@@ -93,8 +106,23 @@
         if (e.tokenCost != null) meta.push({ k: 'Token Cost', v: N.count(e.tokenCost) || '0' });
         var metaCard = meta.length ? UI.card('Metadata', UI.kv(meta)) : '';
 
+        // Resend — a side action (not a record write). Mirrors legacy
+        // email-log.js resendEmail: re-sends a test email to the same recipient
+        // via the existing `sendTestEmail` callable. Shown only when there is a
+        // recipient AND the operator can edit this surface (RBAC). The actual
+        // send is confirm-gated + audited in EmailLogV2.resend().
+        var canResend = (typeof window.can !== 'function') || window.can('email-log-v2', 'edit');
+        var resendCard = '';
+        if (e.to && canResend) {
+          var rk = e._key || e.id || '';
+          resendCard = UI.card('Actions',
+            '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 10px;">' +
+              'Send a fresh test email to ' + esc(e.to) + ' to confirm delivery is working.</p>' +
+            '<button class="btn btn-secondary" onclick="EmailLogV2.resend(\'' + esc(rk) + '\')">↻ Resend test email</button>');
+        }
+
         var ovPane = '<div class="mu-pane" data-pane="ov">' +
-          UI.card('Overview', overview) + metaCard + '</div>';
+          UI.card('Overview', overview) + metaCard + resendCard + '</div>';
 
         var contentPane = '';
         if (hasContent) {
@@ -127,21 +155,41 @@
   }
 
   // ── module state + data ─────────────────────────────────────────────
-  // Date window mirrors legacy: default last 30 days, bounded by limit.
+  // Date window mirrors legacy: operator picks From/To; we fetch every email in
+  // that window up to EMAIL_LIMIT. Default is last 30 days. `dateFrom`/`dateTo`
+  // are the live bounds (re-fetch on change); `hitCap` flags a window that
+  // matched more than EMAIL_LIMIT (narrow the dates to see all).
   var EMAIL_LIMIT = 500;
-  var V2 = { rows: [], byId: {}, sortKey: 'createdAt', sortDir: 'desc', filter: 'all', q: '', loaded: false };
 
   function _todayDate() { return new Date().toISOString().slice(0, 10); }
   function _defaultFromDate() { var d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); }
 
+  var V2 = {
+    rows: [], byId: {}, sortKey: 'createdAt', sortDir: 'desc', filter: 'all', q: '',
+    loaded: false, loading: false, hitCap: false,
+    dateFrom: _defaultFromDate(), dateTo: _todayDate()
+  };
+
+  function _fmtRange(from, to) {
+    function f(s) {
+      try {
+        var d = new Date(s + 'T00:00:00Z');
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+      } catch (e) { return s; }
+    }
+    return f(from) + ' → ' + f(to);
+  }
+
   function load() {
     // Date-range query, mirrored EXACTLY from legacy email-log.js loadEmails():
-    // MastDB.query('emails') ordered by createdAt, [from 00:00Z, to 23:59:59.999Z],
-    // bounded by limitToLast (the explicit { limit } below). One-shot .once('value')
-    // read (no live listener); we sort client-side (createdAt desc default).
-    var startIso = _defaultFromDate() + 'T00:00:00.000Z';
-    var endIso = _todayDate() + 'T23:59:59.999Z';
-    var limit = EMAIL_LIMIT; // { limit: EMAIL_LIMIT } — bounded read (lint-unbounded-read)
+    // MastDB.query('emails') ordered by createdAt over [dateFrom 00:00Z,
+    // dateTo 23:59:59.999Z], bounded by limitToLast (the explicit { limit } below).
+    // We over-fetch by 1 to detect the cap. One-shot .once('value') read (no live
+    // listener); we sort client-side (createdAt desc default).
+    V2.loading = true; render();
+    var startIso = V2.dateFrom + 'T00:00:00.000Z';
+    var endIso = V2.dateTo + 'T23:59:59.999Z';
+    var limit = EMAIL_LIMIT + 1; // { limit: EMAIL_LIMIT + 1 } — bounded read (lint-unbounded-read); +1 detects the cap
     var query = MastDB.query('emails').orderByChild('createdAt')
       .startAt(startIso).endAt(endIso).limitToLast(limit);
     Promise.resolve(query.once('value')).then(function (snap) {
@@ -154,11 +202,17 @@
         var r = Object.assign({ _key: k }, e);
         out.push(r);
       });
+      V2.hitCap = out.length > EMAIL_LIMIT;
+      if (V2.hitCap) {
+        // Drop the oldest overflow row — keep the newest EMAIL_LIMIT.
+        out.sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+        out = out.slice(0, EMAIL_LIMIT);
+      }
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
-      V2.loaded = true; render();
+      V2.loaded = true; V2.loading = false; render();
     }).catch(function (err) {
       console.error('[email-log-v2] load', err);
-      V2.loaded = true; render();
+      V2.loaded = true; V2.loading = false; render();
       if (window.showToast) showToast('Failed to load email log: ' + (err && err.message || err), true);
     });
   }
@@ -212,19 +266,48 @@
         s.charAt(0).toUpperCase() + s.slice(1) + ' <span style="color:var(--warm-gray);">' + (counts[s] || 0) + '</span></button>';
     }).join('');
 
+    // Date-range controls — the primary fetch window. Changing either bound
+    // re-fetches; "← Load older 30d" shifts From back 30 days. Inputs are
+    // disabled mid-fetch to avoid back-pressure on Firebase. A cap chip warns
+    // when the window matched more than EMAIL_LIMIT (narrow the dates to see all).
+    var dis = V2.loading ? ' disabled' : '';
+    var dInp = 'padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;font-family:inherit;background:transparent;color:var(--text-primary);';
+    var capChip = V2.hitCap
+      ? '<span title="This window matched more than ' + EMAIL_LIMIT + ' emails — narrow the dates to see them all." style="font-size:0.78rem;color:var(--amber);border:1px solid var(--border);border-radius:10px;padding:2px 8px;">capped at ' + EMAIL_LIMIT + '</span>'
+      : '';
+    var loadOlderLabel = V2.loading ? 'Loading…' : '← Load older 30d';
+    var dateBar =
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:14px 0;">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);">From</label>' +
+        '<input type="date" value="' + esc(V2.dateFrom) + '" max="' + esc(V2.dateTo) + '" onchange="EmailLogV2.setDateFrom(this.value)"' + dis + ' style="' + dInp + '">' +
+        '<label style="font-size:0.85rem;color:var(--warm-gray);">To</label>' +
+        '<input type="date" value="' + esc(V2.dateTo) + '" min="' + esc(V2.dateFrom) + '" max="' + esc(_todayDate()) + '" onchange="EmailLogV2.setDateTo(this.value)"' + dis + ' style="' + dInp + '">' +
+        '<button class="btn btn-secondary" onclick="EmailLogV2.loadOlder()"' + dis + ' style="font-size:0.85rem;padding:6px 12px;">' + esc(loadOlderLabel) + '</button>' +
+        '<button class="btn btn-secondary" onclick="EmailLogV2.refresh()"' + dis + ' style="font-size:0.85rem;padding:6px 12px;">↻ Refresh</button>' +
+        '<span style="font-size:0.85rem;color:var(--warm-gray);">' + esc(_fmtRange(V2.dateFrom, V2.dateTo)) + '</span>' +
+        capChip +
+      '</div>';
+
+    var emptyMsg = V2.loading
+      ? 'Loading…'
+      : (V2.filter !== 'all' || V2.q)
+        ? 'No emails match these filters in this date range.'
+        : 'No emails in this date range. Widen the dates or click "← Load older 30d".';
+
     tab.innerHTML =
       U.pageHeader({
         title: 'Email history',
         count: N.count(V2.rows.length) + ' emails',
         actionsHtml: '<button class="btn btn-secondary" onclick="EmailLogV2.exportCsv()">↓ Export</button>'
       }) +
+      dateBar +
       '<div style="margin:14px 0;">' + pills + '</div>' +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search subject, recipient, type…" value="' + esc(V2.q) +
         '" oninput="EmailLogV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
       MastEntity.renderList('email-log-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'EmailLogV2.sort', onRowClickFnName: 'EmailLogV2.open',
-        empty: { title: 'No emails', message: V2.loaded ? 'No emails match these filters in the last 30 days.' : 'Loading…' }
+        empty: { title: 'No emails', message: emptyMsg }
       });
   }
 
@@ -242,7 +325,58 @@
         if (rec) MastEntity.openRecord('email-log-v2', rec, 'read');
       });
     },
-    exportCsv: function () { return MastEntity.exportRows('email-log-v2', visibleRows(), V2.filter); }
+    exportCsv: function () { return MastEntity.exportRows('email-log-v2', visibleRows(), V2.filter); },
+
+    // ── date-range / pager (pure client query; mirrors legacy) ─────────
+    setDateFrom: function (v) { if (V2.loading) return; V2.dateFrom = v || _defaultFromDate(); load(); },
+    setDateTo: function (v) { if (V2.loading) return; V2.dateTo = v || _todayDate(); load(); },
+    loadOlder: function () {
+      // "← Load older 30d" — shift the From bound back 30 days and re-fetch,
+      // so the operator can widen backwards without picking a new date.
+      if (V2.loading) return;
+      var d = new Date(V2.dateFrom + 'T00:00:00Z');
+      d.setUTCDate(d.getUTCDate() - 30);
+      V2.dateFrom = d.toISOString().slice(0, 10);
+      load();
+    },
+    refresh: function () { if (V2.loading) return; load(); },
+
+    // ── Resend (side action — re-sends a test email via sendTestEmail) ──
+    // Mirrors legacy email-log.js resendEmail EXACTLY: confirm → existing
+    // `sendTestEmail` callable with { toEmail } → toast → refresh. RBAC-gated
+    // (can('email-log-v2','edit')) and audited (writeAudit). NOT a record write
+    // (the log row is immutable); the CF writes its own new 'sent' log entry.
+    resend: function (key) {
+      var email = V2.byId[key];
+      if (!email) return;
+      if (typeof window.can === 'function' && !window.can('email-log-v2', 'edit')) {
+        if (window.showToast) showToast('You do not have permission to resend emails.', true);
+        return;
+      }
+      if (!email.to) {
+        if (window.showToast) showToast('No recipient address on this email.', true);
+        return;
+      }
+      if (!window.firebase || !firebase.functions) {
+        if (window.showToast) showToast('Email sending is unavailable right now.', true);
+        return;
+      }
+      var ask = (typeof window.mastConfirm === 'function')
+        ? window.mastConfirm('Send a test email to ' + email.to + '? This sends a real email.', { title: 'Resend Email', confirmLabel: 'Send' })
+        : Promise.resolve(true);
+      Promise.resolve(ask).then(function (ok) {
+        if (!ok) return;
+        return firebase.functions().httpsCallable('sendTestEmail')({ toEmail: email.to }).then(function (result) {
+          var sentTo = (result && result.data && result.data.sentTo) || email.to;
+          if (window.writeAudit) writeAudit('resend', 'email', key, { to: email.to, emailType: email.emailType || null, via: 'sendTestEmail' });
+          if (window.showToast) showToast('Email resent to ' + sentTo);
+          // Reload after a beat so the new 'sent' log entry appears in range.
+          setTimeout(function () { if (!V2.loading) load(); }, 1000);
+        });
+      }).catch(function (err) {
+        if (window.showToast) showToast('Resend failed: ' + (err && err.message || err), true);
+      });
+    }
   };
 
   // ── register the side-by-side route ─────────────────────────────────

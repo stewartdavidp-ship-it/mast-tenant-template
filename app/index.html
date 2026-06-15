@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260615-165643-7ab5309"></script>
+  <script src="../shared/mastdb.js?v=20260615-170435-0717925"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,25 +184,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260615-165643-7ab5309"></script>
-  <script src="../shared/brand-sync.js?v=20260615-165643-7ab5309"></script>
+  <script src="../shared/customer-filters.js?v=20260615-170435-0717925"></script>
+  <script src="../shared/brand-sync.js?v=20260615-170435-0717925"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260615-165643-7ab5309"></script>
+  <script src="../shared/variant-reconcile.js?v=20260615-170435-0717925"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260615-165643-7ab5309"></script>
-  <script src="../shared/mast-io.js?v=20260615-165643-7ab5309"></script>
-  <script src="../shared/mast-entity.js?v=20260615-165643-7ab5309"></script>
+  <script src="../shared/mast-ui.js?v=20260615-170435-0717925"></script>
+  <script src="../shared/mast-io.js?v=20260615-170435-0717925"></script>
+  <script src="../shared/mast-entity.js?v=20260615-170435-0717925"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260615-165643-7ab5309"></script>
+  <script src="../shared/product-readiness.core.js?v=20260615-170435-0717925"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22362,7 +22362,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260615-165643-7ab5309';
+var MAST_MODULES_V = '20260615-170435-0717925';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
