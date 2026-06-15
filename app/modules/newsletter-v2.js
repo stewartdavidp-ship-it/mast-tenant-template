@@ -300,7 +300,7 @@
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'subscribedAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false,
-    view: 'subs', issues: [], issuesById: {}, issueSortKey: 'date', issueSortDir: 'desc' };
+    view: 'issues', issues: [], issuesById: {}, issueSortKey: 'date', issueSortDir: 'desc' };
 
   function load() {
     // Ensure the legacy newsletter module is loaded so window.NewsletterBridge
@@ -368,9 +368,11 @@
 
   function render() {
     var tab = ensureTab();
-    // Lens pills (Wave 3): the Newsletter route hosts TWO record sets —
-    // subscribers (native CRUD) and issues (read + draft delete).
-    var lens = [['subs', 'Subscribers', V2.rows.length], ['issues', 'Issues', V2.issues.length]].map(function (l) {
+    // Lens pills (Wave 3): the Newsletter route hosts TWO record sets — issues
+    // (the newsletters themselves; default lens) and subscribers. Issues lead
+    // because "Newsletter" is fundamentally the issues you send; subscribers are
+    // the audience behind them.
+    var lens = [['issues', 'Issues', V2.issues.length], ['subs', 'Subscribers', V2.rows.length]].map(function (l) {
       var on = V2.view === l[0];
       return '<button onclick="NewsletterV2.view(\'' + l[0] + '\')" style="border:1px solid var(--border);' +
         'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
