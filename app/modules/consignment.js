@@ -183,8 +183,7 @@
       return Promise.reject('Exceeds on-hand');
     }
     var newQtySold = currentSold + qtySold;
-    return MastDB.consignments.fieldRef(placementId, 'lineItems/' + lineItemId + '/qtySold')
-      .set(newQtySold)
+    return MastDB.consignments.setField(placementId, 'lineItems/' + lineItemId + '/qtySold', newQtySold)
       .then(function() {
         savePlacementTotals(placementId);
         showToast(qtySold + ' sale(s) recorded');
@@ -203,8 +202,7 @@
       return Promise.reject('Exceeds on-hand');
     }
     var newQtyReturned = currentReturned + qtyReturned;
-    return MastDB.consignments.fieldRef(placementId, 'lineItems/' + lineItemId + '/qtyReturned')
-      .set(newQtyReturned)
+    return MastDB.consignments.setField(placementId, 'lineItems/' + lineItemId + '/qtyReturned', newQtyReturned)
       .then(function() {
         savePlacementTotals(placementId);
         showToast(qtyReturned + ' return(s) recorded');
@@ -1916,7 +1914,7 @@
       qtyReturned: 0
     };
 
-    MastDB.consignments.fieldRef(placementId, 'lineItems/' + liKey).set(lineItem).then(function() {
+    MastDB.consignments.setField(placementId, 'lineItems/' + liKey, lineItem).then(function() {
       savePlacementTotals(placementId);
       showToast('Item added');
       closeModal();

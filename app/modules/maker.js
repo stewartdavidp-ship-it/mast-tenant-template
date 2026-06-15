@@ -1314,7 +1314,7 @@
     }).then(function() {
       showToast('Price updated on Etsy');
       // Record sync timestamp on recipe
-      MastDB.recipes.fieldRef(recipeId, 'lastEtsySyncAt').set(new Date().toISOString());
+      MastDB.recipes.setField(recipeId, 'lastEtsySyncAt', new Date().toISOString());
     }).catch(function(err) {
       console.error('Etsy price sync failed:', err);
       showToast('Local price updated — Etsy sync failed', 'error');
