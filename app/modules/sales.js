@@ -713,6 +713,8 @@ function openManualMatchModal(paymentKey) {
     candidates.forEach(function(c) {
       var s = c.sale;
       var items = (s.items || []).map(function(i) { return i.productName; }).join(', ');
+      // A mismatch row is still matchable, but executeManualMatch now requires an
+      // explicit danger-confirm before overwriting the sale's recognized revenue.
       var amountMatch = c.amount === (payment.amount || 0);
       var timeStr = s.timestamp ? new Date(s.timestamp).toLocaleString() : '-';
       var deltaStr = c.deltaMin < 1 ? '<1 min' : Math.round(c.deltaMin) + ' min';
@@ -757,11 +759,50 @@ async function executeManualMatch(paymentKey, saleId) {
   var payment = squarePayments[paymentKey];
   if (!payment || !saleId) return;
 
+  // ---- MONEY-CRITICAL amount-mismatch guard (interim client-side) ----
+  // Matching writes the Square amount onto admin/sales/{id}.amount, which finance
+  // sums into recognized revenue. The match modal only *shows* a yellow mismatch
+  // note (openManualMatchModal) — the row was still one-click matchable, so an
+  // operator could SILENTLY overwrite the sale's recognized revenue. Before any
+  // write, if the Square amount differs from the sale's current amount, require an
+  // EXPLICIT danger-confirm that surfaces the delta; decline = abort (no write at
+  // all). Equal amounts proceed exactly as before, no extra prompt.
+  // NOTE: the authoritative fix is server-side (the receipts-match Cloud Function
+  // reconcileSquarePayment in mast-architecture — block-by-default + accumulator-
+  // routed revenue), tracked separately. This client guard removes the SILENT
+  // overwrite, not the ability to match.
+  var sale = sales[saleId];
+  var oldAmount = (sale && typeof sale.amount === 'number') ? sale.amount : 0; // integer cents
+  var newAmount = payment.amount || 0; // integer cents (Square payment amount)
+  var amountsDiffer = oldAmount !== newAmount;
+
+  if (amountsDiffer) {
+    // Fail CLOSED: never silently overwrite recognized revenue. If the confirm
+    // primitive is unavailable, abort rather than proceed unguarded.
+    if (typeof mastConfirm !== 'function') {
+      showToast('Cannot confirm amount mismatch — match aborted.', true);
+      return;
+    }
+    var deltaCents = newAmount - oldAmount;
+    var dirWord = deltaCents > 0 ? 'increase' : 'decrease';
+    var msg = 'Square amount ' + formatCents(newAmount) + " differs from the sale's "
+      + formatCents(oldAmount) + ' (' + dirWord + ' of ' + formatCents(Math.abs(deltaCents)) + ').\n\n'
+      + 'Matching will OVERWRITE the sale\'s recognized revenue to ' + formatCents(newAmount)
+      + '. This changes finance totals. Continue?';
+    var ok = await mastConfirm(msg, {
+      title: 'Amount mismatch',
+      danger: true,
+      confirmLabel: 'Overwrite to ' + formatCents(newAmount),
+      cancelLabel: 'Cancel'
+    });
+    if (!ok) return; // operator declined — abort, no write at all
+  }
+
   try {
     var updates = {};
     // Update sale with Square payment info — Square amount is authoritative
     updates['admin/sales/' + saleId + '/squarePaymentId'] = payment.paymentId || paymentKey;
-    updates['admin/sales/' + saleId + '/amount'] = payment.amount || 0;
+    updates['admin/sales/' + saleId + '/amount'] = newAmount;
     updates['admin/sales/' + saleId + '/status'] = 'reconciled';
     // Update payment with matched sale
     updates['admin/square-payments/' + paymentKey + '/matchedSaleId'] = saleId;
@@ -770,8 +811,13 @@ async function executeManualMatch(paymentKey, saleId) {
     // Audit the money-mutating match commit (sale amount/status + payment link).
     // Mirror siblings reconcileSale/voidSale ('pos' entity); writeAudit is
     // self-guarded and never throws, so this can't break the match flow.
-    await writeAudit('reconcile', 'pos', saleId);
-    await writeAudit('match', 'square-payment', payment.paymentId || paymentKey);
+    // On an amount-mismatch overwrite, capture old/new amount + a variance flag so
+    // the revenue change is traceable (writeAudit's optional 4th detail arg).
+    var auditDetail = amountsDiffer
+      ? { oldAmount: oldAmount, newAmount: newAmount, amountVariance: newAmount - oldAmount, amountOverwritten: true }
+      : null;
+    await writeAudit('reconcile', 'pos', saleId, auditDetail);
+    await writeAudit('match', 'square-payment', payment.paymentId || paymentKey, auditDetail);
     showToast('Payment matched to sale.');
     var modal = document.getElementById('manualMatchModal');
     if (modal) modal.remove();
