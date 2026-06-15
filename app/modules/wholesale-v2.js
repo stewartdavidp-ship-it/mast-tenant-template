@@ -19,9 +19,21 @@
  * set, grouped like the legacy modal) + an onSave that DELEGATES to
  * window.WholesaleBridge (exposed in wholesale.js) so the account write stays
  * single-sourced — this twin never reimplements that logic (mirrors the
- * contacts-v2 / ContactsBridge precedent). The orders / AR aging / cadence /
- * authorized-users / requests / dormant sub-tools remain bespoke surfaces coupled
- * to legacy #wholesale and keep a "manage in classic view" link.
+ * contacts-v2 / ContactsBridge precedent).
+ *
+ * As of the AR/users conversion the remaining sub-tools are ALSO native facets,
+ * so the classic escape hatch is GONE:
+ *   • Orders — this account's wholesale orders; each # drills into the V2
+ *     orders-v2 detail (MastEntity.drill, stacked slide-out), NOT classic.
+ *   • AR aging — unpaid invoices bucketed by days overdue (read; derived from
+ *     account NET terms + dueDate), each row drilling to its V2 order.
+ *   • Cadence — reorder-frequency analytics derived from this account's orders
+ *     (median interval, days-since-last, on-track/due-soon/overdue/lapsed).
+ *   • Authorized buyers — who can order on this account (CRUD): authorize /
+ *     unlink / revoke, RBAC-gated with can('wholesale','edit'|'delete') +
+ *     writeAudit, single-sourced through WholesaleBridge.{authorizeUser,linkUser,
+ *     revokeUser}. Pending access-requests are surfaced here with approve/deny
+ *     (WholesaleBridge.{approveRequest,denyRequest}).
  * Flag-gated (?ui=1) at #wholesale-v2, side-by-side.
  */
 (function () {
@@ -72,6 +84,16 @@
     return t + (t && a.territory ? ' · ' : '') + (a.territory || '') + (a.salesRepName ? ' · Rep: ' + a.salesRepName : '') || '—';
   }
   function contactsOf(a) { return a.contacts || (a.primaryContact ? [a.primaryContact] : []); }
+  // relatedTable cell that drills into the V2 orders-v2 detail. Accepts either a
+  // raw order (Orders facet) or an AR row { order } (AR-aging facet). The drill
+  // lazy-loads orders-v2 + fetches the canonical order doc by id (no preload).
+  function orderLink(row) {
+    var o = (row && row.order) ? row.order : row;
+    var id = o && (o._key || o.id);
+    var label = (o && (o.orderNumber || (typeof getOrderDisplayNumber === 'function' ? getOrderDisplayNumber(o) : ''))) || String(id || '').slice(0, 8);
+    if (!id) return '<span class="mu-sub">—</span>';
+    return '<button type="button" class="mu-link" style="font-family:ui-monospace,monospace;" onclick="MastEntity.drill(\'orders-v2\',\'' + esc(String(id)) + '\')">' + esc(label) + '</button>';
+  }
 
   // ── schema (read-only Faceted Record) ───────────────────────────────
   MastEntity.define('wholesale-v2', {
@@ -108,8 +130,13 @@
           { k: 'Open AR', v: s.openCount ? (N.money(s.openAr) + ' · ' + s.openCount + (s.overdueCount ? ' (' + s.overdueCount + ' overdue)' : '')) : 'None' },
           { k: 'Credit limit', v: N.money(N.moneyVal(a, 'creditLimitCents', null)) || '—' }
         ]);
+        var acctUsers = V2.usersByAccount[aid] || [];
+        var ar = arAging(a);
         var tabsBar = UI.paneTabsBar([
           { key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders (' + s.count + ')' },
+          { key: 'ar', label: 'AR aging' + (ar.rows.length ? ' (' + ar.rows.length + ')' : '') },
+          { key: 'cadence', label: 'Cadence' },
+          { key: 'users', label: 'Users (' + acctUsers.length + ')' },
           { key: 'contacts', label: 'Contacts' }, { key: 'notes', label: 'Notes' }
         ], 'ov');
 
@@ -132,12 +159,9 @@
           { k: 'Tax-exempt', v: (a.taxExempt !== false) ? 'Yes' : 'No' },
           { k: 'Resale cert', v: a.resaleCertNumber ? esc(a.resaleCertNumber) : '—' }
         ]);
-        // Account create/edit is NATIVE now (the Edit button on this slide-out).
-        // What still has NO V2 home: orders, AR aging, cadence, authorized-user
-        // links, access requests, and dormant tooling — those stay bespoke on
-        // legacy #wholesale. navigateToClassic so the V2 route remap doesn't loop
-        // back here.
-        var manage = '<div style="margin-top:14px;"><button class="btn btn-secondary" onclick="WholesaleV2.classic()">Orders / AR / users in classic view →</button></div>';
+        // Account create/edit is NATIVE (the Edit button on this slide-out).
+        // Orders, AR aging, cadence, and authorized-users are all native facets
+        // below — no classic escape hatch remains.
 
         // Contacts — primary + all contacts on file.
         var contacts = contactsOf(a);
@@ -154,12 +178,12 @@
               '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(a.repNotes) + '</div>' : '')
           : '<span class="mu-sub">No notes.</span>';
 
-        // Orders — this account's wholesale orders (newest first), with the
-        // open-invoice state inline; reconcile chip surfaces unlinked orders
-        // whose buyer email matches this account's authorized users.
+        // Orders — this account's wholesale orders (newest first). Each order #
+        // drills into the V2 orders-v2 detail (stacked slide-out with Back), NOT
+        // classic — orders-v2.fetch reads the canonical order doc by id.
         var acctOrders = V2.ordersByAccount[aid] || [];
         var ordersBody = acctOrders.length ? UI.relatedTable([
-          { label: 'Order', render: function (o) { return '<span style="font-family:ui-monospace,monospace;">' + esc(o.orderNumber || (o._key || '').slice(0, 8)) + '</span>'; } },
+          { label: 'Order', render: orderLink },
           { label: 'Placed', render: function (o) { var ms = orderTime(o); return ms ? N.date(new Date(ms).toISOString()) : '—'; } },
           { label: 'Status', render: function (o) { return UI.badge(String(o.status || '—').replace(/_/g, ' '), o.paidAt ? 'success' : 'amber'); } },
           { label: 'Invoice', render: function (o) {
@@ -171,13 +195,93 @@
         ], acctOrders) : '<span class="mu-sub">No orders yet from this account.</span>';
         var rec = reconcileCount(aid);
         var reconcileChip = rec ? '<div style="margin-top:10px;"><span style="font-size:0.78rem;font-weight:600;padding:4px 12px;border-radius:10px;background:color-mix(in srgb,var(--amber) 15%,transparent);color:var(--amber);border:1px solid color-mix(in srgb,var(--amber) 40%,transparent);">' +
-          rec + ' unlinked order' + (rec === 1 ? '' : 's') + ' match this account\'s buyers</span> ' +
-          '<a href="#" onclick="WholesaleV2.classic();return false;" style="font-size:0.78rem;color:var(--teal);text-decoration:underline;margin-left:8px;">reconcile in classic</a></div>' : '';
-        var ordersManage = '<div style="margin-top:12px;"><button class="btn btn-secondary" onclick="WholesaleV2.classic()">Order detail / AR aging in classic view →</button></div>';
+          rec + ' unlinked order' + (rec === 1 ? '' : 's') + ' match this account\'s buyers — link the buyer in the Users tab to attribute them.</span></div>' : '';
+
+        // AR aging detail — unpaid invoices bucketed by days overdue, each row
+        // drilling to its V2 order. Read-only (no RBAC gate; mirrors sibling
+        // read facets).
+        var arBuckets = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:8px;margin-bottom:14px;">' +
+          ar.buckets.map(function (b) {
+            return '<div style="border:1px solid var(--border,rgba(127,127,127,.2));border-radius:8px;padding:10px;">' +
+              '<div class="mu-sub" style="text-transform:uppercase;letter-spacing:0.04em;">' + esc(b.label) + '</div>' +
+              '<div style="font-size:1.15rem;font-weight:700;margin-top:2px;">' + (N.money(b.total) || '$0.00') + '</div>' +
+              '<div class="mu-sub">' + b.count + ' order' + (b.count === 1 ? '' : 's') + '</div>' +
+            '</div>';
+          }).join('') + '</div>';
+        var arRowsBody = ar.rows.length ? UI.relatedTable([
+          { label: 'Order', render: orderLink },
+          { label: 'Due', render: function (r) { return r.dueMs ? N.date(new Date(r.dueMs).toISOString()) : '—'; } },
+          { label: 'Days overdue', align: 'right', render: function (r) {
+              if (r.daysOverdue <= 0) return '<span class="mu-sub">current</span>';
+              var tone = r.daysOverdue <= 30 ? 'amber' : r.daysOverdue <= 90 ? 'warning' : 'danger';
+              return UI.badge(r.daysOverdue + 'd', tone);
+            } },
+          { label: 'Total', align: 'right', render: function (r) { return N.money(r.total) || '—'; } }
+        ], ar.rows) : '<span class="mu-sub">No unpaid wholesale orders. AR is clean.</span>';
+        var arSummary = ar.rows.length ? '<div class="mu-sub" style="margin-bottom:10px;">Outstanding: <b>' + (N.money(ar.grand) || '$0.00') + '</b> across ' + ar.rows.length + ' order' + (ar.rows.length === 1 ? '' : 's') + '</div>' : '';
+
+        // Cadence — reorder-frequency analytics derived from this account's orders.
+        var cad = cadenceOf(a);
+        var cadenceBody = UI.kv([
+          { k: 'Order rhythm', v: UI.badge(CADENCE_LABEL[cad.status] || '—', CADENCE_TONE[cad.status] || 'neutral') +
+              (cad.ratio != null ? ' <span class="mu-sub">· ' + cad.ratio.toFixed(2) + '× expected</span>' : '') },
+          { k: 'Last order', v: cad.lastMs ? N.date(new Date(cad.lastMs).toISOString()) + (cad.daysSince != null ? ' <span class="mu-sub">· ' + cad.daysSince + 'd ago</span>' : '') : '<span class="mu-sub">Never</span>' },
+          { k: 'Expected cadence', v: cad.effectiveInterval != null ? (cad.effectiveInterval + ' days <span class="mu-sub">· ' + (cad.intervalSource === 'learned' ? 'learned from order history' : 'default (too few orders to learn)') + '</span>') : '<span class="mu-sub">—</span>' },
+          { k: 'Orders on record', v: N.count(cad.orderCount) }
+        ]);
+        var cadenceNote = '<div class="mu-sub" style="margin-top:10px;">Cadence is derived from this account\'s order history (median interval between orders). "Overdue"/"Lapsed" flag accounts that have gone well past their usual reorder rhythm — a reorder-outreach signal.</div>';
+
+        // Users — authorized buyers who can order on this account (W2d). CRUD is
+        // RBAC-gated: edit links, grant/revoke. Writes single-source through
+        // WholesaleBridge so this twin never reimplements the DB shape.
+        var mayEdit = canEdit(), mayDelete = canDelete();
+        var usersBody = acctUsers.length ? UI.relatedTable([
+          { label: 'Buyer', render: function (u) { return esc(u._email || u.email || '—') + (u.displayName ? ' <span class="mu-sub">· ' + esc(u.displayName) + '</span>' : ''); } },
+          { label: 'Status', render: function (u) { return (u.active !== false) ? UI.badge('Active', 'success') : UI.badge('Revoked', 'neutral'); } },
+          { label: 'Added', render: function (u) { return u.createdAt ? N.date(u.createdAt) : '<span class="mu-sub">—</span>'; } },
+          { label: '', align: 'right', render: function (u) {
+              if (u.active === false) return '<span class="mu-sub">—</span>';
+              var btns = '';
+              if (mayEdit) btns += '<button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="WholesaleV2.unlinkUser(\'' + esc(aid) + '\',\'' + esc(u._key) + '\')" title="Remove from this account">Unlink</button> ';
+              if (mayDelete) btns += '<button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="WholesaleV2.revokeUser(\'' + esc(aid) + '\',\'' + esc(u._key) + '\')" title="Revoke wholesale access entirely">Revoke</button>';
+              return btns || '<span class="mu-sub">—</span>';
+            } }
+        ], acctUsers) : '<span class="mu-sub">No authorized buyers on this account yet.</span>';
+        // "Authorize buyer" prompts for an email and upserts the grant linked to
+        // THIS account (re-linking a known buyer preserves their history). This
+        // single action covers both granting a new buyer and linking an existing
+        // unlinked one (just enter their email).
+        var usersActions = mayEdit
+          ? '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
+              '<button class="btn btn-secondary btn-small" onclick="WholesaleV2.authorizeUser(\'' + esc(aid) + '\')">+ Authorize buyer</button>' +
+              (V2.usersUnlinked.length ? '<span class="mu-sub">' + V2.usersUnlinked.length + ' buyer' + (V2.usersUnlinked.length === 1 ? '' : 's') + ' authorized but not linked to any account — enter their email to attach.</span>' : '') +
+            '</div>'
+          : '<div class="mu-sub" style="margin-top:8px;">You don\'t have permission to manage authorized buyers.</div>';
+        // Pending access requests (account-agnostic queue — buyers asking for
+        // catalog access; approving links them to an account inline).
+        var pendingReqs = (V2.requests || []).filter(function (r) { return (r.status || 'pending') === 'pending'; });
+        var requestsBody = '';
+        if (pendingReqs.length) {
+          requestsBody = UI.relatedTable([
+            { label: 'Requested by', render: function (r) { return esc(r.email || '—') + (r.displayName ? ' <span class="mu-sub">· ' + esc(r.displayName) + '</span>' : ''); } },
+            { label: 'When', render: function (r) { return r.createdAt ? N.date(r.createdAt) : '<span class="mu-sub">—</span>'; } },
+            { label: '', align: 'right', render: function (r) {
+                if (!mayEdit) return '<span class="mu-sub">—</span>';
+                return '<button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="WholesaleV2.approveRequest(\'' + esc(r._id) + '\')">Approve</button> ' +
+                  '<button class="btn btn-secondary btn-small" style="padding:2px 8px;" onclick="WholesaleV2.denyRequest(\'' + esc(r._id) + '\')">Deny</button>';
+              } }
+          ], pendingReqs);
+        }
+        var requestsCard = pendingReqs.length
+          ? UI.cardTable('Pending access requests (' + pendingReqs.length + ')', requestsBody)
+          : '';
 
         return tiles + tabsBar +
-          '<div class="mu-pane" data-pane="ov">' + UI.card('Account', account) + UI.card('Terms & credit', terms) + UI.card('Tax & resale', taxResale + manage) + '</div>' +
-          '<div class="mu-pane" data-pane="orders" hidden>' + UI.cardTable('Orders (' + acctOrders.length + ')', ordersBody + reconcileChip + ordersManage) + '</div>' +
+          '<div class="mu-pane" data-pane="ov">' + UI.card('Account', account) + UI.card('Terms & credit', terms) + UI.card('Tax & resale', taxResale) + '</div>' +
+          '<div class="mu-pane" data-pane="orders" hidden>' + UI.cardTable('Orders (' + acctOrders.length + ')', ordersBody + reconcileChip) + '</div>' +
+          '<div class="mu-pane" data-pane="ar" hidden>' + UI.cardTable('AR aging', arBuckets + arSummary + arRowsBody) + '</div>' +
+          '<div class="mu-pane" data-pane="cadence" hidden>' + UI.card('Reorder cadence', cadenceBody + cadenceNote) + '</div>' +
+          '<div class="mu-pane" data-pane="users" hidden>' + UI.cardTable('Authorized buyers (' + acctUsers.length + ')', usersBody + usersActions) + requestsCard + '</div>' +
           '<div class="mu-pane" data-pane="contacts" hidden>' + UI.cardTable('Contacts (' + contacts.length + ')', contactsBody) + '</div>' +
           '<div class="mu-pane" data-pane="notes" hidden>' + UI.card('Notes', notesBody) + '</div>';
       },
@@ -266,7 +370,16 @@
 
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, sortKey: 'name', sortDir: 'asc', q: '', statusFilter: 'all', loaded: false,
-    ordersByAccount: {}, authorizedEmails: {} };
+    ordersByAccount: {}, authorizedEmails: {},
+    // W2d/W2c parity: full authorized-user records keyed by account, plus
+    // pending access requests, so the Users + Requests facets are native.
+    usersByAccount: {}, usersUnlinked: [], requests: [] };
+
+  // Email ⇄ Firebase key (mirror wholesale.js wsEmailToKey / wsKeyToEmail).
+  function wsEmailToKey(email) { return email ? String(email).toLowerCase().replace(/\./g, ',') : ''; }
+  function wsKeyToEmail(key) { return key ? String(key).replace(/,/g, '.') : ''; }
+  function canEdit() { return typeof window.can === 'function' ? window.can('wholesale', 'edit') : true; }
+  function canDelete() { return typeof window.can === 'function' ? window.can('wholesale', 'delete') : true; }
 
   // Per-account order rollup (W2.9 parity with the legacy account detail):
   // lifetime + 12-month LTV, order count, open AR (unpaid), last order.
@@ -296,6 +409,94 @@
     });
     return s;
   }
+  // ── AR aging (W2.8 parity) ─────────────────────────────────────────
+  // dueDate semantics mirror wholesale.js _wsOrderDueMs: explicit dueDate wins,
+  // else placedAt/createdAt + account NET terms (DUE_ON_RECEIPT → 0 days).
+  function netTermsDays(code) {
+    if (!code) return 30;
+    if (code === 'DUE_ON_RECEIPT') return 0;
+    var m = /^NET_(\d+)$/.exec(String(code));
+    return m ? parseInt(m[1], 10) : 30;
+  }
+  function orderDueMs(o, account) {
+    if (!o) return null;
+    if (o.dueDate) { var d = new Date(o.dueDate); if (!isNaN(d.getTime())) return d.getTime(); }
+    var placed = o.placedAt || o.createdAt;
+    if (!placed) return null;
+    var placedMs = (typeof placed === 'number') ? placed : new Date(placed).getTime();
+    if (isNaN(placedMs)) return null;
+    var terms = (o.paymentTerms_days != null) ? o.paymentTerms_days : netTermsDays(account && account.netTerms);
+    return placedMs + (terms * 86400000);
+  }
+  // Aging buckets for one account's unpaid (non-cancelled) orders.
+  function arAging(account) {
+    var aid = account._key || account.id;
+    var orders = V2.ordersByAccount[aid] || [];
+    var nowMs = Date.now();
+    var buckets = [
+      { key: 'current', label: 'Current', count: 0, total: 0 },
+      { key: 'b1_30', label: '1–30 days', count: 0, total: 0 },
+      { key: 'b31_60', label: '31–60 days', count: 0, total: 0 },
+      { key: 'b61_90', label: '61–90 days', count: 0, total: 0 },
+      { key: 'b90plus', label: '90+ days', count: 0, total: 0 }
+    ];
+    var rows = [];
+    orders.forEach(function (o) {
+      if (o.paidAt || String(o.status || '') === 'cancelled') return;
+      var dueMs = orderDueMs(o, account);
+      if (dueMs == null) return;
+      var daysOverdue = Math.floor((nowMs - dueMs) / 86400000);
+      var total = _wsOrderTotal(o);
+      var bi = daysOverdue <= 0 ? 0 : daysOverdue <= 30 ? 1 : daysOverdue <= 60 ? 2 : daysOverdue <= 90 ? 3 : 4;
+      buckets[bi].count++; buckets[bi].total += total;
+      rows.push({ order: o, daysOverdue: daysOverdue, total: total, dueMs: dueMs });
+    });
+    rows.sort(function (a, b) { return b.daysOverdue - a.daysOverdue; });
+    var grand = buckets.reduce(function (s, b) { return s + b.total; }, 0);
+    return { buckets: buckets, rows: rows, grand: grand };
+  }
+
+  // ── Cadence (W2.5 parity, account-scoped) ──────────────────────────
+  // Derived from THIS account's orders: median reorder interval, days since
+  // last order, and an overdue classification against learned/default cadence.
+  var WS_CADENCE = { dueSoonMultiplier: 0.9, overdueMultiplier: 1.25, lapsedMultiplier: 2.0, defaultIntervalDays: 90 };
+  function medianIntervalDays(timestampsMs) {
+    if (!timestampsMs || timestampsMs.length < 2) return null;
+    var sorted = timestampsMs.slice().sort(function (a, b) { return a - b; });
+    var iv = [];
+    for (var i = 1; i < sorted.length; i++) iv.push(sorted[i] - sorted[i - 1]);
+    iv.sort(function (a, b) { return a - b; });
+    var mid = Math.floor(iv.length / 2);
+    var medianMs = iv.length % 2 === 0 ? (iv[mid - 1] + iv[mid]) / 2 : iv[mid];
+    return Math.max(1, Math.round(medianMs / 86400000));
+  }
+  function classifyCadence(daysSince, intervalDays) {
+    if (daysSince == null || !intervalDays || intervalDays <= 0) return { status: 'unknown', ratio: null };
+    var ratio = Math.round((daysSince / intervalDays) * 100) / 100;
+    if (ratio >= WS_CADENCE.lapsedMultiplier) return { status: 'lapsed', ratio: ratio };
+    if (ratio >= WS_CADENCE.overdueMultiplier) return { status: 'overdue', ratio: ratio };
+    if (ratio >= WS_CADENCE.dueSoonMultiplier) return { status: 'due-soon', ratio: ratio };
+    return { status: 'on-track', ratio: ratio };
+  }
+  var CADENCE_LABEL = { 'on-track': 'On track', 'due-soon': 'Due soon', overdue: 'Overdue', lapsed: 'Lapsed', unknown: 'No history' };
+  var CADENCE_TONE = { 'on-track': 'success', 'due-soon': 'amber', overdue: 'danger', lapsed: 'danger', unknown: 'neutral' };
+  function cadenceOf(account) {
+    var aid = account._key || account.id;
+    var orders = (V2.ordersByAccount[aid] || []).filter(function (o) { return String(o.status || '') !== 'cancelled'; });
+    var ts = orders.map(orderTime).filter(function (m) { return m > 0; }).sort(function (a, b) { return a - b; });
+    var lastMs = ts.length ? ts[ts.length - 1] : null;
+    var daysSince = lastMs ? Math.floor((Date.now() - lastMs) / 86400000) : null;
+    var learned = medianIntervalDays(ts);
+    var effective = learned != null ? learned : WS_CADENCE.defaultIntervalDays;
+    var cls = classifyCadence(daysSince, daysSince != null ? effective : null);
+    return {
+      orderCount: orders.length, lastMs: lastMs, daysSince: daysSince,
+      learnedInterval: learned, effectiveInterval: daysSince != null ? effective : null,
+      intervalSource: learned != null ? 'learned' : (daysSince != null ? 'default' : null),
+      status: cls.status, ratio: cls.ratio
+    };
+  }
+
   // Reconcile candidates: unlinked orders whose buyer email matches one of this
   // account's authorized users (same best-effort rule as the legacy detail).
   function reconcileCount(accountId) {
@@ -318,42 +519,80 @@
       // Same source as legacy #wholesale: wholesale orders live at admin/orders
       // (type=wholesale), linked via o.wholesaleAccountId.
       MastDB.query('admin/orders').orderByChild('type').equalTo('wholesale').limitToLast(500).once('value'),
-      Promise.resolve(MastDB.get('admin/wholesaleAuthorized')).catch(function () { return null; })
-    ]).then(function (results) {
-      var snap = results[0];
-      var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
-      var ordersVal = (results[1] && typeof results[1].val === 'function') ? results[1].val() : results[1];
-      var out = [];
-      Object.keys(val || {}).forEach(function (k) {
-        var a = val[k];
-        if (a && typeof a === 'object') { a = Object.assign({ _key: k }, a); a.status = a.status || 'active'; out.push(a); }
-      });
-      V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
-      // Index orders by account (plus the unlinked pool for the reconcile chip).
-      var byAcct = { __unlinked: [] };
-      Object.keys(ordersVal || {}).forEach(function (k) {
-        var o = ordersVal[k]; if (!o || typeof o !== 'object') return;
-        o = Object.assign({ _key: k }, o);
-        if (o.wholesaleAccountId && o.wholesaleAccountId !== 'direct_retail') {
-          (byAcct[o.wholesaleAccountId] = byAcct[o.wholesaleAccountId] || []).push(o);
-        } else if (!o.wholesaleAccountId) byAcct.__unlinked.push(o);
-      });
-      Object.keys(byAcct).forEach(function (k) { if (k !== '__unlinked') byAcct[k].sort(function (a, b) { return orderTime(b) - orderTime(a); }); });
-      V2.ordersByAccount = byAcct;
-      // Authorized-user emails per account (reconcile rule).
-      var auth = results[2] || {};
-      var emails = {};
-      Object.keys(auth || {}).forEach(function (k) {
-        var u = auth[k];
-        if (u && u.wholesaleAccountId && u.email) {
-          (emails[u.wholesaleAccountId] = emails[u.wholesaleAccountId] || {})[String(u.email).toLowerCase()] = true;
-        }
-      });
-      V2.authorizedEmails = emails;
-      V2.loaded = true; render();
-    }).catch(function (e) { console.error('[wholesale-v2] load', e); render(); });
+      Promise.resolve(MastDB.get('admin/wholesaleAuthorized')).catch(function () { return null; }),
+      // Pending access requests (W2c parity) — buyers asking for catalog access.
+      Promise.resolve(MastDB.get('admin/wholesaleRequests')).catch(function () { return null; })
+    ]).then(function (results) { applyLoad(results); render(); })
+      .catch(function (e) { console.error('[wholesale-v2] load', e); render(); });
+  }
+  // Process the Promise.all([accounts, orders, authorized, requests]) results
+  // into V2 state. Shared by load() and reloadThenOpen() so both stay in sync.
+  function applyLoad(results) {
+    var snap = results[0];
+    var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+    var ordersVal = (results[1] && typeof results[1].val === 'function') ? results[1].val() : results[1];
+    var out = [];
+    Object.keys(val || {}).forEach(function (k) {
+      var a = val[k];
+      if (a && typeof a === 'object') { a = Object.assign({ _key: k }, a); a.status = a.status || 'active'; out.push(a); }
+    });
+    V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
+    // Index orders by account (plus the unlinked pool for the reconcile chip).
+    var byAcct = { __unlinked: [] };
+    Object.keys(ordersVal || {}).forEach(function (k) {
+      var o = ordersVal[k]; if (!o || typeof o !== 'object') return;
+      o = Object.assign({ _key: k }, o);
+      if (o.wholesaleAccountId && o.wholesaleAccountId !== 'direct_retail') {
+        (byAcct[o.wholesaleAccountId] = byAcct[o.wholesaleAccountId] || []).push(o);
+      } else if (!o.wholesaleAccountId) byAcct.__unlinked.push(o);
+    });
+    Object.keys(byAcct).forEach(function (k) { if (k !== '__unlinked') byAcct[k].sort(function (a, b) { return orderTime(b) - orderTime(a); }); });
+    V2.ordersByAccount = byAcct;
+    // Authorized users — full records, indexed by account (W2d). The auth key
+    // is the email with '.'→','; legacy records may carry an explicit `email`
+    // field but we derive it from the key when absent (older grants).
+    var auth = results[2] || {};
+    var emails = {};                  // accountId → { lowercaseEmail: true } (reconcile rule)
+    var usersByAccount = {};          // accountId → [user record]
+    var usersUnlinked = [];           // grants with no wholesaleAccountId
+    Object.keys(auth || {}).forEach(function (k) {
+      var u = auth[k]; if (!u || typeof u !== 'object') return;
+      var email = (u.email || wsKeyToEmail(k) || '').toLowerCase();
+      var rec = Object.assign({ _key: k, _email: email }, u);
+      if (u.wholesaleAccountId) {
+        (usersByAccount[u.wholesaleAccountId] = usersByAccount[u.wholesaleAccountId] || []).push(rec);
+        if (email) (emails[u.wholesaleAccountId] = emails[u.wholesaleAccountId] || {})[email] = true;
+      } else {
+        usersUnlinked.push(rec);
+      }
+    });
+    V2.authorizedEmails = emails;
+    V2.usersByAccount = usersByAccount;
+    V2.usersUnlinked = usersUnlinked;
+    // Access requests — newest first.
+    var reqVal = results[3] || {};
+    var reqs = Object.keys(reqVal || {}).map(function (k) { var r = reqVal[k] || {}; return Object.assign({ _id: k }, r); })
+      .sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+    V2.requests = reqs;
+    V2.loaded = true;
   }
   function reloadSoon() { V2.loaded = false; setTimeout(load, 250); }   // let the legacy write settle, then refresh
+  // Reload data then re-open the SAME account slide-out (mirrors vendors-v2's
+  // reloadThenOpenVendor) — so a user/request write reflects in the open panel.
+  function reloadThenOpen(accountId) {
+    V2.loaded = false;
+    return new Promise(function (resolve) {
+      setTimeout(function () {
+        Promise.all([
+          MastDB.wholesaleAccounts.list(500),
+          MastDB.query('admin/orders').orderByChild('type').equalTo('wholesale').limitToLast(500).once('value'),
+          Promise.resolve(MastDB.get('admin/wholesaleAuthorized')).catch(function () { return null; }),
+          Promise.resolve(MastDB.get('admin/wholesaleRequests')).catch(function () { return null; })
+        ]).then(function (r) { applyLoad(r); var rec = V2.byId[accountId]; if (rec) MastEntity.openRecord('wholesale-v2', rec, 'read'); resolve(); })
+          .catch(function (e) { console.error('[wholesale-v2] reloadThenOpen', e); resolve(); });
+      }, 250);
+    });
+  }
 
   function visibleRows() {
     var rows = V2.rows;
@@ -423,14 +662,80 @@
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('wholesale'); } catch (e) {} }
       MastEntity.openRecord('wholesale-v2', {}, 'create');
     },
-    // Orders, AR aging, cadence, authorized-user links, access requests, and
-    // dormant tooling are still bespoke on legacy #wholesale (no V2 home).
-    // Account create/edit is native. navigateToClassic so the V2 route remap
-    // doesn't loop us back to this twin.
-    classic: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('wholesale');
-      else if (typeof navigateTo === 'function') navigateTo('wholesale');
+    // ── Authorized-user CRUD (W2d) — RBAC-gated, single-sourced via WholesaleBridge ──
+    authorizeUser: function (accountId) {
+      if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to do that.', true); return; }
+      if (!window.WholesaleBridge) { if (window.showToast) showToast('Wholesale engine still loading — try again', true); return; }
+      if (typeof window.mastPrompt !== 'function') { if (window.showToast) showToast('Dialog unavailable — try again', true); return; }
+      Promise.resolve(window.mastPrompt('Buyer email to authorize on this account', { title: 'Authorize buyer', placeholder: 'buyer@example.com', confirmLabel: 'Authorize' })).then(function (raw) {
+        var email = (raw || '').trim().toLowerCase();
+        if (!email) return;
+        if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { if (window.showToast) showToast('Invalid email address', true); return; }
+        Promise.resolve(window.WholesaleBridge.authorizeUser(email, accountId)).then(function () {
+          if (window.writeAudit) writeAudit('wholesale.authorize_user', 'wholesaleAuthorized', wsEmailToKey(email));
+          if (window.showToast) showToast('Authorized ' + email);
+          reloadThenOpen(accountId);
+        }).catch(function (e) { console.error('[wholesale-v2] authorizeUser', e); if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+      });
     },
+    unlinkUser: function (accountId, emailKey) {
+      if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to do that.', true); return; }
+      if (!window.WholesaleBridge) { if (window.showToast) showToast('Wholesale engine still loading — try again', true); return; }
+      var go = function () {
+        Promise.resolve(window.WholesaleBridge.linkUser(emailKey, null)).then(function () {
+          if (window.writeAudit) writeAudit('wholesale.unlink_user', 'wholesaleAuthorized', emailKey);
+          if (window.showToast) showToast('Buyer unlinked from this account (access kept).');
+          reloadThenOpen(accountId);
+        }).catch(function (e) { console.error('[wholesale-v2] unlinkUser', e); if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+      };
+      if (typeof window.mastConfirm === 'function') Promise.resolve(window.mastConfirm('Unlink ' + wsKeyToEmail(emailKey) + ' from this account? Their wholesale access is kept (just no longer tied to this account).', { title: 'Unlink buyer' })).then(function (ok) { if (ok) go(); });
+      else go();
+    },
+    revokeUser: function (accountId, emailKey) {
+      if (!canDelete()) { if (window.showToast) showToast('You don\'t have permission to do that.', true); return; }
+      if (!window.WholesaleBridge) { if (window.showToast) showToast('Wholesale engine still loading — try again', true); return; }
+      var go = function () {
+        Promise.resolve(window.WholesaleBridge.revokeUser(emailKey)).then(function () {
+          if (window.writeAudit) writeAudit('wholesale.revoke_user', 'wholesaleAuthorized', emailKey);
+          if (window.showToast) showToast('Wholesale access revoked for ' + wsKeyToEmail(emailKey));
+          reloadThenOpen(accountId);
+        }).catch(function (e) { console.error('[wholesale-v2] revokeUser', e); if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+      };
+      if (typeof window.mastConfirm === 'function') Promise.resolve(window.mastConfirm('Revoke wholesale access for ' + wsKeyToEmail(emailKey) + '? They will no longer be able to order.', { title: 'Revoke access', danger: true })).then(function (ok) { if (ok) go(); });
+      else go();
+    },
+    // ── Access-request approvals (W2c) — RBAC-gated, single-sourced ──
+    approveRequest: function (requestId) {
+      if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to do that.', true); return; }
+      if (!window.WholesaleBridge) { if (window.showToast) showToast('Wholesale engine still loading — try again', true); return; }
+      var req = (V2.requests || []).filter(function (r) { return r._id === requestId; })[0];
+      if (!req) { if (window.showToast) showToast('Request not found', true); return; }
+      var cur = (window.MastEntity && MastEntity.getCurrent) ? MastEntity.getCurrent() : null;
+      var openAid = (cur && cur.key === 'wholesale-v2' && cur.record) ? (cur.record._key || cur.record.id) : null;
+      Promise.resolve(window.WholesaleBridge.approveRequest(requestId, req)).then(function () {
+        if (window.writeAudit) writeAudit('wholesale.approve_request', 'wholesaleRequests', requestId);
+        if (window.showToast) showToast('Approved — ' + req.email + ' now has wholesale access.');
+        if (openAid) reloadThenOpen(openAid); else reloadSoon();
+      }).catch(function (e) { console.error('[wholesale-v2] approveRequest', e); if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+    },
+    denyRequest: function (requestId) {
+      if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to do that.', true); return; }
+      if (!window.WholesaleBridge) { if (window.showToast) showToast('Wholesale engine still loading — try again', true); return; }
+      var cur = (window.MastEntity && MastEntity.getCurrent) ? MastEntity.getCurrent() : null;
+      var openAid = (cur && cur.key === 'wholesale-v2' && cur.record) ? (cur.record._key || cur.record.id) : null;
+      var go = function () {
+        Promise.resolve(window.WholesaleBridge.denyRequest(requestId)).then(function () {
+          if (window.writeAudit) writeAudit('wholesale.deny_request', 'wholesaleRequests', requestId);
+          if (window.showToast) showToast('Request denied.');
+          if (openAid) reloadThenOpen(openAid); else reloadSoon();
+        }).catch(function (e) { console.error('[wholesale-v2] denyRequest', e); if (window.showToast) showToast('Error: ' + (e && e.message || e), true); });
+      };
+      if (typeof window.mastConfirm === 'function') Promise.resolve(window.mastConfirm('Deny this wholesale access request?', { title: 'Deny request' })).then(function (ok) { if (ok) go(); });
+      else go();
+    },
+    // Account create/edit + archiving, this account's orders (drill to orders-v2),
+    // AR aging, cadence, and authorized-buyer CRUD + access requests are ALL
+    // native here. No classic escape hatch remains.
     exportCsv: function () { return MastEntity.exportRows('wholesale-v2', visibleRows(), 'all'); }
   };
 
