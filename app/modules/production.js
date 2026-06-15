@@ -574,23 +574,9 @@ async function doCreateJob(purpose) {
     showToast('Enter a job name', true); return;
   }
   try {
-    var jobId = MastDB.productionJobs.newKey();
-    await MastDB.productionJobs.set(jobId, {
-      name: name,
-      description: '',
-      purpose: purpose,
-      workType: 'flameshop',
-      priority: 'medium',
-      status: 'definition',
-      deadline: null,
-      eventName: null,
-      orderId: null,
-      customerId: null,
-      createdAt: new Date().toISOString(),
-      startedAt: null,
-      completedAt: null
-    });
-    await writeAudit('create', 'jobs', jobId);
+    // Single-sourced write — ProductionBridge.createJob mirrors this record
+    // shape and is the same path jobs-v2's native "+ New job" calls.
+    var jobId = await window.ProductionBridge.createJob({ name: name, purpose: purpose });
     closeModal();
     viewProductionJob(jobId);
     showToast('Job created');
@@ -1315,25 +1301,17 @@ async function doAddLineItem(jobId) {
     }
   }
   try {
-    // Snapshot recipe BOM forecast if product has an active recipe (D48 — frozen at creation)
-    var bomForecast = await snapshotBomForecast(pid, variantId);
-    var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
-    await MastDB.productionJobs.setLineItem(jobId, lineItemId, {
+    // Single-sourced write — ProductionBridge.addLineItem snapshots the BOM
+    // forecast (D48) and persists the line item; jobs-v2's native add calls it too.
+    var res = await window.ProductionBridge.addLineItem(jobId, {
       productId: pid,
       productName: name,
-      // Channel-First Phase 1d (D42)
-      variantId: variantId,
+      variantId: variantId,       // Channel-First Phase 1d (D42)
       variantLabel: variantLabel,
       targetQuantity: qty,
-      completedQuantity: 0,
-      lossQuantity: 0,
-      specifications: specs,
-      productionRequestId: null,
-      bomForecast: bomForecast,
-      actualMaterialCostCents: null, // override; null = derive from forecast × completed
-      actualLaborCostCents: null     // override; null = derive from forecast × completed
+      specifications: specs
     });
-    await writeAudit('update', 'jobs', jobId);
+    var bomForecast = res && res.bomForecast;
     closeModal();
     showToast(bomForecast
       ? 'Line item added with BOM forecast ($' + (bomForecast.totalCostPerUnitCents / 100).toFixed(2) + '/unit)'
@@ -3443,6 +3421,75 @@ async function linkProductToBuild(jobId, lineItemId) {
   window.saveDraftStory = saveDraftStory;
   window.publishStory = publishStory;
   window.unpublishStory = unpublishStory;
+
+  // ProductionBridge — delegated write path for jobs-v2's native job CREATE +
+  // ADD LINE ITEM (both writes lived only in legacy production.js, so the V2
+  // surface had no way to start a build without flipping to Legacy UI). The
+  // bridge single-sources the exact MastDB writes + BOM-forecast snapshot the
+  // legacy modals use; doCreateJob / doAddLineItem now call through it too, so
+  // V1 and V2 stay byte-identical on the persisted record shape. No DOM / no
+  // legacy in-memory cache (productionJobs) — callable from the V2 twin.
+  window.ProductionBridge = {
+    // Mirrors doCreateJob's record shape (status:'definition' job skeleton).
+    // data: { name, purpose }. Returns the new jobId.
+    createJob: async function (data) {
+      data = data || {};
+      var name = (data.name || '').trim();
+      var purpose = data.purpose || 'custom';
+      if (!name) throw new Error('Job name is required');
+      var jobId = MastDB.productionJobs.newKey();
+      await MastDB.productionJobs.set(jobId, {
+        name: name,
+        description: '',
+        purpose: purpose,
+        workType: 'flameshop',
+        priority: 'medium',
+        status: 'definition',
+        deadline: null,
+        eventName: null,
+        orderId: null,
+        customerId: null,
+        createdAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null
+      });
+      try { await writeAudit('create', 'jobs', jobId); } catch (e) {}
+      return jobId;
+    },
+    // Mirrors doAddLineItem's line-item shape, including the at-add-time BOM
+    // forecast snapshot (D48 — frozen so later recipe edits don't ripple).
+    // data: { productId, productName, variantId, variantLabel, targetQuantity,
+    //         specifications }. Returns { lineItemId, bomForecast }.
+    addLineItem: async function (jobId, data) {
+      data = data || {};
+      var name = (data.productName || '').trim();
+      if (!name) throw new Error('Product name is required');
+      var pid = data.productId || null;
+      var variantId = data.variantId || null;
+      var variantLabel = data.variantLabel || null;
+      var qty = parseInt(data.targetQuantity, 10) || 1;
+      var specs = (data.specifications || '').trim();
+      // Snapshot recipe BOM forecast if the product has an active recipe.
+      var bomForecast = await snapshotBomForecast(pid, variantId);
+      var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
+      await MastDB.productionJobs.setLineItem(jobId, lineItemId, {
+        productId: pid,
+        productName: name,
+        variantId: variantId,
+        variantLabel: variantLabel,
+        targetQuantity: qty,
+        completedQuantity: 0,
+        lossQuantity: 0,
+        specifications: specs,
+        productionRequestId: null,
+        bomForecast: bomForecast,
+        actualMaterialCostCents: null,
+        actualLaborCostCents: null
+      });
+      try { await writeAudit('update', 'jobs', jobId); } catch (e) {}
+      return { lineItemId: lineItemId, bomForecast: bomForecast };
+    }
+  };
 
   // StoriesBridge — delegated write path for stories-v2's native create + light
   // edit (free/trial tenants reach the twin without the curation canvas as their

@@ -343,7 +343,7 @@
     label: 'Job', labelPlural: 'Jobs', size: 'xl',
     recordId: function (j) { return j._key || j.id; },
     fields: [
-      { name: 'name', label: 'Job', type: 'text', list: true, required: true, group: 'Job', readOnly: true },
+      { name: 'name', label: 'Job', type: 'text', list: true, group: 'Job', readOnly: true },
       { name: 'purpose', label: 'Purpose', type: 'tags', list: true, sortable: false, group: 'Job', readOnly: true,
         get: function (j) { return j.purpose ? [purposeLabel(j.purpose)] : []; } },
       { name: 'status', label: 'Status', type: 'status', list: true, group: 'Lifecycle', readOnly: true,
@@ -418,7 +418,68 @@
           pane('story', storyPane(UU, j));
       }
     }
-    // No onSave in Layer 1 — read-only panes. Bridge-routed writes land next.
+    // No onSave on jobs-v2 — keeping the main record read-only (adding onSave
+    // would surface an Edit pencil on every job; lifecycle is the MastFlow
+    // process header, fields are derived). Native CREATE lives on the separate
+    // job-intake-v2 entity below (the engine rule: onSave ⇒ Edit button).
+  });
+
+  // ════════════════ Entity: native job CREATE (intake) ════════════════
+  // Closes the V1-only gap — a maker could not start a build in V2 without
+  // flipping to Legacy UI (openNewJobModal/doCreateJob lived only in
+  // production.js). A dedicated create-only entity (no read detail, no Edit
+  // button) collects name + purpose and persists through ProductionBridge.createJob
+  // (the SAME write doCreateJob now calls). After create we land the operator in
+  // the new job's read detail so they can add line items + start work.
+  var INTAKE_PURPOSES = Object.keys(PURPOSE_LABELS); // same order/labels as legacy
+  MastEntity.define('job-intake-v2', {
+    label: 'Job', labelPlural: 'Jobs', size: 'md', route: null,
+    recordId: function (j) { return j._key || j.id || 'new'; },
+    fields: [{ name: 'name', label: 'Job', type: 'text', readOnly: true }],
+    fetch: function () { return Promise.resolve(null); },
+    detail: {
+      editRender: function (j, mode) {
+        j = j || {};
+        function fg(label, inner) { return '<div class="form-group"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        var sel = j.purpose || 'custom';
+        var opts = INTAKE_PURPOSES.map(function (k) {
+          return '<option value="' + esc(k) + '"' + (sel === k ? ' selected' : '') + '>' + esc(purposeLabel(k)) + '</option>';
+        }).join('');
+        return '<div class="mu-editbar"><span class="mu-editpill">NEW</span>New production job</div>' +
+          fg('Job name *', '<input class="form-input" id="jobNewName" value="' + esc(j.name || '') + '" placeholder="e.g. Spring Craft Fair Prep" style="width:100%;">') +
+          fg('Purpose', '<select class="form-input" id="jobNewPurpose" style="width:100%;">' + opts + '</select>') +
+          '<div class="mu-sub">The job starts in Definition — add line items and start a build from the job detail after creating.</div>';
+      }
+    },
+    onSave: function (rec, mode) {
+      if (mode !== 'create') return false;
+      if (!_guardEdit()) return false;
+      // Ensure legacy production.js is loaded so window.ProductionBridge exists.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
+      if (!window.ProductionBridge || !window.ProductionBridge.createJob) { if (window.MastAdmin) MastAdmin.showToast('Production engine still loading — try again', true); return false; }
+      var name = ((document.getElementById('jobNewName') || {}).value || '').trim();
+      var purpose = ((document.getElementById('jobNewPurpose') || {}).value || 'custom');
+      if (!name) { if (window.MastAdmin) MastAdmin.showToast('Job name is required', true); return false; }
+      return Promise.resolve(window.ProductionBridge.createJob({ name: name, purpose: purpose })).then(function (jobId) {
+        if (window.MastAdmin) MastAdmin.showToast('Job created');
+        // Refresh the list (the live listener also picks it up) and land the
+        // operator in the new job's read detail.
+        setTimeout(function () {
+          Promise.resolve(MastDB.productionJobs.get(jobId)).then(function (fresh) {
+            if (!fresh) return;
+            fresh._key = jobId; fresh.id = jobId;
+            V2.rows.push(fresh); V2.byId[jobId] = fresh;
+            render();
+            window.MastEntity.openRecord('jobs-v2', fresh, 'read');
+          });
+        }, 60);
+        return true;
+      }).catch(function (e) {
+        console.error('[jobs-v2] createJob', e);
+        if (window.MastAdmin) MastAdmin.showToast('Could not create job: ' + (e && e.message || e), true);
+        return false;
+      });
+    }
   });
 
   // ── Read-only detail panes (standard MastUI controls only) ──────────
@@ -475,7 +536,11 @@
     var hasLocked = Object.keys(j.builds || {}).some(function (b) { return j.builds[b] && j.builds[b].locked; });
     var hasBuilds = Object.keys(j.builds || {}).length > 0;
     var canEdit = canEditJobs() && !term;
-    if (!lis.length) return UU.card('Line Items', '<p style="color:var(--warm-gray);">No line items.</p>');
+    // "+ Add line item" — parity with legacy openAddLineItemModal (shown unless
+    // the job is terminal). Toggles an inline native form rendered below.
+    var addBtn = canEdit ? '<button class="btn btn-secondary btn-small" onclick="JobsV2.toggleAddItem(\'' + esc(jobId) + '\')">+ Add line item</button>' : '';
+    var addForm = canEdit ? addLineItemForm(UU, jobId) : '';
+    if (!lis.length) return UU.card('Line Items', '<p style="color:var(--warm-gray);">No line items yet.</p>' + addForm, { headerRight: addBtn });
     function numCell(li, field, editable) {
       if (canEdit && editable) return '<input type="number" min="0" class="form-input" style="width:68px;text-align:right;" value="' + (li[field] || 0) + '" onchange="JobsV2.liField(\'' + esc(jobId) + '\',\'' + esc(li._key) + '\',\'' + field + '\',this)">';
       return String(li[field] || 0);
@@ -494,7 +559,60 @@
       } }
     ];
     var hint = (canEdit && hasLocked) ? '<p style="color:var(--warm-gray);margin-top:8px;font-size:0.78rem;">Completed/loss are locked by a completed build — correct via a new build.</p>' : '';
-    return UU.card('Line Items', UU.relatedTable(cols, lis) + hint);
+    return UU.card('Line Items', UU.relatedTable(cols, lis) + hint + addForm, { headerRight: addBtn });
+  }
+
+  // Inline native "Add line item" form (hidden until toggled). Mirrors the legacy
+  // openAddLineItemModal fields: product picker (from window.productsData) →
+  // auto-fills name + reveals a variant picker when the product has variants;
+  // target qty; specifications. Saved through ProductionBridge.addLineItem.
+  function productsList() {
+    var pd = window.productsData;
+    if (Array.isArray(pd)) return pd;
+    if (pd && typeof pd === 'object') return Object.keys(pd).map(function (k) { return pd[k]; });
+    return [];
+  }
+  // Lazily populate window.productsData (the add-item picker source) — products
+  // may not be loaded when a job detail is opened directly. Resolves either way;
+  // freeform still works if the load fails.
+  function ensureProducts() {
+    if (productsList().length) return Promise.resolve();
+    if (!(window.MastDB && MastDB.products && MastDB.products.list)) return Promise.resolve();
+    return Promise.resolve(MastDB.products.list()).then(function (all) {
+      if (all) window.productsData = Array.isArray(all) ? all : Object.values(all || {});
+    }).catch(function () {});
+  }
+  // Re-render only the product <select> inside an open add-item form (after a
+  // lazy products load) without disturbing other in-progress field values.
+  function refreshAddItemProductPicker() {
+    var sel = document.getElementById('jobLiProduct');
+    if (!sel) return;
+    var prods = productsList().filter(function (p) { return p && p.pid; });
+    var cur = sel.value;
+    sel.innerHTML = '<option value="">— Freeform (type a name) —</option>' + prods.map(function (p) {
+      return '<option value="' + esc(p.pid) + '"' + (cur === p.pid ? ' selected' : '') + '>' + esc(p.name || p.pid) + '</option>';
+    }).join('');
+  }
+  function addLineItemForm(UU, jobId) {
+    var prods = productsList().filter(function (p) { return p && p.pid; });
+    var opts = '<option value="">— Freeform (type a name) —</option>' + prods.map(function (p) {
+      return '<option value="' + esc(p.pid) + '">' + esc(p.name || p.pid) + '</option>';
+    }).join('');
+    function fg(label, inner) { return '<div class="form-group" style="margin-bottom:10px;"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+    return '<div id="jobAddLiForm" data-job="' + esc(jobId) + '" hidden style="margin-top:14px;padding:14px;border:1px solid var(--border);border-radius:10px;background:var(--cream,transparent);">' +
+      '<div style="font-size:0.78rem;font-weight:600;color:var(--warm-gray);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:10px;">Add line item</div>' +
+      fg('Product', '<select id="jobLiProduct" class="form-input" style="width:100%;" onchange="JobsV2.onAddItemProduct()">' + opts + '</select>') +
+      fg('Product name', '<input id="jobLiName" class="form-input" style="width:100%;" placeholder="Product name">') +
+      '<div id="jobLiVariantWrap" hidden>' + fg('Variant *', '<select id="jobLiVariant" class="form-input" style="width:100%;"></select>') + '</div>' +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+        '<div class="form-group" style="margin-bottom:10px;flex:0 0 120px;"><label class="form-label">Target qty</label><input id="jobLiQty" type="number" min="1" value="1" class="form-input" style="width:100%;"></div>' +
+        '<div class="form-group" style="margin-bottom:10px;flex:1;min-width:160px;"><label class="form-label">Specifications</label><input id="jobLiSpecs" class="form-input" style="width:100%;" placeholder="Color, size, notes…"></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;">' +
+        '<button class="btn btn-secondary btn-small" onclick="JobsV2.toggleAddItem(\'' + esc(jobId) + '\')">Cancel</button>' +
+        '<button class="btn btn-primary btn-small" onclick="JobsV2.addLineItem(\'' + esc(jobId) + '\')">Add</button>' +
+      '</div>' +
+    '</div>';
   }
   // In-place re-render of the Line Items pane (keeps the operator on the tab —
   // reopening the whole SO would bounce to Overview).
@@ -820,7 +938,8 @@
       U.pageHeader({
         title: 'Jobs',
         count: U.Num.count(V2.rows.length) + ' jobs',
-        actionsHtml: '<button class="btn btn-secondary" onclick="JobsV2.exportCsv()">&darr; Export</button>'
+        actionsHtml: (canEditJobs() ? '<button class="btn btn-primary" onclick="JobsV2.newJob()">+ New job</button> ' : '') +
+          '<button class="btn btn-secondary" onclick="JobsV2.exportCsv()">&darr; Export</button>'
       }) +
       '<div style="margin:12px 0 6px;">' + statusPills() + '</div>' +
       '<div style="margin:0 0 14px;">' + purposePills() + '</div>' +
@@ -842,6 +961,14 @@
     setPurpose: function (p) { V2.purpose = p; render(); },
     open: function (id) { var rec = V2.byId[id]; if (rec) window.MastEntity.openRecord('jobs-v2', rec, 'read'); },
     exportCsv: function () { return window.MastEntity.exportRows('jobs-v2', visibleRows(), V2.status); },
+    // Native "+ New job" — opens the create-only intake entity (name + purpose),
+    // persisted through ProductionBridge.createJob. Closes the V1-only gap.
+    newJob: function () {
+      if (!_guardEdit()) return;
+      // Pre-load legacy production.js so window.ProductionBridge exists at save.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
+      window.MastEntity.openRecord('job-intake-v2', {}, 'create');
+    },
     hold: function (id) {
       if (!_guardEdit()) return;
       JobsBridge.setStatus(id, 'on-hold').then(function () { if (window.MastAdmin) MastAdmin.showToast('Put on hold'); return reopenJob(id); })
@@ -922,6 +1049,75 @@
       if (!_guardEdit()) return;
       JobsBridge.linkProductToBuild(jobId, liId).then(function () { if (window.MastAdmin) MastAdmin.showToast('Product linked to builds'); return rerenderItemsPane(jobId); })
         .catch(function (e) { if (window.MastAdmin) MastAdmin.showToast((e && e.message) || 'Link failed', true); });
+    },
+    // ── Add line item (native, in-pane) ──
+    toggleAddItem: function (jobId) {
+      var form = document.getElementById('jobAddLiForm');
+      if (!form) return;
+      form.hidden = !form.hidden;
+      if (!form.hidden) {
+        var n = document.getElementById('jobLiName'); if (n) n.focus();
+        // Populate the product picker on first open if products aren't loaded yet.
+        if (!productsList().length) ensureProducts().then(refreshAddItemProductPicker);
+      }
+    },
+    // Product picker change: auto-fill name + reveal/populate the variant picker
+    // (mirrors legacy onLineItemProductSelect).
+    onAddItemProduct: function () {
+      var picker = document.getElementById('jobLiProduct');
+      var nameEl = document.getElementById('jobLiName');
+      var wrap = document.getElementById('jobLiVariantWrap');
+      var vsel = document.getElementById('jobLiVariant');
+      if (!picker) return;
+      var prods = productsList();
+      var match = picker.value ? prods.filter(function (p) { return p && p.pid === picker.value; })[0] : null;
+      if (match && nameEl) nameEl.value = match.name || '';
+      var variants = (match && Array.isArray(match.variants)) ? match.variants : [];
+      if (variants.length) {
+        var opts = '<option value="">— Pick a variant —</option>' + variants.map(function (v) {
+          if (!v || !v.id) return '';
+          var label = v.combo ? Object.keys(v.combo).map(function (k) { return v.combo[k]; }).filter(Boolean).join(' / ') : (v.name || v.id);
+          return '<option value="' + esc(v.id) + '">' + esc(label) + '</option>';
+        }).join('');
+        if (vsel) vsel.innerHTML = opts;
+        if (wrap) wrap.hidden = false;
+      } else {
+        if (vsel) vsel.innerHTML = '';
+        if (wrap) wrap.hidden = true;
+      }
+    },
+    addLineItem: function (jobId) {
+      if (!_guardEdit()) return;
+      // Ensure legacy production.js is loaded so window.ProductionBridge exists.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
+      if (!window.ProductionBridge || !window.ProductionBridge.addLineItem) { if (window.MastAdmin) MastAdmin.showToast('Production engine still loading — try again', true); return; }
+      var pid = ((document.getElementById('jobLiProduct') || {}).value) || null;
+      var name = (((document.getElementById('jobLiName') || {}).value) || '').trim();
+      var qty = parseInt(((document.getElementById('jobLiQty') || {}).value), 10) || 1;
+      var specs = (((document.getElementById('jobLiSpecs') || {}).value) || '').trim();
+      if (!name) { if (window.MastAdmin) MastAdmin.showToast('Enter a product name', true); return; }
+      // Variant required when the picked product has variants (parity with legacy).
+      var variantId = null, variantLabel = null;
+      if (pid) {
+        var prod = productsList().filter(function (p) { return p && p.pid === pid; })[0];
+        if (prod && Array.isArray(prod.variants) && prod.variants.length) {
+          variantId = ((document.getElementById('jobLiVariant') || {}).value) || null;
+          if (!variantId) { if (window.MastAdmin) MastAdmin.showToast('Pick a variant for this product', true); return; }
+          var v = prod.variants.filter(function (x) { return x && x.id === variantId; })[0];
+          if (v && v.combo) variantLabel = Object.keys(v.combo).map(function (k) { return v.combo[k]; }).filter(Boolean).join(' / ');
+        }
+      }
+      window.ProductionBridge.addLineItem(jobId, {
+        productId: pid, productName: name, variantId: variantId, variantLabel: variantLabel,
+        targetQuantity: qty, specifications: specs
+      }).then(function (res) {
+        var bf = res && res.bomForecast;
+        if (window.MastAdmin) MastAdmin.showToast(bf ? ('Line item added ($' + (bf.totalCostPerUnitCents / 100).toFixed(2) + '/unit)') : 'Line item added');
+        return rerenderItemsPane(jobId);
+      }).catch(function (e) {
+        console.error('[jobs-v2] addLineItem', e);
+        if (window.MastAdmin) MastAdmin.showToast('Could not add line item: ' + (e && e.message || e), true);
+      });
     },
     // ── Story ──
     openStory: function (jobId) {
