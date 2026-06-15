@@ -450,8 +450,10 @@
     // Per-instance issuing/redeeming + per-holder cohort tooling have no V2 home
     // yet, so the Sales tab keeps a deep-link to classic #passes. navigateToClassic
     // so the V2 route remap doesn't loop us back to this twin.
-    // Holders facet — cohort pills + instances table (PassesBridge single-
-    // sources the defs/matcher/query with the legacy cohort block).
+    // Holders facet — cohort pills + instances table + per-cohort export bar
+    // (Copy emails / Download CSV). PassesBridge single-sources the
+    // defs/matcher/query with the legacy cohort block; export mirrors legacy
+    // book.js _passCohortCopyEmails / _passCohortDownloadCsv (read-only).
     _holdersState: {},
     _fillHolders: function (passDefId, cohortKey) {
       var el = document.getElementById('pv2Holders');
@@ -471,6 +473,7 @@
           return '<button class="btn btn-small ' + (c.key === sel ? 'btn-primary' : 'btn-secondary') + '" onclick="PassesV2._cohort(\'' + c.key + '\')">' + esc(c.label) + ' (' + n + ')</button>';
         }).join(' ');
         var rows = instances.filter(function (i) { return window.PassesBridge.instanceMatches(i, sel); });
+        st.rows = rows;
         var tbl = rows.length
           ? U.relatedTable([
               { label: 'Holder', render: function (i) { return esc(i.customerName || i.customerEmail || i.uid || '—'); } },
@@ -480,8 +483,17 @@
               { label: 'Last used', render: function (i) { return i.lastUsedAt ? N.date(i.lastUsedAt) : '—'; } }
             ], rows)
           : '<span class="mu-sub">No holders in this cohort.</span>';
+        // Per-cohort export bar — mirrors legacy book.js _renderPassCohortBlock:
+        // "Copy emails (N)" copies the cohort's holder emails to the clipboard;
+        // "Download CSV" exports the cohort's holders. Read-only (no writes).
+        var nEmails = rows.filter(function (i) { return i.customerEmail; }).length;
+        var exportBar = '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary btn-small" onclick="PassesV2._cohortCopyEmails()"' + (nEmails ? '' : ' disabled') + '>Copy emails (' + nEmails + ')</button>' +
+          '<button class="btn btn-secondary btn-small" onclick="PassesV2._cohortDownloadCsv()"' + (rows.length ? '' : ' disabled') + '>Download CSV</button>' +
+          '<span class="mu-sub" style="margin-left:auto;">' + rows.length + ' holder' + (rows.length === 1 ? '' : 's') + '</span>' +
+        '</div>';
         var el2 = document.getElementById('pv2Holders');
-        if (el2) el2.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + pills + '</div>' + tbl;
+        if (el2) el2.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + pills + '</div>' + tbl + exportBar;
       };
       if (st.defId === passDefId && st.instances && cohortKey) { renderTbl(st.instances); return; }
       Promise.resolve(window.PassesBridge.loadInstances(passDefId)).then(renderTbl)
@@ -492,6 +504,40 @@
         });
     },
     _cohort: function (key) { PassesV2._fillHolders(PassesV2._holdersState.defId, key); },
+    // Per-cohort holder export — read-only, mirrors legacy book.js
+    // _passCohortCopyEmails / _passCohortDownloadCsv. Operates on the holders
+    // currently matched into the selected cohort (PassesV2._holdersState.rows).
+    _cohortRows: function () { return (PassesV2._holdersState && PassesV2._holdersState.rows) || []; },
+    _cohortCopyEmails: function () {
+      var emails = PassesV2._cohortRows().map(function (i) { return i.customerEmail; }).filter(Boolean);
+      if (!emails.length) return;
+      var text = emails.join(', ');
+      var ok = function () { if (window.showToast) showToast('Copied ' + emails.length + ' email' + (emails.length === 1 ? '' : 's')); };
+      var fb = function () { if (typeof mastCopyFallback === 'function') mastCopyFallback('Copy emails', text); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(ok).catch(fb);
+      } else { fb(); }
+    },
+    _cohortDownloadCsv: function () {
+      var rows = PassesV2._cohortRows();
+      if (!rows.length) return;
+      // Same columns as legacy book.js cohort CSV; cells run through the shared
+      // _csvCell helper (formula-injection-safe quoting).
+      var header = ['customerName', 'customerEmail', 'status', 'visitsRemaining', 'visitsUsed', 'activatedAt', 'expiresAt', 'lastUsedAt'];
+      var cell = (typeof window._csvCell === 'function')
+        ? window._csvCell
+        : function (s) { var v = String(s == null ? '' : s); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+      var lines = [header.join(',')];
+      rows.forEach(function (r) { lines.push(header.map(function (k) { return cell(r[k] == null ? '' : r[k]); }).join(',')); });
+      var st = PassesV2._holdersState || {};
+      var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'pass-cohort-' + (st.defId || 'pass') + '-' + (st.cohort || 'cohort') + '.csv';
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    },
     exportCsv: function () { return MastEntity.exportRows('passes-v2', visibleRows(), 'all'); }
   };
 
