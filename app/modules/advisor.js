@@ -591,7 +591,10 @@
         // admin/sales mirror stamped with that orderId — skip the mirror so the
         // pacing actuals don't double-count. Fair/offline sales have no orderId.
         if (s.orderId) return;
-        var amt = s.amount || 0;
+        // admin/sales `amount` is INTEGER CENTS; orders contribute `o.total`
+        // DOLLARS and totalTarget is in dollars, so convert to dollars to keep
+        // the pacing math unit-consistent (was adding manual/Fair sales at 100×).
+        var amt = (Number(s.amount) || 0) / 100;
         totalActual += amt;
         var ch = s.eventId ? 'craft-fairs' : 'online';
         channelActuals[ch] = (channelActuals[ch] || 0) + amt;
