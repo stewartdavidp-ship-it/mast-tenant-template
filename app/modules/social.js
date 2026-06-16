@@ -1498,6 +1498,9 @@
       clipId: clipId,
       fileUrl: fileUrl,
       thumbnailUrl: thumbnailUrl,
+      // S6 — base64 thumbnail returned so the V2 caller can run the advisory
+      // readiness vision check (SocialBridge.checkReadiness) without a re-fetch.
+      thumbnailBase64: thumbnailBase64 || null,
       fileType: isVideo ? 'video' : 'image',
       duration: duration,
       fileSize: file.size
@@ -1548,6 +1551,101 @@
         broad: ['#oneofakind', '#shoplocal', '#makersmovement', '#homedecor']
       }
     };
+  }
+
+  // ------------------------------------------------------------
+  // S6 — shoot-card core (CF wrapper + template fallback). Mirrors the
+  // payload + degrade-gracefully behavior of smGenerateShootCard so V2
+  // pre-shoot callers get the same shape ({ bullets:[...] }). ctx =
+  // { treatment, treatmentName, subject, productDetails, destinations }.
+  // → Promise<{ bullets:[...] }>
+  // ------------------------------------------------------------
+  async function smGenerateShootCardCore(ctx) {
+    ctx = ctx || {};
+    var subject = ctx.subject || 'glass art piece';
+    try {
+      var result = await firebase.functions().httpsCallable('socialAI')({
+        action: 'shootCard',
+        tenantId: MastDB.tenantId(),
+        treatment: ctx.treatmentName || ctx.treatment || null,
+        subject: subject,
+        productDetails: ctx.productDetails || '',
+        destinations: ctx.destinations || []
+      });
+      if (result && result.data && Array.isArray(result.data.bullets) && result.data.bullets.length) {
+        return { bullets: result.data.bullets };
+      }
+    } catch (err) {
+      console.warn('Shoot card generation error:', err && err.message);
+    }
+    // Fallback bullets — same copy the legacy smGenerateShootCard catch uses.
+    return {
+      bullets: [
+        'Focus on the ' + subject + ' from multiple angles',
+        'Capture natural light reflecting off the glass',
+        'Film in portrait (9:16) for Reels',
+        'Keep it under 60 seconds',
+        'Start wide, then move in close'
+      ]
+    };
+  }
+
+  // ------------------------------------------------------------
+  // S6 — readiness vision check (CF wrapper, graceful null on error).
+  // Mirrors the vision branch of smRunReadinessAndCaptions — an ADVISORY
+  // treatment-fit score, never a hard block. opts = { treatment,
+  // thumbnailBase64 }. → Promise<{ score, feedback } | null>
+  // ------------------------------------------------------------
+  async function smCheckReadinessCore(opts) {
+    opts = opts || {};
+    if (!opts.thumbnailBase64) return null;
+    try {
+      var visionResult = await firebase.functions().httpsCallable('socialAI')({
+        action: 'readiness',
+        tenantId: MastDB.tenantId(),
+        treatment: opts.treatment || null,
+        thumbnailBase64: opts.thumbnailBase64
+      });
+      if (visionResult && visionResult.data && visionResult.data.score) {
+        return { score: visionResult.data.score, feedback: visionResult.data.feedback || null };
+      }
+    } catch (err) {
+      console.warn('Vision readiness check skipped:', err && err.message);
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------
+  // S6 — persist a pre-shoot shoot card as a PENDING CLIP (status
+  // 'pending-clip', no file yet). Single-sources the write smFinishPreShoot
+  // does so the V2 pre-shoot path never touches MastDB directly. The saved
+  // doc surfaces in the pending-clips list and resumes via the native wizard
+  // once the operator has filmed. → Promise<clipId>
+  // ------------------------------------------------------------
+  async function smSaveShootCardCore(data) {
+    var uid = smGetUid();
+    if (!uid) throw new Error('Not signed in');
+    data = data || {};
+    var clipId = 'preshoot_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    var clipData = {
+      clipId: clipId,
+      fileName: 'Pre-shoot: ' + (data.subject || data.productName || data.description || 'Untitled'),
+      thumbnailUrl: null,
+      fileUrl: null,
+      uploadedAt: MastDB.serverTimestamp(),
+      status: 'pending-clip',
+      fileType: 'video',
+      treatment: data.treatment || null,
+      subjectType: data.subjectType || null,
+      productId: data.productId || null,
+      productName: data.productName || null,
+      eventName: data.eventName || null,
+      description: data.description || null,
+      shootCardBullets: Array.isArray(data.bullets) ? data.bullets : null
+    };
+    await MastDB.market.pendingClips.set(uid, clipId, clipData);
+    if (window.writeAudit) writeAudit('create', 'social-shoot-card', clipId);
+    return clipId;
   }
 
   window.SocialBridge = {
@@ -1642,6 +1740,38 @@
       data.postedAt = Date.now();
       smPosts.unshift(data);
       return postId;
+    },
+
+    // S6 — pure delegator over the shootCard socialAI action (+ fallback
+    // bullets legacy uses). ctx = { treatment, treatmentName, subject,
+    // productDetails, destinations }. → Promise<{ bullets:[...] }>
+    generateShootCard: function(ctx) {
+      return smGenerateShootCardCore(ctx);
+    },
+
+    // S6 — pure delegator over the readiness socialAI vision action. ADVISORY
+    // only; resolves null on error / no thumbnail so callers degrade silently.
+    // opts = { treatment, thumbnailBase64 }. → Promise<{ score, feedback } | null>
+    checkReadiness: function(opts) {
+      return smCheckReadinessCore(opts);
+    },
+
+    // S6 — single-sourced pre-shoot persist (pending-clip doc, no file yet),
+    // mirroring smFinishPreShoot. data = { treatment, subjectType, productId,
+    // productName, eventName, description, subject, bullets }. → Promise<clipId>
+    saveShootCard: function(data) {
+      return smSaveShootCardCore(data);
+    },
+
+    // S6 — retire a pending-clip planning doc (e.g. a pre-shoot plan that has now
+    // been filmed and posted under a fresh uploaded clip). Flips it to 'processed'
+    // so it leaves the pending-clips list. Same setStatus path createPost uses.
+    retirePendingClip: async function(clipId) {
+      if (!clipId) return false;
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      await MastDB.market.pendingClips.setStatus(uid, clipId, 'processed');
+      return true;
     }
   };
 

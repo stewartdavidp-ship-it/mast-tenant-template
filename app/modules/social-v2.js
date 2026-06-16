@@ -6,8 +6,15 @@
  * (treatment + AI captions / shoot cards) → staging → "mark posted", plus a
  * posted-feed list with a 👍/🔥 signal logger. This twin re-hosts the POSTS
  * list → read/edit detail on the Entity Engine PLUS a native create flow
- * (upload → details → AI captions → post, S2) and native pending-clip RESUME
- * (S5) — the legacy #social escape hatch is GONE (no navigateToClassic).
+ * (upload → details → AI captions → post, S2), native pending-clip RESUME
+ * (S5) and the authoring EXTRAS that retire the last legacy pipeline (S6):
+ * (A) "Plan a shoot" pre-shoot shoot-card flow (no clip yet → AI shot list →
+ * saved as a pending clip, resumable once filmed), (B) advisory AI readiness
+ * score + client orientation/duration/filesize warnings (never blocks),
+ * (C) coupon attach (appends the claim URL to the caption), and (D) Caption-
+ * in-Claude (draft via Ask AI's openWithReturn). Every CF call / write is
+ * single-sourced through SocialBridge. The legacy #social escape hatch is GONE
+ * (no navigateToClassic).
  *
  * Variant: a social post is a content record (caption, platforms, treatment,
  * media) with NO governed lifecycle — status is 'draft' | 'posted', an
@@ -69,6 +76,15 @@
     { id: 'instagram-reels', label: '📱 Instagram Reels' },
     { id: 'instagram-feed', label: '📸 Instagram Feed' }
   ];
+  // Per-treatment one-line shoot tip (mirrors SM_TECH_TIPS in social.js) —
+  // shown on the (A) pre-shoot shoot card under the AI shot list.
+  var SHOOT_TIPS = {
+    'hot-glass': 'Portrait (9:16) · 15–30 sec · Capture the glow',
+    'finished-piece': 'Portrait or Square · Slow pan or static · Clean background',
+    'studio-life': 'Portrait (9:16) · 15–60 sec · Handheld is fine',
+    'fair-day': 'Portrait (9:16) · 15–45 sec · Show the crowd and location',
+    'process-story': 'Portrait (9:16) · 30–90 sec · Start-to-finish arc'
+  };
 
   // Scoped loading spinner — deliberately NOT the global `.loading` class. The
   // multi-collection load (posts + pendingClips) and AI caption generation can
@@ -277,8 +293,8 @@
   // classic-view punt: upload → details → AI captions → post, all
   // single-sourced through SocialBridge.uploadClip / generateCaptions /
   // createPost. Pending clips resume into this same flow at the details step
-  // (S5). Pre-shoot (no-clip), shoot cards, AI readiness score, coupon attach
-  // and caption-in-Claude are DEFERRED.
+  // (S5). Pre-shoot (no-clip) shoot cards, AI readiness score, coupon attach
+  // and caption-in-Claude are the S6 extras layered on below.
   //
   // The slide-out renders once; each step re-renders the inner container
   // (#smCreateBody) in place via innerHTML, holding wizard state in CREATE.
@@ -286,21 +302,35 @@
   var CREATE = null;
   function freshCreate() {
     return {
-      step: 'upload',        // upload → details → captions → post
+      mode: 'clip',          // 'clip' (upload→post) | 'shoot' (pre-shoot plan)
+      step: 'upload',        // clip: upload → details → captions → post
       uploading: false,
       clipId: null, fileUrl: null, thumbnailUrl: null, fileType: null,
       duration: null, fileSize: null, fileName: null,
+      thumbnailBase64: null, // for the advisory readiness vision check (B)
       subjectType: 'none',   // product | event | none
       productId: null, productName: null, productPriceCents: 0,
       productMaterials: null, productCategory: null,
       eventName: '', description: '',
       treatment: null, destinations: [],
-      captions: [], selectedCaptionIdx: 0, hashtags: null, generating: false
+      captions: [], selectedCaptionIdx: 0, hashtags: null, generating: false,
+      // (B) advisory readiness — score+feedback chip + client warn-only checks.
+      readiness: null, readinessChecks: [], readinessRan: false, readinessRunning: false,
+      // (C) coupon attach — claim URL appended to the selected caption.
+      attachedCoupon: null,
+      // (A) pre-shoot shoot-card — AI shot list + saved as a pending clip.
+      shootGenerating: false, shootBullets: null, shootSaving: false,
+      // (A) when resuming a pre-shoot plan, the planning doc key to retire on post.
+      preShootClipId: null
     };
   }
   function createBodyEl() { return document.getElementById('smCreateBody'); }
   function createStepHtml() {
     if (!CREATE) return '';
+    // (A) Pre-shoot plan mode is a separate two-step flow: details → shootCard.
+    if (CREATE.mode === 'shoot') {
+      return CREATE.step === 'shootCard' ? createShootCardStep() : createShootDetailsStep();
+    }
     if (CREATE.step === 'details') return createDetailsStep();
     if (CREATE.step === 'captions') return createCaptionsStep();
     if (CREATE.step === 'post') return createPostStep();
@@ -314,13 +344,29 @@
   // Open the create slide-out, seeding the inner body from CREATE.step so a
   // fresh create starts at upload and a clip RESUME starts at details (S5).
   function openCreatePane() {
+    var isShoot = CREATE && CREATE.mode === 'shoot';
     U.slideOut.open({
-      id: 'social-create', title: 'New social post', subtitle: 'Upload → captions → post',
+      id: 'social-create',
+      title: isShoot ? 'Plan a shoot' : 'New social post',
+      subtitle: isShoot ? 'Details → shoot card' : 'Upload → captions → post',
       size: 'lg', mode: 'read', deepLink: false,
       render: function () { return '<div id="smCreateBody">' + createStepHtml() + '</div>'; }
     });
   }
   function stepDots() {
+    // (A) Pre-shoot plan mode shows its own two-dot rail.
+    if (CREATE.mode === 'shoot') {
+      var shootSteps = [['details', 'Details'], ['shootCard', 'Shoot card']];
+      var shootCur = CREATE.step === 'shootCard' ? 1 : 0;
+      return '<div style="display:flex;gap:6px;align-items:center;margin:0 0 16px;flex-wrap:wrap;">' +
+        shootSteps.map(function (s, i) {
+          var on = i === shootCur, past = i < shootCur;
+          var color = on ? 'var(--teal)' : (past ? 'var(--text-secondary)' : 'var(--text-tertiary)');
+          return '<span style="font-size:0.78rem;color:' + color + ';font-weight:' + (on ? '600' : '400') + ';">' +
+            (past ? '✓ ' : (i + 1) + '. ') + s[1] + '</span>' +
+            (i < shootSteps.length - 1 ? '<span style="color:var(--text-tertiary);font-size:0.78rem;">›</span>' : '');
+        }).join('') + '</div>';
+    }
     var steps = [['upload', 'Upload'], ['details', 'Details'], ['captions', 'Captions'], ['post', 'Post']];
     var doneAt = { upload: 0, details: 1, captions: 2, post: 3 };
     var cur = doneAt[CREATE.step];
@@ -389,15 +435,14 @@
     }).catch(function () {});
   }
 
-  // ---- Step 2: details ----
-  function createDetailsStep() {
+  // ---- shared details building blocks (clip + shoot modes) ----
+  function subjectSection(captionLabel) {
     var c = CREATE;
     function seg(val, label) {
       var on = c.subjectType === val;
       return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="SocialV2.createSubject(\'' + val + '\')">' + label + '</button>';
     }
     var subjectRow = '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + seg('product', 'Product') + seg('event', 'Event') + seg('none', 'No specific product') + '</div>';
-
     var subjectDetail = '';
     if (c.subjectType === 'product') {
       // Stable container so the product <select> can be re-rendered in place
@@ -408,40 +453,163 @@
       subjectDetail = '<div class="form-group" style="margin-top:12px;"><label class="form-label">Event name</label>' +
         '<input class="form-input" id="smCreateEvent" value="' + esc(c.eventName || '') + '" placeholder="e.g. Spring Craft Fair" oninput="SocialV2.createField(\'eventName\', this.value)" style="width:100%;"></div>';
     }
-
-    var captionDraft = '<div class="form-group" style="margin-top:12px;"><label class="form-label">Caption focus <span class="mu-sub" style="font-weight:400;">(optional)</span></label>' +
-      '<textarea class="form-input" id="smCreateDesc" rows="2" placeholder="What should the caption call out?" oninput="SocialV2.createField(\'description\', this.value)" style="width:100%;resize:vertical;">' + esc(c.description || '') + '</textarea></div>';
-
-    var treatments = '<div style="display:flex;flex-direction:column;gap:8px;">' +
+    var captionDraft = '<div class="form-group" style="margin-top:12px;"><label class="form-label">' + esc(captionLabel || 'Caption focus') + ' <span class="mu-sub" style="font-weight:400;">(optional)</span></label>' +
+      '<textarea class="form-input" id="smCreateDesc" rows="2" placeholder="What should this call out?" oninput="SocialV2.createField(\'description\', this.value)" style="width:100%;resize:vertical;">' + esc(c.description || '') + '</textarea></div>';
+    return subjectRow + subjectDetail + captionDraft;
+  }
+  function treatmentSection() {
+    var c = CREATE;
+    return '<div style="display:flex;flex-direction:column;gap:8px;">' +
       CREATE_TREATMENTS.map(function (t) {
         var on = c.treatment === t.id;
         return '<div onclick="SocialV2.createTreatment(\'' + t.id + '\')" style="cursor:pointer;padding:10px 12px;border:1px solid ' + (on ? 'var(--teal)' : 'var(--cream-dark)') + ';border-radius:8px;background:' + (on ? 'var(--teal-bg, var(--cream))' : 'transparent') + ';">' +
           '<div style="font-weight:600;font-size:0.85rem;">' + esc(t.name) + (on ? ' ✓' : '') + '</div>' +
           '<div class="mu-sub" style="font-size:0.78rem;">' + esc(t.desc) + '</div></div>';
       }).join('') + '</div>';
-
-    var dests = '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+  }
+  function destSection() {
+    var c = CREATE;
+    return '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
       CREATE_DESTS.map(function (d) {
         var on = c.destinations.indexOf(d.id) >= 0;
         return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="SocialV2.createDest(\'' + d.id + '\')">' + (on ? '✓ ' : '') + d.label + '</button>';
       }).join('') + '</div>';
+  }
 
+  // ---- Step 2: details ----
+  function createDetailsStep() {
     return stepDots() +
-      U.card('What\'s this about?', subjectRow + subjectDetail + captionDraft) +
-      U.card('Content style', treatments) +
-      U.card('Destinations', dests) +
+      U.card('What\'s this about?', subjectSection('Caption focus')) +
+      U.card('Content style', treatmentSection()) +
+      U.card('Destinations', destSection()) +
       createNav();
+  }
+
+  // ====================================================================
+  // (A) Pre-shoot "Plan a shoot" flow — details → shoot card. No clip yet:
+  // the AI drafts a shot list for a post you haven't filmed, then "Save shoot
+  // plan" persists it as a PENDING CLIP (status pending-clip via
+  // SocialBridge.saveShootCard) so it shows in the pending-clips list and
+  // resumes into the normal upload→post wizard once filmed (existing
+  // resumeClip). Ports legacy smPreShoot / smGenerateShootCard / smFinishPreShoot.
+  // ====================================================================
+  function shootSubject() {
+    var c = CREATE;
+    return (c.subjectType === 'product' ? c.productName : (c.subjectType === 'event' ? c.eventName : c.description)) || 'glass art piece';
+  }
+  function createShootDetailsStep() {
+    return stepDots() +
+      U.card('What are you about to shoot?', subjectSection('Shoot notes')) +
+      U.card('Content style', treatmentSection()) +
+      U.card('Destinations', destSection()) +
+      createNav();
+  }
+  function createShootCardStep() {
+    var c = CREATE;
+    var t = CREATE_TREATMENTS.filter(function (x) { return x.id === c.treatment; })[0];
+    var inner;
+    if (c.shootGenerating) {
+      inner = scopedSpinner('Generating your shoot card…');
+    } else if (!c.shootBullets) {
+      inner = '<button class="btn btn-primary" onclick="SocialV2.shootGenerate()">✨ Generate shoot card</button>' +
+        '<div class="mu-sub" style="margin-top:8px;font-size:0.78rem;">A shot list tailored to your subject and content style — read it before you film.</div>';
+    } else {
+      inner = (t ? '<div style="font-weight:600;font-size:0.9rem;margin-bottom:8px;">' + esc(t.name) + '</div>' : '') +
+        '<ul style="margin:0;padding-left:18px;font-size:0.85rem;line-height:1.7;">' +
+        c.shootBullets.map(function (b) { return '<li>' + esc(b) + '</li>'; }).join('') +
+        '</ul>' +
+        (t && SHOOT_TIPS[t.id] ? '<div class="mu-sub" style="margin-top:10px;font-size:0.78rem;">' + esc(SHOOT_TIPS[t.id]) + '</div>' : '') +
+        '<div style="margin-top:12px;"><button class="btn btn-secondary btn-small" onclick="SocialV2.shootGenerate()">↻ Regenerate</button></div>';
+    }
+    return stepDots() + U.card('Your shoot card', inner) + createNav();
+  }
+
+  // ====================================================================
+  // (B) Readiness — ADVISORY only, never blocks posting. Client-side
+  // orientation/duration/filesize warnings (warn-only, mirror legacy
+  // smRunReadinessAndCaptions ~997-1038) + an AI treatment-fit score via
+  // SocialBridge.checkReadiness (socialAI readiness vision action). Degrades
+  // silently if the CF returns null. Rendered as a chip on the captions step.
+  // ====================================================================
+  function buildClientReadinessChecks() {
+    var c = CREATE, checks = [];
+    if (c.fileType === 'video') {
+      if (c.duration) {
+        var dur = Math.round(c.duration);
+        if (dur < 5) checks.push({ status: 'warn', label: 'Duration', msg: dur + 's — may be too short for engagement' });
+        else if (dur > 90) checks.push({ status: 'warn', label: 'Duration', msg: dur + 's — consider trimming to under 60s' });
+        else checks.push({ status: 'ok', label: 'Duration', msg: dur + 's — good length' });
+      }
+    }
+    if (c.fileSize && c.fileSize > 500 * 1048576) {
+      checks.push({ status: 'warn', label: 'File size', msg: (c.fileSize / 1048576).toFixed(0) + ' MB — large file, upload may be slow' });
+    }
+    return checks;
+  }
+  // Run once per clip: client checks immediately, then the AI vision fit (async,
+  // advisory). Re-renders in place. No-ops without a clip.
+  function runReadiness() {
+    var c = CREATE;
+    if (!c || !c.clipId || c.readinessRan || c.readinessRunning) return;
+    c.readinessRunning = true;
+    c.readinessChecks = buildClientReadinessChecks();
+    var b = bridge();
+    var p = (b && c.thumbnailBase64)
+      ? Promise.resolve(b.checkReadiness({ treatment: c.treatment, thumbnailBase64: c.thumbnailBase64 })).catch(function () { return null; })
+      : Promise.resolve(null);
+    p.then(function (res) {
+      if (!CREATE) return;
+      CREATE.readiness = res || null;
+      CREATE.readinessRan = true;
+      CREATE.readinessRunning = false;
+      if (CREATE.step === 'captions') renderCreate();
+    });
+  }
+  // Advisory chip — AI treatment-fit score (if any) + client warn-only checks.
+  // Never gates the flow; absent entirely when there's nothing to show.
+  function readinessChip() {
+    var c = CREATE;
+    if (!c || !c.clipId) return '';
+    if (c.readinessRunning && !c.readinessRan) {
+      return U.card('Clip readiness', scopedSpinner('Checking your clip…'));
+    }
+    var rows = '';
+    if (c.readiness && c.readiness.score) {
+      var score = c.readiness.score;
+      var tone = score >= 7 ? 'success' : (score >= 4 ? 'warning' : 'danger');
+      rows += '<div style="margin-bottom:8px;">' + U.badge('Treatment fit ' + score + '/10', tone) +
+        (c.readiness.feedback ? '<span class="mu-sub" style="margin-left:8px;font-size:0.78rem;">' + esc(c.readiness.feedback) + '</span>' : '') + '</div>';
+    }
+    (c.readinessChecks || []).forEach(function (chk) {
+      var icon = chk.status === 'ok' ? '✅' : '⚠️';
+      rows += '<div style="font-size:0.85rem;line-height:1.6;">' + icon + ' <strong>' + esc(chk.label) + ':</strong> ' + esc(chk.msg) + '</div>';
+    });
+    if (!rows) return '';
+    return U.card('Clip readiness <span class="mu-sub" style="font-weight:400;font-size:0.78rem;">(advisory)</span>', rows);
+  }
+
+  // (D) Caption-in-Claude available only when Ask AI is configured (mirrors the
+  // legacy showClaudeBtn gate in social.js renderSMEnhance).
+  function claudeEnabled() {
+    return !!(window.MastAskAi && typeof MastAskAi.isEnabled === 'function' && MastAskAi.isEnabled());
+  }
+  function claudeBtn(small) {
+    if (!claudeEnabled()) return '';
+    return '<button class="btn btn-secondary ' + (small ? 'btn-small' : '') + '" onclick="SocialV2.createDraftInClaude()" title="Opens Ask AI to draft a caption">✨ Draft in Claude</button>';
   }
 
   // ---- Step 3: captions ----
   function createCaptionsStep() {
     var c = CREATE;
+    // (B) advisory readiness runs once when the captions step opens.
+    runReadiness();
     var inner;
     if (c.generating) {
       inner = scopedSpinner('Generating captions…');
     } else if (!c.captions.length) {
-      inner = '<button class="btn btn-primary" onclick="SocialV2.createGenerate()">✨ Generate captions</button>' +
-        '<div class="mu-sub" style="margin-top:8px;font-size:0.78rem;">Uses your subject + content style to draft caption options and hashtags.</div>';
+      inner = '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary" onclick="SocialV2.createGenerate()">✨ Generate captions</button>' +
+        claudeBtn(false) + '</div>' +
+        '<div class="mu-sub" style="margin-top:8px;font-size:0.78rem;">Uses your subject + content style to draft caption options and hashtags' + (claudeEnabled() ? ', or draft one in Claude' : '') + '.</div>';
     } else {
       inner = c.captions.map(function (cap, idx) {
         var on = idx === c.selectedCaptionIdx;
@@ -454,7 +622,9 @@
         }
         return card + '</div>';
       }).join('') +
-      '<button class="btn btn-secondary btn-small" onclick="SocialV2.createGenerate()">↻ Regenerate</button>';
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary btn-small" onclick="SocialV2.createGenerate()">↻ Regenerate</button>' +
+        claudeBtn(true) + '</div>';
     }
     var captionCard = U.card('Choose a caption', inner);
 
@@ -482,7 +652,48 @@
           '<button class="btn btn-secondary btn-small" style="margin-top:8px;" onclick="SocialV2.createCopyCaption()">⧉ Copy caption</button>')
       : '';
 
-    return stepDots() + captionCard + hashCard + guideCard + createNav();
+    return stepDots() + readinessChip() + captionCard + couponCard() + hashCard + guideCard + createNav();
+  }
+
+  // ====================================================================
+  // (C) Coupon attach — pick an active coupon (window.coupons) and append its
+  // claim URL (MastCouponCard.getClaimUrl) to the SELECTED caption. Reattachable
+  // / removable. Ports legacy smPickCoupon + the caption-append in
+  // smRunReadinessAndCaptions (~1106). Only shown once a caption exists.
+  // ====================================================================
+  function couponClaimUrl(code) {
+    return (window.MastCouponCard && MastCouponCard.getClaimUrl) ? MastCouponCard.getClaimUrl(code, 'social') : null;
+  }
+  // Remove a previously-appended coupon claim line from the SELECTED caption so
+  // re-attaching / removing / editing the caption doesn't double-stack links.
+  function stripCouponFromCaption() {
+    var c = CREATE;
+    if (!c || !c.attachedCoupon) return;
+    var cap = c.captions[c.selectedCaptionIdx];
+    if (!cap || !cap.text) return;
+    cap.text = cap.text.replace(/\n*\s*🏷️ Claim your coupon: \S+\s*$/, '').replace(/\s+$/, '');
+  }
+  function couponLine(code) {
+    var all = window.coupons || {};
+    var cpn = all[code];
+    if (!cpn) return esc(code);
+    var val = cpn.type === 'percent' ? (cpn.value + '% off') : ('$' + Number(cpn.value || 0).toFixed(2) + ' off');
+    return '<span style="font-family:monospace;font-weight:600;">' + esc(code) + '</span> — ' + esc(val);
+  }
+  function couponCard() {
+    var c = CREATE;
+    if (!c.captions.length) return '';
+    var body;
+    if (c.attachedCoupon) {
+      body = '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">' +
+        '<span>🏷️ ' + couponLine(c.attachedCoupon) + '</span>' +
+        '<button class="btn btn-secondary btn-small" onclick="SocialV2.createRemoveCoupon()">Remove</button></div>' +
+        '<div class="mu-sub" style="margin-top:6px;font-size:0.78rem;">Claim link appended to the selected caption.</div>';
+    } else {
+      body = '<button class="btn btn-secondary btn-small" onclick="SocialV2.createPickCoupon()">🏷️ Attach coupon</button>' +
+        '<div class="mu-sub" style="margin-top:6px;font-size:0.78rem;">Adds a coupon claim link to your caption.</div>';
+    }
+    return U.card('Attach coupon <span class="mu-sub" style="font-weight:400;font-size:0.78rem;">(optional)</span>', body);
   }
 
   // ---- Step 4: post (review + write) ----
@@ -510,6 +721,25 @@
   function createNav() {
     var c = CREATE;
     var back = '', next = '';
+    // (A) Pre-shoot plan mode nav.
+    if (c.mode === 'shoot') {
+      if (c.step === 'details') {
+        next = '<button class="btn btn-primary" ' + (c.treatment ? '' : 'disabled') + ' onclick="SocialV2.shootGoto(\'shootCard\')">Next: Shoot card →</button>';
+        var dhint = c.treatment ? '' : 'Pick a content style to continue';
+        return '<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;">' +
+          '<div></div><div style="display:flex;gap:8px;align-items:center;">' +
+          (dhint ? '<span class="mu-sub" style="font-size:0.78rem;">' + dhint + '</span>' : '') + next + '</div></div>';
+      }
+      // shootCard step: back + (when bullets exist) Save shoot plan.
+      back = '<button class="btn btn-secondary" onclick="SocialV2.shootGoto(\'details\')">← Back</button>';
+      next = c.shootBullets
+        ? '<button class="btn btn-primary" ' + (c.shootSaving ? 'disabled' : '') + ' onclick="SocialV2.shootSave()">Save shoot plan ✓</button>'
+        : '';
+      var shint = c.shootBullets ? '' : 'Generate a shoot card to save your plan';
+      return '<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;">' +
+        '<div>' + back + '</div><div style="display:flex;gap:8px;align-items:center;">' +
+        (shint ? '<span class="mu-sub" style="font-size:0.78rem;">' + shint + '</span>' : '') + next + '</div></div>';
+    }
     if (c.step === 'upload') {
       next = '<button class="btn btn-primary" ' + (c.clipId ? '' : 'disabled') + ' onclick="SocialV2.createGoto(\'details\')">Next: Details →</button>';
     } else if (c.step === 'details') {
@@ -615,6 +845,7 @@
         subtitle: 'Captions, signals and the posting record.',
         actionsHtml:
           (canEdit() ? '<button class="btn btn-primary" onclick="SocialV2.create()">+ New post</button>' : '') +
+          (canEdit() ? '<button class="btn btn-secondary" onclick="SocialV2.planShoot()">📸 Plan a shoot</button>' : '') +
           '<button class="btn btn-secondary" onclick="SocialV2.exportCsv()">↓ Export</button>'
       }) +
       clipsNote +
@@ -651,6 +882,75 @@
       CREATE = freshCreate();
       openCreatePane();
     },
+    // (A) S6 — "Plan a shoot": pre-shoot, no clip yet. Opens the two-step
+    // shoot-plan flow (details → AI shoot card → save as pending clip). Ports
+    // legacy smPreShoot's branch of the "what would you like to do?" screen.
+    planShoot: function () {
+      if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to create social posts.', true); return; }
+      if (!bridge()) return;
+      ensureProducts();
+      CREATE = freshCreate();
+      CREATE.mode = 'shoot';
+      CREATE.step = 'details';
+      openCreatePane();
+    },
+    shootGoto: function (step) {
+      if (!CREATE) return;
+      CREATE.step = step;
+      renderCreate();
+      if (step === 'shootCard' && !CREATE.shootBullets && !CREATE.shootGenerating) SocialV2.shootGenerate();
+    },
+    shootGenerate: function () {
+      var b = bridge(); if (!b || !CREATE) return;
+      CREATE.shootGenerating = true; renderCreate();
+      var t = CREATE_TREATMENTS.filter(function (x) { return x.id === CREATE.treatment; })[0];
+      var ctx = {
+        treatment: CREATE.treatment || null,
+        treatmentName: t ? t.name : (CREATE.treatment || null),
+        subject: shootSubject(),
+        productDetails: CREATE.subjectType === 'product'
+          ? [CREATE.productName, (CREATE.productPriceCents && window.formatCents ? window.formatCents(CREATE.productPriceCents) : null), CREATE.productMaterials, CREATE.productCategory].filter(Boolean).join(', ')
+          : '',
+        destinations: CREATE.destinations
+      };
+      Promise.resolve(b.generateShootCard(ctx)).then(function (res) {
+        if (!CREATE) return;
+        CREATE.shootGenerating = false;
+        CREATE.shootBullets = (res && res.bullets) || null;
+        renderCreate();
+      }).catch(function (err) {
+        console.error('[social-v2] generateShootCard', err);
+        if (CREATE) CREATE.shootGenerating = false;
+        if (window.showToast) showToast('Could not generate the shoot card.', true);
+        renderCreate();
+      });
+    },
+    shootSave: function () {
+      if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to create social posts.', true); return; }
+      var b = bridge(); if (!b || !CREATE || !CREATE.shootBullets || CREATE.shootSaving) return;
+      CREATE.shootSaving = true; renderCreate();
+      var c = CREATE;
+      Promise.resolve(b.saveShootCard({
+        treatment: c.treatment || null,
+        subjectType: c.subjectType || null,
+        productId: c.subjectType === 'product' ? (c.productId || null) : null,
+        productName: c.subjectType === 'product' ? (c.productName || null) : null,
+        eventName: c.subjectType === 'event' ? (c.eventName || null) : null,
+        description: c.description || null,
+        subject: shootSubject(),
+        bullets: c.shootBullets
+      })).then(function () {
+        CREATE = null;
+        try { U.slideOut.requestCloseForce(); } catch (e) {}
+        if (window.showToast) showToast('Shoot plan saved — finish it once you\'ve filmed.');
+        load();
+      }).catch(function (err) {
+        console.error('[social-v2] saveShootCard', err);
+        if (CREATE) CREATE.shootSaving = false;
+        if (window.showToast) showToast('Could not save the shoot plan: ' + (err && err.message || err), true);
+        renderCreate();
+      });
+    },
     // S5 — resume a previously-uploaded but not-yet-posted PENDING clip into the
     // native wizard, opening directly at DETAILS with the clip already attached
     // (upload step skipped). The existing captions→post path flips the clip to
@@ -663,14 +963,32 @@
       if (!clip) { if (window.showToast) showToast('That clip is no longer available.', true); return; }
       ensureProducts();
       CREATE = freshCreate();
-      CREATE.step = 'details';
-      CREATE.clipId = clip.clipId;
-      CREATE.fileUrl = clip.fileUrl || null;
-      CREATE.thumbnailUrl = clip.thumbnailUrl || null;
-      CREATE.fileType = clip.fileType || null;
-      CREATE.duration = clip.duration != null ? clip.duration : null;
-      CREATE.fileSize = clip.fileSize != null ? clip.fileSize : null;
-      CREATE.fileName = clip.fileName || null;
+      // (A) A pre-shoot plan (status 'pending-clip', no file yet) resumes at the
+      // UPLOAD step — the operator attaches the filmed clip, then continues — but
+      // its planned details (treatment / subject) are pre-filled. A real uploaded
+      // clip resumes directly at DETAILS (the original S5 behavior).
+      var isPreShoot = clip.status === 'pending-clip' || !clip.fileUrl;
+      if (isPreShoot) {
+        CREATE.step = 'upload';
+        // Carry the original pending-clip key so the upload that follows resolves
+        // this plan: createPost flips it to 'processed' via the new clipId, and
+        // we drop the planning doc so it doesn't linger as a duplicate.
+        CREATE.preShootClipId = clip.clipId;
+        if (clip.treatment) CREATE.treatment = clip.treatment;
+        if (clip.subjectType) CREATE.subjectType = clip.subjectType;
+        if (clip.productId) { CREATE.productId = clip.productId; CREATE.productName = clip.productName || null; }
+        if (clip.eventName) CREATE.eventName = clip.eventName;
+        if (clip.description) CREATE.description = clip.description;
+      } else {
+        CREATE.step = 'details';
+        CREATE.clipId = clip.clipId;
+        CREATE.fileUrl = clip.fileUrl || null;
+        CREATE.thumbnailUrl = clip.thumbnailUrl || null;
+        CREATE.fileType = clip.fileType || null;
+        CREATE.duration = clip.duration != null ? clip.duration : null;
+        CREATE.fileSize = clip.fileSize != null ? clip.fileSize : null;
+        CREATE.fileName = clip.fileName || null;
+      }
       openCreatePane();
     },
     createPickFile: function () {
@@ -700,6 +1018,9 @@
         CREATE.clipId = clip.clipId; CREATE.fileUrl = clip.fileUrl;
         CREATE.thumbnailUrl = clip.thumbnailUrl; CREATE.fileType = clip.fileType;
         CREATE.duration = clip.duration; CREATE.fileSize = clip.fileSize;
+        CREATE.thumbnailBase64 = clip.thumbnailBase64 || null;
+        // (B) advisory readiness is re-derived for this fresh clip — clear any prior run.
+        CREATE.readiness = null; CREATE.readinessChecks = []; CREATE.readinessRan = false;
         renderCreate();
       }).catch(function (err) {
         console.error('[social-v2] upload', err);
@@ -743,6 +1064,8 @@
     createGenerate: function () {
       var b = bridge(); if (!b || !CREATE) return;
       CREATE.generating = true; renderCreate();
+      // Fresh captions won't carry a previously-attached coupon link.
+      CREATE.attachedCoupon = null;
       b.generateCaptions(buildCaptionCtx()).then(function (res) {
         if (!CREATE) return;
         CREATE.generating = false;
@@ -757,7 +1080,17 @@
         renderCreate();
       });
     },
-    createSelectCaption: function (idx) { if (CREATE) { CREATE.selectedCaptionIdx = idx; renderCreate(); } },
+    createSelectCaption: function (idx) {
+      if (!CREATE) return;
+      CREATE.selectedCaptionIdx = idx;
+      // (C) keep the attached coupon link on whichever caption is now selected.
+      if (CREATE.attachedCoupon) {
+        var url = couponClaimUrl(CREATE.attachedCoupon);
+        var cap = CREATE.captions[idx];
+        if (url && cap && (cap.text || '').indexOf(url) === -1) cap.text = (cap.text || '') + '\n\n🏷️ Claim your coupon: ' + url;
+      }
+      renderCreate();
+    },
     createEditCaption: function (val) {
       if (CREATE && CREATE.captions[CREATE.selectedCaptionIdx]) CREATE.captions[CREATE.selectedCaptionIdx].text = val;
     },
@@ -774,6 +1107,85 @@
       if (all.length && navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(all.join(' ')).then(function () { if (window.showToast) showToast('Hashtags copied.'); });
       }
+    },
+    // (C) S6 — coupon attach. Pick from active window.coupons, append the claim
+    // URL to the SELECTED caption (reattachable/removable). Mirrors legacy
+    // smPickCoupon + the caption-append in smRunReadinessAndCaptions.
+    createPickCoupon: function () {
+      if (!CREATE) return;
+      var all = window.coupons || {};
+      var statusFn = (typeof window.getCouponEffectiveStatus === 'function') ? window.getCouponEffectiveStatus : function () { return 'active'; };
+      var codes = Object.keys(all).filter(function (code) { return statusFn(all[code]) === 'active'; });
+      if (!codes.length) { if (window.showToast) showToast('No active coupons. Create one in the Coupons tab first.', true); return; }
+      var listHtml = codes.map(function (code) {
+        var cpn = all[code];
+        var val = cpn.type === 'percent' ? (cpn.value + '% off') : ('$' + Number(cpn.value || 0).toFixed(2) + ' off');
+        // data-attribute + dataset read (legacy smPickCoupon pattern) so an
+        // arbitrary coupon code can't break out of the inline handler.
+        return '<div data-sm-coupon="' + esc(code) + '" onclick="SocialV2.createAttachCoupon(this.dataset.smCoupon)" ' +
+          'style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--cream-dark);border-radius:8px;cursor:pointer;">' +
+          '<span style="font-family:monospace;font-weight:600;">' + esc(code) + '</span>' +
+          '<span style="color:var(--teal);font-weight:600;">' + esc(val) + '</span></div>';
+      }).join('');
+      var html = '<div class="modal-header"><h3>Attach coupon</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div class="modal-body"><p class="mu-sub" style="font-size:0.85rem;margin-bottom:12px;">The claim link will be appended to your selected caption.</p>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;">' + listHtml + '</div></div>';
+      if (window.openModal) openModal(html);
+    },
+    createAttachCoupon: function (code) {
+      if (!CREATE) return;
+      if (window.closeModal) closeModal();
+      var url = couponClaimUrl(code);
+      if (!url) { if (window.showToast) showToast('Could not build the coupon link.', true); return; }
+      // Strip any previously-attached coupon line before appending the new one.
+      stripCouponFromCaption();
+      CREATE.attachedCoupon = code;
+      var cap = CREATE.captions[CREATE.selectedCaptionIdx];
+      if (cap) {
+        if ((cap.text || '').indexOf(url) === -1) cap.text = (cap.text || '') + '\n\n🏷️ Claim your coupon: ' + url;
+      }
+      renderCreate();
+      if (window.showToast) showToast('Coupon link added to caption.');
+    },
+    createRemoveCoupon: function () {
+      if (!CREATE) return;
+      stripCouponFromCaption();
+      CREATE.attachedCoupon = null;
+      renderCreate();
+      if (window.showToast) showToast('Coupon removed.');
+    },
+    // (D) S6 — Caption-in-Claude. Opens Ask AI's openWithReturn to draft a single
+    // caption, returning it as a new "Claude" option into the editable caption
+    // field. Mirrors legacy smCaptionInClaude wiring.
+    createDraftInClaude: function () {
+      if (!CREATE) return;
+      if (!claudeEnabled()) { if (window.showToast) showToast('Configure Ask AI in Settings → AI to draft in Claude.', true); return; }
+      var c = CREATE;
+      var t = CREATE_TREATMENTS.filter(function (x) { return x.id === c.treatment; })[0];
+      var treatmentName = t ? t.name : (c.treatment || 'finished piece');
+      var subject = c.productName || c.eventName || c.description || 'handmade piece';
+      var destinations = (c.destinations || []).map(function (d) { return PLATFORM_LABEL[d] || d; }).join(', ') || 'Instagram';
+      var details = [];
+      if (c.productName) details.push('Product: ' + c.productName);
+      if (c.productCategory) details.push('Category: ' + c.productCategory);
+      if (c.productMaterials) details.push('Materials: ' + c.productMaterials);
+      if (c.eventName) details.push('Event: ' + c.eventName);
+      if (c.description) details.push('Notes: ' + c.description);
+      window.MastAskAi.openWithReturn({
+        title: 'Social caption: ' + subject,
+        prompt: 'Write a single social media caption for ' + destinations + '. ' +
+                'Treatment style: ' + treatmentName + '. Subject: ' + subject + '.\n\n' +
+                (details.length ? 'Details:\n' + details.join('\n') + '\n\n' : '') +
+                'Keep the voice warm and concrete. One short caption, no hashtag block (we handle hashtags separately).',
+        onReturn: function (text) {
+          if (!CREATE) return;
+          CREATE.captions = [{ style: 'Claude', text: text }];
+          CREATE.selectedCaptionIdx = 0;
+          CREATE.attachedCoupon = null;
+          renderCreate();
+          if (window.showToast) showToast('Caption drafted — review and post.');
+        }
+      });
     },
     createSubmit: function () {
       if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to create social posts.', true); return; }
@@ -798,7 +1210,16 @@
         thumbnailUrl: c.thumbnailUrl || null,
         description: c.description || c.productName || c.eventName || null
       };
+      // (A) If this post resolves a resumed pre-shoot PLAN (the operator filmed
+      // it and uploaded a fresh clip), retire the original planning doc so it
+      // leaves the pending-clips list. Single-sourced via SocialBridge.
+      var preShootKey = c.preShootClipId;
       Promise.resolve(b.createPost(postData)).then(function (postId) {
+        if (preShootKey && b.retirePendingClip) {
+          return Promise.resolve(b.retirePendingClip(preShootKey)).catch(function () {}).then(function () { return postId; });
+        }
+        return postId;
+      }).then(function (postId) {
         CREATE = null;
         try { U.slideOut.requestCloseForce(); } catch (e) {}
         if (window.showToast) showToast('Post recorded! 🎉');
