@@ -2954,6 +2954,226 @@
       return (await MastDB.get('public/config/theme').catch(function () { return null; })) || {};
     },
 
+    // ── Looks / template switching (v2 "Look & feel" Card 1) ──────────────
+    // The v2 Looks gallery shows every template as a tile; tapping a DIFFERENT
+    // one runs the SAME template-switch cascade the legacy Template tab does
+    // (theme reset + gallery-image migration). These methods are THIN
+    // delegators — the dangerous part (which gallery images survive the new
+    // template's slot layout, the theme-field reset, markUnpublished) is owned
+    // by the legacy computeGalleryMigration / executeGalleryMigration /
+    // wpConfirmSwitch functions above. The bridge never re-derives the
+    // migration math or the reset list; it only loads the caches those legacy
+    // functions read, runs them, and snapshots/restores for Undo.
+
+    // The Looks list — every template in the registry, summarized for the
+    // gallery tiles. Reuses the legacy registry/manifest fetch
+    // (loadTemplateRegistry → allTemplateManifests) so the source of truth is
+    // identical to the legacy Template tab. Each entry: id, name, description,
+    // thumbnail (manifest thumbnail/preview if present), and the template's
+    // DEFAULT scheme/font ids (so a tile can show its bundled palette + a
+    // cheap same-template re-apply can use them). `current` flags the active
+    // template. Cold-safe: warms the registry if it hasn't loaded yet.
+    getTemplates: async function () {
+      if (!allTemplateManifests || !allTemplateManifests.length) {
+        try { await loadTemplateRegistry(); } catch (e) {}
+      }
+      if (!themeConfig) { try { await loadThemeConfig(); } catch (e) {} }
+      var currentId = (themeConfig && themeConfig.templateId) || null;
+      return (allTemplateManifests || []).map(function (m) {
+        var schemes = m.colorSchemes || [];
+        var fonts = m.fontPairs || [];
+        var defScheme = schemes.filter(function (s) { return s.default; })[0] || schemes[0] || null;
+        var defFont = fonts.filter(function (f) { return f.default; })[0] || fonts[0] || null;
+        return {
+          id: m.id,
+          name: m.name || m.id,
+          description: m.description || '',
+          thumbnail: m.thumbnail || m.previewImage || m.preview || null,
+          defaultSchemeId: defScheme ? defScheme.id : null,
+          defaultFontId: defFont ? defFont.id : null,
+          // a couple of scheme swatches for the tile (DATA, the tile paints them)
+          schemeColors: defScheme && defScheme.colors ? {
+            primaryColor: defScheme.colors.primaryColor || null,
+            accentColor: defScheme.colors.accentColor || null,
+            bgColor: defScheme.colors.bgColor || null
+          } : null,
+          current: m.id === currentId
+        };
+      });
+    },
+
+    // Compute (DO NOT mutate) what switching to templateId would do to the
+    // gallery images — for the friendly confirm. Delegates verbatim to the
+    // legacy computeGalleryMigration: { migrate, hide, restore } arrays. The
+    // bridge loads the SAME inputs the legacy Template tab feeds it (the live
+    // gallery + the new manifest) and returns friendly counts plus the raw
+    // arrays. No write happens here.
+    previewSwitch: async function (templateId) {
+      if (!allTemplateManifests || !allTemplateManifests.length) {
+        try { await loadTemplateRegistry(); } catch (e) {}
+      }
+      if (!themeConfig) { try { await loadThemeConfig(); } catch (e) {} }
+      var newManifest = (allTemplateManifests || []).filter(function (m) { return m.id === templateId; })[0];
+      if (!newManifest) return null;
+      var currentTemplateId = (themeConfig && themeConfig.templateId) || null;
+      // Load the live gallery the same way renderTemplateTab does (snapshot →
+      // .val()), and cache it on the same window key the legacy cascade reads
+      // so the subsequent switchTemplate operates on identical data.
+      var gallery = {};
+      try {
+        var snap = await MastDB.gallery.list(500);
+        gallery = (snap && typeof snap.val === 'function' ? snap.val() : snap) || {};
+      } catch (e) { gallery = {}; }
+      window._wpGalleryCache = gallery;
+      var migration = computeGalleryMigration(gallery, newManifest, currentTemplateId);
+      var totalImages = Object.keys(gallery).length;
+      // images that simply stay put (already-compatible, not touched)
+      return {
+        templateId: templateId,
+        name: newManifest.name || templateId,
+        description: newManifest.description || '',
+        totalImages: totalImages,
+        keepCount: migration.migrate.length,   // images that carry to the new layout
+        hideCount: migration.hide.length,       // images the new layout can't show (hidden, not deleted)
+        restoreCount: migration.restore.length, // previously-hidden images this template brings back
+        // raw arrays kept so a caller could cross-check; the UI uses the counts
+        migration: migration
+      };
+    },
+
+    // Snapshot the pre-switch theme + the gallery-visibility state the switch
+    // will change — so a faithful Undo can put it ALL back. The theme doc is
+    // captured whole (set restores it field-for-field, removing fields the
+    // switch added). For the gallery, we capture which image ids are CURRENTLY
+    // hidden-by-a-template-switch (templateHidden) so restore can recompute the
+    // delta and reverse exactly the flips this switch performs. Returns the
+    // snapshot object the caller hands back to restoreThemeState.
+    captureThemeState: async function () {
+      var theme = (await MastDB.get('public/config/theme').catch(function () { return null; })) || {};
+      var hiddenIds = [];
+      var hiddenMeta = {};
+      try {
+        var snap = await MastDB.gallery.list(500);
+        var gallery = (snap && typeof snap.val === 'function' ? snap.val() : snap) || {};
+        Object.keys(gallery).forEach(function (id) {
+          var img = gallery[id] || {};
+          if (img.templateHidden) {
+            hiddenIds.push(id);
+            hiddenMeta[id] = {
+              templateHiddenSection: img.templateHiddenSection != null ? img.templateHiddenSection : null,
+              templateHiddenFrom: img.templateHiddenFrom != null ? img.templateHiddenFrom : null
+            };
+          }
+        });
+      } catch (e) {}
+      // Deep-ish copy of the theme doc (flat scalar fields — JSON-safe).
+      var themeCopy = {};
+      try { themeCopy = JSON.parse(JSON.stringify(theme)); } catch (e) { themeCopy = theme || {}; }
+      return {
+        capturedAt: new Date().toISOString(),
+        theme: themeCopy,
+        hiddenIds: hiddenIds,      // image ids that were ALREADY hidden before the switch
+        hiddenMeta: hiddenMeta     // their hidden-section/from so restore is faithful
+      };
+    },
+
+    // Run the FULL template-switch cascade for templateId by delegating to the
+    // legacy wpConfirmSwitch — the single source of truth for the reset
+    // (templateId/colorSchemeId/fontPair write + designScale/navStyle/
+    // responsivePriority/heroVariant/galleryVariant/productGridVariant removal)
+    // AND executeGalleryMigration (the gallery-visibility rewrite) AND
+    // markUnpublished. The bridge ONLY primes the module state wpConfirmSwitch
+    // reads (pendingSwitchTemplateId + the manifest/theme/gallery caches) and
+    // suppresses the legacy renderWebsite repaint (the v2 builder isn't on the
+    // legacy tab). NO cascade logic is duplicated here. Returns true on success.
+    switchTemplate: async function (templateId) {
+      if (!allTemplateManifests || !allTemplateManifests.length) {
+        try { await loadTemplateRegistry(); } catch (e) {}
+      }
+      if (!themeConfig) { try { await loadThemeConfig(); } catch (e) {} }
+      var newManifest = (allTemplateManifests || []).filter(function (m) { return m.id === templateId; })[0];
+      if (!newManifest) throw new Error('Look not found');
+      // Ensure the gallery cache wpConfirmSwitch reads is fresh (previewSwitch
+      // already populates it, but switchTemplate must be safe called alone).
+      if (!window._wpGalleryCache) {
+        try {
+          var snap = await MastDB.gallery.list(500);
+          window._wpGalleryCache = (snap && typeof snap.val === 'function' ? snap.val() : snap) || {};
+        } catch (e) { window._wpGalleryCache = {}; }
+      }
+      // Prime the legacy state the cascade reads, then delegate. wpConfirmSwitch
+      // ends by calling the module-local renderWebsite(), which no-ops when the
+      // legacy tab isn't mounted (it early-returns on a missing #websiteModuleRoot)
+      // — so the v2 builder isn't repainted underneath. NO repaint suppression
+      // needed; the v2 page owns its own re-render via reloadSoon.
+      pendingSwitchTemplateId = templateId;
+      await window.wpConfirmSwitch();   // ← the entire legacy cascade, verbatim
+      return true;
+    },
+
+    // Restore a snapshot from captureThemeState (stage-before-commit Undo).
+    // Two parts: (1) the theme doc is restored field-for-field — set the
+    // captured value for every captured field, and REMOVE any field present
+    // now but absent in the snapshot (the switch may have added defaults). (2)
+    // the gallery visibility is reversed: any image hidden NOW that was NOT
+    // hidden in the snapshot is un-hidden (the switch hid it); any image that
+    // WAS hidden in the snapshot but isn't now is re-hidden with its captured
+    // section/from (the switch restored it). This makes Undo faithful for both
+    // the theme and the gallery. Returns { theme, galleryReverted }.
+    restoreThemeState: async function (snapshot) {
+      if (!snapshot || !snapshot.theme) throw new Error('Nothing to undo');
+      var snapTheme = snapshot.theme || {};
+      // current theme → diff so we can remove fields the switch added.
+      var nowTheme = (await MastDB.get('public/config/theme').catch(function () { return null; })) || {};
+      // 1) write the whole captured theme doc (overwrite). MastDB.set on the doc
+      //    path replaces it, which both restores captured fields AND drops any
+      //    field the switch added that isn't in the snapshot.
+      await MastDB.set('public/config/theme', snapTheme);
+      // keep the module cache coherent for any later legacy render
+      try { themeConfig = JSON.parse(JSON.stringify(snapTheme)); } catch (e) { themeConfig = snapTheme; }
+      showCustomColors = !themeConfig.colorSchemeId && !!themeConfig.primaryColor;
+
+      // 2) reverse the gallery visibility flips.
+      var galleryReverted = 0;
+      try {
+        var snap = await MastDB.gallery.list(500);
+        var gallery = (snap && typeof snap.val === 'function' ? snap.val() : snap) || {};
+        var wasHidden = {};
+        (snapshot.hiddenIds || []).forEach(function (id) { wasHidden[id] = true; });
+        var meta = snapshot.hiddenMeta || {};
+        var updates = {};
+        Object.keys(gallery).forEach(function (id) {
+          var img = gallery[id] || {};
+          var hiddenNow = !!img.templateHidden;
+          if (hiddenNow && !wasHidden[id]) {
+            // switch hid it → un-hide
+            updates['public/gallery/' + id + '/templateHidden'] = null;
+            updates['public/gallery/' + id + '/templateHiddenSection'] = null;
+            updates['public/gallery/' + id + '/templateHiddenFrom'] = null;
+            galleryReverted++;
+          } else if (!hiddenNow && wasHidden[id]) {
+            // switch restored it → re-hide with the captured metadata
+            var m = meta[id] || {};
+            updates['public/gallery/' + id + '/templateHidden'] = true;
+            updates['public/gallery/' + id + '/templateHiddenSection'] = m.templateHiddenSection != null ? m.templateHiddenSection : (img.section || 'gallery');
+            updates['public/gallery/' + id + '/templateHiddenFrom'] = m.templateHiddenFrom != null ? m.templateHiddenFrom : null;
+            galleryReverted++;
+          }
+        });
+        if (Object.keys(updates).length) await MastDB.multiUpdate(updates);
+      } catch (e) {
+        // If the gallery reversal fails, the theme is still restored — the
+        // caller surfaces an honest caveat (gallery visibility may need a manual
+        // recheck). We do NOT silently claim a clean undo.
+        window._wpGalleryCache = null;
+        markUnpublished();
+        throw new Error('theme-restored-gallery-partial');
+      }
+      window._wpGalleryCache = null;   // force a fresh reload next time
+      markUnpublished();
+      return { theme: snapTheme, galleryReverted: galleryReverted };
+    },
+
     // ── Categories (v2 "Your shop" Card 3) ───────────────────────────────
     // The v2 builder edits public/config/categories WITHOUT ever rendering the
     // legacy Categories tab, so the writes must single-source through this
