@@ -71,6 +71,12 @@
   // tagline), logo = config/brand/logo (primary url).
   var V2 = { wp: null, meta: null, status: 'draft', theme: null, brand: null, logo: null,
     nav: null, sectionOrder: null, expanded: {}, importHits: null, loaded: false,
+    // Card 1 (Look & feel) · the "Looks" gallery — the full template registry
+    // (WebsiteBridge.getTemplates). null until loaded (loaded lazily after the
+    // first paint via loadLooks, like productCatCounts). switchBusy guards the
+    // double-tap during the migration cascade; lastUndo holds the pre-switch
+    // snapshot so the inline Undo affordance can restore it.
+    looks: null, switchBusy: false, lastUndo: null,
     // Card 3 (Your shop): the live storefront categories array (each
     // { id, label, wholesaleGroup? }) + a per-slug product count (for the
     // delete-safety warning + product-derived "stray category" suggestions).
@@ -248,6 +254,154 @@
     var o = (window.HomepageBridge && HomepageBridge.getThemeOptions && HomepageBridge.getThemeOptions()) || null;
     return o || { schemes: [], fonts: [], templateName: null };
   }
+
+  // ── Looks gallery ───────────────────────────────────────────────────
+  // The high-level entry to Card 1: a swatchGrid of every template ("Look").
+  // Each tile shows the Look's name + a thumbnail/mini-preview (its bundled
+  // palette swatches when no thumbnail), and the CURRENT Look is checked.
+  // Tapping a DIFFERENT Look runs the migration cascade (friendly confirm +
+  // Undo, all in WebsiteV2.pickLook); the current Look is a no-op tap. The
+  // template list comes from WebsiteBridge.getTemplates() (the legacy registry).
+  function looksSection() {
+    var looks = V2.looks;
+    if (looks == null) {
+      return '<div id="wv2LooksGrid"><div class="mu-sub">Loading your Looks…</div></div>';
+    }
+    if (!looks.length) {
+      return '<div id="wv2LooksGrid"><div class="mu-sub">No Looks available yet — your template library will appear here.</div></div>';
+    }
+    var currentId = (V2.theme && V2.theme.templateId) || (looks.filter(function (l) { return l.current; })[0] || {}).id || '';
+    var items = looks.map(function (l) {
+      return { value: l.id, label: l.name || l.id, _look: l };
+    });
+    var grid = U.swatchGrid({
+      items: items, selected: currentId, onSelectFnName: 'wv2PickLook',
+      renderItem: function (it) {
+        var l = it._look || {};
+        var thumb;
+        if (l.thumbnail) {
+          // background-image is DATA (the manifest's own preview URL), painted
+          // inline on the tile — not baked into the stylesheet.
+          thumb = '<span class="wv2-look-thumb" style="background-image:url(' + esc(l.thumbnail) + ');"></span>';
+        } else {
+          // No thumbnail → paint the Look's bundled palette as a mini-preview.
+          var c = l.schemeColors || {};
+          thumb = '<span class="wv2-look-thumb wv2-look-thumb-mini">' +
+            '<span class="wv2-look-band" style="background:' + esc(c.bgColor || 'var(--surface-card)') + ';"></span>' +
+            '<span class="wv2-look-band" style="background:' + esc(c.primaryColor || 'var(--text-primary)') + ';"></span>' +
+            '<span class="wv2-look-band" style="background:' + esc(c.accentColor || 'var(--warm-gray)') + ';"></span>' +
+            '</span>';
+        }
+        return thumb + '<span class="wv2-look-name mu-sw-label">' + esc(l.name || l.id) + '</span>';
+      }
+    });
+    var undo = V2.lastUndo
+      ? '<div class="wv2-undo" id="wv2LooksUndo">' +
+          '<span class="wv2-undo-msg">Switched to <strong>' + esc(V2.lastUndo.toName || 'your new Look') + '</strong>.' +
+          (V2.lastUndo.caveat ? ' <span class="wv2-undo-caveat">' + esc(V2.lastUndo.caveat) + '</span>' : '') + '</span>' +
+          '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.undoLook()">Undo</button>' +
+        '</div>'
+      : '';
+    return '<div id="wv2LooksGrid">' +
+      '<div class="mu-sub" style="margin-bottom:8px;">Pick a Look to set your whole site’s layout, colors, and fonts at once. Fine-tune below.</div>' +
+      grid + undo + '</div>';
+  }
+  // Re-render only the Looks grid (after a switch / undo) so the rest of Card 1
+  // (scheme/font/logo) doesn't rebuild + lose focus.
+  function refreshLooksGrid() {
+    var host = document.getElementById('wv2LooksGrid');
+    if (host) host.outerHTML = looksSection();
+  }
+
+  // Friendly switch confirm — NOT the legacy keep/lose-sections dialog. Plain
+  // language: text + products stay; N gallery images fit the new layout, M get
+  // hidden (not deleted — reversible). [Apply Look] / [Cancel]. Apply →
+  // doLookSwitch. preview = WebsiteBridge.previewSwitch(...) result.
+  function showLookSwitchConfirm(look, preview) {
+    var keep = preview.keepCount || 0;
+    var hide = preview.hideCount || 0;
+    var restore = preview.restoreCount || 0;
+    var total = preview.totalImages || 0;
+    // plain-language gallery line(s)
+    var galleryLines = '';
+    if (total === 0) {
+      galleryLines = '<li>You have no gallery images yet — nothing to move.</li>';
+    } else {
+      galleryLines += '<li><strong>' + keep + '</strong> gallery image' + (keep === 1 ? '' : 's') + ' fit the new layout and stay visible.</li>';
+      if (hide > 0) {
+        galleryLines += '<li><strong>' + hide + '</strong> image' + (hide === 1 ? '' : 's') + ' won’t fit the new layout, so ' +
+          (hide === 1 ? 'it' : 'they') + '’ll be <strong>hidden</strong> — not deleted, and you can switch back to bring ' +
+          (hide === 1 ? 'it' : 'them') + ' right back.</li>';
+      }
+      if (restore > 0) {
+        galleryLines += '<li><strong>' + restore + '</strong> previously hidden image' + (restore === 1 ? '' : 's') +
+          ' will reappear in this Look.</li>';
+      }
+    }
+    var body =
+      '<div class="wv2-lookdlg-lead">Switch to <strong>' + esc(look.name || look.id) + '</strong>?</div>' +
+      (preview.description ? '<div class="wv2-lookdlg-desc">' + esc(preview.description) + '</div>' : '') +
+      '<ul class="wv2-lookdlg-list">' +
+        '<li>Your text, products, and shop settings stay exactly as they are.</li>' +
+        '<li>Colors and fonts switch to this Look’s defaults (you can fine-tune them after).</li>' +
+        galleryLines +
+      '</ul>';
+    // Stash the chosen Look so the modal's Apply button (a stable inline
+    // handler) can run the switch without serializing the Look into the DOM.
+    V2.pendingLook = look;
+    var html = '<div class="wv2-lookdlg">' +
+      '<div class="wv2-modal-title">Switch your Look</div>' +
+      '<div class="wv2-modal-body">' + body + '</div>' +
+      '<div class="wv2-modal-actions">' +
+        '<button type="button" class="btn btn-secondary" onclick="WebsiteV2.cancelLook()">Cancel</button>' +
+        '<button type="button" class="btn btn-primary" onclick="WebsiteV2.applyLook()">Apply Look</button>' +
+      '</div></div>';
+    if (typeof window.openModal === 'function') openModal(html);
+    else doLookSwitch(look); // last-resort: no modal shell available
+  }
+
+  // Run the switch: snapshot (for Undo) → delegate the full cascade to
+  // WebsiteBridge.switchTemplate (legacy wpConfirmSwitch). On success, stash the
+  // snapshot so the inline Undo can restore it, push the new scheme/font to the
+  // live preview, and re-read. NEVER reimplements the cascade — this only
+  // orchestrates snapshot → switch → Undo + preview nudge.
+  function doLookSwitch(look) {
+    if (V2.switchBusy) return;
+    V2.switchBusy = true;
+    refreshLooksGrid();
+    pipSaving();
+    // 1) snapshot the pre-switch theme + gallery-hidden state (stage-before-commit)
+    Promise.resolve(window.WebsiteBridge.captureThemeState()).then(function (snapshot) {
+      // 2) delegate the entire cascade (theme reset + gallery migration + markUnpublished)
+      return Promise.resolve(window.WebsiteBridge.switchTemplate(look.id)).then(function () {
+        return snapshot;
+      });
+    }).then(function (snapshot) {
+      V2.switchBusy = false;
+      // 3) Tier-2 instant preview: push the Look's default scheme + font so the
+      //    live preview repaints immediately (the canonical writes already
+      //    happened inside switchTemplate). Scheme delta clears custom colors.
+      var delta = {};
+      if (look.defaultSchemeId) { delta.colorSchemeId = look.defaultSchemeId; delta.primaryColor = null; delta.accentColor = null; }
+      if (look.defaultFontId) delta.fontPair = look.defaultFontId;
+      if (Object.keys(delta).length) wv2PostTheme(delta);
+      schedulePreviewReload();
+      // 4) stash the Undo snapshot + show the inline Undo affordance
+      V2.lastUndo = { snapshot: snapshot, toName: look.name || look.id, caveat: '' };
+      pipSaved();
+      if (window.showToast) showToast('Your site now uses the ' + (look.name || look.id) + ' Look.');
+      // 5) re-read (updates the "current" flag → checks the new tile) + repaint Card 1
+      loadLooks();
+      reloadSoon();
+    }).catch(function (e) {
+      V2.switchBusy = false;
+      pipSaved();
+      console.error('[website-v2] switchTemplate', e);
+      if (window.showToast) showToast('Couldn’t switch Look: ' + (e && e.message || e), true);
+      refreshLooksGrid();
+    });
+  }
+
 
   // Color scheme swatch grid (renderItem paints the manifest's primary/accent/bg).
   function colorSchemeSection() {
@@ -428,7 +582,8 @@
     function sub(title, inner) {
       return '<div class="wv2-sub"><div class="wv2-sub-h">' + esc(title) + '</div>' + inner + '</div>';
     }
-    return sub('Color scheme', colorSchemeSection() + customColorsSection()) +
+    return sub('Looks', looksSection()) +
+      sub('Color scheme', colorSchemeSection() + customColorsSection()) +
       sub('Fonts', fontSection()) +
       sub('Logo & brand', logoVoiceSection()) +
       sub('Advanced', layoutScaleSection());
@@ -1142,6 +1297,31 @@
       // scheme tile dots (color VALUES are inline data, not in these rules)
       '.wv2-scheme-dots{display:flex;gap:4px;}' +
       '.wv2-scheme-dot{width:16px;height:16px;border-radius:50%;border:1px solid color-mix(in srgb,var(--text-primary) 18%,transparent);}' +
+      // ── Looks gallery tiles (wider than scheme/font tiles for the thumbnail) ──
+      '#wv2LooksGrid .mu-swgrid{grid-template-columns:repeat(auto-fill,minmax(132px,1fr));}' +
+      '#wv2LooksGrid .mu-sw{min-height:auto;padding:8px;gap:8px;}' +
+      '.wv2-look-thumb{display:block;width:100%;height:74px;border-radius:8px;border:1px solid color-mix(in srgb,var(--text-primary) 14%,transparent);background-size:cover;background-position:center;background-repeat:no-repeat;overflow:hidden;}' +
+      // mini-preview (no thumbnail): three stacked palette bands
+      '.wv2-look-thumb-mini{display:flex;flex-direction:column;}' +
+      '.wv2-look-band{flex:1;width:100%;}' +
+      '.wv2-look-name{font-size:0.78rem;color:var(--text-primary);line-height:1.2;}' +
+      // inline Undo affordance under the Looks grid
+      '.wv2-undo{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;' +
+        'margin-top:4px;padding:9px 12px;border-radius:8px;border:1px solid color-mix(in srgb,var(--teal) 30%,transparent);' +
+        'background:color-mix(in srgb,var(--teal) 8%,transparent);}' +
+      '.wv2-undo-msg{font-size:0.78rem;color:var(--text-primary);}' +
+      '.wv2-undo-caveat{color:var(--warning,var(--amber));}' +
+      // friendly switch-confirm modal (rendered inside the shared openModal
+      // shell — these style only the INNER content; the shell owns the overlay)
+      '.wv2-lookdlg{max-width:440px;}' +
+      '.wv2-modal-title{font-size:1.15rem;font-weight:700;color:var(--text-primary);margin-bottom:10px;}' +
+      '.wv2-modal-body{font-size:0.85rem;color:var(--text-secondary,var(--warm-gray));line-height:1.5;}' +
+      '.wv2-lookdlg-lead{font-size:0.9rem;color:var(--text-primary);margin-bottom:6px;}' +
+      '.wv2-lookdlg-desc{font-size:0.78rem;color:var(--warm-gray);margin-bottom:10px;}' +
+      '.wv2-lookdlg-list{margin:6px 0 2px;padding-left:18px;display:flex;flex-direction:column;gap:6px;}' +
+      '.wv2-lookdlg-list li{font-size:0.78rem;color:var(--text-secondary,var(--warm-gray));}' +
+      '.wv2-lookdlg-list strong{color:var(--text-primary);}' +
+      '.wv2-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;}' +
       // font tiles — taller so the preview face reads
       '.wv2-font-name{font-size:1.0rem;line-height:1.15;color:var(--text-primary);}' +
       '.wv2-font-sub{font-size:0.72rem;margin-top:2px;}' +
@@ -1282,6 +1462,88 @@
       // immediately (the storefront loads the Google Font + sets --font-* vars).
       wv2PostTheme({ fontPair: fontId });
       withSave(window.MastBrandSync.setFontPair(fontId));
+    },
+
+    // Card 1 · Looks gallery tile → the high-level whole-site switch. Tapping
+    // the CURRENT Look is a no-op (it's already applied). Tapping a DIFFERENT
+    // Look runs WebsiteBridge.previewSwitch to build a FRIENDLY confirm dialog: text +
+    // products stay; N gallery images fit, M get hidden — reversible). On Apply
+    // it snapshots (captureThemeState) then delegates the full cascade to
+    // WebsiteBridge.switchTemplate (which calls the legacy wpConfirmSwitch — the
+    // gallery migration + theme reset are NOT reimplemented here), then offers
+    // an Undo. NOTE: the migration/reset live entirely behind the bridge; this
+    // method only orchestrates confirm → snapshot → switch → Undo.
+    pickLook: function (lookId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      if (V2.switchBusy) return;
+      var looks = V2.looks || [];
+      var look = looks.filter(function (l) { return l.id === lookId; })[0];
+      if (!look) return;
+      var currentId = (V2.theme && V2.theme.templateId) || (looks.filter(function (l) { return l.current; })[0] || {}).id || '';
+      if (lookId === currentId) {
+        // Same Look — nothing to migrate. (A future "looks bundle" that's just a
+        // scheme+font re-apply on the same template would route through
+        // pickScheme/pickFont; the registry has one entry per template, so the
+        // current tile is simply a no-op.)
+        if (window.showToast) showToast('That’s your current Look.');
+        return;
+      }
+      if (!window.WebsiteBridge || typeof window.WebsiteBridge.previewSwitch !== 'function') {
+        try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('website'); } catch (e) {}
+        if (window.showToast) showToast('Site editor still loading — try again', true);
+        return;
+      }
+      // Build the preview (no mutation), then show the friendly confirm.
+      Promise.resolve(window.WebsiteBridge.previewSwitch(lookId)).then(function (preview) {
+        if (!preview) { if (window.showToast) showToast('Look not found.', true); return; }
+        showLookSwitchConfirm(look, preview);
+      }).catch(function (e) {
+        console.error('[website-v2] previewSwitch', e);
+        if (window.showToast) showToast('Couldn’t preview that Look: ' + (e && e.message || e), true);
+      });
+    },
+    // Reverse the most recent Look switch (stage-before-commit Undo). Restores
+    // the captured theme doc + the gallery-visibility flips via
+    // WebsiteBridge.restoreThemeState. Honest about a partial gallery restore.
+    undoLook: function () {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var snap = V2.lastUndo && V2.lastUndo.snapshot;
+      if (!snap) { if (window.showToast) showToast('Nothing to undo.', true); return; }
+      if (V2.switchBusy) return;
+      if (!window.WebsiteBridge || typeof window.WebsiteBridge.restoreThemeState !== 'function') {
+        if (window.showToast) showToast('Site editor still loading — try again', true); return;
+      }
+      V2.switchBusy = true;
+      withSave(Promise.resolve(window.WebsiteBridge.restoreThemeState(snap)).then(function (res) {
+        V2.switchBusy = false;
+        V2.lastUndo = null;
+        if (window.showToast) showToast('Reverted to your previous Look.');
+        return res;
+      }).catch(function (e) {
+        V2.switchBusy = false;
+        // restoreThemeState restored the THEME even when the gallery reversal
+        // failed — be honest, don't pretend it was clean.
+        if (e && /gallery-partial/.test(String(e.message || e))) {
+          V2.lastUndo = null;
+          if (window.showToast) showToast('Look reverted — but please recheck your gallery images.', true);
+          return true;
+        }
+        throw e;
+      })).then(function () { loadLooks(); });
+    },
+    // The friendly-confirm modal's Apply button → close the modal + run the
+    // switch on the stashed pending Look. (Split from pickLook so the confirm
+    // body can be rich HTML in the sanctioned openModal shell.)
+    applyLook: function () {
+      var look = V2.pendingLook;
+      V2.pendingLook = null;
+      if (typeof window.closeModal === 'function') closeModal();
+      if (look) doLookSwitch(look);
+    },
+    // The friendly-confirm modal's Cancel button → just close, no change.
+    cancelLook: function () {
+      V2.pendingLook = null;
+      if (typeof window.closeModal === 'function') closeModal();
     },
     // Card 1 · Logo from the shared image library (PR-571 picker). Instant-apply:
     // the picked URL writes immediately through BrandBridge.setLogoFromUrl.
@@ -1578,6 +1840,7 @@
   // path), so the scheme/font tiles point here and these forward to WebsiteV2.
   window.wv2PickScheme = function (id) { window.WebsiteV2.pickScheme(id); };
   window.wv2PickFont = function (id) { window.WebsiteV2.pickFont(id); };
+  window.wv2PickLook = function (id) { window.WebsiteV2.pickLook(id); };
 
   // ── load ───────────────────────────────────────────────────────────
   // Cold-safe: read the storefront config defensively for the header (site name +
@@ -1621,6 +1884,10 @@
       // them cold-safe AFTER the first paint (never blocks the card) and re-mount
       // Card 3 once counts land.
       loadProductCats();
+      // The Looks gallery (Card 1) reads the template registry via
+      // WebsiteBridge.getTemplates — cold-safe + AFTER the first paint, same as
+      // products, so the card shows a "Loading your Looks…" line then fills.
+      loadLooks();
     }).catch(function (e) { console.error('[website-v2] load', e); V2.loaded = true; render(); });
   }
 
@@ -1645,6 +1912,30 @@
       }).catch(function (e) { console.warn('[website-v2] product cats', e && e.message); });
     } catch (e) { console.warn('[website-v2] product cats', e && e.message); }
   }
+  // Read the template registry (the "Looks" list) cold-safe through
+  // WebsiteBridge.getTemplates — the legacy registry/manifest fetch. Never
+  // blocks the card: on any failure the Looks grid degrades to an empty state.
+  // Re-mounts Card 1 once the list lands. Called after the first paint + after a
+  // switch (so the "current" flag + checked tile reflect the new template).
+  function loadLooks() {
+    if (!window.WebsiteBridge || typeof window.WebsiteBridge.getTemplates !== 'function') {
+      // host not ready yet — ensureHostModules warms website.js, retry shortly
+      try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('website'); } catch (e) {}
+      setTimeout(function () {
+        if (window.WebsiteBridge && typeof window.WebsiteBridge.getTemplates === 'function') loadLooks();
+      }, 400);
+      return;
+    }
+    Promise.resolve(window.WebsiteBridge.getTemplates()).then(function (list) {
+      V2.looks = Array.isArray(list) ? list : [];
+      refreshLooksGrid();
+    }).catch(function (e) {
+      console.warn('[website-v2] looks', e && e.message);
+      V2.looks = [];
+      refreshLooksGrid();
+    });
+  }
+
   // The category slugs a product is filed under (deduped). Tolerant of either the
   // singular `category` (which in the live data holds the LABEL, e.g. "Home
   // Decor") or the plural `categories` array (which holds slug ids, e.g.
