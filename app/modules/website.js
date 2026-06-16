@@ -2898,6 +2898,59 @@
     MastDB.set('webPresence/config/updatedAt', new Date().toISOString());
   }
 
+  // --- WebsiteBridge (additive) ---
+  // Thin shim for the v2 "Your Website" builder (website-v2.js Card 1). Every
+  // method DELEGATES to the existing legacy write logic above — the twin never
+  // reimplements a storefront/theme write, so the canonical public/config/theme
+  // path + markUnpublished (draft-on-edit) semantics are preserved. Unlike the
+  // window.wp* handlers, these do NOT call renderWebsite() (that repaints the
+  // LEGACY website tab, which the v2 builder is not on), and they keep the
+  // module's themeConfig cache in sync so a subsequent legacy render is correct.
+  window.WebsiteBridge = {
+    // Arbitrary theme field (designScale / navStyle / responsivePriority — the
+    // Layout & Scale controls). Mirrors wpUpdateThemeField's write half WITHOUT
+    // the legacy re-render. Returns the value on success.
+    setThemeField: async function (field, value) {
+      if (!themeConfig) themeConfig = {};
+      themeConfig[field] = value;
+      await MastDB.set('public/config/theme/' + field, value);
+      markUnpublished();
+      return value;
+    },
+    // Custom primary/accent colors. Routes the VALUE write through the single
+    // writer MastBrandSync.setColors (canonical public/config/theme + platform
+    // publicConfig mirror) AND clears colorSchemeId so a custom color and a
+    // manifest scheme are mutually exclusive — mirrors wpSelectSchemeCustom's
+    // override clear (the legacy custom pickers assumed "Custom" was selected
+    // first; the v2 builder has no Custom tile, so the bridge owns the clear).
+    // colors: { primaryColor?, accentColor? }. Returns the written update.
+    setCustomColors: async function (colors) {
+      colors = colors || {};
+      var update = {};
+      if (colors.primaryColor) update.primaryColor = colors.primaryColor;
+      if (colors.accentColor) update.accentColor = colors.accentColor;
+      if (!Object.keys(update).length) return null;
+      if (!themeConfig) themeConfig = {};
+      themeConfig.primaryColor = update.primaryColor || themeConfig.primaryColor;
+      themeConfig.accentColor = update.accentColor || themeConfig.accentColor;
+      themeConfig.colorSchemeId = null;
+      if (window.MastBrandSync && typeof window.MastBrandSync.setColors === 'function') {
+        await window.MastBrandSync.setColors(update);
+      } else {
+        await MastDB.update('public/config/theme', update);
+      }
+      // Exclusivity: a manifest scheme and custom colors can't both win.
+      await MastDB.remove('public/config/theme/colorSchemeId');
+      markUnpublished();
+      return update;
+    },
+    // Read-through so the builder can refresh after a write without touching the
+    // module's private caches. Single-sources the theme read.
+    getThemeConfig: async function () {
+      return (await MastDB.get('public/config/theme').catch(function () { return null; })) || {};
+    }
+  };
+
   // ── Draft Template Actions ──
   window.wpReviewDraft = async function(draftId) {
     if (!draftTemplates) return;
