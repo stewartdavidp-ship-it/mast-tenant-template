@@ -12,9 +12,14 @@
  *     platform mirrors) + resolvePublicPlacements.
  *   • Placement assignment → BrandBridge.savePlacement → resolvePublicPlacements.
  *   • Variant delete → BrandBridge.deleteVariant.
- * Logos are set FROM A URL (no file picker) — that's what the legacy surface
- * supports without library coupling. The image-library picker (uploadImage CF
- * path) is genuinely library-only and stays reachable via classic Brand.
+ * Logos are set FROM A URL, FROM THE IMAGE LIBRARY, or BY UPLOADING from the
+ * computer — matching legacy Brand (brandUploadLogoPrompt's "Choose from Image
+ * Library" + brandPickFromLibrary, available for primary AND every variant). The
+ * library picker reuses the shared window.openImagePicker; "From computer" uploads
+ * via the /uploadImage CF (base64) then uses the returned library URL — mirroring
+ * composer-v2/blog-v2. Both paths land the chosen URL in the form's URL field and
+ * still write through BrandBridge.setLogoFromUrl, so the storefront fan-out stays
+ * single-sourced (no new write path, no classic escape hatch).
  *
  * The host module (brand.js, which owns BrandBridge) is loaded at route setup;
  * every delegated call guards on window.BrandBridge and kicks a reload + toast
@@ -137,16 +142,35 @@
       fg('Voice rules', '<textarea class="form-input" id="brandV2VoiceRules" rows="8" placeholder="- Warm, plainspoken, never salesy&#10;- Refer to pieces as work not products" style="width:100%;resize:vertical;font-family:inherit;">' + esc(v.voiceRules || '') + '</textarea>', 'Tone, do/don\'t list, signature phrases. Used by Claude when drafting copy.');
   }
 
+  function logoPreviewHtml(url) {
+    return url
+      ? '<div style="background:var(--surface-dark);border-radius:8px;padding:12px;display:flex;align-items:center;justify-content:center;min-height:72px;margin-bottom:8px;"><img src="' + esc(url) + '" alt="" style="max-height:56px;max-width:100%;object-fit:contain;"></div>'
+      : '<div style="background:var(--surface-dark);border-radius:8px;padding:18px;text-align:center;color:var(--warm-gray);font-size:0.85rem;margin-bottom:8px;">No image chosen yet.</div>';
+  }
+
   function logoFormHtml(targetType) {
     var label = logoKeyLabel(targetType);
     var current = targetType === 'primary' ? primaryUrl() : variantUrl(targetType);
-    var preview = current
-      ? '<div style="background:var(--surface-dark);border-radius:8px;padding:12px;display:flex;align-items:center;justify-content:center;min-height:72px;margin-bottom:8px;"><img src="' + esc(current) + '" alt="" style="max-height:56px;max-width:100%;object-fit:contain;"></div>'
-      : '';
+    var pickers = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:-4px 0 4px;">' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="BrandV2.logoFromLibrary()">📚 From library</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="BrandV2.logoUpload()">💻 From computer</button>' +
+      '</div>';
     return '<div class="mu-editbar"><span class="mu-editpill">' + (current ? 'EDIT' : 'NEW') + '</span>' + esc(label) + ' logo</div>' +
-      preview +
-      fg('Image URL', '<input class="form-input" id="brandV2LogoUrl" type="text" value="' + esc(current || '') + '" placeholder="https://example.com/logo.png" style="width:100%;">', 'Paste a hosted image URL. The image stays at that URL (no re-host). To pick from the image library, use classic Brand.') +
+      '<div id="brandV2LogoPreview">' + logoPreviewHtml(current) + '</div>' +
+      pickers +
+      fg('Image URL', '<input class="form-input" id="brandV2LogoUrl" type="text" value="' + esc(current || '') + '" placeholder="https://example.com/logo.png" style="width:100%;" oninput="BrandV2.logoUrlChanged()">', 'Pick from your image library, upload from your computer, or paste a hosted image URL. The image stays at that URL (no re-host).') +
       '<input type="hidden" id="brandV2LogoTarget" value="' + esc(targetType) + '">';
+  }
+
+  // Drop a resolved URL into the logo edit form: set the URL field + refresh the
+  // inline preview. The chosen URL is still written through BrandBridge.setLogoFromUrl
+  // when the operator hits Save (single-sourced write path).
+  function applyLogoUrl(url) {
+    if (!url) return;
+    var urlEl = document.getElementById('brandV2LogoUrl');
+    if (urlEl) urlEl.value = url;
+    var prev = document.getElementById('brandV2LogoPreview');
+    if (prev) prev.innerHTML = logoPreviewHtml(url);
   }
 
   function variantsManageHtml() {
@@ -235,6 +259,53 @@
           }).catch(function (e) { console.error('[brand-v2] setLogoFromUrl', e); if (window.showToast) showToast('Save failed', true); return false; });
         }
       });
+    },
+
+    // Refresh the inline preview when the operator edits the URL field by hand.
+    logoUrlChanged: function () {
+      var urlEl = document.getElementById('brandV2LogoUrl');
+      var prev = document.getElementById('brandV2LogoPreview');
+      if (prev) prev.innerHTML = logoPreviewHtml(urlEl ? urlEl.value.trim() : '');
+    },
+
+    // 📚 From library — shared image-library picker (mirrors V1 brandPickFromLibrary).
+    // Returns a library URL; we land it in the URL field and let the form's Save
+    // write it through BrandBridge.setLogoFromUrl (single-sourced).
+    logoFromLibrary: function () {
+      if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
+      window.openImagePicker(function (imageId, url) {
+        if (!url) return;
+        applyLogoUrl(url);
+        if (window.showToast) showToast('Picked from library — Save to apply.');
+      });
+    },
+
+    // 💻 From computer — upload via /uploadImage CF (base64), then use the returned
+    // library URL (mirrors composer-v2/blog-v2 imgUpload). Lands in the URL field.
+    logoUpload: function () {
+      var input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
+      input.onchange = function () {
+        if (!input.files || !input.files[0]) return;
+        if (window.showToast) showToast('Uploading image…');
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            var base64 = String(e.target.result).split(',')[1];
+            auth.currentUser.getIdToken().then(function (token) {
+              return callCF('/uploadImage', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ image: base64, tags: ['logo'], source: 'brand-logo-upload' }) });
+            }).then(function (resp) { return resp.json(); }).then(function (result) {
+              if (!result || !result.success) throw new Error((result && result.error) || 'Upload failed');
+              var lib = window.imageLibrary || {}; var d = lib[result.imageId] || {};
+              var url = d.url || result.url;
+              if (!url) throw new Error('Upload returned no URL');
+              applyLogoUrl(url);
+              if (window.showToast) showToast('Uploaded to library — Save to apply.');
+            }).catch(function (err) { if (window.showToast) showToast('Upload failed: ' + (err && err.message ? err.message : 'error'), true); });
+          } catch (err) { if (window.showToast) showToast('Upload failed.', true); }
+        };
+        reader.readAsDataURL(input.files[0]);
+      };
+      input.click();
     },
 
     manageVariants: function () {
