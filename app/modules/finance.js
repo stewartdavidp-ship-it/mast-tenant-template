@@ -4479,7 +4479,7 @@ async function renderApVendorDetail(vendorId) {
     h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Type</div><div style="font-size:0.9rem;margin-top:3px;">' + e((vendor.vendorType || vendor.payeeType || '—').replace(/^\w/, function(c) { return c.toUpperCase(); })) + '</div></div>';
     h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Email</div><div style="font-size:0.9rem;margin-top:3px;">' + e(vendor.email || '—') + '</div></div>';
     h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Phone</div><div style="font-size:0.9rem;margin-top:3px;">' + e(vendor.phone || '—') + '</div></div>';
-    h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Tax ID</div><div style="font-size:0.9rem;margin-top:3px;">' + (vendor.taxId ? 'XXX-XX-' + String(vendor.taxId).replace(/[^0-9]/g, '').slice(-4) : '—') + '</div></div>';
+    h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Tax ID</div><div style="font-size:0.9rem;margin-top:3px;">' + (vendor.taxId ? e(_maskTaxId(vendor.taxId)) : '—') + '</div></div>';
     h += '</div>';
 
     // Summary
@@ -4882,6 +4882,17 @@ function renderTaxNexus(states, byState, nexus, overrides, startDate, endDate) {
   return h;
 }
 
+// Canonical mask for a vendor/contractor tax ID (EIN/SSN): last 4 digits only,
+// e.g. "XXX-XX-1234". Single source of truth so the on-screen display and every
+// downloadable export stay in lockstep — a raw TIN must NEVER reach a CSV. A
+// working 1099-prep file is a human-facing reference, not the IRS e-file payload,
+// so last-4 is enough to disambiguate a payee. Returns '' for an empty/garbage
+// TIN; callers label the gap themselves (e.g. 'MISSING — request W-9').
+function _maskTaxId(taxId) {
+  var digits = String(taxId == null ? '' : taxId).replace(/[^0-9]/g, '');
+  return digits ? 'XXX-XX-' + digits.slice(-4) : '';
+}
+
 function loadTax1099() {
   var el = document.getElementById('fTaxContent');
   if (!el) return;
@@ -4934,7 +4945,7 @@ async function _tax1099ForYearCore(year) {
     var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
     contractors.push({
       name: v.name || 'Unknown', taxId: taxId,
-      maskedTaxId: hasTaxId ? 'XXX-XX-' + String(taxId).replace(/[^0-9]/g,'').slice(-4) : null,
+      maskedTaxId: hasTaxId ? _maskTaxId(taxId) : null,
       hasTaxId: hasTaxId, totalPaid: total
     });
   });
@@ -4998,9 +5009,9 @@ function render1099(contractors, year) {
   // W1 R2-F3: register canonical exporter + footer (separate from legacy
   // fin1099Export button — we keep both so existing UI still works).
   _finExporters['finance-tax-1099'] = function() {
-    var rows = [['Contractor','Tax ID','Total Paid (USD)','1099 Required']];
+    var rows = [['Contractor','Tax ID (masked)','Total Paid (USD)','1099 Required']];
     contractors.forEach(function(c) {
-      rows.push([c.name, c.hasTaxId ? c.taxId : 'MISSING', (c.totalPaid / 100).toFixed(2), 'Yes']);
+      rows.push([c.name, c.hasTaxId ? _maskTaxId(c.taxId) : 'MISSING', (c.totalPaid / 100).toFixed(2), 'Yes']);
     });
     _finDownloadCsv('finance-tax-1099', rows, 'Period: tax year ' + year + ' · Basis: admin/vendors + admin/purchaseReceipts');
   };
@@ -5044,9 +5055,9 @@ window.fin1099Export = function() {
   if (!_1099ContractorData || _1099ContractorData.length === 0) {
     showToast('No 1099 data to export', true); return;
   }
-  var rows = [['Name','Tax ID','Total Paid','1099 Required']];
+  var rows = [['Name','Tax ID (masked)','Total Paid','1099 Required']];
   _1099ContractorData.forEach(function(c) {
-    rows.push([c.name, c.hasTaxId ? c.taxId : 'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
+    rows.push([c.name, c.hasTaxId ? _maskTaxId(c.taxId) : 'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
   });
   downloadCsv(rows, '1099s_' + _1099Year + '.csv');
   showToast('1099s.csv downloaded');
@@ -5395,7 +5406,7 @@ async function _vendor1099RowsCore(pick, start, end) {
     var d = totals[vid];
     var taxId = d.vendor.taxId;
     var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
-    var masked = hasTaxId ? 'XXX-XX-' + String(taxId).replace(/[^0-9]/g, '').slice(-4) : '';
+    var masked = hasTaxId ? _maskTaxId(taxId) : '';
     var tinStatus = hasTaxId ? 'On file' : 'MISSING — request W-9';
     var required = d.total > 60000 ? 'Yes' : 'No (below threshold)';
     rows.push([d.vendor.name || 'Unknown', masked, tinStatus, (d.total / 100).toFixed(2), '$600 (period-windowed)', required]);
@@ -5785,7 +5796,7 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
     contractors.forEach(function(c) {
       h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
       h += '<td style="padding:7px 10px;font-weight:600;">' + e(c.name) + '</td>';
-      h += '<td style="padding:7px 10px;font-size:0.78rem;">' + (c.hasTaxId?'<span style="font-family:monospace;">XXX-XX-'+String(c.taxId||'').replace(/[^0-9]/g,'').slice(-4)+'</span>':'<span style="color:#ef4444;">Missing</span>') + '</td>';
+      h += '<td style="padding:7px 10px;font-size:0.78rem;">' + (c.hasTaxId?'<span style="font-family:monospace;">'+e(_maskTaxId(c.taxId))+'</span>':'<span style="color:#ef4444;">Missing</span>') + '</td>';
       h += '<td style="padding:7px 10px;font-weight:700;">' + fmt$(c.totalPaid) + '</td>';
       h += '<td style="padding:7px 10px;color:#22c55e;">Yes</td>';
       h += '</tr>';
@@ -5886,9 +5897,9 @@ window.finExportTaxCsv = function() {
 };
 
 function _yearEndExport1099Csv(d) {
-  var rows = [['Name','Tax ID','Total Paid','1099 Required']];
+  var rows = [['Name','Tax ID (masked)','Total Paid','1099 Required']];
   d.contractors.forEach(function(c) {
-    rows.push([c.name, c.hasTaxId?c.taxId:'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
+    rows.push([c.name, c.hasTaxId?_maskTaxId(c.taxId):'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
   });
   downloadCsv(rows, '1099s_'+d.year+'.csv');
   showToast('1099s.csv downloaded');
