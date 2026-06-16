@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **60,898** lines
-- **Feature modules:** **119** files in `app/modules/` (**110** routed), **135,925** lines combined
+- **Core shell:** `app/index.html` — **60,884** lines
+- **Feature modules:** **119** files in `app/modules/` (**110** routed), **136,261** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -75,12 +75,12 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/lookbooks.js` | 822 | lookbooks |
 | `modules/lots-v2.js` | 178 | lots-v2 |
 | `modules/loyalty-v2.js` | 357 | loyalty-v2 |
-| `modules/maker.js` | 7,645 | materials, products |
+| `modules/maker.js` | 7,725 | materials, products |
 | `modules/mapping-v2.js` | 382 | mapping-v2 |
 | `modules/mapping.js` | 1,809 | mapping |
 | `modules/marketing-calendar-v2.js` | 208 | marketing-calendar-v2 |
 | `modules/marketing-calendar.js` | 270 | marketing-calendar |
-| `modules/materials-v2.js` | 337 | materials-v2 |
+| `modules/materials-v2.js` | 593 | materials-v2 |
 | `modules/membership-v2.js` | 473 | membership-v2 |
 | `modules/newsletter-v2.js` | 874 | newsletter-v2 |
 | `modules/newsletter.js` | 2,621 | newsletter |
