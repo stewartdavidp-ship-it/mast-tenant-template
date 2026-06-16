@@ -534,15 +534,40 @@
               }).catch(function() {
                 if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
               });
-              // Apply per-section styling (background, spacing)
-              MastDB.get('webPresence/config/sections').then(function(configs) {
-                if (!configs) return;
+              // Apply per-section ENABLEMENT (hide toggled-off sections) + styling
+              // (background, spacing). The builder's section On/Off toggle
+              // (hpToggleSection) writes `enabled` to BOTH public/config/nav/sections/{id}
+              // and the webPresence/config/sections/{id} mirror; the canonical reader
+              // (homepage.js) treats a section as enabled only when NEITHER location is
+              // explicitly false. We honor the same rule here. Hiding is done with a
+              // [data-section-disabled] attribute backed by a CSS `!important` rule so it
+              // survives the homepage data loaders (gallery/events/testimonials/featured/
+              // category) that set display='' once their async data resolves.
+              Promise.all([
+                MastDB.get('public/config/nav/sections').catch(function() { return null; }),
+                MastDB.get('webPresence/config/sections').catch(function() { return null; })
+              ]).then(function(res) {
+                var navSections = res[0] || {};
+                var wpSections = res[1] || {};
                 var spacingPresets = { compact: '3rem', normal: '5rem', spacious: '9rem' };
-                Object.keys(configs).forEach(function(sectionId) {
-                  var cfg = configs[sectionId];
-                  if (!cfg) return;
+                var ids = {};
+                Object.keys(navSections).forEach(function(k) { ids[k] = true; });
+                Object.keys(wpSections).forEach(function(k) { ids[k] = true; });
+                Object.keys(ids).forEach(function(sectionId) {
                   var el = document.querySelector('[data-slot="' + sectionId + '"]') || document.getElementById(sectionId);
                   if (!el) return;
+                  var navData = navSections[sectionId] || {};
+                  var cfg = wpSections[sectionId] || {};
+                  // Disabled when either location explicitly says enabled:false.
+                  // 'hero' is a required/locked section — never hide it (defends
+                  // against corrupt data blanking the top of the page).
+                  var disabled = sectionId !== 'hero' &&
+                    (navData.enabled === false || cfg.enabled === false);
+                  if (disabled) {
+                    el.setAttribute('data-section-disabled', 'true');
+                  } else {
+                    el.removeAttribute('data-section-disabled');
+                  }
                   if (cfg.background) {
                     el.style.backgroundColor = cfg.background;
                   }

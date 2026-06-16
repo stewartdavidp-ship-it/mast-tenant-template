@@ -425,6 +425,12 @@
   /* ========= SECTIONS SHARED ========= */
   section { padding: 7rem 3rem; }
 
+  /* Homepage section toggled OFF in the builder (public/config/nav/sections/{id}/enabled=false,
+     mirrored to webPresence/config/sections). storefront-theme.js stamps this attribute; the
+     !important keeps the section hidden even after async data loaders (gallery/events/
+     testimonials/featured/category) re-show their section once their data resolves. */
+  [data-section-disabled="true"] { display: none !important; }
+
   .section-label {
     font-size: 0.68rem;
     letter-spacing: 0.3em;
@@ -1671,7 +1677,7 @@
      Tenant resolution and parallel config reads start immediately while
      Firebase SDK downloads in the background (browser prefetch). -->
 <script src="storefront-tenant.js?v=2"></script>
-<script src="storefront-theme.js"></script>
+<script src="storefront-theme.js?v=1"></script>
 <script src="storefront-nav.js"></script>
 <script src="tenant-brand.js?v=2"></script>
 <script src="storefront-content.js"></script>
