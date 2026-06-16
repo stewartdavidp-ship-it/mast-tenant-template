@@ -20,8 +20,10 @@
  *
  * All writes DELEGATE to window.ComposerBridge (exposed in composer.js) so
  * the doc shape and the publish fan-out (sequential module loads + per-channel
- * hooks) stay single-sourced. Image attach reuses the legacy picker on the
- * classic editor (temp-link debt; the picker is modal + library-coupled).
+ * hooks) stay single-sourced. Images are attached NATIVELY in the edit form via
+ * the shared window.openImagePicker (library) + /uploadImage CF (from computer)
+ * — mirroring blog-v2 — and written through ComposerBridge.update(id,{images})
+ * as the legacy `images[]` URL-string array. No classic escape hatch.
  * RBAC: can('composer','edit'|'delete'). Flag-gated (?ui=1) at #composer-v2.
  */
 (function () {
@@ -48,6 +50,64 @@
     if (window.ComposerBridge) return window.ComposerBridge;
     if (window.showToast) showToast('Composer engine still loading — try again', true);
     return null;
+  }
+
+  // ── Native image picker (mirrors blog-v2: shared openImagePicker library +
+  // /uploadImage CF). edit.images is the live edit-form working copy; the
+  // canonical `images[]` URL-string array is written via ComposerBridge.update
+  // immediately on add/remove (legacy attachPicked parity). ──
+  var edit = { id: '', images: [] };
+
+  function seedEditImages(c, mode) {
+    edit.id = (mode === 'create') ? '' : (c._key || c.id || '');
+    edit.images = (mode !== 'create' && Array.isArray(c.images)) ? c.images.slice() : [];
+  }
+
+  function imagesEditHtml() {
+    var canEdit = canDo('edit');
+    var grid = edit.images.length
+      ? '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;">' +
+          edit.images.map(function (url, i) {
+            return '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">' +
+              '<div style="width:84px;height:84px;border-radius:6px;overflow:hidden;background:var(--charcoal);">' +
+                '<img src="' + esc(url) + '" alt="Image ' + (i + 1) + '" loading="lazy" style="width:100%;height:100%;object-fit:cover;">' +
+              '</div>' +
+              (canEdit ? '<button type="button" class="btn btn-secondary btn-small" title="Remove image" onclick="ComposerV2.imgRemove(' + i + ')" style="padding:1px 9px;">✕</button>' : '') +
+            '</div>';
+          }).join('') +
+        '</div>'
+      : '<div class="mu-sub" style="font-size:0.85rem;margin-bottom:8px;">No images attached.</div>';
+    var buttons = canEdit
+      ? '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button type="button" class="btn btn-secondary btn-small" onclick="ComposerV2.imgFromLibrary()">📚 From library</button>' +
+          '<button type="button" class="btn btn-secondary btn-small" onclick="ComposerV2.imgUpload()">💻 From computer</button>' +
+        '</div>'
+      : '';
+    return grid + buttons;
+  }
+
+  function rerenderImages() {
+    var el = document.getElementById('cmpsV2Images');
+    if (el) el.innerHTML = imagesEditHtml();
+  }
+
+  // Persist the working-copy `images[]` via the single-sourced bridge (same
+  // URL-string array + shape legacy composer.js attachPicked writes).
+  function persistImages() {
+    if (!canDo('edit')) { if (window.showToast) showToast('You don\'t have permission to edit content.', true); return Promise.resolve(false); }
+    if (!edit.id) { rerenderImages(); return Promise.resolve(true); } // create: held until first save creates the doc
+    var b = bridge(); if (!b) return Promise.resolve(false);
+    var id = edit.id, urls = edit.images.slice();
+    return Promise.resolve(b.update(id, { images: urls })).then(function () {
+      var rec = V2.byId[id]; if (rec) rec.images = urls;
+      if (window.writeAudit) writeAudit('update', 'content-images', id);
+      rerenderImages();
+      return true;
+    }).catch(function (e) {
+      console.error('[composer-v2] persistImages', e);
+      if (window.showToast) showToast('Could not save images.', true);
+      return false;
+    });
   }
 
   // Linked-artifact deep links (mirrors legacy _formatLinked; social posts
@@ -132,12 +192,14 @@
           return '<label style="display:inline-flex;align-items:center;gap:6px;margin-right:14px;font-size:0.9rem;">' +
             '<input type="checkbox" class="cmpsV2Ch" value="' + val + '"' + (chs.indexOf(val) >= 0 ? ' checked' : '') + '> ' + (CHANNEL_LABEL[val] || val) + '</label>';
         }
+        // Seed the native image-picker edit state from the record (create starts empty).
+        seedEditImages(c, mode);
         return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New content draft' : 'Edit this draft') + '</div>' +
           fg('Title', '<input class="form-input" id="cmpsV2Title" value="' + esc(c.title || '') + '" style="width:100%;" placeholder="e.g. June studio update">') +
           fg('Body', '<textarea class="form-input" id="cmpsV2Body" rows="10" style="width:100%;resize:vertical;" placeholder="Write once — publish to every channel you pick.">' + esc(c.body || '') + '</textarea>') +
           fg('Target channels', '<div style="padding:4px 0;">' + cb('blog') + cb('social') + cb('newsletter') + cb('story') + '</div>') +
-          (mode === 'create' ? '' :
-            '<div class="mu-sub" style="font-size:0.78rem;">Images are attached in the classic editor (library picker) — <a href="javascript:void(0)" onclick="ComposerV2.classic(\'' + esc(c._key || c.id || '') + '\')" style="color:var(--teal);">open classic →</a></div>');
+          fg('Images', '<div id="cmpsV2Images">' + imagesEditHtml() + '</div>' +
+            (mode === 'create' ? '<div class="mu-sub" style="font-size:0.78rem;margin-top:6px;">Images save to this draft as you add them.</div>' : ''));
       }
     },
     onSave: function (rec, mode) {
@@ -147,7 +209,10 @@
       var patch = {
         title: val('cmpsV2Title').trim(),
         body: val('cmpsV2Body'),
-        targetChannels: Array.prototype.slice.call(document.querySelectorAll('.cmpsV2Ch:checked')).map(function (el) { return el.value; })
+        targetChannels: Array.prototype.slice.call(document.querySelectorAll('.cmpsV2Ch:checked')).map(function (el) { return el.value; }),
+        // images are written live via persistImages() during edit; include them so
+        // create carries any picked-before-save images and edit stays coherent.
+        images: edit.images.slice()
       };
       if (mode === 'create') {
         return Promise.resolve(b.create(patch)).then(function () {
@@ -285,9 +350,49 @@
         });
       }).catch(function (e) { console.error('[composer-v2] remove', e); if (window.showToast) showToast('Delete failed.', true); });
     },
-    classic: function (id) {
-      if (typeof window.navigateToClassic === 'function') navigateToClassic('composer', id ? { id: id } : undefined);
-      else if (typeof window.navigateTo === 'function') navigateTo('composer', id ? { id: id } : undefined);
+    // ── Native image picker (replaces the old classic library hatch) ──
+    imgFromLibrary: function () {
+      if (!canDo('edit')) { if (window.showToast) showToast('You don\'t have permission to edit content.', true); return; }
+      if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
+      window.openImagePicker(function (imageId, url) {
+        if (!url) return;
+        if (edit.images.indexOf(url) >= 0) { if (window.showToast) showToast('Already attached.'); return; }
+        edit.images.push(url);
+        persistImages();
+      });
+    },
+    imgUpload: function () {
+      if (!canDo('edit')) { if (window.showToast) showToast('You don\'t have permission to edit content.', true); return; }
+      var input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
+      input.onchange = function () {
+        if (!input.files || !input.files[0]) return;
+        if (window.showToast) showToast('Uploading image…');
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          try {
+            var base64 = String(e.target.result).split(',')[1];
+            auth.currentUser.getIdToken().then(function (token) {
+              return callCF('/uploadImage', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ image: base64, tags: [], source: 'composer-upload' }) });
+            }).then(function (resp) { return resp.json(); }).then(function (result) {
+              if (!result || !result.success) throw new Error((result && result.error) || 'Upload failed');
+              var lib = window.imageLibrary || {}; var d = lib[result.imageId] || {};
+              var url = d.url || result.url;
+              if (!url) throw new Error('Upload returned no URL');
+              if (window.showToast) showToast('Image uploaded to library.');
+              if (edit.images.indexOf(url) < 0) edit.images.push(url);
+              persistImages();
+            }).catch(function (err) { if (window.showToast) showToast('Upload failed: ' + (err && err.message ? err.message : 'error'), true); });
+          } catch (err) { if (window.showToast) showToast('Upload failed.', true); }
+        };
+        reader.readAsDataURL(input.files[0]);
+      };
+      input.click();
+    },
+    imgRemove: function (i) {
+      if (!canDo('edit')) { if (window.showToast) showToast('You don\'t have permission to edit content.', true); return; }
+      if (i < 0 || i >= edit.images.length) return;
+      edit.images.splice(i, 1);
+      persistImages();
     },
     exportCsv: function () { return MastEntity.exportRows('composer-v2', visibleRows(), V2.statusFilter); }
   };
