@@ -5,9 +5,9 @@
  * Legacy social.js (#social) is a content PIPELINE: clip upload → enhance
  * (treatment + AI captions / shoot cards) → staging → "mark posted", plus a
  * posted-feed list with a 👍/🔥 signal logger. This twin re-hosts the POSTS
- * list → read/edit detail on the Entity Engine. The enhance/AI-caption canvas
- * is a Composer-archetype authoring surface and stays single-sourced on legacy
- * #social via navigateToClassic (temp-link debt, tracked in the build plan).
+ * list → read/edit detail on the Entity Engine PLUS a native create flow
+ * (upload → details → AI captions → post, S2) and native pending-clip RESUME
+ * (S5) — the legacy #social escape hatch is GONE (no navigateToClassic).
  *
  * Variant: a social post is a content record (caption, platforms, treatment,
  * media) with NO governed lifecycle — status is 'draft' | 'posted', an
@@ -20,8 +20,10 @@
  * ('draft'|'posted'; legacy pre-status docs are posted), postedAt,
  * scheduledFor, signalScore (1=👍 2=🔥, toggleable), treatment, contentType,
  * thumbnailUrl, hashtags, productId/Name, eventName, source, sourceContentId.
- * Pending clips (market/pendingClips/{uid}) surface as a count chip linking to
- * the classic pipeline — clips are work-in-flight, not records.
+ * Pending clips (market/pendingClips/{uid}) — uploaded but not-yet-posted
+ * clips — surface as RESUMABLE chips that re-open the native create wizard at
+ * the details step with the clip already attached (S5). Clips are
+ * work-in-flight, not records.
  *
  * NATIVE write: caption/description/hashtags/platforms/schedule edit + signal
  * + mark-posted, all DELEGATED to window.SocialBridge (exposed in social.js)
@@ -222,7 +224,10 @@
   });
 
   // -- module state + data ---------------------------------------------
-  var V2 = { rows: [], byId: {}, sortKey: 'date', sortDir: 'desc', q: '', statusFilter: 'all', pendingClips: 0, loaded: false };
+  // pendingClipDocs: the raw not-yet-processed clip docs (clipId, thumbnailUrl,
+  // fileUrl, fileType, duration, fileSize, fileName) — kept (not just counted)
+  // so a pending clip can be RESUMED natively into the create wizard (S5).
+  var V2 = { rows: [], byId: {}, sortKey: 'date', sortDir: 'desc', q: '', statusFilter: 'all', pendingClips: 0, pendingClipDocs: [], loaded: false };
 
   function load() {
     // Ensure legacy social.js is loaded so window.SocialBridge (the delegated
@@ -241,18 +246,27 @@
         if (p && typeof p === 'object') out.push(Object.assign({ _key: k }, p));
       });
       V2.rows = out; V2.byId = {}; out.forEach(function (r) { V2.byId[r._key] = r; });
-      V2.pendingClips = Object.keys(clips).filter(function (k) { return clips[k] && clips[k].status !== 'processed'; }).length;
+      var pending = [];
+      Object.keys(clips).forEach(function (k) {
+        var c = clips[k];
+        if (c && typeof c === 'object' && c.status !== 'processed') {
+          pending.push(Object.assign({ clipId: c.clipId || k }, c));
+        }
+      });
+      V2.pendingClipDocs = pending;
+      V2.pendingClips = pending.length;
       V2.loaded = true; render();
     }).catch(function (e) { console.error('[social-v2] load', e); V2.loaded = true; render(); });
   }
   function reloadSoon() { setTimeout(load, 250); }
 
   // ====================================================================
-  // Native "I have a clip" create flow (marketing-v2 S2). Replaces the
-  // navigateToClassic('social') punt: upload → details → AI captions →
-  // post, all single-sourced through SocialBridge.uploadClip /
-  // generateCaptions / createPost. Pre-shoot (no-clip), shoot cards, AI
-  // readiness score, coupon attach and caption-in-Claude are DEFERRED.
+  // Native "I have a clip" create flow (marketing-v2 S2). Replaced the old
+  // classic-view punt: upload → details → AI captions → post, all
+  // single-sourced through SocialBridge.uploadClip / generateCaptions /
+  // createPost. Pending clips resume into this same flow at the details step
+  // (S5). Pre-shoot (no-clip), shoot cards, AI readiness score, coupon attach
+  // and caption-in-Claude are DEFERRED.
   //
   // The slide-out renders once; each step re-renders the inner container
   // (#smCreateBody) in place via innerHTML, holding wizard state in CREATE.
@@ -273,13 +287,26 @@
     };
   }
   function createBodyEl() { return document.getElementById('smCreateBody'); }
+  function createStepHtml() {
+    if (!CREATE) return '';
+    if (CREATE.step === 'details') return createDetailsStep();
+    if (CREATE.step === 'captions') return createCaptionsStep();
+    if (CREATE.step === 'post') return createPostStep();
+    return createUploadStep();
+  }
   function renderCreate() {
     var el = createBodyEl();
     if (!el || !CREATE) return;
-    if (CREATE.step === 'upload') el.innerHTML = createUploadStep();
-    else if (CREATE.step === 'details') el.innerHTML = createDetailsStep();
-    else if (CREATE.step === 'captions') el.innerHTML = createCaptionsStep();
-    else if (CREATE.step === 'post') el.innerHTML = createPostStep();
+    el.innerHTML = createStepHtml();
+  }
+  // Open the create slide-out, seeding the inner body from CREATE.step so a
+  // fresh create starts at upload and a clip RESUME starts at details (S5).
+  function openCreatePane() {
+    U.slideOut.open({
+      id: 'social-create', title: 'New social post', subtitle: 'Upload → captions → post',
+      size: 'lg', mode: 'read', deepLink: false,
+      render: function () { return '<div id="smCreateBody">' + createStepHtml() + '</div>'; }
+    });
   }
   function stepDots() {
     var steps = [['upload', 'Upload'], ['details', 'Details'], ['captions', 'Captions'], ['post', 'Post']];
@@ -527,10 +554,23 @@
       var on = V2.statusFilter === f[0];
       return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="SocialV2.filter(\'' + f[0] + '\')">' + f[1] + '</button>';
     }).join(' ');
-    var clipsNote = V2.pendingClips
-      ? '<div style="margin:12px 0;padding:10px 14px;border:1px solid var(--cream-dark);border-radius:8px;font-size:0.9rem;">' +
-          '📎 ' + N.count(V2.pendingClips) + ' clip' + (V2.pendingClips === 1 ? '' : 's') + ' waiting in the pipeline — ' +
-          '<a href="javascript:void(0)" onclick="SocialV2.classic()" style="color:var(--teal);">process in classic view →</a></div>'
+    var clipsNote = (V2.pendingClips && canEdit())
+      ? '<div style="margin:12px 0;padding:12px 14px;border:1px solid var(--cream-dark);border-radius:8px;">' +
+          '<div style="font-size:0.9rem;margin-bottom:8px;">📎 ' + N.count(V2.pendingClips) + ' clip' + (V2.pendingClips === 1 ? '' : 's') +
+            ' uploaded but not yet posted — finish one into a post.</div>' +
+          '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+            V2.pendingClipDocs.map(function (c) {
+              var thumb = c.thumbnailUrl
+                ? '<img src="' + esc(c.thumbnailUrl) + '" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--cream-dark);flex-shrink:0;">'
+                : '<div style="width:48px;height:48px;border-radius:6px;border:1px solid var(--cream-dark);display:flex;align-items:center;justify-content:center;font-size:1.15rem;flex-shrink:0;">' + (c.fileType === 'video' ? '🎬' : '📷') + '</div>';
+              var label = esc(c.fileName || (c.fileType === 'video' ? 'Video clip' : 'Photo'));
+              return '<div onclick="SocialV2.resumeClip(\'' + esc(c.clipId) + '\')" title="Finish this clip into a post" ' +
+                'style="cursor:pointer;display:flex;gap:8px;align-items:center;padding:6px 10px 6px 6px;border:1px solid var(--cream-dark);border-radius:8px;">' +
+                thumb +
+                '<div style="min-width:0;"><div style="font-size:0.85rem;font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + label + '</div>' +
+                '<div class="mu-sub" style="font-size:0.72rem;">Finish into a post →</div></div></div>';
+            }).join('') +
+          '</div></div>'
       : '';
     tab.innerHTML =
       U.pageHeader({
@@ -548,7 +588,7 @@
       MastEntity.renderList('social-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'SocialV2.sort', onRowClickFnName: 'SocialV2.open',
-        empty: { title: 'No social posts', message: V2.loaded ? 'Produce your first post in the classic pipeline.' : 'Loading…' }
+        empty: { title: 'No social posts', message: V2.loaded ? 'Hit “+ New post” to upload a clip and draft your first post.' : 'Loading…' }
       });
   }
 
@@ -565,11 +605,6 @@
         if (rec) MastEntity.openRecord('social-v2', rec, 'read');
       });
     },
-    classic: function () {
-      if (typeof window.navigateToClassic === 'function') navigateToClassic('social');
-      else if (typeof window.navigateTo === 'function') navigateTo('social');
-    },
-
     // ── Native create flow (S2) ──────────────────────────────────────
     create: function () {
       if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to create social posts.', true); return; }
@@ -577,12 +612,29 @@
       // Make sure products are available for the subject picker.
       if (!window.productsData && window.loadProducts) { try { loadProducts(); } catch (e) {} }
       CREATE = freshCreate();
-      U.slideOut.open({
-        id: 'social-create', title: 'New social post', subtitle: 'Upload → captions → post',
-        size: 'lg', mode: 'read', deepLink: false,
-        render: function () { return '<div id="smCreateBody">' + createUploadStep() + '</div>'; }
-      });
-      // The render runs synchronously into the pane; nothing else needed.
+      openCreatePane();
+    },
+    // S5 — resume a previously-uploaded but not-yet-posted PENDING clip into the
+    // native wizard, opening directly at DETAILS with the clip already attached
+    // (upload step skipped). The existing captions→post path flips the clip to
+    // 'processed' via SocialBridge.createPost. Replaces the classic "process
+    // clips in classic view →" hatch — no navigateToClassic.
+    resumeClip: function (clipId) {
+      if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to create social posts.', true); return; }
+      if (!bridge()) return;
+      var clip = V2.pendingClipDocs.filter(function (c) { return c.clipId === clipId; })[0];
+      if (!clip) { if (window.showToast) showToast('That clip is no longer available.', true); return; }
+      if (!window.productsData && window.loadProducts) { try { loadProducts(); } catch (e) {} }
+      CREATE = freshCreate();
+      CREATE.step = 'details';
+      CREATE.clipId = clip.clipId;
+      CREATE.fileUrl = clip.fileUrl || null;
+      CREATE.thumbnailUrl = clip.thumbnailUrl || null;
+      CREATE.fileType = clip.fileType || null;
+      CREATE.duration = clip.duration != null ? clip.duration : null;
+      CREATE.fileSize = clip.fileSize != null ? clip.fileSize : null;
+      CREATE.fileName = clip.fileName || null;
+      openCreatePane();
     },
     createPickFile: function () {
       if (!CREATE) return;
