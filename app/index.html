@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260616-011231-bc99193"></script>
+  <script src="../shared/mastdb.js?v=20260616-012906-0dc6c4a"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,25 +184,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260616-011231-bc99193"></script>
-  <script src="../shared/brand-sync.js?v=20260616-011231-bc99193"></script>
+  <script src="../shared/customer-filters.js?v=20260616-012906-0dc6c4a"></script>
+  <script src="../shared/brand-sync.js?v=20260616-012906-0dc6c4a"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260616-011231-bc99193"></script>
+  <script src="../shared/variant-reconcile.js?v=20260616-012906-0dc6c4a"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260616-011231-bc99193"></script>
-  <script src="../shared/mast-io.js?v=20260616-011231-bc99193"></script>
-  <script src="../shared/mast-entity.js?v=20260616-011231-bc99193"></script>
+  <script src="../shared/mast-ui.js?v=20260616-012906-0dc6c4a"></script>
+  <script src="../shared/mast-io.js?v=20260616-012906-0dc6c4a"></script>
+  <script src="../shared/mast-entity.js?v=20260616-012906-0dc6c4a"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260616-011231-bc99193"></script>
+  <script src="../shared/product-readiness.core.js?v=20260616-012906-0dc6c4a"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -6656,9 +6656,11 @@
         <span class="sidebar-section-arrow">&#9654;</span>
       </div>
       <div class="sidebar-items">
-        <div class="sidebar-item" data-route="website" onclick="navigateTo('website')">Website Content</div>
-        <div class="sidebar-item" data-route="homepage" onclick="navigateTo('homepage')">Page Builder</div>
-        <div class="sidebar-item" data-route="brand" onclick="navigateTo('brand')">Brand</div>
+        <!-- "Your Website" capstone: ONE entry for the unified builder (website-v2).
+             Page Builder + Brand merged in — #website, #homepage, #brand all resolve
+             to the 4-card builder. data-route-alt keeps the active highlight on deep
+             links to the absorbed routes. -->
+        <div class="sidebar-item web-merged-v2" data-route="website" data-route-alt="homepage brand" onclick="navigateTo('website')">Your Website</div>
         <div class="sidebar-item" data-route="images" onclick="navigateTo('images')">Images</div>
       </div>
     </div>
@@ -11609,8 +11611,8 @@
     <div id="csSurveysV2Tab" class="tab-content" style="display:none;"></div><!-- CS Wave 3: surveys hub -->
     <div id="termsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config-singleton shape: policies/terms -->
     <div id="walletV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config-singleton shape: wallet/instruments -->
-    <div id="brandV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config shape: brand read-on-page -->
-    <div id="homepageV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign config shape: homepage read-on-page -->
+    <!-- brandV2Tab + homepageV2Tab static divs removed (PR8): the brand-v2/homepage-v2
+         twins are retired — #brand and #homepage now resolve to the unified builder below. -->
     <div id="websiteV2Tab" class="tab-content" style="display:none;"></div><!-- "Your website" consolidated builder (absorbs page builder + homepage-v2 + brand-v2 into one scrolling page) -->
     <div id="commissionsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Process surface: commissions -->
     <div id="productsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Process surface: products -->
@@ -21078,7 +21080,12 @@ var MAST_V2_ROUTE_MAP = {
   trips: 'trips-v2', team: 'team-v2', procurement: 'procurement-v2',
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', 'cs-surveys': 'cs-surveys-v2', terms: 'terms-v2', wallet: 'wallet-v2',
-  brand: 'brand-v2', homepage: 'homepage-v2', website: 'website-v2', commissions: 'commissions-v2', products: 'products-v2',
+  // "Your website" capstone: #website, #brand, and #homepage all resolve to the
+  // single unified builder (website-v2). brand-v2/homepage-v2 twins retired —
+  // their surface (logo/colors/fonts, sections/content, testimonials) is absorbed
+  // into the 4-card builder. `website` is listed FIRST so the reverse-lookup
+  // (set-active-nav baseRoute) resolves the consolidated "Your Website" nav item.
+  website: 'website-v2', brand: 'website-v2', homepage: 'website-v2', commissions: 'commissions-v2', products: 'products-v2',
   wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
   contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
   resources: 'classes-rooms-v2', newsletter: 'newsletter-v2',
@@ -22363,7 +22370,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260616-011231-bc99193';
+var MAST_MODULES_V = '20260616-012906-0dc6c4a';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22399,9 +22406,14 @@ var MODULE_MANIFEST = {
   'cs-surveys-v2': { src: 'modules/cs-surveys-v2.js', routes: ['cs-surveys-v2'] }, // CS Wave 3: surveys hub (Surveys/Responses/Question sets/Library lenses + automation card)
   'terms-v2': { src: 'modules/terms-v2.js', routes: ['terms-v2'] }, // UI-redesign config-singleton shape: policies/terms launcher→slide-out (flag-gated)
   'wallet-v2': { src: 'modules/wallet-v2.js', routes: ['wallet-v2'] }, // UI-redesign config-singleton shape: wallet/instruments launcher→slide-out (flag-gated)
-  'brand-v2': { src: 'modules/brand-v2.js', routes: ['brand-v2'] }, // UI-redesign config shape: brand read-on-page (read-focused, edit→classic) (flag-gated)
-  'homepage-v2': { src: 'modules/homepage-v2.js', routes: ['homepage-v2'] }, // UI-redesign config shape: homepage read-on-page (read-focused, edit→classic) (flag-gated)
-  'website-v2': { src: 'modules/website-v2.js', routes: ['website-v2'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). Shell only this PR; cards land PR3–PR6 (flag-gated)
+  // brand-v2 + homepage-v2 RETIRED (PR8 capstone): their read-on-page surface is
+  // fully absorbed by the unified "Your website" builder (website-v2 — Card 1
+  // logo/colors/fonts/name/tagline, Card 2 sections/content/testimonials). The
+  // route map now points #brand and #homepage at website-v2, so these twin modules
+  // no longer load. The legacy host modules (brand / homepage / website) still load
+  // — they own the bridges (BrandBridge / HomepageBridge / WebsiteBridge) + writers
+  // the builder delegates to (hp*, hpToggleTestimonialVisible).
+  'website-v2': { src: 'modules/website-v2.js', routes: ['website-v2'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2) (flag-gated)
   'commissions-v2': { src: 'modules/commissions-v2.js', routes: ['commissions-v2'] }, // UI-redesign Process surface: commissions lifecycle (flag-gated, side-by-side)
   'products-v2': { src: 'modules/products-v2.js', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)

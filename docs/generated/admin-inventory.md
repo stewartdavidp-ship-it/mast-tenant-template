@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **60,892** lines
-- **Feature modules:** **120** files in `app/modules/` (**111** routed), **139,352** lines combined
+- **Core shell:** `app/index.html` — **60,904** lines
+- **Feature modules:** **118** files in `app/modules/` (**109** routed), **138,698** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -20,7 +20,6 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/blog-v2.js` | 1,123 | blog-v2 |
 | `modules/blog.js` | 2,615 | blog |
 | `modules/book.js` | 6,660 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
-| `modules/brand-v2.js` | 379 | brand-v2 |
 | `modules/brand.js` | 668 | brand |
 | `modules/calendar-v2.js` | 108 | calendar-v2 |
 | `modules/campaigns-v2.js` | 405 | campaigns-v2 |
@@ -66,7 +65,6 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 657 | galleries-v2 |
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
-| `modules/homepage-v2.js` | 351 | homepage-v2 |
 | `modules/homepage.js` | 781 | homepage |
 | `modules/inquiries-v2.js` | 380 | inquiries-v2 |
 | `modules/instructors-v2.js` | 416 | instructors-v2 |
@@ -118,7 +116,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/trips.js` | 2,162 | trips |
 | `modules/vendors-v2.js` | 587 | vendors-v2 |
 | `modules/wallet-v2.js` | 237 | wallet-v2 |
-| `modules/website-v2.js` | 2,000 | website-v2 |
+| `modules/website-v2.js` | 2,076 | website-v2 |
 | `modules/website.js` | 3,444 | website |
 | `modules/wholesale-v2.js` | 745 | wholesale-v2 |
 | `modules/wholesale.js` | 1,953 | wholesale |
