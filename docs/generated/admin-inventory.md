@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,904** lines
-- **Feature modules:** **118** files in `app/modules/` (**109** routed), **139,368** lines combined
+- **Feature modules:** **118** files in `app/modules/` (**109** routed), **139,686** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -17,8 +17,8 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit-v2.js` | 414 | audit-v2, audit-muted-v2 |
 | `modules/audit.js` | 1,721 | audit |
 | `modules/auditlog-v2.js` | 243 | auditlog-v2 |
-| `modules/blog-v2.js` | 1,123 | blog-v2 |
-| `modules/blog.js` | 2,615 | blog |
+| `modules/blog-v2.js` | 1,240 | blog-v2 |
+| `modules/blog.js` | 2,658 | blog |
 | `modules/book.js` | 6,660 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand.js` | 668 | brand |
 | `modules/calendar-v2.js` | 108 | calendar-v2 |
@@ -76,12 +76,12 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/maker.js` | 7,886 | materials, products |
 | `modules/mapping-v2.js` | 382 | mapping-v2 |
 | `modules/mapping.js` | 1,809 | mapping |
-| `modules/marketing-calendar-v2.js` | 208 | marketing-calendar-v2 |
+| `modules/marketing-calendar-v2.js` | 246 | marketing-calendar-v2 |
 | `modules/marketing-calendar.js` | 270 | marketing-calendar |
 | `modules/materials-v2.js` | 593 | materials-v2 |
 | `modules/membership-v2.js` | 473 | membership-v2 |
-| `modules/newsletter-v2.js` | 874 | newsletter-v2 |
-| `modules/newsletter.js` | 2,621 | newsletter |
+| `modules/newsletter-v2.js` | 932 | newsletter-v2 |
+| `modules/newsletter.js` | 2,683 | newsletter |
 | `modules/orders-v2.js` | 351 | orders-v2 |
 | `modules/orders.js` | 6,470 | orders, commissions, rma |
 | `modules/passes-v2.js` | 547 | passes-v2 |

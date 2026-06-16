@@ -381,6 +381,7 @@
         title: 'Blog Posts',
         count: N.count(V2.rows.length) + (V2.rows.length === 1 ? ' post' : ' posts'),
         actionsHtml: '<button class="btn btn-primary" onclick="BlogV2.newPost()">+ New Post</button> ' +
+          '<button class="btn btn-secondary" onclick="BlogV2.openIdeas()">💡 Ideas</button> ' +
           '<button class="btn btn-secondary" onclick="BlogV2.exportCsv()">&darr; Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
@@ -615,6 +616,59 @@
     detail: { render: function (UI, r) { return editorHtml(UI, r); } }
   });
 
+  // ── Blog Ideas queue (marketing-v2 LOW closer) ─────────────────────
+  // The legacy #blog list hosts an inline "Blog Ideas" capture queue
+  // (blogAddIdea / blogDeleteIdea / blogStartFromIdea). This twin re-hosts it
+  // as a focused slide-out: capture an idea, delete one, or turn one into a
+  // draft post. EVERY write delegates to window.BlogBridge (listIdeas / addIdea
+  // / removeIdea / ideaToDraft → single-sourced with blog.js, MastDB under
+  // blog/ideas); gated on the blog edit permission. The idea text is plain text,
+  // esc()'d at render time (never injected as HTML).
+  var IDEAS = { rows: [], loaded: false };
+
+  function ideasBody() {
+    var input =
+      '<div style="display:flex;gap:8px;margin-bottom:14px;">' +
+      '<input id="blogV2IdeaInput" class="form-input" placeholder="Capture a blog idea…" ' +
+        'style="flex:1;min-width:0;font-size:0.9rem;" ' +
+        'onkeydown="if(event.key===\'Enter\'){event.preventDefault();BlogV2.addIdea()}">' +
+      '<button class="btn btn-primary" onclick="BlogV2.addIdea()" style="white-space:nowrap;">+ Add</button>' +
+      '</div>';
+    var listHtml;
+    if (!IDEAS.loaded) {
+      listHtml = '<div style="padding:24px;text-align:center;color:var(--warm-gray);font-size:0.9rem;">Loading…</div>';
+    } else if (!IDEAS.rows.length) {
+      listHtml = '<div style="padding:30px 16px;text-align:center;color:var(--warm-gray);font-size:0.85rem;">' +
+        'No ideas captured yet. Jot one down when inspiration strikes!</div>';
+    } else {
+      listHtml = IDEAS.rows.map(function (idea) {
+        var when = idea.createdAt ? N.date(idea.createdAt) : '';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border,rgba(127,127,127,.15));">' +
+          '<span style="flex:1;min-width:0;font-size:0.9rem;color:var(--text-primary);">' + esc(idea.text) + '</span>' +
+          '<span style="font-size:0.78rem;color:var(--warm-gray);white-space:nowrap;">' + esc(when) + '</span>' +
+          '<button class="btn btn-secondary btn-small" onclick="BlogV2.ideaToDraft(\'' + esc(idea.id) + '\')" title="Turn into a draft post">✍️ Draft</button>' +
+          '<button class="btn btn-secondary btn-small" onclick="BlogV2.removeIdea(\'' + esc(idea.id) + '\')" title="Remove idea" style="color:var(--text-danger);">🗑️</button>' +
+          '</div>';
+      }).join('');
+    }
+    return U.card('Blog Ideas', input + listHtml);
+  }
+  function renderIdeas() {
+    // Only re-render if OUR ideas slide-out is the active one.
+    if (!(U.slideOut && U.slideOut._opts && U.slideOut._opts.id === 'blog-ideas')) return;
+    // Fast path: update the body in place (keeps the panel chrome). Fall back to
+    // re-opening (render reads fresh IDEAS state each time, like setMode).
+    var body = document.getElementById('mastSlideOutBody');
+    if (body) body.innerHTML = ideasBody();
+    else U.slideOut.open(U.slideOut._opts);
+  }
+  function loadIdeas() {
+    if (!window.BlogBridge || !BlogBridge.listIdeas) { IDEAS.loaded = true; renderIdeas(); return; }
+    Promise.resolve(BlogBridge.listIdeas()).then(function (rows) {
+      IDEAS.rows = rows || []; IDEAS.loaded = true; renderIdeas();
+    }).catch(function (e) { console.error('[blog-v2] loadIdeas', e); IDEAS.loaded = true; renderIdeas(); });
+  }
+
   window.BlogV2 = {
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
@@ -638,6 +692,69 @@
       // Ensure legacy blog.js is loaded so window.BlogBridge.create exists at save.
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('blog'); } catch (e) {} }
       MastEntity.openRecord('blog-v2', {}, 'create');
+    },
+    // ── Blog Ideas queue ──
+    // Open the Ideas slide-out and (re)load the queue. AWAIT legacy blog.js so
+    // window.BlogBridge (the single-sourced ideas write path) exists first.
+    openIdeas: function () {
+      IDEAS.loaded = false;
+      function go() {
+        U.slideOut.open({
+          id: 'blog-ideas', size: 'md', mode: 'read',
+          title: 'Blog Ideas',
+          subtitle: 'Capture post ideas, then turn one into a draft.',
+          render: function () { return ideasBody(); }
+        });
+        loadIdeas();
+      }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        Promise.resolve(MastAdmin.loadModule('blog')).then(go).catch(go);
+      } else go();
+    },
+    addIdea: function () {
+      if (typeof window.can === 'function' && !window.can('blog', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to add ideas.', true); return;
+      }
+      var input = document.getElementById('blogV2IdeaInput');
+      var text = input ? String(input.value || '').trim() : '';
+      if (!text) return;
+      if (!window.BlogBridge || !BlogBridge.addIdea) { if (window.showToast) showToast('Blog engine still loading — try again', true); return; }
+      Promise.resolve(BlogBridge.addIdea(text)).then(function (idea) {
+        IDEAS.rows.unshift(idea); IDEAS.loaded = true;
+        if (window.writeAudit) writeAudit('create', 'blog-idea', idea.id);
+        renderIdeas();
+        if (window.showToast) showToast('Idea captured!');
+      }).catch(function (e) { console.error('[blog-v2] addIdea', e); if (window.showToast) showToast('Could not save idea.', true); });
+    },
+    removeIdea: function (id) {
+      if (typeof window.can === 'function' && !window.can('blog', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to remove ideas.', true); return;
+      }
+      if (!window.BlogBridge || !BlogBridge.removeIdea) { if (window.showToast) showToast('Blog engine still loading — try again', true); return; }
+      Promise.resolve(BlogBridge.removeIdea(id)).then(function () {
+        IDEAS.rows = IDEAS.rows.filter(function (i) { return i.id !== id; });
+        if (window.writeAudit) writeAudit('delete', 'blog-idea', id);
+        renderIdeas();
+      }).catch(function (e) { console.error('[blog-v2] removeIdea', e); if (window.showToast) showToast('Could not remove idea.', true); });
+    },
+    // Turn an idea into a draft post (mirrors legacy blogStartFromIdea: the idea
+    // text seeds the new post title). The idea is left in the queue. The new
+    // draft opens in the native editor for fleshing out.
+    ideaToDraft: function (id) {
+      if (typeof window.can === 'function' && !window.can('blog', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to create posts.', true); return;
+      }
+      var idea = IDEAS.rows.filter(function (i) { return i.id === id; })[0];
+      if (!idea) return;
+      if (!window.BlogBridge || !BlogBridge.ideaToDraft) { if (window.showToast) showToast('Blog engine still loading — try again', true); return; }
+      Promise.resolve(BlogBridge.ideaToDraft(idea.text)).then(function (postId) {
+        if (window.writeAudit) writeAudit('create', 'blog-post-draft', postId);
+        if (window.showToast) showToast('Draft post created from idea.');
+        try { U.slideOut.requestCloseForce(); } catch (e) {}
+        load();
+        // Open the new draft's editor so the author can flesh it out.
+        if (postId) BlogV2.editBody(postId);
+      }).catch(function (e) { console.error('[blog-v2] ideaToDraft', e); if (window.showToast) showToast('Could not create draft.', true); });
     },
     // Draft deletion (Wave 3): published/complete posts never delete from the
     // twin — unpublish lives with the Builder's side effects.

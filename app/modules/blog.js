@@ -2589,6 +2589,49 @@
       var imgs = Array.isArray(post.inlineImages) ? post.inlineImages : (post.inlineImages ? Object.keys(post.inlineImages).map(function (k) { return post.inlineImages[k]; }) : []);
       imgs.forEach(function (img, idx) { var marker = '[Image ' + (idx + 1) + ']'; if (aiHtml.indexOf(marker) === -1) aiHtml += '<p>' + marker + '</p>'; });
       return aiHtml;
+    },
+
+    // ── Blog Ideas queue — single-sourced write path for blog-v2's native
+    // Ideas surface (marketing-v2 LOW closer). Mirrors the legacy #blog
+    // Ideas section exactly (blogAddIdea / blogDeleteIdea / blogStartFromIdea):
+    // ideas live at blog/ideas as { id, text, createdAt }; capture appends one,
+    // delete removes one, and "turn into a draft post" mints a draft via the
+    // same create() path (the idea text becomes the post title). Conversion does
+    // NOT delete the idea (matches the legacy blogStartFromIdea, which only
+    // seeds the new post). Reads are bounded (orderByChild + limitToLast 50,
+    // mirroring loadBlog). The V2 twin gates these on the blog edit permission.
+    listIdeas: async function () {
+      var snap = await MastDB.blog.ideas.ref().orderByChild('createdAt').limitToLast(50).once('value');
+      var val = (snap && typeof snap.val === 'function') ? snap.val() : snap;
+      var out = val ? Object.keys(val).map(function (k) {
+        var i = val[k] || {}; if (!i.id) i.id = k; return i;
+      }) : [];
+      out.sort(function (a, b) { return String(b.createdAt || '').localeCompare(String(a.createdAt || '')); });
+      if (typeof blogIdeas !== 'undefined' && Array.isArray(blogIdeas)) blogIdeas = out;
+      return out;
+    },
+    addIdea: async function (text) {
+      var t = String(text == null ? '' : text).trim();
+      if (!t) throw new Error('Idea text is required');
+      var id = 'idea_' + Date.now();
+      var idea = { id: id, text: t, createdAt: new Date().toISOString() };
+      await MastDB.blog.ideas.ref(id).set(idea);
+      if (typeof blogIdeas !== 'undefined' && Array.isArray(blogIdeas)) blogIdeas.unshift(idea);
+      return idea;
+    },
+    removeIdea: async function (id) {
+      await MastDB.blog.ideas.ref(id).remove();
+      if (typeof blogIdeas !== 'undefined' && Array.isArray(blogIdeas)) {
+        blogIdeas = blogIdeas.filter(function (i) { return i.id !== id; });
+      }
+      return true;
+    },
+    // Turn an idea into a draft post — mints a draft whose title is the idea
+    // text (single-sourced with create()). Returns the new post id. The idea is
+    // left in place (matches the legacy blogStartFromIdea seed behavior).
+    ideaToDraft: async function (text) {
+      var t = String(text == null ? '' : text).trim();
+      return this.create({ title: t, status: 'draft' });
     }
   };
 
