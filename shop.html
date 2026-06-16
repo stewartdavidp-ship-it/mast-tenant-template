@@ -778,6 +778,11 @@ window.TENANT_READY.then(function() {
       }
       allShopItems = Object.values(data)
         .filter(function(p) {
+          // Only active (or status-less legacy) products are publicly visible —
+          // never draft/archived/unpublished. Wave-1 QA found a status:"draft"
+          // product showing in a configured category because the category
+          // branch below skipped this check (only the no-category branch had it).
+          if (p.status && p.status !== 'active') return false;
           // Keep discontinued products (portfolio visibility), hide non-discontinued sold items
           if (p.availability === 'sold' && p.availability !== 'discontinued') return false;
           // When no categories configured, show all active products

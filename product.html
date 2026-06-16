@@ -1575,16 +1575,25 @@
                       variantOnSale = variant && variant.id && si.variants.indexOf(variant.id) !== -1;
                     }
                   }
-                  if (variantOnSale) {
+                  if (!(typeof vPrice === 'number' && vPrice > 0)) {
+                    // Variant carries no valid price — show an honest message and
+                    // keep Add to Cart disabled (resolved price null) instead of
+                    // rendering "$0.00" (Wave-1 QA: Glass Pumpkin variants resolved
+                    // to $0.00). Underlying data fix: give every variant a price.
+                    priceEl.textContent = 'Price unavailable';
+                    priceEl.classList.add('no-price');
+                    window._resolvedVariantPrice = null;
+                  } else if (variantOnSale) {
                     var vSalePrice = window._calcSalePrice(vPrice);
                     priceEl.innerHTML = '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(vPrice) + '</span> ' +
                       '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(vSalePrice) + '</span>';
                     window._resolvedVariantPrice = vSalePrice;
+                    priceEl.classList.remove('no-price');
                   } else {
                     priceEl.innerHTML = formatPriceCents(vPrice);
                     window._resolvedVariantPrice = vPrice;
+                    priceEl.classList.remove('no-price');
                   }
-                  priceEl.classList.remove('no-price');
                 } else {
                   priceEl.textContent = 'Combination not available';
                   priceEl.classList.add('no-price');
@@ -1840,7 +1849,11 @@
       btn.disabled = true;
       btn.style.opacity = '0.5';
       btn.style.cursor = 'not-allowed';
+      // Give a visible reason when the blocker is a missing/zero price (Wave-1
+      // QA), not just a greyed-out "Add to Cart".
       if (stockBlocked) btn.textContent = btnText;
+      else if (allSelected && !hasPrice) btn.textContent = 'Price Unavailable';
+      else btn.textContent = 'Add to Cart';
     }
 
     // Ships-by note below the button (created once, refreshed on every run so it
@@ -2514,6 +2527,7 @@
     // signed in, show a sign-in CTA instead of the write-a-review button.
     var anonAllowed = !!(window._reviewsPolicy && window._reviewsPolicy.anonymousAllowed);
     var signedIn = !!(firebase.auth && firebase.auth().currentUser);
+    window._reviewLastSignedIn = signedIn;
     if (!anonAllowed && !signedIn) {
       html += '<div style="padding:14px 16px;border:1px dashed var(--cream-dark,#d6cfc0);border-radius:8px;background:rgba(0,0,0,0.02);margin-top:8px;">';
       html += '<div style="font-size:0.9rem;margin-bottom:8px;">Sign in to write a review. Reviews from confirmed buyers get a <strong>Verified buyer</strong> badge.</div>';
@@ -2537,6 +2551,20 @@
         reviewCount: reviews.length,
         bestRating: 5,
         worstRating: 1
+      });
+    }
+
+    // Firebase Auth restores the session asynchronously after page load, so the
+    // sign-in gate above can render before currentUser is known — leaving a
+    // signed-in visitor stuck on "Sign in to write a review" (Wave-1 QA).
+    // Re-render once when the resolved auth state differs from what we drew.
+    if (!window._reviewAuthWatch && firebase.auth) {
+      window._reviewAuthWatch = true;
+      firebase.auth().onAuthStateChanged(function() {
+        var nowSignedIn = !!(firebase.auth().currentUser);
+        if (nowSignedIn !== window._reviewLastSignedIn) {
+          renderReviewsSection(reviews, pid, productName);
+        }
       });
     }
   }
