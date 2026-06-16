@@ -189,6 +189,7 @@ var MastDB = (function() {
     'admin_mappingFlowState': true,
     'admin_termsConfig': true,
     'admin_walletConfig': true,
+    'admin_githubToken': true,
     'platform_driftSeverityDefaults': true
   };
   var SINGLETON_DOC_ID = '_data';
