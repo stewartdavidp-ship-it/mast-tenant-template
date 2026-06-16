@@ -515,7 +515,17 @@
                 if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
                 return;
               }
-              var fs = (window.firebase && window.firebase.firestore) ? window.firebase.firestore() : null;
+              // Only call firebase.firestore() once a default app is actually
+              // initialized — the firestore() namespace can exist on window
+              // before initializeApp() has run, and calling it then throws
+              // "No Firebase App '[DEFAULT]'" (Wave-1 QA console error). Guard on
+              // firebase.apps.length and wrap defensively; fall back to manifest.
+              var fs = null;
+              try {
+                if (window.firebase && window.firebase.firestore && window.firebase.apps && window.firebase.apps.length) {
+                  fs = window.firebase.firestore();
+                }
+              } catch (e) { fs = null; }
               if (!fs) {
                 if (manifest && manifest.homepageFlow) applyHomepageFlow(manifest);
                 return;

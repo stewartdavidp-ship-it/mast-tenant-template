@@ -2204,7 +2204,10 @@ window.nlSubmitSignup = function() {
   var name = document.getElementById('nlSignupName').value.trim();
   var email = document.getElementById('nlSignupEmail').value.trim();
   if (!name) { alert('Please enter your name.'); return; }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Please enter a valid email address.'); return; }
+  // Require dot-separated domain labels with no empty label — the looser
+  // `@[^\s@]+\.[^\s@]+` accepted malformed addresses like "bill@billtest..com"
+  // (Wave-1 QA). Labels exclude '.' so consecutive/leading/trailing dots fail.
+  if (!email || !/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email)) { alert('Please enter a valid email address.'); return; }
 
   var btn = document.querySelector('#nlSignupForm button');
   btn.disabled = true;
@@ -2250,7 +2253,10 @@ window.submitContactForm = function() {
   var message = document.getElementById('contactFormMessage').value.trim();
 
   if (!first) { alert('Please enter your first name.'); return; }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Please enter a valid email address.'); return; }
+  // Require dot-separated domain labels with no empty label — the looser
+  // `@[^\s@]+\.[^\s@]+` accepted malformed addresses like "bill@billtest..com"
+  // (Wave-1 QA). Labels exclude '.' so consecutive/leading/trailing dots fail.
+  if (!email || !/^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(email)) { alert('Please enter a valid email address.'); return; }
   if (!message) { alert('Please enter a message.'); return; }
 
   var btn = document.querySelector('.form-submit');

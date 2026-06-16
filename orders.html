@@ -1126,11 +1126,35 @@ window.TENANT_READY.then(function() {
     return '$' + (amount || 0).toFixed(2);
   }
 
+  // Resolve an order's grand total in DOLLARS for display. Canonical orders
+  // carry totalCents (cents); legacy storefront orders carry `total` in dollars;
+  // wallet-deducted orders carry the post-deduction chargeAmount (dollars).
+  // Prefer the cents field so a cents value is never rendered as dollars —
+  // Wave-1 QA found seeded orders (e.g. SGTE-0203, totalCents 27500) showing
+  // "$27500.00" because the grand-total line read `order.total` (cents here)
+  // as dollars while the line items, read from priceCents, were correct.
+  function orderTotalDollars(order) {
+    if (!order) return null;
+    if (order.walletDeductions && order.walletDeductions.totalDeductionCents > 0 && order.chargeAmount != null) return order.chargeAmount;
+    if (typeof order.totalCents === 'number') return order.totalCents / 100;
+    return order.total != null ? order.total : null;
+  }
+
   function statusLabel(status) {
     var labels = {
       'pending_payment': 'Pending Payment',
       'placed': 'Confirmed',
+      'confirmed': 'Confirmed',
       'processing': 'Processing',
+      // Internal pack-lifecycle sub-statuses → friendly customer-facing copy
+      // (Wave-1 QA: customers saw the raw enum "PACK").
+      'pack': 'Preparing',
+      'packing': 'Preparing',
+      'packed': 'Packed',
+      'ready': 'Ready to Ship',
+      'fulfilled': 'Fulfilled',
+      'on_hold': 'On Hold',
+      'shipped-back': 'Returning',
       'shipped': 'Shipped',
       'delivered': 'Delivered',
       'cancelled': 'Cancelled',
@@ -1315,7 +1339,7 @@ window.TENANT_READY.then(function() {
         html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>Store Credit</span><span>-' + formatPrice(crTotal / 100) + '</span></div>';
       }
     }
-    var displayTotal = (order.walletDeductions && order.walletDeductions.totalDeductionCents > 0 && order.chargeAmount != null) ? order.chargeAmount : order.total;
+    var displayTotal = orderTotalDollars(order);
     if (displayTotal != null) html += '<div class="order-total-row grand-total"><span>Total</span><span>' + formatPrice(displayTotal) + '</span></div>';
     html += '</div></div>';
 
@@ -1395,7 +1419,8 @@ window.TENANT_READY.then(function() {
     var orderNum = order.orderNumber || order.id || '—';
     var status = order.status || 'unknown';
     var date = formatDate(order.placedAt || order.pendingPaymentAt || order.createdAt);
-    var total = (order.walletDeductions && order.walletDeductions.totalDeductionCents > 0 && order.chargeAmount != null) ? formatPrice(order.chargeAmount) : (order.total != null ? formatPrice(order.total) : '');
+    var totalD = orderTotalDollars(order);
+    var total = totalD != null ? formatPrice(totalD) : '';
     var wsBadge = order._isWholesale ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:color-mix(in srgb, var(--accent) 15%, transparent);color:var(--accent);border-radius:3px;margin-left:6px;vertical-align:middle;letter-spacing:0.06em;">WHOLESALE</span>' : '';
     var payBadge = order.paymentMethod === 'check' ? '<span style="display:inline-block;font-size:0.6rem;padding:2px 6px;background:color-mix(in srgb, var(--primary) 15%, transparent);color:var(--primary);border-radius:3px;margin-left:4px;vertical-align:middle;">CHECK</span>' : '';
 

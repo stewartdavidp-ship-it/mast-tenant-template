@@ -436,12 +436,17 @@
       return days + time;
     }
     if (cls.schedule.type === 'once') {
-      var date = cls.schedule.date || cls.schedule.startDate || '';
+      // Prefer the next upcoming session's date/time over the class's nominal
+      // schedule date, which goes stale (and shows in the past) once the
+      // original session has passed — Wave-1 QA saw single classes carrying a
+      // past date on the card even though a future session exists.
+      var date = (cls._nextSession && cls._nextSession.date) || cls.schedule.date || cls.schedule.startDate || '';
+      var time = (cls._nextSession && cls._nextSession.startTime) || cls.schedule.startTime;
       if (date) {
         var parts = date.split('-');
         date = parts[1] + '/' + parts[2] + '/' + parts[0];
       }
-      return date + (cls.schedule.startTime ? ' at ' + formatTime(cls.schedule.startTime) : '');
+      return date + (time ? ' at ' + formatTime(time) : '');
     }
     return '';
   }
