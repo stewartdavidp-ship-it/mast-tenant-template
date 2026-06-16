@@ -131,4 +131,5 @@ jobs:
           node test/business-entity-feature-mode.test.js &&
           node test/wizard-launch-never-blocks.test.js &&
           node test/brand-sync-business-name.test.js &&
+          node test/consignment-commission-rate.test.js &&
           node test/lint-ratchet.test.js
