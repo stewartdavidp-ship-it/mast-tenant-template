@@ -20,8 +20,16 @@
 (function(){
   var P=window.MAST_POD_PLATFORM_PROJECT||'mast-platform-prod',B='https://firestore.googleapis.com/v1/projects/'+P+'/databases/(default)/documents';
   var h=location.hostname,C=5*60*1000;
+  // Builder live-preview mode (?mastpreview=1): the admin "Your website" builder
+  // iframes the real storefront so edits show instantly. Skip the localStorage
+  // tenant/config caches (so an edit reflects within ~1s, not 1–5 min) and force
+  // light mode (so applyTheme doesn't skip color overrides — see storefront-theme.js).
+  // Guarded so normal visitors are unaffected: only the query param flips it on.
+  var PV=false;try{PV=/[?&]mastpreview=1\b/.test(location.search);}catch(e){}
+  window.__mastPreview=PV;
   if(h==='localhost'||h==='127.0.0.1')return;
-  try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}
+  // In preview mode, do NOT read the localStorage tenant cache — fetch fresh below.
+  if(!PV){try{var r=localStorage.getItem('mast_tenant_'+h);if(r){var c=JSON.parse(r);if(Date.now()-c.timestamp<C){window.__earlyTenant=Promise.resolve(c.data);return;}}}catch(e){}}
   var ek=h.replace(/\./g,'_');
   function uv(v){if(v==null)return null;if('stringValue' in v)return v.stringValue;if('booleanValue' in v)return v.booleanValue;if('integerValue' in v)return Number(v.integerValue);if('doubleValue' in v)return v.doubleValue;if('nullValue' in v)return null;if('timestampValue' in v)return v.timestampValue;if('mapValue' in v){var o={};var f=v.mapValue.fields||{};for(var k in f)o[k]=uv(f[k]);return o;}if('arrayValue' in v)return(v.arrayValue.values||[]).map(uv);return null;}
   function uf(fields){var o={};for(var k in fields)o[k]=uv(fields[k]);return o;}
@@ -1323,7 +1331,7 @@
 
 </style>
 <script>
-(function(){var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();
+(function(){if(window.__mastPreview){document.documentElement.classList.add('light');return;}var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();
 </script>
 </head>
 <body>

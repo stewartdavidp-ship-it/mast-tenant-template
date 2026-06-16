@@ -31,6 +31,21 @@ var PLATFORM_PROJECT_ID = (typeof window !== 'undefined' && window.MAST_POD_PLAT
 var PLATFORM_FIRESTORE_BASE = 'https://firestore.googleapis.com/v1/projects/' + PLATFORM_PROJECT_ID + '/databases/(default)/documents';
 var CACHE_TTL_MS = 60 * 1000; // 1 minute
 
+// Builder live-preview mode (?mastpreview=1): the admin "Your website" builder
+// iframes the real storefront so edits show instantly. When on, skip the
+// localStorage tenant/config caches so a fresh edit reflects within ~1s instead
+// of waiting out the 60s TTL. Force-light is handled in index.html (so applyTheme
+// doesn't skip color overrides). The flag is set by the inline <head> block; this
+// recompute is a defensive fallback for pages without that block. Guarded so
+// normal visitors are unaffected — only the query param flips it on.
+var MAST_PREVIEW = (typeof window !== 'undefined' && window.__mastPreview) || false;
+try {
+  if (typeof window !== 'undefined' && !MAST_PREVIEW) {
+    MAST_PREVIEW = /[?&]mastpreview=1\b/.test(window.location.search || '');
+    window.__mastPreview = MAST_PREVIEW;
+  }
+} catch (e) { /* non-fatal */ }
+
 // Unwrap Firestore REST field value into a plain JS value.
 function unwrapFirestoreValue(v) {
   if (v == null) return null;
@@ -73,6 +88,7 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
   }
 
   function getCachedTenant(hostname) {
+    if (MAST_PREVIEW) return null; // preview: always read fresh config
     try {
       var raw = localStorage.getItem('mast_tenant_' + hostname);
       if (!raw) return null;
@@ -88,6 +104,7 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
   }
 
   function setCachedTenant(hostname, data) {
+    if (MAST_PREVIEW) return; // preview: don't pollute the visitor's cache
     try {
       localStorage.setItem('mast_tenant_' + hostname, JSON.stringify({
         timestamp: Date.now(),
@@ -317,17 +334,20 @@ window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
   var hostname = window.location.hostname;
   var cacheKey = 'mast_storefront_' + hostname;
 
-  // Check cache
-  try {
-    var raw = localStorage.getItem(cacheKey);
-    if (raw) {
-      var cached = JSON.parse(raw);
-      if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
-        return cached.data;
+  // Check cache (skipped in builder preview mode — always read fresh config so
+  // an admin edit reflects in the iframe within ~1s instead of waiting the TTL).
+  if (!MAST_PREVIEW) {
+    try {
+      var raw = localStorage.getItem(cacheKey);
+      if (raw) {
+        var cached = JSON.parse(raw);
+        if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+          return cached.data;
+        }
+        localStorage.removeItem(cacheKey);
       }
-      localStorage.removeItem(cacheKey);
-    }
-  } catch (e) { /* ignore */ }
+    } catch (e) { /* ignore */ }
+  }
 
   // Firestore REST base for tenant data. Tenant data lives under
   // tenants/{tenantId}/{collection}/{docId}.
@@ -429,13 +449,15 @@ window.STOREFRONT_DATA = window.TENANT_READY.then(function() {
       }
     } catch (e) { /* non-fatal */ }
 
-    // Cache the result
-    try {
-      localStorage.setItem(cacheKey, JSON.stringify({
-        timestamp: Date.now(),
-        data: data
-      }));
-    } catch (e) { /* localStorage full — non-fatal */ }
+    // Cache the result (skipped in preview mode — don't pollute the visitor's cache)
+    if (!MAST_PREVIEW) {
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({
+          timestamp: Date.now(),
+          data: data
+        }));
+      } catch (e) { /* localStorage full — non-fatal */ }
+    }
 
     return data;
   });
