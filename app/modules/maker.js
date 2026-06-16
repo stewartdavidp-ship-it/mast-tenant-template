@@ -353,6 +353,10 @@
       spotMetal: data.spotMetal || null,
       purity: data.purity != null ? Number(data.purity) : null,
       markupOverSpot: data.markupOverSpot != null ? Number(data.markupOverSpot) : null,
+      // Purchase-UOM conversion (buy-by-the-case, stock-by-the-unit). Carried on
+      // create so the V2 twin's UOM-conversion edit isn't dropped on a new record.
+      purchaseUOM: data.purchaseUOM || null,
+      conversionFactor: (data.conversionFactor != null && Number(data.conversionFactor) > 0) ? Number(data.conversionFactor) : null,
       // Phase 2B: dual-basis costing. On manual create, all three converge.
       bookCost: data.unitCost || 0,
       replacementCost: data.unitCost || 0,
@@ -2382,6 +2386,22 @@
   }
 
   /**
+   * Landed-cost proration math — single source for both the legacy material
+   * modal and the V2 twin (via MakerMaterialsBridge.prorateLandedCost). Allocate
+   * an extra landed charge (freight/customs/fees) across the qty it covers and
+   * add the per-unit share onto the current unit cost. Throws on bad input so
+   * each caller can surface its own toast.
+   */
+  function prorateLandedCost(currentCost, extra, qty) {
+    var ex = Number(extra), q = Number(qty);
+    if (!(ex > 0)) throw new Error('Enter a positive extra charge');
+    if (!(q > 0)) throw new Error('Enter a positive qty');
+    var addPerUnit = ex / q;
+    var next = Math.round(((Number(currentCost) || 0) + addPerUnit) * 10000) / 10000;
+    return { addPerUnit: addPerUnit, unitCost: next };
+  }
+
+  /**
    * Landed-cost helper — adds (extra / qty) to current unitCost in the open form.
    * Does not save until user clicks Save Material; once saved, normal cost-history
    * + costsDirty propagation kicks in.
@@ -2391,23 +2411,17 @@
     var qtyEl = document.getElementById('matLandedQty');
     var costEl = document.getElementById('matCost');
     if (!extraEl || !qtyEl || !costEl) return;
-    var extra = parseFloat(extraEl.value);
-    var qty = parseFloat(qtyEl.value);
-    if (isNaN(extra) || extra <= 0) {
-      MastAdmin.showToast('Enter a positive extra charge', true);
+    var res;
+    try {
+      res = prorateLandedCost(parseFloat(costEl.value) || 0, extraEl.value, qtyEl.value);
+    } catch (e) {
+      MastAdmin.showToast(e.message, true);
       return;
     }
-    if (isNaN(qty) || qty <= 0) {
-      MastAdmin.showToast('Enter a positive qty', true);
-      return;
-    }
-    var current = parseFloat(costEl.value) || 0;
-    var addPerUnit = extra / qty;
-    var next = Math.round((current + addPerUnit) * 10000) / 10000;
-    costEl.value = next;
+    costEl.value = res.unitCost;
     extraEl.value = '';
     qtyEl.value = '';
-    MastAdmin.showToast('Added $' + addPerUnit.toFixed(4) + '/unit — review and Save to commit');
+    MastAdmin.showToast('Added $' + res.addPerUnit.toFixed(4) + '/unit — review and Save to commit');
   }
 
   async function saveMaterialForm() {
@@ -6772,6 +6786,44 @@
     return record;
   }
 
+  // Single-sourced write of ONE mapped material import record. Shared by the
+  // legacy 3-step wizard (runImport) and the V2 twin (MakerMaterialsBridge.
+  // importMaterialRecords) so the CSV import persists identically from either
+  // surface. Returns the new material id.
+  async function persistMaterialImportRecord(record, now) {
+    var matId = MastDB.materials.newKey();
+    await MastDB.materials.set(matId, {
+      materialId: matId,
+      name: record.name,
+      category: record.category || 'Imported',
+      unitOfMeasure: record.unitOfMeasure || 'each',
+      unitCost: record.unitCost || 0,
+      onHandQty: record.onHandQty || 0,
+      reorderThreshold: record.reorderThreshold || 0,
+      notes: record.notes || '',
+      status: 'draft',
+      importedFrom: 'csv',
+      createdAt: now,
+      updatedAt: now
+    });
+    return matId;
+  }
+
+  // Single-sourced import-log entry. Shared by legacy runImport + the V2 bridge.
+  async function logMaterialsImport(filename, rowsAttempted, imported, skipped, now) {
+    var logId = MastDB.importLog.newKey();
+    await MastDB.importLog.set(logId, {
+      importId: logId,
+      type: 'materials',
+      filename: filename || '',
+      rowsAttempted: rowsAttempted,
+      rowsImported: imported,
+      rowsSkipped: skipped,
+      importedAt: now,
+      importedBy: auth.currentUser ? auth.currentUser.uid : 'unknown'
+    });
+  }
+
   async function runImport() {
     var fields = importState.type === 'materials' ? MATERIALS_FIELDS : PRODUCTS_FIELDS;
     var rows = importState.parsedData || [];
@@ -6791,21 +6843,7 @@
 
       try {
         if (importState.type === 'materials') {
-          var matId = MastDB.materials.newKey();
-          await MastDB.materials.set(matId, {
-            materialId: matId,
-            name: record.name,
-            category: record.category || 'Imported',
-            unitOfMeasure: record.unitOfMeasure || 'each',
-            unitCost: record.unitCost || 0,
-            onHandQty: record.onHandQty || 0,
-            reorderThreshold: record.reorderThreshold || 0,
-            notes: record.notes || '',
-            status: 'draft',
-            importedFrom: 'csv',
-            createdAt: now,
-            updatedAt: now
-          });
+          await persistMaterialImportRecord(record, now);
         } else {
           var pid = record.pid ? sanitizeString(record.pid) : ('p' + Date.now().toString(36) + i);
           var priceCents = record.price ? Math.round(record.price * 100) : 0;
@@ -6968,7 +7006,49 @@
       }
       return updateMaterial(id, updates);
     },
-    archive: function (id) { return archiveMaterial(id); }
+    archive: function (id) { return archiveMaterial(id); },
+
+    // ── Cost-tooling delegates for the V2 twin (close the V1→V2 parity gap) ──
+    // Landed-cost proration: allocate a freight/customs/fees charge across the qty
+    // it covers, returning the new per-unit cost. Pure math, single-sourced with
+    // the legacy material-modal helper. Throws on bad input.
+    prorateLandedCost: function (currentCost, extra, qty) { return prorateLandedCost(currentCost, extra, qty); },
+
+    // CSV import: the column schema (for auto-mapping + required-field checks),
+    // the per-row mapper (reuses legacy sanitize + number coercion + defaults),
+    // and the writer (status:'draft', importedFrom:'csv' + an importLog entry).
+    // The V2 twin parses the file (PapaParse/SheetJS, already loaded globally),
+    // drives mapping natively, then hands mapped records here so the write +
+    // validation stay single-sourced.
+    importFields: function () { return MATERIALS_FIELDS; },
+    autoDetectImportMappings: function (headers) { return autoDetectMappings(headers, MATERIALS_FIELDS); },
+    mapImportRow: function (row, mappings, defaults) {
+      // Reuse legacy mapRow by lending it an importState shim (mapRow reads
+      // importState.mappings + importState.defaultUom/defaultCategory).
+      var prev = importState;
+      importState = {
+        type: 'materials',
+        mappings: mappings || {},
+        defaultUom: (defaults && defaults.defaultUom) || '',
+        defaultCategory: (defaults && defaults.defaultCategory) || ''
+      };
+      try { return mapRow(row, MATERIALS_FIELDS); }
+      finally { importState = prev; }
+    },
+    importMaterialRecords: async function (records, filename) {
+      var now = new Date().toISOString();
+      var imported = 0, skipped = 0;
+      var list = records || [];
+      for (var i = 0; i < list.length; i++) {
+        var rec = list[i];
+        if (!rec || rec._valid === false) { skipped++; continue; }
+        try { await persistMaterialImportRecord(rec, now); imported++; }
+        catch (err) { console.error('[materials import] row ' + i + ' failed', err); skipped++; }
+      }
+      await logMaterialsImport(filename, list.length, imported, skipped, now);
+      MastAdmin.writeAudit('import', 'material', 'csv:' + imported);
+      return { imported: imported, skipped: skipped };
+    }
   };
 
   // ── Product bridge (P4) ──────────────────────────────────────────────
