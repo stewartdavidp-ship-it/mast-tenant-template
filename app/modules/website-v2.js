@@ -70,7 +70,11 @@
   // designScale / navStyle / responsivePriority), brand = config/brand (name /
   // tagline), logo = config/brand/logo (primary url).
   var V2 = { wp: null, meta: null, status: 'draft', theme: null, brand: null, logo: null,
-    nav: null, sectionOrder: null, expanded: {}, importHits: null, loaded: false };
+    nav: null, sectionOrder: null, expanded: {}, importHits: null, loaded: false,
+    // Card 3 (Your shop): the live storefront categories array (each
+    // { id, label, wholesaleGroup? }) + a per-slug product count (for the
+    // delete-safety warning + product-derived "stray category" suggestions).
+    cats: null, catEditId: null, catMore: {}, productCatCounts: null, suggestions: null };
 
   // Card 2 · which section ids expose a layout VARIANT picker (closing
   // homepage-v2's variant hatch). The picker options + manifest defaults come
@@ -807,6 +811,174 @@
     return Promise.reject(new Error('Site editor still loading — try again'));
   }
 
+  // ── Card 3 · Your shop ──────────────────────────────────────────────
+  // Storefront categories CRUD + the single retained "Advanced (classic)" import
+  // door. Categories (public/config/categories — a plain ARRAY of
+  // { id, label, wholesaleGroup? }) drive the shop filter pills, gallery sections,
+  // and wholesale grouping. Every write is SINGLE-SOURCED through
+  // WebsiteBridge.saveCategories(arr) — which sets the WHOLE array (last-write-wins),
+  // refreshes the global CATEGORIES (loadTenantCategories), and stamps the draft
+  // signal (markUnpublished). The twin does read-modify-write in ONE place
+  // (catsWorking → mutate → save) so there's never a raw MastDB.set here.
+  //
+  // The whole async catalog-import subsystem stays behind the ONE classic link
+  // (Advanced → the legacy Import tab); it is NOT rebuilt natively.
+
+  // The working categories array the twin mutates — always a fresh copy of the
+  // loaded state so a failed write doesn't half-apply (we re-read on reload).
+  function catsWorking() { return (V2.cats || []).map(function (c) { return Object.assign({}, c); }); }
+
+  // Commit the whole working array through the single-sourced bridge writer.
+  // Optimistically updates V2.cats so the list re-renders instantly, flips the
+  // Saved pip, and re-tallies suggestions against the new list. reload re-reads
+  // the canonical state (cats + product counts) after the write settles.
+  function commitCats(arr) {
+    V2.cats = arr.map(function (c) { return Object.assign({}, c); });   // optimistic
+    if (V2.productCatCounts) V2.suggestions = computeSuggestions(V2.productCatCounts);
+    mountShop();
+    return withSave(WebsiteBridgeCall('saveCategories', arr), { reload: false }).then(function (res) {
+      if (res === false) return false;       // withSave already toasted + reset pip
+      reloadSoon();                          // re-read canonical cats + recount products
+      return res;
+    });
+  }
+  // Derive a unique slug for a label via the bridge (mirrors the legacy
+  // slugify + numeric de-dupe) so v2-created ids match legacy ones. Falls back to
+  // a local slugify if the bridge isn't loaded yet.
+  function slugFor(label, list, excludeIdx) {
+    if (window.WebsiteBridge && typeof window.WebsiteBridge.slugForCategory === 'function') {
+      return window.WebsiteBridge.slugForCategory(label, list, excludeIdx);
+    }
+    var base = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!base) return '';
+    var slug = base, n = 2;
+    while ((list || []).some(function (c, i) { return i !== excludeIdx && c && c.id === slug; })) { slug = base + '-' + n; n++; }
+    return slug;
+  }
+
+  function titleSlug(slug) { return titleCase(String(slug || '')); }
+
+  // One category row: inline-editable label, slug chip, optional wholesaleGroup
+  // under a row-level "More ▾", reorder ▲▼, delete. Edit mode swaps the label for
+  // a text input committed on the row's Save.
+  function shopCatRow(cat, idx, total) {
+    var ed = canEdit();
+    var editing = V2.catEditId === cat.id;
+    var more = !!V2.catMore[cat.id];
+    var cid = esc(cat.id);
+    var count = (V2.productCatCounts && V2.productCatCounts[String(cat.id).toLowerCase()]) || 0;
+    var countPill = count > 0
+      ? '<span class="wv2-cat-count" title="' + count + ' product' + (count === 1 ? '' : 's') + ' in this category">' + count + '</span>'
+      : '';
+    // reorder controls (disabled at the ends)
+    var upDis = idx === 0 ? ' disabled' : '';
+    var dnDis = idx === total - 1 ? ' disabled' : '';
+    var reorder = ed
+      ? '<span class="wv2-cat-move">' +
+          '<button type="button" class="wv2-mv"' + upDis + ' title="Move up" onclick="WebsiteV2.moveCat(\'' + cid + '\',-1)">▲</button>' +
+          '<button type="button" class="wv2-mv"' + dnDis + ' title="Move down" onclick="WebsiteV2.moveCat(\'' + cid + '\',1)">▼</button>' +
+        '</span>'
+      : '';
+    var main;
+    if (editing && ed) {
+      main = '<div class="wv2-cat-edit">' +
+        '<input class="form-input" id="wv2CatLabel-' + cid + '" type="text" value="' + esc(cat.label) + '" style="width:100%;">' +
+        '<div class="wv2-cat-edit-actions">' +
+          '<button type="button" class="btn btn-primary btn-small" onclick="WebsiteV2.saveCatLabel(\'' + cid + '\')">Save</button>' +
+          '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.cancelCatEdit()">Cancel</button>' +
+        '</div>' +
+      '</div>';
+    } else {
+      main = '<div class="wv2-cat-main">' +
+        '<span class="wv2-cat-label">' + esc(cat.label) + '</span>' + countPill +
+        '<span class="wv2-cat-slug">' + cid + '</span>' +
+      '</div>';
+    }
+    var actions = '';
+    if (ed && !editing) {
+      actions = '<div class="wv2-cat-actions">' + reorder +
+        '<button type="button" class="wv2-cat-btn" title="Rename" onclick="WebsiteV2.editCat(\'' + cid + '\')">Rename</button>' +
+        '<button type="button" class="wv2-cat-btn wv2-cat-more" title="More options" onclick="WebsiteV2.toggleCatMore(\'' + cid + '\')">More ' + (more ? '▴' : '▾') + '</button>' +
+        '<button type="button" class="wv2-cat-btn danger" title="Delete" onclick="WebsiteV2.deleteCat(\'' + cid + '\')">Delete</button>' +
+      '</div>';
+    }
+    // Row-level "More" — the de-emphasized wholesaleGroup parity field.
+    var moreBody = (more && ed && !editing)
+      ? '<div class="wv2-cat-morebody">' +
+          '<label class="form-label">Wholesale group <span class="mu-sub">(optional — groups categories for wholesale)</span></label>' +
+          '<input class="form-input" id="wv2CatWholesale-' + cid + '" type="text" value="' + esc(cat.wholesaleGroup || '') + '" placeholder="e.g. Decorative" style="width:100%;max-width:280px;">' +
+        '</div>'
+      : '';
+    return '<div class="wv2-cat" data-cat="' + cid + '">' +
+        '<div class="wv2-cat-head">' + main + actions + '</div>' + moreBody +
+      '</div>';
+  }
+
+  // The product-derived suggestion chip-row: slugs found on products but missing
+  // from the list. One tap appends the category (label = title-cased slug).
+  function shopSuggestionsHtml() {
+    var sug = V2.suggestions;
+    if (!Array.isArray(sug) || !sug.length || !canEdit()) return '';
+    var chips = sug.slice(0, 8).map(function (s) {
+      return '<button type="button" class="wv2-sug-chip" onclick="WebsiteV2.addSuggestedCat(\'' + esc(s.slug) + '\')" title="' + s.count + ' product' + (s.count === 1 ? '' : 's') + ' use this category">' +
+        '+ ' + esc(titleSlug(s.slug)) + ' <span class="wv2-sug-n">' + s.count + '</span></button>';
+    }).join('');
+    return '<div class="wv2-suggest">' +
+      '<div class="wv2-sub-h">Found in your products</div>' +
+      '<div class="mu-sub" style="margin-bottom:8px;">These categories are on your products but not in your shop yet. Tap to add.</div>' +
+      '<div class="wv2-sug-row">' + chips + '</div>' +
+    '</div>';
+  }
+
+  // The add-new-category row (label only — the slug is auto-derived on add).
+  function shopAddHtml() {
+    if (!canEdit()) return '';
+    return '<div class="wv2-cat-add">' +
+      '<input class="form-input" id="wv2CatNew" type="text" placeholder="New category name (e.g. Drinkware)" style="flex:1;min-width:180px;" onkeydown="if(event.key===\'Enter\'){WebsiteV2.addCat();}">' +
+      '<button type="button" class="btn btn-primary btn-small" onclick="WebsiteV2.addCat()">Add category</button>' +
+    '</div>' +
+    '<div id="wv2CatAddErr" class="mu-sub" style="color:var(--danger);margin-top:4px;display:none;"></div>';
+  }
+
+  // The one retained classic hatch in the whole builder: the async catalog-import
+  // subsystem stays behind THIS single "Advanced (classic)" door → the legacy
+  // Import tab (deep-linked via navigateToClassic('website', { tab:'import' })).
+  function shopImportDoorHtml() {
+    if (!canEdit()) return '';
+    return '<div class="wv2-importdoor">' +
+      '<div class="wv2-importdoor-main">' +
+        '<div class="wv2-sub-h">Bring in my whole catalog</div>' +
+        '<div class="mu-sub">Have an existing store on Shopify, Etsy, Square, or your own site? Import your full product catalog in the advanced tools.</div>' +
+      '</div>' +
+      '<button type="button" class="btn btn-secondary" onclick="WebsiteV2.openImport()">Advanced (classic) →</button>' +
+    '</div>';
+  }
+
+  function shopHtml() {
+    if (!canEdit()) {
+      return '<div class="mu-sub">You do not have permission to edit your shop categories.</div>';
+    }
+    var cats = V2.cats || [];
+    var listHtml = cats.length
+      ? '<div class="wv2-catlist">' + cats.map(function (c, i) { return shopCatRow(c, i, cats.length); }).join('') + '</div>'
+      : '<div class="mu-sub" style="padding:6px 0;">No categories yet. Add your first product category below — it becomes a filter pill on your shop.</div>';
+    return '<div class="wv2-sub"><div class="wv2-sub-h">Shop categories</div>' +
+        '<div class="mu-sub" style="margin-bottom:8px;">Categories become the filter pills customers tap on your shop page. Drag order is display order.</div>' +
+        listHtml + shopAddHtml() +
+      '</div>' +
+      shopSuggestionsHtml() +
+      '<div class="wv2-sub">' + shopImportDoorHtml() + '</div>';
+  }
+
+  // Mount Card 3 into its scaffold body (wv2ShopBody) — replaces the PR2
+  // "Coming in this builder" placeholder. Re-called by reloadSoon()/optimistic
+  // updates to refresh state.
+  function mountShop() {
+    var host = document.getElementById('wv2ShopBody');
+    if (!host) return;
+    host.innerHTML = shopHtml();
+  }
+
   function ensureStyles() {
     if (document.getElementById('wv2-styles')) return;
     var css =
@@ -884,7 +1056,35 @@
       '.wv2-impchip{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:color-mix(in srgb,var(--text-primary) 3%,transparent);}' +
       '.wv2-impchip-main{min-width:0;display:flex;flex-direction:column;gap:1px;}' +
       '.wv2-impchip-label{font-size:0.72rem;font-weight:600;color:var(--text-secondary,var(--warm-gray));}' +
-      '.wv2-impchip-val{font-size:0.85rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;}';
+      '.wv2-impchip-val{font-size:0.85rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;}' +
+      // ── Card 3 · Your shop (categories) ──
+      '.wv2-catlist{display:flex;flex-direction:column;}' +
+      '.wv2-cat{border-top:1px solid var(--border);}.wv2-cat:first-child{border-top:none;}' +
+      '.wv2-cat-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;flex-wrap:wrap;}' +
+      '.wv2-cat-main{display:flex;align-items:center;gap:9px;min-width:0;flex:1;}' +
+      '.wv2-cat-label{font-size:0.9rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+      '.wv2-cat-slug{font-size:0.72rem;color:var(--text-secondary,var(--warm-gray));font-family:ui-monospace,monospace;opacity:0.8;}' +
+      '.wv2-cat-count{font-size:0.72rem;font-weight:600;color:var(--teal);background:color-mix(in srgb,var(--teal) 14%,transparent);padding:1px 8px;border-radius:999px;flex-shrink:0;}' +
+      '.wv2-cat-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;}' +
+      '.wv2-cat-move{display:inline-flex;gap:2px;}' +
+      '.wv2-cat-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.72rem;padding:3px 10px;}' +
+      '.wv2-cat-btn:hover{color:var(--text-primary);border-color:var(--teal);}' +
+      '.wv2-cat-btn.danger:hover{color:var(--danger);border-color:var(--danger);}' +
+      '.wv2-cat-more{opacity:0.85;}' +
+      '.wv2-cat-edit{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;}' +
+      '.wv2-cat-edit-actions{display:flex;gap:8px;}' +
+      '.wv2-cat-morebody{padding:2px 0 12px;}' +
+      '.wv2-cat-morebody .form-label{display:block;font-size:0.78rem;margin-bottom:4px;}' +
+      '.wv2-cat-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}' +
+      // product-derived suggestion chips
+      '.wv2-suggest{margin-top:18px;border-top:1px solid var(--border);padding-top:16px;}' +
+      '.wv2-sug-row{display:flex;flex-wrap:wrap;gap:8px;}' +
+      '.wv2-sug-chip{display:inline-flex;align-items:center;gap:6px;font-size:0.78rem;font-weight:600;color:var(--teal);background:color-mix(in srgb,var(--teal) 8%,transparent);border:1px solid color-mix(in srgb,var(--teal) 30%,transparent);border-radius:999px;padding:5px 12px;cursor:pointer;}' +
+      '.wv2-sug-chip:hover{background:color-mix(in srgb,var(--teal) 16%,transparent);}' +
+      '.wv2-sug-n{font-size:0.72rem;font-weight:600;opacity:0.85;}' +
+      // the one retained classic import door
+      '.wv2-importdoor{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 14px;border:1px dashed var(--border);border-radius:10px;background:color-mix(in srgb,var(--text-primary) 3%,transparent);}' +
+      '.wv2-importdoor-main{min-width:0;flex:1;}';
     var st = document.createElement('style'); st.id = 'wv2-styles'; st.textContent = css;
     (document.head || document.documentElement).appendChild(st);
   }
@@ -899,11 +1099,12 @@
     tab.innerHTML =
       U.pageHeader({ title: 'Your website', subtitle: 'Everything your visitors see — in one place.' }) +
       header + stack;
-    // Fill Card 1 (Look & feel) + Card 2 (Your words & pictures) into their
-    // mounts now that the scaffold is in the DOM. Cards 3–4 remain PR5/PR6
-    // placeholders.
+    // Fill Card 1 (Look & feel) + Card 2 (Your words & pictures) + Card 3 (Your
+    // shop) into their mounts now that the scaffold is in the DOM. Card 4 remains
+    // the PR6 placeholder.
     mountLookFeel();
     mountWords();
+    mountShop();
   }
 
   // ── public API ─────────────────────────────────────────────────────
@@ -1062,6 +1263,121 @@
       else if (typeof navigateTo === 'function') navigateTo('homepage');
     },
 
+    // ── Card 3 · Your shop ──────────────────────────────────────────────
+    // Add a category from the new-category input. Slug auto-derived (unique);
+    // appends to the working array and commits the whole array via the bridge.
+    addCat: function () {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
+      var input = document.getElementById('wv2CatNew');
+      var errEl = document.getElementById('wv2CatAddErr');
+      var label = (input && input.value || '').trim();
+      function err(msg) { if (errEl) { errEl.textContent = msg; errEl.style.display = 'block'; } }
+      if (errEl) errEl.style.display = 'none';
+      if (!label) { err('Enter a category name first.'); if (input) input.focus(); return; }
+      var arr = catsWorking();
+      var slug = slugFor(label, arr, -1);
+      if (!slug) { err('Could not make a valid ID from that name — try letters and numbers.'); return; }
+      arr.push({ id: slug, label: label });
+      commitCats(arr);
+      if (window.showToast) showToast('Category “' + label + '” added.');
+    },
+    // Append a product-derived suggestion (label = title-cased slug, id = the slug
+    // as-is so existing products stay filed under it). One tap → commit.
+    addSuggestedCat: function (slug) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
+      slug = String(slug || '').toLowerCase();
+      if (!slug) return;
+      var arr = catsWorking();
+      if (arr.some(function (c) { return String(c.id).toLowerCase() === slug; })) return; // already present
+      arr.push({ id: slug, label: titleSlug(slug) });
+      commitCats(arr);
+      if (window.showToast) showToast('Added “' + titleSlug(slug) + '” to your shop.');
+    },
+    // Enter inline rename for a category row.
+    editCat: function (id) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
+      V2.catEditId = id;
+      mountShop();
+      var el = document.getElementById('wv2CatLabel-' + id);
+      if (el) { el.focus(); el.select && el.select(); }
+    },
+    cancelCatEdit: function () { V2.catEditId = null; mountShop(); },
+    // Save a renamed label (slug unchanged — parity with V1: we do NOT remap slugs
+    // this PR so existing products stay filed under the same id).
+    saveCatLabel: function (id) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
+      var el = document.getElementById('wv2CatLabel-' + id);
+      var label = (el && el.value || '').trim();
+      if (!label) { if (window.showToast) showToast('Category name can’t be empty.', true); return; }
+      var arr = catsWorking();
+      var row = arr.filter(function (c) { return c.id === id; })[0];
+      if (!row) return;
+      row.label = label;
+      V2.catEditId = null;
+      commitCats(arr);
+    },
+    // Toggle the row-level "More" disclosure (wholesaleGroup). Editing the field
+    // commits on blur (wired by an inline change handler below).
+    toggleCatMore: function (id) {
+      V2.catMore[id] = !V2.catMore[id];
+      mountShop();
+      if (V2.catMore[id]) {
+        var el = document.getElementById('wv2CatWholesale-' + id);
+        if (el) {
+          el.addEventListener('change', function () {
+            var arr = catsWorking();
+            var row = arr.filter(function (c) { return c.id === id; })[0];
+            if (!row) return;
+            var v = (el.value || '').trim();
+            if (v) row.wholesaleGroup = v; else delete row.wholesaleGroup;
+            commitCats(arr);
+          });
+        }
+      }
+    },
+    // Reorder a category up/down — read-modify-write the whole array (instant).
+    moveCat: function (id, dir) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
+      var arr = catsWorking();
+      var i = -1; arr.forEach(function (c, k) { if (c.id === id) i = k; });
+      var j = i + dir;
+      if (i < 0 || j < 0 || j >= arr.length) return;
+      arr.splice(j, 0, arr.splice(i, 1)[0]);
+      commitCats(arr);
+    },
+    // Delete a category — but first WARN with the product count if any products are
+    // filed under its slug (read-only check). Removes the whole-array entry on
+    // confirm and commits through the bridge.
+    deleteCat: function (id) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
+      var arr = catsWorking();
+      var row = arr.filter(function (c) { return c.id === id; })[0];
+      if (!row) return;
+      var count = (V2.productCatCounts && V2.productCatCounts[String(id).toLowerCase()]) || 0;
+      var doDelete = function () {
+        var next = arr.filter(function (c) { return c.id !== id; });
+        commitCats(next);
+        if (window.showToast) showToast('Category “' + row.label + '” deleted.');
+      };
+      var msg = count > 0
+        ? count + ' product' + (count === 1 ? ' is' : 's are') + ' in “' + row.label + '”. Those products stay, but lose this category. Remove it anyway?'
+        : 'Delete the “' + row.label + '” category? It will be removed from your shop filter pills.';
+      if (typeof window.showConfirmDialog === 'function') {
+        window.showConfirmDialog('Delete category', msg, doDelete, { confirmLabel: 'Delete', cancelLabel: 'Keep' });
+      } else if (typeof window.mastConfirm === 'function') {
+        window.mastConfirm(msg, { title: 'Delete category', confirmLabel: 'Delete', cancelLabel: 'Keep', danger: true })
+          .then(function (ok) { if (ok) doDelete(); });
+      } else { doDelete(); }
+    },
+    // The ONE retained classic hatch in the whole builder: deep-link the legacy
+    // website route to its Import tab (the async catalog-import subsystem is NOT
+    // rebuilt natively — it lives behind this single door). navigateToClassic
+    // bypasses the V2 remap so it lands on the legacy Import surface, not the twin.
+    openImport: function () {
+      if (typeof navigateToClassic === 'function') navigateToClassic('website', { tab: 'import' });
+      else if (typeof navigateTo === 'function') navigateTo('website', { tab: 'import' });
+    },
+
     copyLink: function () {
       var url = liveUrl();
       if (!url) { if (window.showToast) showToast('Live URL unavailable', true); return; }
@@ -1097,7 +1413,11 @@
       // under nav/sections (mirrored on webPresence sections); the persisted
       // homepage section order lives under sectionOrder. Both guarded/cold-safe.
       Promise.resolve(MastDB.get('public/config/nav/sections')).catch(function () { return null; }),
-      Promise.resolve(MastDB.get('public/config/sectionOrder')).catch(function () { return null; })
+      Promise.resolve(MastDB.get('public/config/sectionOrder')).catch(function () { return null; }),
+      // Card 3 (Your shop) read: storefront categories (plain ARRAY at
+      // public/config/categories). Guarded/cold-safe; normalized in getCategories
+      // when the bridge is present, else this raw read is filtered below.
+      Promise.resolve(MastDB.get('public/config/categories')).catch(function () { return null; })
     ]).then(function (r) {
       var wp = r[0];
       V2.wp = wp || {};
@@ -1109,9 +1429,63 @@
       V2.legacyLogoUrl = r[4] || null;
       V2.nav = r[5] || {};                                  // section enabled states
       V2.sectionOrder = Array.isArray(r[6]) ? r[6] : null;  // persisted order (else manifest/list order)
+      // Card 3 (Your shop): categories. Read through WebsiteBridge.getCategories
+      // (the single-sourced read; normalizes RTDB object→array + filters to valid
+      // {id,label}). If the bridge isn't loaded yet, fall back to a guarded direct
+      // read so the card still paints; the bridge warms via ensureHostModules.
+      V2.cats = Array.isArray(r[7]) ? r[7].filter(function (c) { return c && c.id && c.label; }) : [];
       V2.loaded = true;
       render();
+      // Products power the delete-safety count + stray-category suggestions; read
+      // them cold-safe AFTER the first paint (never blocks the card) and re-mount
+      // Card 3 once counts land.
+      loadProductCats();
     }).catch(function (e) { console.error('[website-v2] load', e); V2.loaded = true; render(); });
+  }
+
+  // Read products defensively (cold-safe) and tally how many sit under each
+  // category slug — a product files via `category` (string slug) or `categories`
+  // (array of slugs). Powers the delete-safety warning + the product-derived
+  // "stray category" suggestion chips. Never throws; on any failure the counts
+  // stay null and the card degrades gracefully (no warning count, no chips).
+  function loadProductCats() {
+    try {
+      if (!window.MastDB || !MastDB.products || typeof MastDB.products.list !== 'function') return;
+      Promise.resolve(MastDB.products.list()).then(function (res) {
+        var arr = Array.isArray(res) ? res : Object.values(res || {});
+        var counts = {};
+        arr.forEach(function (p) {
+          var slugs = productCatSlugs(p);
+          slugs.forEach(function (s) { if (s) counts[s] = (counts[s] || 0) + 1; });
+        });
+        V2.productCatCounts = counts;
+        V2.suggestions = computeSuggestions(counts);
+        mountShop();
+      }).catch(function (e) { console.warn('[website-v2] product cats', e && e.message); });
+    } catch (e) { console.warn('[website-v2] product cats', e && e.message); }
+  }
+  // The category slugs a product is filed under (deduped, lowercased to match the
+  // slug id). Tolerant of either the singular `category` string or the plural
+  // `categories` array (both seen in the product model).
+  function productCatSlugs(p) {
+    if (!p) return [];
+    var out = {};
+    if (p.category) out[String(p.category).toLowerCase()] = 1;
+    if (Array.isArray(p.categories)) p.categories.forEach(function (c) { if (c) out[String(c).toLowerCase()] = 1; });
+    return Object.keys(out);
+  }
+  // Slugs that appear on products but are NOT yet in the categories list →
+  // one-tap "Add" suggestions. The chip label title-cases the slug (the product
+  // carries only the slug, not a friendly label).
+  function computeSuggestions(counts) {
+    var have = {}; (V2.cats || []).forEach(function (c) { have[String(c.id).toLowerCase()] = 1; });
+    var sug = [];
+    Object.keys(counts || {}).forEach(function (slug) {
+      if (slug === 'shop') return;           // 'shop' is the storefront header, not a real category
+      if (!have[slug]) sug.push({ slug: slug, count: counts[slug] });
+    });
+    sug.sort(function (a, b) { return b.count - a.count; });
+    return sug;
   }
   // After a delegated write the host writers mutate their own caches; re-read OUR
   // caches so the read-on-page controls reflect the change without a full reload.
