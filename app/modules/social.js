@@ -1291,7 +1291,9 @@
 
       // Move clip from pending
       if (d.clipId) {
-        await MastDB.market.pendingClips.statusRef(uid, d.clipId).set('processed');
+        // setStatus is the real accessor (there is no pendingClips.statusRef);
+        // the old call silently threw, so clips never flipped to processed.
+        await MastDB.market.pendingClips.setStatus(uid, d.clipId, 'processed');
         var clipIdx = smPendingClips.findIndex(function(c) { return c.clipId === d.clipId; });
         if (clipIdx !== -1) smPendingClips[clipIdx].status = 'processed';
       }
@@ -1433,6 +1435,121 @@
     if (post) Object.assign(post, patch);
     return post;
   }
+
+  // ------------------------------------------------------------
+  // S1 — shared upload core (no V1 DOM/state). Lifts the Storage
+  // upload + thumbnail-extract + duration-probe logic out of
+  // smHandleFileSelected so the bridge (and later native V2 UI)
+  // can reuse it without smEnhanceData / socialMediaContent.
+  // Video goes through the raw Storage SDK — the /uploadImage CF
+  // is base64-IMAGE-only and is NOT used for video.
+  // ------------------------------------------------------------
+  async function smUploadClipCore(file, onProgress) {
+    var uid = smGetUid();
+    if (!uid) throw new Error('Not signed in');
+    if (!file) throw new Error('No file provided');
+
+    var isVideo = (file.type || '').indexOf('video/') === 0;
+    var clipId = 'clip_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+
+    // Generate thumbnail (base64, no canvas state shared with V1).
+    var thumbnailBase64 = isVideo
+      ? await smExtractVideoThumbnail(file)
+      : await smImageToBase64(file);
+
+    // Upload original to Firebase Storage via the raw SDK.
+    var storageRef = storage.ref('market/clips/' + uid + '/' + clipId + '/original');
+    var uploadTask = storageRef.put(file);
+    if (typeof onProgress === 'function') {
+      uploadTask.on('state_changed', function(snapshot) {
+        var total = snapshot.totalBytes || 0;
+        var pct = total ? Math.round((snapshot.bytesTransferred / total) * 100) : 0;
+        try { onProgress(pct, snapshot.bytesTransferred, total); } catch (e) { /* caller progress handler must not break upload */ }
+      });
+    }
+    await uploadTask;
+    var fileUrl = await storageRef.getDownloadURL();
+
+    // Upload thumbnail if we extracted one.
+    var thumbnailUrl = null;
+    if (thumbnailBase64) {
+      var thumbRef = storage.ref('market/clips/' + uid + '/' + clipId + '/thumbnail.jpg');
+      await thumbRef.put(smBase64ToBlob(thumbnailBase64, 'image/jpeg'));
+      thumbnailUrl = await thumbRef.getDownloadURL();
+    }
+
+    var duration = isVideo ? await smGetVideoDuration(file) : null;
+
+    // Persist the pending-clip doc exactly as legacy smHandleFileSelected does.
+    var clipData = {
+      clipId: clipId,
+      fileName: file.name,
+      thumbnailUrl: thumbnailUrl || null,
+      fileUrl: fileUrl,
+      uploadedAt: MastDB.serverTimestamp(),
+      status: 'pending',
+      fileType: isVideo ? 'video' : 'image',
+      duration: duration,
+      fileSize: file.size
+    };
+    await MastDB.market.pendingClips.set(uid, clipId, clipData);
+
+    return {
+      clipId: clipId,
+      fileUrl: fileUrl,
+      thumbnailUrl: thumbnailUrl,
+      fileType: isVideo ? 'video' : 'image',
+      duration: duration,
+      fileSize: file.size
+    };
+  }
+
+  // ------------------------------------------------------------
+  // S1 — shared caption generation (CF wrapper + template fallback).
+  // Mirrors the payload + degrade-gracefully behavior of the caption
+  // branch in smRunReadinessAndCaptions so V2 callers get the same
+  // shape ({captions:[{style,text}], hashtags:{niche,mid,broad}}).
+  // ------------------------------------------------------------
+  async function smGenerateCaptionsCore(ctx) {
+    ctx = ctx || {};
+    try {
+      var result = await firebase.functions().httpsCallable('socialAI')({
+        action: 'captions',
+        tenantId: MastDB.tenantId(),
+        treatment: ctx.treatment || null,
+        platform: ctx.platform || null,
+        productName: ctx.productName || null,
+        productPrice: ctx.productPrice || null,
+        productMaterials: ctx.productMaterials || null,
+        productCategory: ctx.productCategory || null,
+        eventName: ctx.eventName || null,
+        description: ctx.description || null
+      });
+      if (result && result.data) {
+        return {
+          captions: result.data.captions || [],
+          hashtags: result.data.hashtags || {}
+        };
+      }
+    } catch (err) {
+      console.warn('Caption generation error:', err.message);
+    }
+    // Template fallback — same copy/hashtags the legacy caption branch uses.
+    var subjectText = ctx.productName || ctx.eventName || ctx.description || 'handmade art';
+    return {
+      captions: [
+        { style: 'Story', text: 'Every piece tells a story. This ' + subjectText + ' came to life in our studio — shaped by hand, with care and intention. ✨' },
+        { style: 'Product', text: 'Meet our latest creation: ' + subjectText + '. Handmade, with intention. Link in bio to bring one home. 🔗' },
+        { style: 'Urgency', text: 'This ' + subjectText + ' won\'t last long — each piece is one-of-a-kind. DM us before it\'s gone! 💨' }
+      ],
+      hashtags: {
+        niche: ['#handmade', '#artisan', '#madebyhand', '#makersgonnamake'],
+        mid: ['#shopsmall', '#supportlocal', '#handcrafted', '#smallbusiness'],
+        broad: ['#oneofakind', '#shoplocal', '#makersmovement', '#homedecor']
+      }
+    };
+  }
+
   window.SocialBridge = {
     // Toggle semantics mirror smSetSignal: same score again clears it.
     setSignal: async function(postId, score, currentScore) {
@@ -1472,6 +1589,59 @@
       var idx = smPosts.findIndex(function(p) { return p.postId === postId; });
       if (idx !== -1) smPosts.splice(idx, 1);
       return true;
+    },
+
+    // S1 — upload a clip (video or image) to Firebase Storage + write the
+    // pending-clip doc. Returns the clip descriptor the native V2 upload UI
+    // needs. onProgress(pct, bytesTransferred, totalBytes) fires during upload.
+    // → Promise<{ clipId, fileUrl, thumbnailUrl, fileType, duration, fileSize }>
+    uploadClip: function(file, opts) {
+      opts = opts || {};
+      return smUploadClipCore(file, opts.onProgress);
+    },
+
+    // S1 — generate captions + hashtags via the socialAI CF, degrading to
+    // template copy on CF error. ctx = { treatment, platform, productName,
+    // productPrice, productMaterials, productCategory, eventName, description }.
+    // → Promise<{ captions:[{style,text}], hashtags:{niche,mid,broad} }>
+    generateCaptions: function(ctx) {
+      return smGenerateCaptionsCore(ctx);
+    },
+
+    // S1 — single-sourced final write. Mints a postId, writes market/posts,
+    // flips the originating clip to processed (setStatus — see smMarkPosted
+    // note), and audits. Mirrors the postData shape smMarkPosted writes.
+    // → Promise<postId>
+    createPost: async function(postData) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      var postId = 'post_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      var data = {
+        postId: postId,
+        clipId: postData.clipId || null,
+        productId: postData.productId || null,
+        productName: postData.productName || null,
+        eventName: postData.eventName || null,
+        treatment: postData.treatment || null,
+        platforms: postData.platforms || [],
+        caption: postData.caption || '',
+        hashtags: postData.hashtags || null,
+        postedAt: postData.postedAt || MastDB.serverTimestamp(),
+        signalScore: postData.signalScore != null ? postData.signalScore : null,
+        scoredAt: postData.scoredAt != null ? postData.scoredAt : null,
+        contentType: postData.contentType || 'video',
+        thumbnailUrl: postData.thumbnailUrl || null,
+        description: postData.description || null
+      };
+      await MastDB.market.posts.set(uid, postId, data);
+      if (data.clipId) {
+        await MastDB.market.pendingClips.setStatus(uid, data.clipId, 'processed');
+      }
+      if (window.writeAudit) writeAudit('create', 'social-post', postId);
+      // Keep the legacy in-memory cache coherent for a later classic-view visit.
+      data.postedAt = Date.now();
+      smPosts.unshift(data);
+      return postId;
     }
   };
 
