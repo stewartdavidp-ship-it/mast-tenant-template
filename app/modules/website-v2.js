@@ -676,9 +676,11 @@
     try {
       var p = MastAdmin.loadModule('homepage');
       if (p && p.then) p.then(function () {
-        // ensureLoaded populates homepage.js' manifest/theme caches the bridge reads.
-        if (window.HomepageBridge && HomepageBridge.ensureLoaded) HomepageBridge.ensureLoaded();
-        render(); // re-render once the manifest is in hand (scheme/font tiles need it)
+        // ensureLoaded populates homepage.js' manifest/theme caches the bridge
+        // reads — it's ASYNC (fetches the template manifest), so re-render only
+        // AFTER it resolves, else the scheme/font swatch grids paint empty.
+        var e = (window.HomepageBridge && HomepageBridge.ensureLoaded) ? HomepageBridge.ensureLoaded() : null;
+        Promise.resolve(e).then(function () { render(); }).catch(function () { render(); });
       });
     } catch (e) {}
     try { MastAdmin.loadModule('brand'); } catch (e) {}

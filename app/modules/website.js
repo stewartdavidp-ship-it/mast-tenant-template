@@ -2891,7 +2891,11 @@
   };
 
   window.markUnpublished = function markUnpublished() {
-    if (websiteConfig.status === 'published') {
+    // websiteConfig is null until loadWebsiteData() runs. The v2 builder calls
+    // WebsiteBridge writes (→ markUnpublished) without ever rendering the legacy
+    // website tab, so guard the cache deref: only flip status when the cache is
+    // populated AND published; always stamp updatedAt (the draft signal readers use).
+    if (websiteConfig && websiteConfig.status === 'published') {
       websiteConfig.status = 'draft';
       MastDB.set('webPresence/config/status', 'draft');
     }
