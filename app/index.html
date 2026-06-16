@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260616-084843-90cfe26"></script>
+  <script src="../shared/mastdb.js?v=20260616-092709-3249367"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,25 +184,25 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260616-084843-90cfe26"></script>
-  <script src="../shared/brand-sync.js?v=20260616-084843-90cfe26"></script>
+  <script src="../shared/customer-filters.js?v=20260616-092709-3249367"></script>
+  <script src="../shared/brand-sync.js?v=20260616-092709-3249367"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260616-084843-90cfe26"></script>
+  <script src="../shared/variant-reconcile.js?v=20260616-092709-3249367"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260616-084843-90cfe26"></script>
-  <script src="../shared/mast-io.js?v=20260616-084843-90cfe26"></script>
-  <script src="../shared/mast-entity.js?v=20260616-084843-90cfe26"></script>
+  <script src="../shared/mast-ui.js?v=20260616-092709-3249367"></script>
+  <script src="../shared/mast-io.js?v=20260616-092709-3249367"></script>
+  <script src="../shared/mast-entity.js?v=20260616-092709-3249367"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260616-084843-90cfe26"></script>
+  <script src="../shared/product-readiness.core.js?v=20260616-092709-3249367"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22370,7 +22370,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260616-084843-90cfe26';
+var MAST_MODULES_V = '20260616-092709-3249367';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -26292,7 +26292,21 @@ async function upgradeFreeTenant(targetTier, billingInterval) {
 async function dismissUpgradeOfferBanner() {
   if (!confirm('Dismiss the upgrade offer? We won\'t show it again until you cross a new tier threshold.')) return;
   try {
-    await firebase.functions().httpsCallable('dismissUpgradeOffer')({ tenantId: MastDB.tenantId() });
+    // onRequest (not httpsCallable): the central CF runs in the control-plane
+    // project, but POD tenants (Shopify installs, region-pod placements) are
+    // signed into their pod's Auth, so the callable framework would reject their
+    // token before our handler runs. Bearer-fetch lets the CF verify pod-aware,
+    // exactly like the sibling billing endpoints.
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('Sign in first');
+    var idToken = await user.getIdToken();
+    var resp = await fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/dismissUpgradeOffer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ tenantId: MastDB.tenantId() })
+    });
+    var data = await resp.json();
+    if (!resp.ok || !data.success) throw new Error((data && data.error) || 'Dismiss failed');
     showToast('Upgrade offer dismissed.');
     _v1PlatformTenantCache = null;
     renderSubscriptionSettings();
