@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260616-092551-3249367"></script>
+  <script src="../shared/mastdb.js?v=20260616-145550-f4efceb"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,25 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260616-092551-3249367"></script>
-  <script src="../shared/brand-sync.js?v=20260616-092551-3249367"></script>
+  <script src="../shared/customer-filters.js?v=20260616-145550-f4efceb"></script>
+  <script src="../shared/brand-sync.js?v=20260616-145550-f4efceb"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260616-092551-3249367"></script>
+  <script src="../shared/variant-reconcile.js?v=20260616-145550-f4efceb"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260616-092551-3249367"></script>
-  <script src="../shared/mast-io.js?v=20260616-092551-3249367"></script>
-  <script src="../shared/mast-entity.js?v=20260616-092551-3249367"></script>
+  <script src="../shared/mast-ui.js?v=20260616-145550-f4efceb"></script>
+  <script src="../shared/mast-io.js?v=20260616-145550-f4efceb"></script>
+  <script src="../shared/mast-entity.js?v=20260616-145550-f4efceb"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260616-092551-3249367"></script>
+  <script src="../shared/product-readiness.core.js?v=20260616-145550-f4efceb"></script>
+  <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
+       lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
+       can't fire before it loads. Provider-agnostic; vendor knowledge lives in
+       the scanned app/modules/connections-providers.js. ?v= kept in lockstep
+       with MAST_MODULES_V by scripts/bump-modules-version.sh.
+       See docs/ux-audit/secure-intake-framework-design.md §9. -->
+  <script src="../shared/mast-intake.js?v=20260616-145550-f4efceb"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -1384,6 +1391,34 @@
     .wp-tpl-colors { display: flex; gap: 5px; margin-bottom: 8px; }
     .wp-tpl-color-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); flex-shrink: 0; }
     .wp-tpl-actions { display: flex; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); }
+
+    /* ========== MASTINTAKE secure-intake field (engine: shared/mast-intake.js) ========== */
+    .mastintake-field { margin-top: 4px; }
+    .mastintake-label { display: block; font-size: 0.85rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+    .mastintake-row { display: flex; gap: 8px; align-items: center; }
+    .mastintake-input {
+      flex: 1; padding: 9px 12px; border-radius: 6px;
+      border: 1px solid var(--border, var(--cream-dark));
+      font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+      background: var(--bg-primary, var(--cream)); color: var(--text-primary);
+    }
+    .mastintake-input:disabled { opacity: 0.6; cursor: not-allowed; }
+    .mastintake-save, .mastintake-revoke { white-space: nowrap; }
+    .mastintake-feedback { font-size: 0.78rem; color: var(--warm-gray); margin: 6px 0 0; min-height: 1em; }
+    .mastintake-feedback.mastintake-error { color: var(--amber); }
+    .mastintake-status { font-size: 0.85rem; color: var(--warm-gray); margin: 6px 0 0; }
+    .mastintake-status.mastintake-ok { color: var(--teal); }
+    .mastintake-status.mastintake-error { color: var(--amber); }
+    .mastintake-trust { list-style: none; padding: 0; margin: 8px 0 0; font-size: 0.78rem; color: var(--warm-gray-light); }
+    .mastintake-trust li { margin: 2px 0; }
+    .mastintake-trust li::before { content: '\1F512'; margin-right: 6px; }
+    .mastintake-guide { margin-top: 10px; font-size: 0.85rem; color: var(--warm-gray); }
+    .mastintake-guide summary { cursor: pointer; color: var(--teal); }
+    .mastintake-guide ol { margin: 8px 0 0; padding-left: 18px; }
+    .mastintake-guide li { margin: 3px 0; }
+    .mastintake-deeplink { color: var(--teal); font-weight: 600; text-decoration: none; }
+    .mastintake-deeplink:hover { text-decoration: underline; }
+    .mastintake-collect-title { font-size: 1.15rem; margin: 0 0 12px; color: var(--text-primary); }
 
     /* ========== BUTTONS ========== */
     .btn {
@@ -9107,14 +9142,15 @@
         <div id="genTab-githubPat" class="gen-tab-body" style="display:none;">
           <div class="tab-section-title">GitHub personal access token<span class="tab-section-status" data-state="missing" id="genStatus-githubPat">Not configured</span></div>
           <p class="tab-section-purpose">Required only when your image storage backend is GitHub. Uploads from the gallery write directly to your GitHub repo &mdash; the token needs <strong>repo</strong> scope. If you&rsquo;re not using GitHub for image storage, this tab won&rsquo;t apply and the section will be hidden.</p>
+          <!-- Secure-intake field — the GitHub PAT now persists ONLY through the
+               server vault (GCP Secret Manager via mastIntakeVaultPut); there is
+               no client-side write path and the token is never read back into the
+               browser. MastIntake renders the input/Save/Revoke + guided steps
+               into this host and binds via delegation; updateGitHubTokenStatus()
+               populates + hydrates it. Replaces the legacy plaintext
+               admin/githubToken write (saveGitHubToken) entirely. -->
           <div id="githubPatSection" class="form-group" style="display:none;">
-            <div style="display:flex;gap:8px;">
-              <input type="password" id="githubTokenInput" placeholder="ghp_..."
-                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-              <button class="btn btn-primary" onclick="saveGitHubToken()">Save</button>
-              <button class="btn btn-secondary" onclick="testGitHubToken()">Test</button>
-            </div>
-            <div id="githubTokenStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+            <div id="githubSecureFieldHost"></div>
           </div>
         </div>
 
@@ -13088,8 +13124,10 @@ MastDB.config = {
   setGoogleMaps: function(key) { return MastDB.set('public/config/googleMapsApiKey', key); },
   testMode: function() { return MastDB.get('public/config/testMode'); },
   setTestMode: function(val) { return MastDB.set('public/config/testMode', val); },
-  githubToken: function() { return MastDB.get('admin/githubToken'); },
-  setGithubToken: function(token) { return MastDB.set('admin/githubToken', token); },
+  // GitHub PAT accessors RETIRED — the token now lives in the server vault (GCP
+  // Secret Manager via MastIntake / mastIntakeVaultPut), never in admin/githubToken
+  // and never read into the browser. There is intentionally no client read/write
+  // accessor; that is the whole point of the fail-closed secure-intake migration.
   settings: function() { return MastDB.get('public/settings'); },
   settingsField: function(field) { return MastDB.get('public/settings/' + field); },
   setSettingsField: function(field, value) { return MastDB.set('public/settings/' + field, value); },
@@ -19603,12 +19641,13 @@ auth.onAuthStateChanged(async function(user) {
     renderLegacyEntityBannerIfNeeded();
   }
 
-  // Load GitHub token for image uploads — admin only
-  if (isAdmin()) {
-    MastDB.config.githubToken().once('value').then(function(snap) {
-      githubToken = snap.val();
-    });
-  }
+  // GitHub PAT is no longer read into the browser. It now lives in the server
+  // vault (GCP Secret Manager via the MastIntake secure-intake framework) with
+  // no client read path — the secret never returns to the client (design §6.2).
+  // Consequently the legacy client-side GitHub image-upload backend is dormant:
+  // getImageStorageBackend() resolves to Firebase Storage (the default) because
+  // `githubToken` stays null. Re-enabling GitHub uploads securely requires a
+  // server-side upload CF (carved-out follow-up); do NOT re-add a boot read here.
 
   // Load settings (events count, dark mode)
   loadSettings();
@@ -22370,7 +22409,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260616-092551-3249367';
+var MAST_MODULES_V = '20260616-145550-f4efceb';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22385,6 +22424,10 @@ var MODULE_MANIFEST = {
   // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
   // (no top-level route). Empty routes[] keeps it lazy-loadable via MastAdmin.loadModule('accounting').
   accounting: { src: 'modules/accounting.js', routes: [] },
+  // MastIntake provider catalog — the vendor knowledge (ProviderDefinitions) the
+  // secure-intake engine looks up. No route (a data catalog, not a view); lazy-
+  // loaded on demand by settings areas via MastAdmin.loadModule('connections-providers').
+  'connections-providers': { src: 'modules/connections-providers.js', routes: [] },
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', routes: ['procurement'] },
@@ -28087,62 +28130,51 @@ async function removeCustomDomain(domain) {
 }
 
 // ============================================================
-// GitHub Token Management
+// GitHub Token Management — migrated to the MastIntake secure vault.
 // ============================================================
-async function saveGitHubToken() {
-  if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
-  var token = document.getElementById('githubTokenInput').value.trim();
-  if (!token) {
-    showToast('Please enter a token.', true);
-    return;
-  }
-  try {
-    // admin/githubToken is a SINGLETON_COLLECTIONS doc (shared/mastdb.js) → the
-    // scalar token lives at admin_githubToken/_data as {_v: token}. Write through
-    // the setGithubToken writer; the old `githubToken().set(token)` called .set on
-    // a get-result (_wrapPromise — only has .once/.child/.on) and threw TypeError,
-    // so the token never persisted. The reader githubToken().once('value') unwraps
-    // _v back to the scalar, so reader and writer now agree on one location.
-    await MastDB.config.setGithubToken(token);
-    await writeAudit('update', 'settings', 'githubToken');
-    githubToken = token;
-    document.getElementById('githubTokenInput').value = '';
-    updateGitHubTokenStatus();
-    showToast('GitHub token saved.');
-  } catch (err) {
-    showToast('Error saving token: ' + err.message, true);
-  }
-}
+// The PAT used to be written in PLAINTEXT to admin/githubToken (saveGitHubToken)
+// and read back into the browser at boot, then used client-side for gallery
+// image uploads. It is now collected via MastIntake.secureField('github') and
+// persisted ONLY through the server vault (GCP Secret Manager via
+// mastIntakeVaultPut) — no client write path, never shown again. saveGitHubToken
+// / testGitHubToken are intentionally gone: there is no plaintext write to make,
+// and a client-side liveness test is impossible without the secret in the browser
+// (the vault reports `collected`, not a verified handshake). updateGitHubTokenStatus
+// now renders + hydrates the secure field and reflects the vault status.
 
+// Cached vault state for the General-tab dot/pill (set by the async status probe).
+var _githubVaultCollected = false;
 
-async function testGitHubToken() {
-  if (!githubToken) {
-    showToast('No token configured. Enter and save a token first.', true);
-    return;
-  }
-  try {
-    var user = await githubRequest('/user');
-    showToast('Connected as: ' + user.login);
-  } catch (err) {
-    showToast('Token test failed: ' + err.message, true);
-  }
-}
-
-function updateGitHubTokenStatus() {
-  // Show/hide the entire GitHub PAT section based on image storage backend
+async function updateGitHubTokenStatus() {
+  // Show/hide the section. getImageStorageBackend() is now always 'storage'
+  // (the client token is gone), so visibility hinges on a configured GitHub repo.
   var patSection = document.getElementById('githubPatSection');
   if (patSection) {
-    patSection.style.display = getImageStorageBackend() === 'github' || (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github && TENANT_CONFIG.site.github.repo) ? '' : 'none';
+    patSection.style.display = (getImageStorageBackend() === 'github'
+      || (TENANT_CONFIG && TENANT_CONFIG.site && TENANT_CONFIG.site.github && TENANT_CONFIG.site.github.repo)) ? '' : 'none';
   }
-  var el = document.getElementById('githubTokenStatus');
-  if (el) {
-    if (githubToken) {
-      el.innerHTML = '<span style="color:var(--teal);">&#10003; Token configured</span>';
-    } else {
-      el.innerHTML = '<span style="color:var(--warm-gray-light);">No token configured. Gallery image upload requires a GitHub PAT.</span>';
+
+  // Render + hydrate the secure-intake field once the provider catalog is loaded.
+  var host = document.getElementById('githubSecureFieldHost');
+  if (host && window.MastIntake) {
+    try {
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        await MastAdmin.loadModule('connections-providers');
+      }
+      if (!host.getAttribute('data-rendered')) {
+        host.innerHTML = MastIntake.secureField({ provider: 'github' });
+        host.setAttribute('data-rendered', '1'); // render guard (a flag, never a secret)
+      }
+      MastIntake.hydrate(host);
+      var st = await MastIntake.status('github');
+      _githubVaultCollected = !!(st && st.state === 'collected');
+    } catch (e) {
+      // Fail-closed: leave the field disabled; never fall back to a plaintext path.
+      _githubVaultCollected = false;
     }
   }
-  // Keep the General tab gating + status dot in sync with the new token/backend state.
+
+  // Keep the General tab gating + status dot in sync with the vault state.
   if (typeof applyGeneralTabGating === 'function') applyGeneralTabGating();
   if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus();
 }
@@ -44929,8 +44961,10 @@ function refreshGeneralTabStatus() {
   // businessSetup — always Active (tenant has a business type set).
   setDot('businessSetup', 'ok');
 
-  // githubPat — green if token saved, red if not. Tab itself may be hidden via applyGeneralTabGating.
-  var hasToken = !!(typeof githubToken !== 'undefined' && githubToken);
+  // githubPat — green when a token is vaulted, red if not. The token no longer
+  // lives in the browser; _githubVaultCollected is set by the MastIntake status
+  // probe in updateGitHubTokenStatus(). Tab may be hidden via applyGeneralTabGating.
+  var hasToken = !!(typeof _githubVaultCollected !== 'undefined' && _githubVaultCollected);
   setDot('githubPat', hasToken ? 'ok' : 'missing');
   setPill('githubPat', hasToken ? 'ok' : 'missing', hasToken ? 'Configured' : 'Not configured');
 
