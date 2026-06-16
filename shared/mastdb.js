@@ -188,6 +188,7 @@ var MastDB = (function() {
     'admin_subscription': true,
     'admin_mappingFlowState': true,
     'admin_termsConfig': true,
+    'admin_walletConfig': true,
     'platform_driftSeverityDefaults': true
   };
   var SINGLETON_DOC_ID = '_data';
