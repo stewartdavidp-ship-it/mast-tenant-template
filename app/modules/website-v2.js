@@ -74,7 +74,12 @@
     // Card 3 (Your shop): the live storefront categories array (each
     // { id, label, wholesaleGroup? }) + a per-slug product count (for the
     // delete-safety warning + product-derived "stray category" suggestions).
-    cats: null, catEditId: null, catMore: {}, productCatCounts: null, suggestions: null };
+    cats: null, catEditId: null, catMore: {}, productCatCounts: null, suggestions: null,
+    // Card 4 (See it live & share): the live-preview iframe. previewVP is the
+    // active viewport (desktop/tablet/mobile); previewNonce is bumped on each
+    // reload to force the iframe to refetch (the storefront-side ?mastpreview=1
+    // param skips its own localStorage cache so the refetch shows fresh config).
+    previewVP: 'desktop', previewNonce: 0 };
 
   // Card 2 · which section ids expose a layout VARIANT picker (closing
   // homepage-v2's variant hatch). The picker options + manifest defaults come
@@ -115,6 +120,16 @@
     var host = liveHost();
     if (!host) return '';
     return /^https?:\/\//.test(host) ? host : 'https://' + host;
+  }
+  // Card 4 · the iframe preview URL: the live site with ?mastpreview=1 (the
+  // storefront honors this to skip its localStorage cache + force light mode so
+  // edits — including colors — reflect within ~1s). A cache-busting _pv nonce on
+  // each reload makes the browser refetch the document; the storefront-side param
+  // handles its OWN cache. Empty string if the live host is unknown (no iframe).
+  function previewUrl() {
+    var base = liveUrl();
+    if (!base) return '';
+    return base + '/?mastpreview=1&_pv=' + V2.previewNonce;
   }
 
   // Site name: prefer the storefront meta siteTitle, then the platform registry
@@ -210,6 +225,10 @@
       var wait = Math.max(0, 350 - (Date.now() - started));
       _pipTimer = setTimeout(function () { pipSaved(); _pipTimer = null; }, wait);
       if (opts.reload !== false) reloadSoon();
+      // Tier-1 live reflect: nudge the Card 4 preview iframe to refetch (debounced)
+      // so the edit shows in the live preview within ~1s. Centralized here so every
+      // card write inherits it. Skipped only when an opt opts out (opts.preview false).
+      if (opts.preview !== false) schedulePreviewReload();
       return res;
     }).catch(function (e) {
       console.error('[website-v2] save', e);
@@ -979,6 +998,99 @@
     host.innerHTML = shopHtml();
   }
 
+  // ── Card 4 · See it live & share ────────────────────────────────────
+  // An always-on live preview of the real storefront. There is NO publish gate —
+  // the storefront direct-reads config, so an admin edit IS already live; this card
+  // is just an iframe of <tenant>.runmast.com (with ?mastpreview=1 so the storefront
+  // skips its localStorage cache + forces light mode → edits reflect within ~1s).
+  // Desktop/tablet/mobile viewport toggle (widths mirror the legacy website.js
+  // template preview), a manual Refresh, and the live URL with Open/Copy.
+  var PREVIEW_WIDTHS = { desktop: '100%', tablet: '768px', mobile: '375px' };
+  function previewIframeHtml() {
+    var url = previewUrl();
+    if (!url) {
+      return '<div class="wv2-prev-empty mu-sub">Live preview unavailable — your site address hasn’t resolved yet.</div>';
+    }
+    var vp = PREVIEW_WIDTHS[V2.previewVP] ? V2.previewVP : 'desktop';
+    var w = PREVIEW_WIDTHS[vp];
+    var h = vp === 'mobile' ? '720px' : '600px';
+    // sandbox mirrors the legacy preview shell (scripts + same-origin so the
+    // storefront boots + reads config; popups so in-iframe links can open).
+    return '<iframe id="wv2PreviewFrame" class="wv2-prev-frame" title="Live preview of your website" ' +
+        'src="' + esc(url) + '" loading="lazy" ' +
+        'style="width:' + w + ';height:' + h + ';" ' +
+        'sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>';
+  }
+  function liveHtml() {
+    var url = liveUrl();
+    var host = liveHost();
+    var vpBtns = ['desktop', 'tablet', 'mobile'].map(function (vp) {
+      var on = (V2.previewVP === vp);
+      var label = vp.charAt(0).toUpperCase() + vp.slice(1);
+      return '<button type="button" class="wv2-vp' + (on ? ' on' : '') + '" aria-pressed="' + on + '" ' +
+        'onclick="WebsiteV2.setPreviewViewport(\'' + vp + '\')">' + label + '</button>';
+    }).join('');
+
+    var actions = url
+      ? '<a class="btn btn-primary btn-small" href="' + esc(url) + '" target="_blank" rel="noopener">Open my site ↗</a>' +
+        '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.copyLink()">Copy link</button>'
+      : '<span class="mu-sub">Live URL unavailable</span>';
+
+    var toolbar =
+      '<div class="wv2-prev-bar">' +
+        '<div class="wv2-vp-group" role="group" aria-label="Preview size">' + vpBtns + '</div>' +
+        '<button type="button" class="wv2-prev-refresh" title="Reload the preview" onclick="WebsiteV2.refreshPreview()">↻ Refresh preview</button>' +
+      '</div>';
+
+    return '<div class="wv2-live">' +
+        '<div class="mu-sub" style="margin-bottom:10px;">Every change here is already live. This is your real storefront.</div>' +
+        '<div class="wv2-live-actions">' + actions + '</div>' +
+        toolbar +
+        '<div class="wv2-prev-stage" id="wv2PreviewStage">' + previewIframeHtml() + '</div>' +
+      '</div>';
+  }
+  // Mount Card 4 into its scaffold body (wv2LiveBody) — replaces the PR2
+  // "Coming in this builder" placeholder. Re-called by reloadSoon() after edits;
+  // to avoid flashing the iframe on every settle, if a preview frame already
+  // exists we only refresh the chrome (URL/actions/toolbar) and RE-ADOPT the live
+  // frame node — its reload is driven separately by reloadPreviewNow (debounced).
+  function mountLive() {
+    var host = document.getElementById('wv2LiveBody');
+    if (!host) return;
+    var existing = document.getElementById('wv2PreviewFrame');
+    host.innerHTML = liveHtml();
+    if (existing) {
+      // Preserve the already-loaded frame (don't trigger a fresh navigation just
+      // because the chrome re-rendered). Move the existing node into the new stage,
+      // keeping its current viewport width in sync with the active toggle.
+      var stage = document.getElementById('wv2PreviewStage');
+      var fresh = document.getElementById('wv2PreviewFrame');
+      if (stage && fresh) {
+        var vp = PREVIEW_WIDTHS[V2.previewVP] ? V2.previewVP : 'desktop';
+        existing.style.width = PREVIEW_WIDTHS[vp];
+        existing.style.height = vp === 'mobile' ? '720px' : '600px';
+        stage.replaceChild(existing, fresh);
+      }
+    }
+  }
+  // Swap only the iframe src (bump the nonce → browser refetches). Avoids tearing
+  // down/rebuilding the <iframe> element so the reload is a single navigation, not
+  // a flash. If the frame element is gone (card not mounted), no-op.
+  function reloadPreviewNow() {
+    V2.previewNonce++;
+    var frame = document.getElementById('wv2PreviewFrame');
+    if (frame) { try { frame.src = previewUrl(); } catch (e) {} }
+  }
+  // Tier-1 live reflect: after a builder edit settles, debounce (~800ms) a preview
+  // reload. Cards 1–3 writes flow through withSave → reloadSoon; we hook here so any
+  // edit visibly updates the preview within ~1s without spamming reloads on rapid
+  // keystrokes. Centralized so every card handler inherits it for free.
+  var _previewTimer = null;
+  function schedulePreviewReload() {
+    if (_previewTimer) clearTimeout(_previewTimer);
+    _previewTimer = setTimeout(function () { _previewTimer = null; reloadPreviewNow(); }, 800);
+  }
+
   function ensureStyles() {
     if (document.getElementById('wv2-styles')) return;
     var css =
@@ -1084,7 +1196,21 @@
       '.wv2-sug-n{font-size:0.72rem;font-weight:600;opacity:0.85;}' +
       // the one retained classic import door
       '.wv2-importdoor{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:12px 14px;border:1px dashed var(--border);border-radius:10px;background:color-mix(in srgb,var(--text-primary) 3%,transparent);}' +
-      '.wv2-importdoor-main{min-width:0;flex:1;}';
+      '.wv2-importdoor-main{min-width:0;flex:1;}' +
+      // ── Card 4 · See it live & share ──
+      '.wv2-live-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;}' +
+      '.wv2-prev-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;}' +
+      '.wv2-vp-group{display:inline-flex;gap:4px;border:1px solid var(--border);border-radius:8px;padding:3px;}' +
+      '.wv2-vp{background:none;border:none;border-radius:6px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.78rem;font-weight:600;padding:4px 12px;}' +
+      '.wv2-vp:hover{color:var(--text-primary);}' +
+      '.wv2-vp.on{background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal);}' +
+      '.wv2-prev-refresh{background:none;border:1px solid var(--border);border-radius:8px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.78rem;padding:5px 12px;}' +
+      '.wv2-prev-refresh:hover{color:var(--text-primary);border-color:var(--teal);}' +
+      '.wv2-prev-stage{display:flex;justify-content:center;overflow:auto;background:var(--surface-dark,color-mix(in srgb,var(--text-primary) 6%,transparent));border:1px solid var(--border);border-radius:10px;padding:12px;}' +
+      // Light placeholder background before the storefront paints (the preview is
+      // forced light, so a white canvas matches — `white` keyword avoids the hex ratchet).
+      '.wv2-prev-frame{max-width:100%;border:1px solid var(--border);border-radius:6px;background:white;transition:width 0.18s ease;}' +
+      '.wv2-prev-empty{padding:32px 12px;text-align:center;}';
     var st = document.createElement('style'); st.id = 'wv2-styles'; st.textContent = css;
     (document.head || document.documentElement).appendChild(st);
   }
@@ -1100,11 +1226,12 @@
       U.pageHeader({ title: 'Your website', subtitle: 'Everything your visitors see — in one place.' }) +
       header + stack;
     // Fill Card 1 (Look & feel) + Card 2 (Your words & pictures) + Card 3 (Your
-    // shop) into their mounts now that the scaffold is in the DOM. Card 4 remains
-    // the PR6 placeholder.
+    // shop) + Card 4 (See it live & share) into their mounts now that the scaffold
+    // is in the DOM.
     mountLookFeel();
     mountWords();
     mountShop();
+    mountLive();
   }
 
   // ── public API ─────────────────────────────────────────────────────
@@ -1377,6 +1504,31 @@
       if (typeof navigateToClassic === 'function') navigateToClassic('website', { tab: 'import' });
       else if (typeof navigateTo === 'function') navigateTo('website', { tab: 'import' });
     },
+
+    // Card 4 · viewport toggle — resize the existing frame in place (no reload,
+    // no flash); just restyle width/height + update the toggle button states.
+    setPreviewViewport: function (vp) {
+      if (!PREVIEW_WIDTHS[vp]) return;
+      V2.previewVP = vp;
+      var frame = document.getElementById('wv2PreviewFrame');
+      if (frame) {
+        frame.style.width = PREVIEW_WIDTHS[vp];
+        frame.style.height = vp === 'mobile' ? '720px' : '600px';
+      }
+      // Reflect the active state on the toggle buttons without reloading the frame.
+      var grp = document.querySelector('.wv2-vp-group');
+      if (grp) {
+        var btns = grp.querySelectorAll('.wv2-vp');
+        for (var i = 0; i < btns.length; i++) {
+          var b = btns[i];
+          var isOn = (b.getAttribute('onclick') || '').indexOf("'" + vp + "'") !== -1;
+          b.classList.toggle('on', isOn);
+          b.setAttribute('aria-pressed', String(isOn));
+        }
+      }
+    },
+    // Card 4 · manual refresh — force the iframe to refetch the live storefront.
+    refreshPreview: function () { reloadPreviewNow(); },
 
     copyLink: function () {
       var url = liveUrl();

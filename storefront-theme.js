@@ -105,8 +105,11 @@
     var root = document.documentElement;
 
     // Apply explicit color overrides
-    // In dark mode, skip bg/text overrides — let storefront.css dark mode values win
-    var isDark = root.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches;
+    // In dark mode, skip bg/text overrides — let storefront.css dark mode values win.
+    // Builder preview mode (?mastpreview=1) forces light so color edits are always
+    // visible in the iframe (otherwise an OS dark preference would skip them).
+    var isDark = !window.__mastPreview &&
+      (root.classList.contains('dark') || window.matchMedia('(prefers-color-scheme: dark)').matches);
     var DARK_MODE_SKIP = isDark ? { bgColor: 1, bgDarkColor: 1, textColor: 1, textMutedColor: 1, textLightColor: 1, primaryColor: 1, accentColor: 1 } : {};
     Object.keys(COLOR_MAP).forEach(function (key) {
       if (config[key] && !DARK_MODE_SKIP[key]) {
@@ -522,8 +525,10 @@
               }
             }
 
-            // Apply default theme from manifest if no user preference is stored
-            if (manifest && manifest.defaultTheme && !localStorage.getItem('mast-theme')) {
+            // Apply default theme from manifest if no user preference is stored.
+            // In builder preview mode, never switch to dark — the preview is forced
+            // light so color edits are visible (see applyTheme isDark guard).
+            if (!window.__mastPreview && manifest && manifest.defaultTheme && !localStorage.getItem('mast-theme')) {
               var h = document.documentElement;
               if (manifest.defaultTheme === 'dark' && !h.classList.contains('dark')) {
                 h.classList.remove('light');
