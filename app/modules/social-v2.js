@@ -48,8 +48,25 @@
     'hot-glass': 'Hot Glass', 'finished-piece': 'Finished Piece',
     'studio-life': 'Studio Life', 'fair-day': 'Fair Day', 'process-story': 'Process Story'
   };
-  var PLATFORM_LABEL = { 'instagram-reels': 'Instagram', instagram: 'Instagram', facebook: 'Facebook', x: 'X', twitter: 'X', tiktok: 'TikTok' };
+  var PLATFORM_LABEL = { 'instagram-reels': 'Instagram', 'instagram-feed': 'Instagram', instagram: 'Instagram', facebook: 'Facebook', x: 'X', twitter: 'X', tiktok: 'TikTok' };
   var STATUS_TONE = { posted: 'success', draft: 'info' };
+
+  // Treatment + destination options for the native create flow — mirror
+  // SM_TREATMENTS / the destination chips in legacy social.js (labels + the
+  // one-line spec tip; legacy hex accents stay in social.js — chrome here uses
+  // tokens). The create flow is the native port of the legacy "I have a clip"
+  // pipeline (S2); SocialBridge single-sources every write.
+  var CREATE_TREATMENTS = [
+    { id: 'hot-glass', name: 'Hot Glass', desc: 'Kiln-lit process, close-in, material-first' },
+    { id: 'finished-piece', name: 'Finished Piece', desc: 'Clean background, product-forward' },
+    { id: 'studio-life', name: 'Studio Life', desc: 'Candid, behind the scenes' },
+    { id: 'fair-day', name: 'Fair Day', desc: 'Event context, crowd energy' },
+    { id: 'process-story', name: 'Process Story', desc: 'Start-to-finish transformation' }
+  ];
+  var CREATE_DESTS = [
+    { id: 'instagram-reels', label: '📱 Instagram Reels' },
+    { id: 'instagram-feed', label: '📸 Instagram Feed' }
+  ];
 
   function statusKey(p) { return String(p.status || 'posted').toLowerCase(); } // legacy pre-status docs are posted
   function postTitle(p) { return p.description || p.productName || p.eventName || (p.caption || '').slice(0, 60) || '(untitled post)'; }
@@ -230,6 +247,250 @@
   }
   function reloadSoon() { setTimeout(load, 250); }
 
+  // ====================================================================
+  // Native "I have a clip" create flow (marketing-v2 S2). Replaces the
+  // navigateToClassic('social') punt: upload → details → AI captions →
+  // post, all single-sourced through SocialBridge.uploadClip /
+  // generateCaptions / createPost. Pre-shoot (no-clip), shoot cards, AI
+  // readiness score, coupon attach and caption-in-Claude are DEFERRED.
+  //
+  // The slide-out renders once; each step re-renders the inner container
+  // (#smCreateBody) in place via innerHTML, holding wizard state in CREATE.
+  // ====================================================================
+  var CREATE = null;
+  function freshCreate() {
+    return {
+      step: 'upload',        // upload → details → captions → post
+      uploading: false,
+      clipId: null, fileUrl: null, thumbnailUrl: null, fileType: null,
+      duration: null, fileSize: null, fileName: null,
+      subjectType: 'none',   // product | event | none
+      productId: null, productName: null, productPriceCents: 0,
+      productMaterials: null, productCategory: null,
+      eventName: '', description: '',
+      treatment: null, destinations: [],
+      captions: [], selectedCaptionIdx: 0, hashtags: null, generating: false
+    };
+  }
+  function createBodyEl() { return document.getElementById('smCreateBody'); }
+  function renderCreate() {
+    var el = createBodyEl();
+    if (!el || !CREATE) return;
+    if (CREATE.step === 'upload') el.innerHTML = createUploadStep();
+    else if (CREATE.step === 'details') el.innerHTML = createDetailsStep();
+    else if (CREATE.step === 'captions') el.innerHTML = createCaptionsStep();
+    else if (CREATE.step === 'post') el.innerHTML = createPostStep();
+  }
+  function stepDots() {
+    var steps = [['upload', 'Upload'], ['details', 'Details'], ['captions', 'Captions'], ['post', 'Post']];
+    var doneAt = { upload: 0, details: 1, captions: 2, post: 3 };
+    var cur = doneAt[CREATE.step];
+    return '<div style="display:flex;gap:6px;align-items:center;margin:0 0 16px;flex-wrap:wrap;">' +
+      steps.map(function (s, i) {
+        var on = i === cur, past = i < cur;
+        var color = on ? 'var(--teal)' : (past ? 'var(--text-secondary)' : 'var(--text-tertiary)');
+        return '<span style="font-size:0.78rem;color:' + color + ';font-weight:' + (on ? '600' : '400') + ';">' +
+          (past ? '✓ ' : (i + 1) + '. ') + s[1] + '</span>' +
+          (i < steps.length - 1 ? '<span style="color:var(--text-tertiary);font-size:0.78rem;">›</span>' : '');
+      }).join('') + '</div>';
+  }
+
+  // ---- Step 1: upload ----
+  function createUploadStep() {
+    var c = CREATE;
+    var inner;
+    if (c.clipId) {
+      var thumb = c.thumbnailUrl
+        ? '<img src="' + esc(c.thumbnailUrl) + '" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--cream-dark);">'
+        : '<div style="width:96px;height:96px;border-radius:8px;border:1px solid var(--cream-dark);display:flex;align-items:center;justify-content:center;font-size:1.6rem;">' + (c.fileType === 'video' ? '🎬' : '📷') + '</div>';
+      inner = '<div style="display:flex;gap:14px;align-items:center;">' + thumb +
+        '<div><div style="font-weight:600;font-size:0.9rem;">' + esc(c.fileName || 'Clip uploaded') + '</div>' +
+        '<div class="mu-sub" style="font-size:0.78rem;">' + esc(c.fileType || '') +
+          (c.duration ? ' · ' + Math.round(c.duration) + 's' : '') +
+          (c.fileSize ? ' · ' + (c.fileSize / 1048576).toFixed(1) + ' MB' : '') + '</div>' +
+        '<button class="btn btn-secondary btn-small" style="margin-top:8px;" onclick="SocialV2.createPickFile()">Replace clip</button></div></div>';
+    } else if (c.uploading) {
+      inner = '<div class="mu-sub" style="margin-bottom:8px;">Uploading…</div>' +
+        '<div style="height:8px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:6px;overflow:hidden;">' +
+          '<div id="smCreateProg" style="height:100%;width:0%;background:var(--teal);transition:width 0.15s;"></div></div>' +
+        '<div class="mu-sub" id="smCreateProgTxt" style="margin-top:6px;font-size:0.78rem;">0%</div>';
+    } else {
+      inner = '<button class="btn btn-primary" onclick="SocialV2.createPickFile()">🎬 Choose a video or photo</button>' +
+        '<div class="mu-sub" style="margin-top:8px;font-size:0.78rem;">Upload a clip from your camera roll. Video or image.</div>';
+    }
+    return stepDots() + U.card('Upload your clip', inner) + createNav();
+  }
+
+  // ---- Step 2: details ----
+  function createDetailsStep() {
+    var c = CREATE;
+    function seg(val, label) {
+      var on = c.subjectType === val;
+      return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="SocialV2.createSubject(\'' + val + '\')">' + label + '</button>';
+    }
+    var subjectRow = '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + seg('product', 'Product') + seg('event', 'Event') + seg('none', 'No specific product') + '</div>';
+
+    var subjectDetail = '';
+    if (c.subjectType === 'product') {
+      var products = window.productsData || [];
+      var opts = '<option value="">— Choose a product —</option>';
+      products.forEach(function (p) {
+        var priceStr = (typeof p.priceCents === 'number' && p.priceCents > 0 && window.formatCents) ? (' — ' + window.formatCents(p.priceCents)) : '';
+        opts += '<option value="' + esc(p.pid) + '"' + (c.productId === p.pid ? ' selected' : '') + '>' + esc(p.name) + priceStr + '</option>';
+      });
+      subjectDetail = '<div class="form-group" style="margin-top:12px;"><label class="form-label">Select product</label>' +
+        '<select class="form-input" id="smCreateProduct" onchange="SocialV2.createSetProduct(this.value)" style="width:100%;">' + opts + '</select>' +
+        (products.length ? '' : '<div class="mu-sub" style="margin-top:4px;font-size:0.78rem;">No products loaded yet.</div>') + '</div>';
+    } else if (c.subjectType === 'event') {
+      subjectDetail = '<div class="form-group" style="margin-top:12px;"><label class="form-label">Event name</label>' +
+        '<input class="form-input" id="smCreateEvent" value="' + esc(c.eventName || '') + '" placeholder="e.g. Spring Craft Fair" oninput="SocialV2.createField(\'eventName\', this.value)" style="width:100%;"></div>';
+    }
+
+    var captionDraft = '<div class="form-group" style="margin-top:12px;"><label class="form-label">Caption focus <span class="mu-sub" style="font-weight:400;">(optional)</span></label>' +
+      '<textarea class="form-input" id="smCreateDesc" rows="2" placeholder="What should the caption call out?" oninput="SocialV2.createField(\'description\', this.value)" style="width:100%;resize:vertical;">' + esc(c.description || '') + '</textarea></div>';
+
+    var treatments = '<div style="display:flex;flex-direction:column;gap:8px;">' +
+      CREATE_TREATMENTS.map(function (t) {
+        var on = c.treatment === t.id;
+        return '<div onclick="SocialV2.createTreatment(\'' + t.id + '\')" style="cursor:pointer;padding:10px 12px;border:1px solid ' + (on ? 'var(--teal)' : 'var(--cream-dark)') + ';border-radius:8px;background:' + (on ? 'var(--teal-bg, var(--cream))' : 'transparent') + ';">' +
+          '<div style="font-weight:600;font-size:0.85rem;">' + esc(t.name) + (on ? ' ✓' : '') + '</div>' +
+          '<div class="mu-sub" style="font-size:0.78rem;">' + esc(t.desc) + '</div></div>';
+      }).join('') + '</div>';
+
+    var dests = '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      CREATE_DESTS.map(function (d) {
+        var on = c.destinations.indexOf(d.id) >= 0;
+        return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="SocialV2.createDest(\'' + d.id + '\')">' + (on ? '✓ ' : '') + d.label + '</button>';
+      }).join('') + '</div>';
+
+    return stepDots() +
+      U.card('What\'s this about?', subjectRow + subjectDetail + captionDraft) +
+      U.card('Content style', treatments) +
+      U.card('Destinations', dests) +
+      createNav();
+  }
+
+  // ---- Step 3: captions ----
+  function createCaptionsStep() {
+    var c = CREATE;
+    var inner;
+    if (c.generating) {
+      inner = '<div class="loading">Generating captions…</div>';
+    } else if (!c.captions.length) {
+      inner = '<button class="btn btn-primary" onclick="SocialV2.createGenerate()">✨ Generate captions</button>' +
+        '<div class="mu-sub" style="margin-top:8px;font-size:0.78rem;">Uses your subject + content style to draft caption options and hashtags.</div>';
+    } else {
+      inner = c.captions.map(function (cap, idx) {
+        var on = idx === c.selectedCaptionIdx;
+        var card = '<div onclick="SocialV2.createSelectCaption(' + idx + ')" style="cursor:pointer;padding:10px 12px;border:1px solid ' + (on ? 'var(--teal)' : 'var(--cream-dark)') + ';border-radius:8px;margin-bottom:8px;">' +
+          '<div style="font-weight:600;font-size:0.78rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;">' + esc(cap.style || ('Option ' + (idx + 1))) + (on ? ' ✓' : '') + '</div>';
+        if (on) {
+          card += '<textarea class="form-input" id="smCreateCaptionEdit" rows="4" oninput="SocialV2.createEditCaption(this.value)" style="width:100%;margin-top:8px;resize:vertical;font-size:0.85rem;">' + esc(cap.text || '') + '</textarea>';
+        } else {
+          card += '<div style="margin-top:6px;font-size:0.85rem;line-height:1.5;">' + esc(cap.text || '') + '</div>';
+        }
+        return card + '</div>';
+      }).join('') +
+      '<button class="btn btn-secondary btn-small" onclick="SocialV2.createGenerate()">↻ Regenerate</button>';
+    }
+    var captionCard = U.card('Choose a caption', inner);
+
+    var hashCard = '';
+    if (c.hashtags) {
+      function tier(label, arr) {
+        if (!arr || !arr.length) return '';
+        return '<div style="margin-bottom:8px;"><div class="mu-sub" style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.04em;">' + label + '</div>' +
+          '<div style="font-family:monospace;font-size:0.78rem;line-height:1.5;">' + esc(arr.join(' ')) + '</div></div>';
+      }
+      hashCard = U.card('Hashtags',
+        tier('Niche', c.hashtags.niche) + tier('Mid-range', c.hashtags.mid) + tier('Broad', c.hashtags.broad) +
+        '<button class="btn btn-secondary btn-small" onclick="SocialV2.createCopyHashtags()">⧉ Copy all hashtags</button>');
+    }
+
+    var guideCard = (c.destinations.indexOf('instagram-reels') >= 0 || c.destinations.indexOf('instagram-feed') >= 0)
+      ? U.card('Instagram posting guide',
+          '<ol style="margin:0;padding-left:18px;font-size:0.85rem;line-height:1.7;">' +
+            '<li>Open Instagram and start a new Reel or post.</li>' +
+            '<li>Pick your clip from the camera roll. Spec: 9:16 portrait · 15–90s · MP4/MOV.</li>' +
+            '<li>Paste your caption (copy below) and add the hashtags.</li>' +
+            '<li>Set a strong cover frame, then share.</li>' +
+            '<li>Come back here and hit Post to log it to your record.</li>' +
+          '</ol>' +
+          '<button class="btn btn-secondary btn-small" style="margin-top:8px;" onclick="SocialV2.createCopyCaption()">⧉ Copy caption</button>')
+      : '';
+
+    return stepDots() + captionCard + hashCard + guideCard + createNav();
+  }
+
+  // ---- Step 4: post (review + write) ----
+  function createPostStep() {
+    var c = CREATE;
+    var cap = c.captions[c.selectedCaptionIdx];
+    var plats = createPlatforms();
+    var rows = U.kv([
+      { k: 'Caption', v: cap && cap.text ? esc(cap.text) : '<span class="mu-sub">No caption selected</span>' },
+      { k: 'Subject', v: c.subjectType === 'product' ? esc(c.productName || '(product)') : (c.subjectType === 'event' ? esc(c.eventName || '(event)') : 'General') },
+      { k: 'Treatment', v: c.treatment ? esc(TREATMENT_LABEL[c.treatment] || c.treatment) : '—' },
+      { k: 'Platforms', v: esc(plats.map(function (p) { return PLATFORM_LABEL[p] || p; }).join(', ') || 'Instagram') },
+      { k: 'Hashtags', v: c.hashtags ? esc([].concat(c.hashtags.niche || [], c.hashtags.mid || [], c.hashtags.broad || []).slice(0, 6).join(' ')) + (([].concat(c.hashtags.niche || [], c.hashtags.mid || [], c.hashtags.broad || []).length > 6) ? ' …' : '') : '—' }
+    ]);
+    var media = c.thumbnailUrl
+      ? '<div style="margin-bottom:12px;"><img src="' + esc(c.thumbnailUrl) + '" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid var(--cream-dark);"></div>'
+      : '';
+    return stepDots() +
+      U.card('Review & post', media + rows +
+        '<div class="mu-sub" style="margin-top:10px;font-size:0.78rem;">This records the post to your posting history with today\'s date.</div>') +
+      createNav();
+  }
+
+  // ---- nav buttons per step ----
+  function createNav() {
+    var c = CREATE;
+    var back = '', next = '';
+    if (c.step === 'upload') {
+      next = '<button class="btn btn-primary" ' + (c.clipId ? '' : 'disabled') + ' onclick="SocialV2.createGoto(\'details\')">Next: Details →</button>';
+    } else if (c.step === 'details') {
+      back = '<button class="btn btn-secondary" onclick="SocialV2.createGoto(\'upload\')">← Back</button>';
+      next = '<button class="btn btn-primary" ' + (c.treatment ? '' : 'disabled') + ' onclick="SocialV2.createGoto(\'captions\')">Next: Captions →</button>';
+    } else if (c.step === 'captions') {
+      back = '<button class="btn btn-secondary" onclick="SocialV2.createGoto(\'details\')">← Back</button>';
+      next = '<button class="btn btn-primary" ' + (c.captions.length ? '' : 'disabled') + ' onclick="SocialV2.createGoto(\'post\')">Next: Review →</button>';
+    } else if (c.step === 'post') {
+      back = '<button class="btn btn-secondary" onclick="SocialV2.createGoto(\'captions\')">← Back</button>';
+      next = '<button class="btn btn-primary" onclick="SocialV2.createSubmit()">Post ✓</button>';
+    }
+    var hint = '';
+    if (c.step === 'upload' && !c.clipId) hint = 'Upload a clip to continue';
+    else if (c.step === 'details' && !c.treatment) hint = 'Pick a content style to continue';
+    else if (c.step === 'captions' && !c.captions.length) hint = 'Generate captions to continue';
+    return '<div style="display:flex;gap:8px;justify-content:space-between;align-items:center;margin-top:16px;flex-wrap:wrap;">' +
+      '<div>' + back + '</div>' +
+      '<div style="display:flex;gap:8px;align-items:center;">' +
+        (hint ? '<span class="mu-sub" style="font-size:0.78rem;">' + hint + '</span>' : '') + next +
+      '</div></div>';
+  }
+
+  function createPlatforms() {
+    // Map the chosen destinations to platform tokens the post record stores.
+    var plats = CREATE.destinations.slice();
+    return plats.length ? plats : ['instagram-reels'];
+  }
+
+  function buildCaptionCtx() {
+    var c = CREATE;
+    var platform = c.destinations[0] || 'instagram-reels';
+    return {
+      treatment: c.treatment || null,
+      platform: platform,
+      productName: c.subjectType === 'product' ? (c.productName || null) : null,
+      productPrice: (c.subjectType === 'product' && c.productPriceCents && window.formatCents) ? window.formatCents(c.productPriceCents) : null,
+      productMaterials: c.subjectType === 'product' ? (c.productMaterials || null) : null,
+      productCategory: c.subjectType === 'product' ? (c.productCategory || null) : null,
+      eventName: c.subjectType === 'event' ? (c.eventName || null) : null,
+      description: c.description || null
+    };
+  }
+
   function visibleRows() {
     var rows = V2.rows;
     if (V2.statusFilter !== 'all') rows = rows.filter(function (p) { return statusKey(p) === V2.statusFilter; });
@@ -275,9 +536,9 @@
       U.pageHeader({
         title: 'Social Media',
         count: N.count(V2.rows.length) + ' post' + (V2.rows.length === 1 ? '' : 's'),
-        subtitle: 'Captions, signals and the posting record. New posts are produced in the classic pipeline.',
+        subtitle: 'Captions, signals and the posting record.',
         actionsHtml:
-          '<button class="btn btn-primary" onclick="SocialV2.classic()">+ New post (classic)</button>' +
+          (canEdit() ? '<button class="btn btn-primary" onclick="SocialV2.create()">+ New post</button>' : '') +
           '<button class="btn btn-secondary" onclick="SocialV2.exportCsv()">↓ Export</button>'
       }) +
       clipsNote +
@@ -307,6 +568,154 @@
     classic: function () {
       if (typeof window.navigateToClassic === 'function') navigateToClassic('social');
       else if (typeof window.navigateTo === 'function') navigateTo('social');
+    },
+
+    // ── Native create flow (S2) ──────────────────────────────────────
+    create: function () {
+      if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to create social posts.', true); return; }
+      if (!bridge()) return;
+      // Make sure products are available for the subject picker.
+      if (!window.productsData && window.loadProducts) { try { loadProducts(); } catch (e) {} }
+      CREATE = freshCreate();
+      U.slideOut.open({
+        id: 'social-create', title: 'New social post', subtitle: 'Upload → captions → post',
+        size: 'lg', mode: 'read', deepLink: false,
+        render: function () { return '<div id="smCreateBody">' + createUploadStep() + '</div>'; }
+      });
+      // The render runs synchronously into the pane; nothing else needed.
+    },
+    createPickFile: function () {
+      if (!CREATE) return;
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'video/*,image/*,.mp4,.mov,.jpeg,.jpg,.heic,.png';
+      input.onchange = function (e) {
+        var file = e.target.files && e.target.files[0];
+        if (file) SocialV2._createUpload(file);
+      };
+      input.click();
+    },
+    _createUpload: function (file) {
+      var b = bridge(); if (!b || !CREATE) return;
+      CREATE.uploading = true; CREATE.clipId = null; CREATE.fileName = file.name;
+      renderCreate();
+      b.uploadClip(file, {
+        onProgress: function (pct) {
+          var bar = document.getElementById('smCreateProg'), txt = document.getElementById('smCreateProgTxt');
+          if (bar) bar.style.width = pct + '%';
+          if (txt) txt.textContent = pct + '%';
+        }
+      }).then(function (clip) {
+        if (!CREATE) return;
+        CREATE.uploading = false;
+        CREATE.clipId = clip.clipId; CREATE.fileUrl = clip.fileUrl;
+        CREATE.thumbnailUrl = clip.thumbnailUrl; CREATE.fileType = clip.fileType;
+        CREATE.duration = clip.duration; CREATE.fileSize = clip.fileSize;
+        renderCreate();
+      }).catch(function (err) {
+        console.error('[social-v2] upload', err);
+        if (CREATE) CREATE.uploading = false;
+        if (window.showToast) showToast('Upload failed: ' + (err && err.message || err), true);
+        renderCreate();
+      });
+    },
+    createGoto: function (step) { if (CREATE) { CREATE.step = step; renderCreate(); } },
+    createSubject: function (type) {
+      if (!CREATE) return;
+      CREATE.subjectType = type;
+      if (type !== 'product') { CREATE.productId = null; CREATE.productName = null; CREATE.productPriceCents = 0; CREATE.productMaterials = null; CREATE.productCategory = null; }
+      renderCreate();
+    },
+    createSetProduct: function (pid) {
+      if (!CREATE) return;
+      var products = window.productsData || [];
+      var p = products.filter(function (x) { return x.pid === pid; })[0];
+      CREATE.productId = pid || null;
+      if (p) {
+        CREATE.productName = p.name || null;
+        CREATE.productPriceCents = p.priceCents || 0;
+        CREATE.productMaterials = p.materials || null;
+        CREATE.productCategory = p.categories ? p.categories.join(', ') : null;
+      } else {
+        CREATE.productName = null; CREATE.productPriceCents = 0; CREATE.productMaterials = null; CREATE.productCategory = null;
+      }
+      // No re-render needed — the select already reflects the choice.
+    },
+    createField: function (key, val) { if (CREATE) CREATE[key] = val; },
+    createTreatment: function (id) { if (CREATE) { CREATE.treatment = id; renderCreate(); } },
+    createDest: function (id) {
+      if (!CREATE) return;
+      var i = CREATE.destinations.indexOf(id);
+      if (i >= 0) CREATE.destinations.splice(i, 1); else CREATE.destinations.push(id);
+      renderCreate();
+    },
+    createGenerate: function () {
+      var b = bridge(); if (!b || !CREATE) return;
+      CREATE.generating = true; renderCreate();
+      b.generateCaptions(buildCaptionCtx()).then(function (res) {
+        if (!CREATE) return;
+        CREATE.generating = false;
+        CREATE.captions = (res && res.captions) || [];
+        CREATE.hashtags = (res && res.hashtags) || null;
+        CREATE.selectedCaptionIdx = 0;
+        renderCreate();
+      }).catch(function (err) {
+        console.error('[social-v2] generateCaptions', err);
+        if (CREATE) CREATE.generating = false;
+        if (window.showToast) showToast('Could not generate captions.', true);
+        renderCreate();
+      });
+    },
+    createSelectCaption: function (idx) { if (CREATE) { CREATE.selectedCaptionIdx = idx; renderCreate(); } },
+    createEditCaption: function (val) {
+      if (CREATE && CREATE.captions[CREATE.selectedCaptionIdx]) CREATE.captions[CREATE.selectedCaptionIdx].text = val;
+    },
+    createCopyCaption: function () {
+      if (!CREATE) return;
+      var cap = CREATE.captions[CREATE.selectedCaptionIdx];
+      if (cap && cap.text && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(cap.text).then(function () { if (window.showToast) showToast('Caption copied.'); });
+      }
+    },
+    createCopyHashtags: function () {
+      if (!CREATE || !CREATE.hashtags) return;
+      var all = [].concat(CREATE.hashtags.niche || [], CREATE.hashtags.mid || [], CREATE.hashtags.broad || []);
+      if (all.length && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(all.join(' ')).then(function () { if (window.showToast) showToast('Hashtags copied.'); });
+      }
+    },
+    createSubmit: function () {
+      if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to create social posts.', true); return; }
+      var b = bridge(); if (!b || !CREATE) return;
+      var c = CREATE;
+      var cap = c.captions[c.selectedCaptionIdx];
+      var caption = cap && cap.text ? cap.text : '';
+      var hashtags = c.hashtags
+        ? [].concat(c.hashtags.niche || [], c.hashtags.mid || [], c.hashtags.broad || []).join(' ')
+        : null;
+      var postData = {
+        clipId: c.clipId || null,
+        productId: c.subjectType === 'product' ? (c.productId || null) : null,
+        productName: c.subjectType === 'product' ? (c.productName || null) : null,
+        eventName: c.subjectType === 'event' ? (c.eventName || null) : null,
+        treatment: c.treatment || null,
+        platforms: createPlatforms(),
+        caption: caption,
+        hashtags: hashtags,
+        postedAt: Date.now(),
+        contentType: c.fileType || 'video',
+        thumbnailUrl: c.thumbnailUrl || null,
+        description: c.description || c.productName || c.eventName || null
+      };
+      Promise.resolve(b.createPost(postData)).then(function (postId) {
+        CREATE = null;
+        try { U.slideOut.requestCloseForce(); } catch (e) {}
+        if (window.showToast) showToast('Post recorded! 🎉');
+        load();
+      }).catch(function (err) {
+        console.error('[social-v2] createPost', err);
+        if (window.showToast) showToast('Could not record post: ' + (err && err.message || err), true);
+      });
     },
     _reopen: function (id) { var rec = V2.byId[id]; if (rec) MastEntity.openRecord('social-v2', rec, 'read'); },
     signal: function (id, score) {
