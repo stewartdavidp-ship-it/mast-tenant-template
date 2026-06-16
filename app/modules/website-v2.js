@@ -69,7 +69,23 @@
   // public/config/theme (colorSchemeId / primaryColor / accentColor / fontPair /
   // designScale / navStyle / responsivePriority), brand = config/brand (name /
   // tagline), logo = config/brand/logo (primary url).
-  var V2 = { wp: null, meta: null, status: 'draft', theme: null, brand: null, logo: null, loaded: false };
+  var V2 = { wp: null, meta: null, status: 'draft', theme: null, brand: null, logo: null,
+    nav: null, sectionOrder: null, expanded: {}, importHits: null, loaded: false };
+
+  // Card 2 · which section ids expose a layout VARIANT picker (closing
+  // homepage-v2's variant hatch). The picker options + manifest defaults come
+  // from HomepageBridge.getThemeOptions().variants/variantDefaults; the key the
+  // theme write uses mirrors homepage.js renderVariantPicker (product-grid →
+  // productGridVariant, otherwise <id>Variant).
+  function variantKeyFor(secId) { return secId === 'product-grid' ? 'productGridVariant' : secId + 'Variant'; }
+
+  // Card 2 · which section ids render storefront gallery images (the classic
+  // "Edit images" punt stays for these — native image-grid editing is out of
+  // scope per the build plan). Mirrors homepage.js IMAGE_CAPABLE_SECTIONS.
+  var IMAGE_SECTIONS = ['hero', 'gallery', 'about', 'our-story', 'shop', 'schedule'];
+
+  // Card 2 · contact social-link platforms (mirrors homepage-v2 SOCIAL_PLATFORMS).
+  var SOCIAL_PLATFORMS = ['instagram', 'facebook', 'etsy', 'pinterest', 'tiktok', 'twitter', 'youtube'];
 
   function titleCase(s) { return s ? String(s).replace(/[-_]/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }) : ''; }
 
@@ -488,6 +504,309 @@
     }
   }
 
+  // ── Card 2 · Your words & pictures ──────────────────────────────────
+  // The homepage section editor, absorbed from homepage-v2: per-section enable
+  // toggle + up/down reorder + inline text editing + layout-variant picker, all
+  // INSTANT-APPLY through the single-source homepage writers (hp* / HomepageBridge)
+  // and WebsiteBridge. Section IMAGE grids stay behind the existing classic link.
+  //
+  // Single-source writers:
+  //   • text fields  → window.hpUpdateField(secId, fieldId, value)   → webPresence/config/sections/{key}/{field}
+  //   • social links → window.hpUpdateSocial(platform, value)        → …/sections/contact/socialLinks/{platform}
+  //   • enable       → window.hpToggleSection(secId, enabled)        → public/config/nav/sections/{id}/enabled (+ wp mirror)
+  //   • reorder      → HomepageBridge.setSectionOrder(orderIds)       → public/config/sectionOrder (read-modify-write)
+  //   • variant      → WebsiteBridge.setThemeField(variantKey, value) → public/config/theme/{heroVariant|galleryVariant|productGridVariant}
+
+  // The canonical section list + per-section content fields, sourced from the
+  // homepage host (manifest slots → SECTION_DEFS fallback). Cold-safe: empty
+  // until HomepageBridge is loaded (ensureHostModules warms it, then re-renders).
+  function wordsSectionList() {
+    var b = window.HomepageBridge;
+    var list = (b && b.getSectionList && b.getSectionList()) || [];
+    if (!list.length) return [];
+    // Order by the persisted/manifest order; unknown ids fall to the end.
+    var order = wordsOrder();
+    var byId = {}; list.forEach(function (s) { byId[s.id] = s; });
+    var ordered = [];
+    order.forEach(function (id) { if (byId[id]) { ordered.push(byId[id]); delete byId[id]; } });
+    list.forEach(function (s) { if (byId[s.id]) ordered.push(s); });
+    return ordered;
+  }
+  function wordsFields() {
+    var b = window.HomepageBridge;
+    return (b && b.getSectionFields && b.getSectionFields()) || {};
+  }
+  function wordsOrder() {
+    if (Array.isArray(V2.sectionOrder) && V2.sectionOrder.length) return V2.sectionOrder.slice();
+    var b = window.HomepageBridge;
+    if (b && b.getSectionOrder) { try { return b.getSectionOrder(); } catch (e) {} }
+    return [];
+  }
+  function sectionEnabled(id, required) {
+    if (required) return true;
+    var navData = (V2.nav && V2.nav[id]) || {};
+    var wpData = (V2.wp && V2.wp.sections && V2.wp.sections[id]) || {};
+    return navData.enabled !== false && wpData.enabled !== false; // mirrors homepage.js:283
+  }
+  function sectionData(id) { return (V2.wp && V2.wp.sections && V2.wp.sections[id]) || {}; }
+
+  // One section row: name + On/Off + reorder + expand chevron, with an
+  // expand-to-edit body (text fields + variant + image punt).
+  function wordsRow(sec, idx, total) {
+    var ed = canEdit();
+    var on = sectionEnabled(sec.id, sec.required);
+    var open = !!V2.expanded[sec.id];
+    var sid = esc(sec.id);
+    var pill = '<span class="wv2-sec-pill ' + (on ? 'on' : 'off') + '">' + (on ? 'On' : 'Off') + '</span>';
+    // reorder controls (disabled at the ends)
+    var upDis = idx === 0 ? ' disabled' : '';
+    var dnDis = idx === total - 1 ? ' disabled' : '';
+    var reorder = ed
+      ? '<span class="wv2-sec-move">' +
+          '<button type="button" class="wv2-mv"' + upDis + ' title="Move up" onclick="WebsiteV2.moveSection(\'' + sid + '\',-1)">▲</button>' +
+          '<button type="button" class="wv2-mv"' + dnDis + ' title="Move down" onclick="WebsiteV2.moveSection(\'' + sid + '\',1)">▼</button>' +
+        '</span>'
+      : '';
+    var toggle = '';
+    if (ed) {
+      toggle = sec.required
+        ? '<span class="mu-sub">Always on</span>'
+        : '<button type="button" class="wv2-sec-toggle" onclick="WebsiteV2.toggleSection(\'' + sid + '\',' + (on ? 'false' : 'true') + ')">' + (on ? 'Turn off' : 'Turn on') + '</button>';
+    }
+    var chevron = '<button type="button" class="wv2-sec-expand" aria-expanded="' + open + '" onclick="WebsiteV2.toggleExpand(\'' + sid + '\')">' + (open ? '▾' : '▸') + '</button>';
+    var head =
+      '<div class="wv2-sec-head">' +
+        '<div class="wv2-sec-id">' + chevron + '<span class="wv2-sec-name">' + esc(sec.label || sec.id) + '</span> ' + pill + '</div>' +
+        '<div class="wv2-sec-actions">' + reorder + toggle + '</div>' +
+      '</div>';
+    var body = open ? '<div class="wv2-sec-body">' + wordsSectionEditor(sec) + '</div>' : '';
+    return '<div class="wv2-sec" data-sec="' + sid + '">' + head + body + '</div>';
+  }
+
+  // The expanded editor for one section: inline text fields (instant-apply via
+  // hpUpdateField), social links for contact, the layout-variant picker (where
+  // supported), and the classic image-edit punt.
+  function wordsSectionEditor(sec) {
+    var ed = canEdit();
+    if (!ed) return '<div class="mu-sub">You do not have permission to edit this section.</div>';
+    var fields = wordsFields()[sec.id] || [];
+    var data = sectionData(sec.id);
+    var out = '';
+    if (fields.length) {
+      out += fields.map(function (f) { return wordsFieldGroup(sec.id, f, data); }).join('');
+    } else {
+      out += '<div class="mu-sub">No text content for this section.</div>';
+    }
+    // Contact social links (mirrors homepage editor's contact section).
+    if (sec.id === 'contact') {
+      var links = data.socialLinks || {};
+      out += '<div class="wv2-sub-h" style="margin-top:12px;">Social links</div>' +
+        '<div class="wv2-social-grid">' + SOCIAL_PLATFORMS.map(function (p) {
+          return '<div class="form-group"><label class="form-label">' + esc(titleCase(p)) + '</label>' +
+            '<input class="form-input" type="url" id="wv2soc-' + esc(p) + '" value="' + esc(links[p] || '') + '" placeholder="https://" style="width:100%;"></div>';
+        }).join('') + '</div>';
+    }
+    // Layout variant picker (hero / gallery / product-grid) — closes the
+    // homepage-v2 variant hatch. swatchGrid of manifest variant options.
+    out += wordsVariantSection(sec.id);
+    // Section images stay classic (no native image-grid editing here).
+    if (IMAGE_SECTIONS.indexOf(sec.id) !== -1) {
+      out += '<div class="mu-sub" style="margin-top:12px;">Photos for this section live in the page builder.<br>' +
+        '<button type="button" class="btn btn-secondary btn-small" style="margin-top:6px;" onclick="WebsiteV2.classicImages()">Edit images (classic) →</button></div>';
+    }
+    return out;
+  }
+
+  // One section text field → an instant-apply input wired in wireWords().
+  function wordsFieldGroup(secId, f, data) {
+    var val = data[f.id] !== undefined ? data[f.id] : '';
+    var iid = 'wv2fld-' + secId + '-' + f.id;
+    var inner;
+    if (f.type === 'textarea') {
+      inner = '<textarea class="form-input" id="' + esc(iid) + '" rows="4" style="width:100%;resize:vertical;">' + esc(String(val)) + '</textarea>';
+    } else if (f.type === 'number') {
+      inner = '<input class="form-input" type="number" id="' + esc(iid) + '" value="' + esc(String(val)) + '" style="width:100%;">';
+    } else if (f.type === 'select') {
+      var opts = (f.options || []).map(function (o) {
+        var ov = o.v != null ? o.v : o.value, ol = o.l != null ? o.l : o.label;
+        return '<option value="' + esc(ov) + '"' + (String(val) === String(ov) ? ' selected' : '') + '>' + esc(ol) + '</option>';
+      }).join('');
+      inner = '<select class="form-input" id="' + esc(iid) + '" style="width:100%;">' + opts + '</select>';
+    } else if (f.type === 'toggle') {
+      inner = '<label class="toggle-switch"><input type="checkbox" id="' + esc(iid) + '"' + (val ? ' checked' : '') + '><span class="toggle-slider"></span></label>';
+    } else if (f.type === 'image') {
+      // image fields edit on classic (no native image-grid editing here).
+      return '<div class="form-group"><label class="form-label">' + esc(f.label) + '</label>' +
+        '<div class="mu-sub">Set in the page builder.</div></div>';
+    } else {
+      inner = '<input class="form-input" type="text" id="' + esc(iid) + '" value="' + esc(String(val)) + '" style="width:100%;">';
+    }
+    return '<div class="form-group"><label class="form-label">' + esc(f.label) + '</label>' + inner + '</div>';
+  }
+
+  // Layout-variant picker for a section (hero/gallery/product-grid). swatchGrid
+  // of the manifest's variant options; the selected tile is the live theme value
+  // (else the manifest default). Picking writes WebsiteBridge.setThemeField.
+  function wordsVariantSection(secId) {
+    var opts = themeOptions();
+    var variants = (opts.variants && opts.variants[secId]) || null;
+    if (!variants || !variants.length) return '';
+    var t = V2.theme || {};
+    var key = variantKeyFor(secId);
+    var def = (opts.variantDefaults && opts.variantDefaults[secId]) || (variants[0] && variants[0].id) || '';
+    var selected = t[key] || def;
+    var items = variants.map(function (v) { return { value: v.id, label: v.label || v.id, _desc: v.desc || '' }; });
+    var grid = U.swatchGrid({
+      items: items, selected: selected, onSelectFnName: 'wv2PickVariant',
+      idKey: 'value',
+      renderItem: function (it) {
+        return '<span class="wv2-var-name">' + esc(it.label) + '</span>' +
+          (it._desc ? '<span class="wv2-var-desc mu-sw-label">' + esc(it._desc) + '</span>' : '');
+      }
+    });
+    // The variant id is encoded into the fn name via a per-section forwarder so
+    // the flat swatchGrid delegate (window[fnName]) routes to the right section.
+    var forwarder = 'wv2PickVariant_' + secId.replace(/-/g, '_');
+    grid = grid.replace(/data-sw="wv2PickVariant"/g, 'data-sw="' + forwarder + '"');
+    window[forwarder] = (function (sid) { return function (variantId) { WebsiteV2.pickVariant(sid, variantId); }; })(secId);
+    return '<div class="wv2-sub-h" style="margin-top:12px;">Layout</div>' + grid;
+  }
+
+  // Mount Card 2 into its scaffold body (wv2WordsBody) — replaces the PR2
+  // "Coming in this builder" placeholder. Re-called by reloadSoon() to refresh.
+  function mountWords() {
+    var host = document.getElementById('wv2WordsBody');
+    if (!host) return;
+    host.innerHTML = wordsHtml();
+    wireWords();
+  }
+  function wordsHtml() {
+    if (!canEdit()) {
+      return '<div class="mu-sub">You do not have permission to edit your homepage content.</div>';
+    }
+    var list = wordsSectionList();
+    var sectionsHtml = list.length
+      ? '<div class="wv2-seclist">' + list.map(function (s, i) { return wordsRow(s, i, list.length); }).join('') + '</div>'
+      : '<div class="mu-sub">Your homepage sections load with your template…</div>';
+    return wordsImportHtml() + sectionsHtml;
+  }
+
+  // "Copy from my old site" — one URL → analyzeExistingSite (the brand/content
+  // half only; NO catalog crawl). Suggested values surface as "Use this" chips
+  // that write into the section fields above (never auto-applied).
+  function wordsImportHtml() {
+    var hits = V2.importHits;
+    var resultHtml = '';
+    if (hits) {
+      var chips = [];
+      if (hits.heroHeadline) chips.push(importChip('Hero headline', hits.heroHeadline, 'hero', 'headline'));
+      if (hits.heroSub) chips.push(importChip('Hero subheadline', hits.heroSub, 'hero', 'subheadline'));
+      if (hits.aboutText) chips.push(importChip('About text', hits.aboutText, 'about', 'body'));
+      if (hits.contactEmail) chips.push(importChip('Contact email', hits.contactEmail, 'contact', 'email'));
+      if (hits.contactPhone) chips.push(importChip('Contact phone', hits.contactPhone, 'contact', 'phone'));
+      resultHtml = chips.length
+        ? '<div class="wv2-import-hits">' + chips.join('') + '</div>'
+        : '<div class="mu-sub" style="margin-top:8px;">No reusable text found on that page.</div>';
+    }
+    return '<details class="wv2-finetune wv2-import">' +
+      '<summary>Copy from my old site</summary>' +
+      '<div class="wv2-finetune-body">' +
+        '<div class="mu-sub" style="margin-bottom:8px;">Paste your existing site\'s address. We\'ll read its words (not its products) and offer them as one-tap fills.</div>' +
+        '<div class="wv2-import-row">' +
+          '<input class="form-input" id="wv2ImportUrl" type="url" placeholder="https://your-old-site.com" style="flex:1;min-width:200px;">' +
+          '<button type="button" class="btn btn-primary btn-small" id="wv2ImportBtn" onclick="WebsiteV2.copyFromSite()">Read it</button>' +
+        '</div>' +
+        '<div id="wv2ImportStatus" class="mu-sub" style="margin-top:6px;"></div>' +
+        resultHtml +
+      '</div></details>';
+  }
+  // A single "Use this" chip — clicking writes the suggested value into the
+  // target section field (hpUpdateField) and re-renders so the field shows it.
+  function importChip(label, value, secId, fieldId) {
+    var preview = String(value).length > 60 ? String(value).slice(0, 60) + '…' : String(value);
+    var token = 'wv2imp_' + secId + '_' + fieldId;
+    window['_' + token] = value; // stash the full value (avoids inline-quote escaping)
+    return '<div class="wv2-impchip">' +
+      '<div class="wv2-impchip-main"><span class="wv2-impchip-label">' + esc(label) + '</span>' +
+        '<span class="wv2-impchip-val">' + esc(preview) + '</span></div>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.useImport(\'' + esc(token) + '\',\'' + esc(secId) + '\',\'' + esc(fieldId) + '\')">Use this</button>' +
+    '</div>';
+  }
+
+  // Wire the instant-apply bindings Card 2 can't do inline (text fields, social
+  // links, select/toggle, the import URL). swatch tiles fire via the shared
+  // delegate (data-sw → the per-section variant forwarder).
+  function wireWords() {
+    if (!canEdit()) return;
+    var list = wordsSectionList();
+    var fieldsBySec = wordsFields();
+    list.forEach(function (sec) {
+      if (!V2.expanded[sec.id]) return; // only the open editor has inputs
+      (fieldsBySec[sec.id] || []).forEach(function (f) {
+        if (f.type === 'image') return;
+        var el = document.getElementById('wv2fld-' + sec.id + '-' + f.id);
+        if (!el) return;
+        U.bindInstant(el, {
+          key: 'wv2fld:' + sec.id + ':' + f.id,
+          delay: f.type === 'select' || f.type === 'toggle' ? 0 : 500,
+          writer: (function (secId, field) {
+            return function (raw) {
+              var value = raw;
+              if (field.type === 'number') value = parseInt(raw, 10) || 0;
+              else if (field.type === 'toggle') value = !!raw;
+              if (!hpReady('hpUpdateField')) return;
+              // optimistic cache so a re-render keeps the typed value
+              if (!V2.wp.sections) V2.wp.sections = {};
+              if (!V2.wp.sections[secId]) V2.wp.sections[secId] = {};
+              V2.wp.sections[secId][field.id] = value;
+              withSave(Promise.resolve(window.hpUpdateField(secId, field.id, value)), { reload: false });
+            };
+          })(sec.id, f)
+        });
+      });
+      if (sec.id === 'contact') {
+        SOCIAL_PLATFORMS.forEach(function (p) {
+          var el = document.getElementById('wv2soc-' + p);
+          if (!el) return;
+          U.bindInstant(el, {
+            key: 'wv2soc:' + p, delay: 500,
+            writer: (function (plat) {
+              return function (v) {
+                if (!hpReady('hpUpdateSocial')) return;
+                if (!V2.wp.sections) V2.wp.sections = {};
+                if (!V2.wp.sections.contact) V2.wp.sections.contact = {};
+                if (!V2.wp.sections.contact.socialLinks) V2.wp.sections.contact.socialLinks = {};
+                V2.wp.sections.contact.socialLinks[plat] = v;
+                withSave(Promise.resolve(window.hpUpdateSocial(plat, v)), { reload: false });
+              };
+            })(p)
+          });
+        });
+      }
+    });
+  }
+
+  // Guard: the homepage host writers (window.hp*) live in homepage.js. If a
+  // delegated write isn't loaded yet, kick a load + toast and bail (never a
+  // silent no-op). Mirrors homepage-v2's hostReady.
+  function hpReady(fnName) {
+    if (typeof window[fnName] === 'function') return true;
+    try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('homepage'); } catch (e) {}
+    if (window.showToast) showToast('Site editor still loading — try again', true);
+    return false;
+  }
+
+  // Guarded HomepageBridge call (for setSectionOrder). Same pattern as
+  // WebsiteBridgeCall — reject (never silently no-op) if the host isn't ready.
+  function HomepageBridgeCall(method) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    if (window.HomepageBridge && typeof window.HomepageBridge[method] === 'function') {
+      return window.HomepageBridge[method].apply(window.HomepageBridge, args);
+    }
+    try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('homepage'); } catch (e) {}
+    return Promise.reject(new Error('Site editor still loading — try again'));
+  }
+
   function ensureStyles() {
     if (document.getElementById('wv2-styles')) return;
     var css =
@@ -537,7 +856,35 @@
       // layout & scale grid + conflict warnings
       '.wv2-layoutgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;}' +
       '.wv2-layoutwarn{margin-top:12px;padding:10px 12px;border-radius:8px;background:color-mix(in srgb,var(--warning,var(--amber)) 12%,transparent);border:1px solid color-mix(in srgb,var(--warning,var(--amber)) 26%,transparent);}' +
-      '.wv2-warn-line{font-size:0.78rem;color:var(--warning,var(--amber));margin-bottom:4px;}.wv2-warn-line:last-child{margin-bottom:0;}';
+      '.wv2-warn-line{font-size:0.78rem;color:var(--warning,var(--amber));margin-bottom:4px;}.wv2-warn-line:last-child{margin-bottom:0;}' +
+      // ── Card 2 · Your words & pictures ──
+      '.wv2-seclist{display:flex;flex-direction:column;}' +
+      '.wv2-sec{border-top:1px solid var(--border);}.wv2-sec:first-child{border-top:none;}' +
+      '.wv2-sec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;}' +
+      '.wv2-sec-id{display:flex;align-items:center;gap:6px;min-width:0;}' +
+      '.wv2-sec-name{font-size:0.9rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+      '.wv2-sec-pill{font-size:0.72rem;font-weight:600;padding:1px 8px;border-radius:999px;}' +
+      '.wv2-sec-pill.on{color:var(--success);background:color-mix(in srgb,var(--success) 14%,transparent);}' +
+      '.wv2-sec-pill.off{color:var(--text-secondary,var(--warm-gray));background:color-mix(in srgb,var(--text-primary) 8%,transparent);}' +
+      '.wv2-sec-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}' +
+      '.wv2-sec-expand{background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;}' +
+      '.wv2-sec-expand:hover{color:var(--text-primary);}' +
+      '.wv2-sec-move{display:inline-flex;gap:2px;}' +
+      '.wv2-mv{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.72rem;width:22px;height:22px;line-height:1;padding:0;}' +
+      '.wv2-mv:hover:not(:disabled){color:var(--text-primary);border-color:var(--teal);}.wv2-mv:disabled{opacity:0.35;cursor:default;}' +
+      '.wv2-sec-toggle{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.72rem;padding:3px 10px;}' +
+      '.wv2-sec-toggle:hover{color:var(--text-primary);border-color:var(--teal);}' +
+      '.wv2-sec-body{padding:4px 0 14px 22px;}' +
+      '.wv2-social-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;}' +
+      '.wv2-var-name{font-size:0.85rem;color:var(--text-primary);}' +
+      '.wv2-var-desc{font-size:0.72rem;margin-top:2px;}' +
+      // Copy-from-site import
+      '.wv2-import-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
+      '.wv2-import-hits{margin-top:10px;display:flex;flex-direction:column;gap:8px;}' +
+      '.wv2-impchip{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:color-mix(in srgb,var(--text-primary) 3%,transparent);}' +
+      '.wv2-impchip-main{min-width:0;display:flex;flex-direction:column;gap:1px;}' +
+      '.wv2-impchip-label{font-size:0.72rem;font-weight:600;color:var(--text-secondary,var(--warm-gray));}' +
+      '.wv2-impchip-val{font-size:0.85rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;}';
     var st = document.createElement('style'); st.id = 'wv2-styles'; st.textContent = css;
     (document.head || document.documentElement).appendChild(st);
   }
@@ -552,9 +899,11 @@
     tab.innerHTML =
       U.pageHeader({ title: 'Your website', subtitle: 'Everything your visitors see — in one place.' }) +
       header + stack;
-    // Fill Card 1 (Look & feel) into its mount now that the scaffold is in the DOM.
-    // The other cards remain PR4–PR6 placeholders.
+    // Fill Card 1 (Look & feel) + Card 2 (Your words & pictures) into their
+    // mounts now that the scaffold is in the DOM. Cards 3–4 remain PR5/PR6
+    // placeholders.
     mountLookFeel();
+    mountWords();
   }
 
   // ── public API ─────────────────────────────────────────────────────
@@ -617,6 +966,102 @@
       input.click();
     },
 
+    // ── Card 2 · Your words & pictures ──────────────────────────────────
+    // Section enable/disable → hpToggleSection (writes nav/sections enabled +
+    // webPresence mirror). Instant-apply.
+    toggleSection: function (id, enabled) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      if (!hpReady('hpToggleSection')) return;
+      // optimistic cache so the pill flips without waiting for the re-read
+      if (!V2.nav) V2.nav = {}; if (!V2.nav[id]) V2.nav[id] = {}; V2.nav[id].enabled = !!enabled;
+      if (!V2.wp.sections) V2.wp.sections = {}; if (!V2.wp.sections[id]) V2.wp.sections[id] = {}; V2.wp.sections[id].enabled = !!enabled;
+      withSave(Promise.resolve(window.hpToggleSection(id, !!enabled)), { reload: false }).then(mountWords);
+    },
+    // Expand/collapse a section's inline editor. Pure UI — re-mount Card 2.
+    toggleExpand: function (id) {
+      V2.expanded[id] = !V2.expanded[id];
+      mountWords();
+    },
+    // Up/down reorder → HomepageBridge.setSectionOrder (read-modify-write the
+    // public/config/sectionOrder array in ONE writer). dir: -1 up / +1 down.
+    moveSection: function (id, dir) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var list = wordsSectionList();
+      var order = list.map(function (s) { return s.id; });
+      var i = order.indexOf(id);
+      var j = i + dir;
+      if (i < 0 || j < 0 || j >= order.length) return;
+      order.splice(j, 0, order.splice(i, 1)[0]);
+      V2.sectionOrder = order.slice(); // optimistic so the re-render shows the new order
+      mountWords();
+      withSave(HomepageBridgeCall('setSectionOrder', order), { reload: false });
+    },
+    // Layout variant tile → WebsiteBridge.setThemeField (public/config/theme/
+    // {heroVariant|galleryVariant|productGridVariant}). Closes homepage-v2's
+    // variant hatch. Instant-apply.
+    pickVariant: function (secId, variantId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var key = variantKeyFor(secId);
+      if (V2.theme) V2.theme[key] = variantId; // optimistic so the tile selects
+      withSave(WebsiteBridgeCall('setThemeField', key, variantId), { reload: false }).then(mountWords);
+    },
+    // "Use this" import chip → write the suggested value into a section field via
+    // hpUpdateField, then re-render so the field shows it. Never auto-applied.
+    useImport: function (token, secId, fieldId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var value = window['_' + token];
+      if (value == null) return;
+      if (!hpReady('hpUpdateField')) return;
+      if (!V2.wp.sections) V2.wp.sections = {};
+      if (!V2.wp.sections[secId]) V2.wp.sections[secId] = {};
+      V2.wp.sections[secId][fieldId] = value;
+      V2.expanded[secId] = true; // open the section so the filled value is visible
+      withSave(Promise.resolve(window.hpUpdateField(secId, fieldId, value)), { reload: false }).then(mountWords);
+      if (window.showToast) showToast('Added to your homepage.');
+    },
+    // "Copy from my old site" — analyzeExistingSite CF (brand/content half only,
+    // NO catalog crawl). Maps the analysis to reusable section-field suggestions
+    // surfaced as "Use this" chips. Never auto-applied.
+    copyFromSite: function () {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var input = document.getElementById('wv2ImportUrl');
+      var statusEl = document.getElementById('wv2ImportStatus');
+      var btn = document.getElementById('wv2ImportBtn');
+      var url = (input && input.value || '').trim();
+      if (!url) { if (statusEl) statusEl.textContent = 'Enter your old site\'s address first.'; return; }
+      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+      if (!window.firebase || !firebase.functions) { if (statusEl) statusEl.textContent = 'Site reader unavailable right now.'; return; }
+      if (btn) { btn.disabled = true; btn.textContent = 'Reading…'; }
+      if (statusEl) statusEl.textContent = 'Reading your old site… this can take up to a minute.';
+      var tid = ''; try { tid = MastDB.tenantId(); } catch (e) {}
+      firebase.functions().httpsCallable('analyzeExistingSite', { timeout: 120000 })({ url: url, tenantId: tid })
+        .then(function (res) {
+          var a = (res && res.data && res.data.analysis) || {};
+          // brand/content half ONLY — ignore template-match / catalog crawl fields
+          V2.importHits = {
+            heroHeadline: a.hero && a.hero.headline,
+            heroSub: a.hero && a.hero.subheadline,
+            aboutText: a.aboutText,
+            contactEmail: a.contactInfo && a.contactInfo.email,
+            contactPhone: a.contactInfo && a.contactInfo.phone
+          };
+          mountWords();
+          // re-open the import disclosure + show the result (mountWords rebuilds it collapsed)
+          var det = document.querySelector('.wv2-import'); if (det) det.open = true;
+        })
+        .catch(function (err) {
+          console.error('[website-v2] copyFromSite', err);
+          var s = document.getElementById('wv2ImportStatus');
+          if (s) s.textContent = 'Could not read that site: ' + (err && err.message ? err.message : 'try another address.');
+          var b = document.getElementById('wv2ImportBtn'); if (b) { b.disabled = false; b.textContent = 'Read it'; }
+        });
+    },
+    // Section images stay classic — open the page builder (the existing punt).
+    classicImages: function () {
+      if (typeof navigateToClassic === 'function') navigateToClassic('homepage');
+      else if (typeof navigateTo === 'function') navigateTo('homepage');
+    },
+
     copyLink: function () {
       var url = liveUrl();
       if (!url) { if (window.showToast) showToast('Live URL unavailable', true); return; }
@@ -647,7 +1092,12 @@
       Promise.resolve(MastDB.get('public/config/theme')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('config/brand')).catch(function () { return null; }),
       Promise.resolve(MastDB.get('config/brand/logo')).catch(function () { return null; }),
-      Promise.resolve(MastDB.get('public/config/nav/logoUrl')).catch(function () { return null; })
+      Promise.resolve(MastDB.get('public/config/nav/logoUrl')).catch(function () { return null; }),
+      // Card 2 (Your words & pictures) reads: per-section enabled states live
+      // under nav/sections (mirrored on webPresence sections); the persisted
+      // homepage section order lives under sectionOrder. Both guarded/cold-safe.
+      Promise.resolve(MastDB.get('public/config/nav/sections')).catch(function () { return null; }),
+      Promise.resolve(MastDB.get('public/config/sectionOrder')).catch(function () { return null; })
     ]).then(function (r) {
       var wp = r[0];
       V2.wp = wp || {};
@@ -657,6 +1107,8 @@
       V2.brand = r[2] || {};
       V2.logo = r[3] || {};
       V2.legacyLogoUrl = r[4] || null;
+      V2.nav = r[5] || {};                                  // section enabled states
+      V2.sectionOrder = Array.isArray(r[6]) ? r[6] : null;  // persisted order (else manifest/list order)
       V2.loaded = true;
       render();
     }).catch(function (e) { console.error('[website-v2] load', e); V2.loaded = true; render(); });

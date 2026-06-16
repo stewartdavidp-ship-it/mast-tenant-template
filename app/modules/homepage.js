@@ -21,6 +21,10 @@
   var themeConfig = null;
   var templateManifest = null;
   var navSections = null;
+  // Persisted homepage section order (public/config/sectionOrder) — the array
+  // the storefront reads to order its homepage slots. null until loaded; the
+  // HomepageBridge.getSectionOrder/setSectionOrder accessors own it.
+  var navSectionOrder = null;
   // W1.8 round-3 — testimonials surfaced in the Page Builder Testimonials
   // section so operators see review-driven entries from public/testimonials/
   // alongside any image-based legacy entries.
@@ -122,6 +126,14 @@
 
     // Load nav sections (enabled states)
     navSections = (await MastDB.get('public/config/nav/sections')) || {};
+
+    // Load persisted homepage section order (public/config/sectionOrder) so the
+    // v2 builder's reorder UI seeds from the live order. Empty/absent → the
+    // accessor falls back to manifest homepageFlow / section-list order.
+    try {
+      var _so = await MastDB.get('public/config/sectionOrder');
+      navSectionOrder = Array.isArray(_so) ? _so : null;
+    } catch (_e) { navSectionOrder = null; }
 
     // W1.8 round-3 — load review-driven testimonials so the Testimonials
     // section card can surface them with visibility toggles.
@@ -694,12 +706,63 @@
     },
     // Expose the loaded template manifest (color schemes + font pairs) so the
     // twin can render native scheme/font choosers without re-fetching.
+    // ALSO exposes the per-section layout VARIANT options + their manifest
+    // defaults (website-v2 Card 2's variant pickers — closing homepage-v2's
+    // legacy variant hatch) and the canonical section list (manifest slots,
+    // SECTION_DEFS fallback) so the twin doesn't re-derive either.
     getThemeOptions: function () {
+      var m = templateManifest || {};
       return {
-        schemes: (templateManifest && templateManifest.colorSchemes) || [],
-        fonts: (templateManifest && templateManifest.fontPairs) || [],
-        templateName: (templateManifest && templateManifest.name) || null
+        schemes: m.colorSchemes || [],
+        fonts: m.fontPairs || [],
+        templateName: m.name || null,
+        // variants: { hero:[{id,label,desc}], gallery:[…], 'product-grid':[…] }
+        variants: VARIANT_OPTIONS,
+        // variantDefaults: the manifest's heroVariant/galleryVariant/
+        // productGridVariant (the "template default" the twin compares against).
+        variantDefaults: {
+          hero: m.heroVariant || (VARIANT_OPTIONS.hero[0] || {}).id,
+          gallery: m.galleryVariant || (VARIANT_OPTIONS.gallery[0] || {}).id,
+          'product-grid': m.productGridVariant || (VARIANT_OPTIONS['product-grid'][0] || {}).id
+        }
       };
+    },
+    // The canonical homepage section list (manifest slots → SECTION_DEFS
+    // fallback): [{id,label,required,…}]. Single-sources getSectionList() so the
+    // twin's Card 2 list matches the page builder exactly.
+    getSectionList: function () { return getSectionList(); },
+    // The editable content fields per section type (mirrors SECTION_DEFS) so the
+    // twin renders the same inline text inputs the page builder does, keyed by
+    // section id. Returns { hero:[{id,label,type,options?}], … }.
+    getSectionFields: function () {
+      var out = {};
+      SECTION_DEFS.forEach(function (d) { out[d.key] = d.fields || []; });
+      return out;
+    },
+    // Current homepage section order — the persisted public/config/sectionOrder
+    // array if set, else the manifest homepageFlow, else the section-list order.
+    // Single-sources the order read so the twin's reorder UI seeds correctly.
+    getSectionOrder: function () {
+      if (Array.isArray(navSectionOrder) && navSectionOrder.length) return navSectionOrder.slice();
+      var m = templateManifest || {};
+      if (Array.isArray(m.homepageFlow) && m.homepageFlow.length) return m.homepageFlow.slice();
+      return getSectionList().map(function (s) { return s.id; });
+    },
+    // Persist a reordered homepage section order → public/config/sectionOrder.
+    // Single-source writer (the storefront reads this array to order its slots);
+    // keeps the cache in sync + marks the site unpublished like every other
+    // homepage write. orderIds: array of section ids in display order.
+    setSectionOrder: async function (orderIds) {
+      orderIds = (orderIds || []).filter(function (x) { return !!x; });
+      navSectionOrder = orderIds.slice();
+      await MastDB.set('public/config/sectionOrder', orderIds);
+      markUnpublished();
+      return orderIds;
+    },
+    // Read-through theme config so the twin can refresh after a delegated write
+    // without touching this module's private caches.
+    getThemeConfig: async function () {
+      return (await MastDB.get('public/config/theme').catch(function () { return null; })) || {};
     },
     // Ensure section content + theme + testimonials are loaded so the twin's
     // delegated writes operate on populated caches. Idempotent.
