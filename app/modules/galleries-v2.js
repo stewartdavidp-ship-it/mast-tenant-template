@@ -502,8 +502,14 @@
       var g = V2.intakeGallery;
       if (!g || !g._key) { if (window.showToast) showToast('Gallery context lost — reopen and try again.', true); return false; }
       function val(id) { return ((document.getElementById(id) || {}).value || '').trim(); }
-      var rate = parseFloat(val('plNewRate'));
-      if (isNaN(rate) || rate < 0 || rate > 100) { if (window.showToast) showToast('Commission must be 0-100%.', true); return false; }
+      var ratePct = parseFloat(val('plNewRate'));
+      if (isNaN(ratePct) || ratePct < 0 || ratePct > 100) { if (window.showToast) showToast('Commission must be 0-100%.', true); return false; }
+      // commissionRate is canonically a 0–1 FRACTION: every reader (this module's
+      // and consignments-v2's placementTotals payout math + pctLabel display) treats
+      // it as such, and consignment.js createPlacement stores input%/100. The form
+      // collects a whole-number percent, so divide by 100 before persisting — writing
+      // the raw 40 made the record show "4000%" and broke maker-earnings math.
+      var commissionRate = ratePct / 100;
       var email = val('plNewEmail');
       if (!U.validate.email(email)) { if (window.showToast) showToast('"' + email + '" doesn\'t look like a valid email.', true); return false; }
       var id = MastDB.consignments.newKey();
@@ -515,7 +521,7 @@
         locationName: g.name || '',
         locationContact: val('plNewContact'),
         locationEmail: email,
-        commissionRate: rate,
+        commissionRate: commissionRate,
         status: 'active',
         lineItems: {},
         notes: val('plNewNotes'),
