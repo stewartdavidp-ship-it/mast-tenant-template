@@ -2952,6 +2952,48 @@
     // module's private caches. Single-sources the theme read.
     getThemeConfig: async function () {
       return (await MastDB.get('public/config/theme').catch(function () { return null; })) || {};
+    },
+
+    // ── Categories (v2 "Your shop" Card 3) ───────────────────────────────
+    // The v2 builder edits public/config/categories WITHOUT ever rendering the
+    // legacy Categories tab, so the writes must single-source through this
+    // module's saveCategories(): it sets the WHOLE array (last-write-wins),
+    // refreshes the global CATEGORIES via loadTenantCategories() (so every shop
+    // pill / dropdown picks up the change), and stamps the draft signal via
+    // markUnpublished(). NEVER raw MastDB.set('public/config/categories') from the
+    // twin — that would skip the global refresh + draft stamp.
+
+    // Read-through: the live categories array (filtered to valid {id,label} rows,
+    // RTDB object→array normalized). Cold-safe; the twin owns the read-modify-write
+    // but seeds from here so it operates on the canonical persisted order.
+    getCategories: async function () {
+      var raw = await MastDB.get('public/config/categories').catch(function () { return null; });
+      if (raw && !Array.isArray(raw) && typeof raw === 'object') raw = Object.values(raw).filter(Boolean);
+      return (raw && Array.isArray(raw)) ? raw.filter(function (c) { return c && c.id && c.label; }) : [];
+    },
+    // Write the WHOLE categories array (the twin does read-modify-write in ONE
+    // place, so this is the single committed writer). Mutates the module's
+    // tenantCategories cache then delegates to the legacy saveCategories() so the
+    // MastDB.set + loadTenantCategories() global refresh + markUnpublished() all
+    // fire exactly as the legacy Categories tab does. Returns the saved array.
+    saveCategories: async function (arr) {
+      tenantCategories = (Array.isArray(arr) ? arr : []).filter(function (c) { return c && c.id && c.label; });
+      await saveCategories();
+      // keep the legacy inline-edit cursor coherent if the legacy tab renders later
+      editingCategoryIdx = null;
+      // if the legacy Categories tab is currently mounted, repaint it too
+      if (currentSubTab === 'categories' && typeof onCatChanged === 'function') { try { onCatChanged(); } catch (e) {} }
+      return tenantCategories.slice();
+    },
+    // Slug helper shared with the twin (so the v2 add/rename derives ids the same
+    // way the legacy tab does — slugify + numeric de-dupe). label → unique slug.
+    slugForCategory: function (label, currentList, excludeIdx) {
+      var list = Array.isArray(currentList) ? currentList : (tenantCategories || []);
+      var base = slugify(label);
+      if (!base) return '';
+      var slug = base, n = 2;
+      while (list.some(function (c, i) { return i !== excludeIdx && c && c.id === slug; })) { slug = base + '-' + n; n++; }
+      return slug;
     }
   };
 
@@ -3163,7 +3205,19 @@
   // ── Register Module ──
   MastAdmin.registerModule('website', {
     routes: {
-      'website': { tab: 'websiteTab', setup: function() { renderWebsite(); } }
+      'website': { tab: 'websiteTab', setup: function() {
+        // Deep-link support: the v2 "Your shop" card's single retained classic
+        // hatch reaches the catalog Import subsystem via
+        // navigateToClassic('website', { tab: 'import' }). Honor a ?tab= param
+        // (whitelisted to real sub-tabs) so the door lands on Import, not Overview.
+        try {
+          var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
+          var want = p && p.tab;
+          var VALID = { overview: 1, template: 1, style: 1, categories: 1, 'import': 1, storefront: 1 };
+          if (want && VALID[want]) currentSubTab = want;
+        } catch (e) {}
+        renderWebsite();
+      } }
     }
   });
 })();
