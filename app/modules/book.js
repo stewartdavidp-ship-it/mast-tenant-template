@@ -5729,6 +5729,21 @@
     '</details>';
   }
 
+  // Order/incident timestamps (completedAt / createdAt) may arrive as an ISO
+  // string, epoch millis, or a Firestore Timestamp (a {seconds,nanoseconds}
+  // plain object, or a real Timestamp with .toDate()). Coerce to a comparable
+  // date string so the window `.substring(0,10)` filters and the incident
+  // `.localeCompare` sort never throw on a Timestamp object (which has no
+  // .substring/.localeCompare). Mirrors classes-v2.js renderReports.
+  function dateStr(v) {
+    if (!v) return '';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number') { var dn = new Date(v); return isNaN(dn.getTime()) ? '' : dn.toISOString(); }
+    if (typeof v.toDate === 'function') { try { return v.toDate().toISOString(); } catch (e) { return ''; } }
+    if (typeof v.seconds === 'number') { var ds = new Date(v.seconds * 1000); return isNaN(ds.getTime()) ? '' : ds.toISOString(); }
+    return '';
+  }
+
   function renderReports(sessions, classes, enrollments, orders, sessionLogs, allIncidents) {
     var content = document.getElementById('bookReportsContent');
     if (!content) return;
@@ -5772,7 +5787,7 @@
     var filteredOrders = orders.filter(function(o) {
       if (!o.completedAt && !o.createdAt) return false;
       if (cutoffDate) {
-        var orderDate = (o.completedAt || o.createdAt || '').substring(0, 10);
+        var orderDate = dateStr(o.completedAt || o.createdAt).substring(0, 10);
         return orderDate >= cutoffDate;
       }
       return true;
@@ -5781,7 +5796,9 @@
       if (!o.items) return;
       (Array.isArray(o.items) ? o.items : Object.values(o.items)).forEach(function(item) {
         if (item.bookingType === 'class' || item.bookingType === 'pass') {
-          revenue += (item.total || ((item.priceCents || 0) / 100) || 0);
+          // item.price (dollars) tail-fallback: storefront class/pass checkout
+          // lines may carry only `price`, not the canonical `priceCents`/`total`.
+          revenue += (item.total || ((item.priceCents || 0) / 100) || item.price || 0);
         }
       });
     });
@@ -5864,7 +5881,7 @@
     var filteredIncidents = allIncidents;
     if (cutoffDate) {
       filteredIncidents = allIncidents.filter(function(inc) {
-        return (inc.createdAt || '').substring(0, 10) >= cutoffDate;
+        return dateStr(inc.createdAt).substring(0, 10) >= cutoffDate;
       });
     }
     if (filteredIncidents.length > 0) {
@@ -5881,7 +5898,7 @@
       html += '</div>';
 
       // Recent incidents list (max 5)
-      var recentInc = filteredIncidents.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }).slice(0, 5);
+      var recentInc = filteredIncidents.sort(function(a, b) { return dateStr(b.createdAt).localeCompare(dateStr(a.createdAt)); }).slice(0, 5);
       recentInc.forEach(function(inc) {
         var sevColor = SEVERITY_COLORS[inc.severity] || '#BDBDBD';
         html += '<div style="' + CARD_STYLE + 'margin-bottom:8px;border-left:3px solid ' + sevColor + ';">' +
@@ -5929,7 +5946,7 @@
           if (!o.items) return;
           (Array.isArray(o.items) ? o.items : Object.values(o.items)).forEach(function(item) {
             if (item.bookingType === 'class' && item.classId === cid) {
-              clsRevenue += (item.total || ((item.priceCents || 0) / 100) || 0);
+              clsRevenue += (item.total || ((item.priceCents || 0) / 100) || item.price || 0);
             }
           });
         });

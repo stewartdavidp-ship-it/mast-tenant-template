@@ -793,6 +793,22 @@
   // items), with an overdue-completion-reports warning section and an incidents
   // summary. All computed client-side from loaded classes + sessions +
   // enrollments + the lazily-loaded orders/incidents (V2.reportData). Read-only.
+  // Order/incident timestamps (completedAt / createdAt) may arrive as an ISO
+  // string, epoch millis, or a Firestore Timestamp (a {seconds,nanoseconds}
+  // plain object, or a real Timestamp with .toDate()). Coerce to a comparable
+  // date string so the window `.substring(0,10)` filters and the incident
+  // `.localeCompare` sort never throw on a Timestamp object (which has no
+  // .substring/.localeCompare) — that throw was resetting reportData to empty
+  // and silently zeroing the default 30-day revenue.
+  function dateStr(v) {
+    if (!v) return '';
+    if (typeof v === 'string') return v;
+    if (typeof v === 'number') { var dn = new Date(v); return isNaN(dn.getTime()) ? '' : dn.toISOString(); }
+    if (typeof v.toDate === 'function') { try { return v.toDate().toISOString(); } catch (e) { return ''; } }
+    if (typeof v.seconds === 'number') { var ds = new Date(v.seconds * 1000); return isNaN(ds.getTime()) ? '' : ds.toISOString(); }
+    return '';
+  }
+
   function renderReports() {
     // Kick the async orders+incidents read on first Reports-lens entry — but
     // only once the main classes/sessions data is in (incidents are read off the
@@ -821,13 +837,18 @@
 
     // ── REVENUE: order-line join (legacy parity) ──────────────────────────────
     // Walk orders, keep those in-range (o.completedAt || o.createdAt), and sum
-    // class/pass line items: item.total || (item.priceCents/100). The headline
-    // figure here MATCHES legacy book.js — NOT enrollment seat price. Per-class
-    // revenue counts only bookingType==='class' items keyed by item.classId.
+    // class/pass line items: item.total || (item.priceCents/100) || item.price.
+    // The item.price (dollars) tail-fallback covers storefront class/pass
+    // checkout lines that carry only `price` and neither `total` nor
+    // `priceCents` (the canonical order-line money field is priceCents, so a
+    // class line lacking it is a checkout-write deviation) — without it the
+    // headline reads $0.00 even with real bookings. The headline figure here
+    // MATCHES legacy book.js — NOT enrollment seat price. Per-class revenue
+    // counts only bookingType==='class' items keyed by item.classId.
     var orders = (rd && rd.orders) || [];
     var filteredOrders = orders.filter(function (o) {
       if (!o.completedAt && !o.createdAt) return false;
-      if (cutoffDate) { return (o.completedAt || o.createdAt || '').substring(0, 10) >= cutoffDate; }
+      if (cutoffDate) { return dateStr(o.completedAt || o.createdAt).substring(0, 10) >= cutoffDate; }
       return true;
     });
     function orderItems(o) { return o.items ? (Array.isArray(o.items) ? o.items : Object.keys(o.items).map(function (k) { return o.items[k]; })) : []; }
@@ -836,10 +857,10 @@
     filteredOrders.forEach(function (o) {
       orderItems(o).forEach(function (item) {
         if (item.bookingType === 'class' || item.bookingType === 'pass') {
-          revenue += (item.total || ((item.priceCents || 0) / 100) || 0);
+          revenue += (item.total || ((item.priceCents || 0) / 100) || item.price || 0);
         }
         if (item.bookingType === 'class' && item.classId) {
-          classRevByCid[item.classId] = (classRevByCid[item.classId] || 0) + (item.total || ((item.priceCents || 0) / 100) || 0);
+          classRevByCid[item.classId] = (classRevByCid[item.classId] || 0) + (item.total || ((item.priceCents || 0) / 100) || item.price || 0);
         }
       });
     });
@@ -864,7 +885,7 @@
     // createdAt. Severity counts + the 5 most-recent incidents.
     var incidents = (rd && rd.incidents) || [];
     var filteredIncidents = cutoffDate
-      ? incidents.filter(function (inc) { return (inc.createdAt || '').substring(0, 10) >= cutoffDate; })
+      ? incidents.filter(function (inc) { return dateStr(inc.createdAt).substring(0, 10) >= cutoffDate; })
       : incidents;
 
     var rangeLabel = (rangeVal === 'all') ? 'all time' : ('last ' + rangeVal + ' days');
@@ -919,7 +940,7 @@
       filteredIncidents.forEach(function (inc) { sevCounts[inc.severity] = (sevCounts[inc.severity] || 0) + 1; });
       var sevBadges = ['critical', 'high', 'medium', 'low'].filter(function (sev) { return sevCounts[sev] > 0; })
         .map(function (sev) { return U.badge(sev + ': ' + sevCounts[sev], sevTone(sev)); }).join(' ');
-      var recentInc = filteredIncidents.slice().sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); }).slice(0, 5);
+      var recentInc = filteredIncidents.slice().sort(function (a, b) { return dateStr(b.createdAt).localeCompare(dateStr(a.createdAt)); }).slice(0, 5);
       var incTable = U.relatedTable([
         { label: 'Severity', render: function (inc) { return U.badge(inc.severity || 'unknown', sevTone(inc.severity)); } },
         { label: 'Type', render: function (inc) { return esc(INCIDENT_TYPE_LABELS[inc.type] || inc.type || '—'); } },
