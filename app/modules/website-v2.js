@@ -1464,14 +1464,18 @@
       }).catch(function (e) { console.warn('[website-v2] product cats', e && e.message); });
     } catch (e) { console.warn('[website-v2] product cats', e && e.message); }
   }
-  // The category slugs a product is filed under (deduped, lowercased to match the
-  // slug id). Tolerant of either the singular `category` string or the plural
-  // `categories` array (both seen in the product model).
+  // The category slugs a product is filed under (deduped). Tolerant of either the
+  // singular `category` (which in the live data holds the LABEL, e.g. "Home
+  // Decor") or the plural `categories` array (which holds slug ids, e.g.
+  // "home-decor"). Both forms are normalized through the same slugify the category
+  // ids use, so a label and its slug collapse to one key that matches the cat.id.
+  function catSlugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
   function productCatSlugs(p) {
     if (!p) return [];
     var out = {};
-    if (p.category) out[String(p.category).toLowerCase()] = 1;
-    if (Array.isArray(p.categories)) p.categories.forEach(function (c) { if (c) out[String(c).toLowerCase()] = 1; });
+    if (p.category) out[catSlugify(p.category)] = 1;
+    if (Array.isArray(p.categories)) p.categories.forEach(function (c) { if (c) out[catSlugify(c)] = 1; });
+    delete out['']; // drop empties
     return Object.keys(out);
   }
   // Slugs that appear on products but are NOT yet in the categories list →
