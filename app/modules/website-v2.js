@@ -463,6 +463,9 @@
             if (!/^#[0-9a-fA-F]{6}$/.test(v)) return; // ignore partial hex while typing
             var update = {}; update[field] = v;
             if (V2.theme) { V2.theme[field] = v; V2.theme.colorSchemeId = null; } // optimistic: scheme tile deselects
+            // Tier-2 instant preview: push just the edited custom color so the
+            // preview repaints that token immediately (no scheme id → direct color).
+            wv2PostTheme(update);
             // Don't full-reload (would clobber the color field the user is on);
             // refresh the scheme grid's selection inline instead.
             withSave(WebsiteBridgeCall('setCustomColors', update), { reload: false }).then(refreshSchemeGrid);
@@ -1081,10 +1084,29 @@
     var frame = document.getElementById('wv2PreviewFrame');
     if (frame) { try { frame.src = previewUrl(); } catch (e) {} }
   }
+  // Tier-2 instant live theme preview (PR7): post a COLOR/FONT delta straight to
+  // the Card 4 preview iframe via postMessage so the storefront repaints in
+  // <100ms — no reload, no flash. The storefront-side listener (storefront-
+  // theme.js) is same-origin guarded + only acts in ?mastpreview=1 mode. This is
+  // an in-memory preview push ONLY; the canonical persist still happens through
+  // the bridges, and schedulePreviewReload() stays as the eventual full-refetch
+  // fallback (and the only path for structural edits Tier-2 doesn't cover).
+  // Defensive: if the frame is missing/not ready or postMessage throws, we no-op
+  // and the Tier-1 reload still reflects the edit.
+  function wv2PostTheme(delta) {
+    if (!delta || typeof delta !== 'object') return;
+    try {
+      var frame = document.getElementById('wv2PreviewFrame');
+      if (!frame || !frame.contentWindow) return;
+      frame.contentWindow.postMessage({ type: 'mast-theme-preview', config: delta }, location.origin);
+    } catch (e) { /* fall back to the Tier-1 reload */ }
+  }
+
   // Tier-1 live reflect: after a builder edit settles, debounce (~800ms) a preview
   // reload. Cards 1–3 writes flow through withSave → reloadSoon; we hook here so any
   // edit visibly updates the preview within ~1s without spamming reloads on rapid
-  // keystrokes. Centralized so every card handler inherits it for free.
+  // keystrokes. Centralized so every card handler inherits it for free. For COLOR/
+  // FONT edits this is the FALLBACK behind the instant wv2PostTheme push above.
   var _previewTimer = null;
   function schedulePreviewReload() {
     if (_previewTimer) clearTimeout(_previewTimer);
@@ -1246,12 +1268,19 @@
         try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('homepage'); } catch (e) {}
         if (window.showToast) showToast('Site editor still loading — try again', true); return;
       }
+      // Tier-2 instant preview: push the scheme delta (the storefront resolves it
+      // through the loaded manifest). Clear any custom colors so the preview drops
+      // them too, mirroring the canonical write (setColorScheme clears custom).
+      wv2PostTheme({ colorSchemeId: schemeId, primaryColor: null, accentColor: null });
       withSave(HomepageBridge.setColorScheme(schemeId));
     },
     // Card 1 · Font pair tile → MastBrandSync.setFontPair (canonical theme write).
     pickFont: function (fontId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       if (!window.MastBrandSync) { if (window.showToast) showToast('Site editor still loading — try again', true); return; }
+      // Tier-2 instant preview: push the font delta so the preview repaints fonts
+      // immediately (the storefront loads the Google Font + sets --font-* vars).
+      wv2PostTheme({ fontPair: fontId });
       withSave(window.MastBrandSync.setFontPair(fontId));
     },
     // Card 1 · Logo from the shared image library (PR-571 picker). Instant-apply:

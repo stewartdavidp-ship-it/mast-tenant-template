@@ -221,6 +221,50 @@
   }
 
   /**
+   * Tier-2 instant live theme preview (PR7).
+   *
+   * When this storefront is rendered INSIDE the builder's Card 4 preview iframe
+   * (?mastpreview=1 → window.__mastPreview set), the builder posts a theme delta
+   * on every color/font edit so the preview repaints in <100ms — no iframe
+   * reload, no flash. The Tier-1 nonce reload (~800ms) stays as the fallback and
+   * is the ONLY path for structural edits (sections / categories / layout
+   * variants), which Tier-2 does not handle.
+   *
+   * Hard guards (security): only act in preview mode, only for same-origin
+   * messages, and only for our own message envelope. Because preview mode forces
+   * light (see applyTheme isDark guard), color deltas always paint.
+   */
+  function handleThemePreviewMessage(event) {
+    try {
+      // Only repaint in builder preview mode (the iframe is forced light there).
+      if (!window.__mastPreview) return;
+      // Same-origin only — the builder and this preview share <tenant>.runmast.com.
+      if (event.origin !== window.location.origin) return;
+      var data = event.data;
+      if (!data || typeof data !== 'object' || data.type !== 'mast-theme-preview') return;
+
+      var delta = data.config;
+      if (!delta || typeof delta !== 'object') return;
+
+      // A scheme pick carries colorSchemeId — resolve it through the already-loaded
+      // manifest so the full palette (primary/accent/bg + variants) repaints.
+      if (delta.colorSchemeId && window.MAST_TEMPLATE_MANIFEST) {
+        applyColorScheme(window.MAST_TEMPLATE_MANIFEST, delta.colorSchemeId);
+      }
+      // Custom colors + fontPair (and any direct color overrides) apply directly.
+      // applyTheme ignores keys it doesn't recognize, so a {fontPair} or
+      // {primaryColor, accentColor} delta is safe to pass verbatim.
+      applyTheme(delta);
+    } catch (e) {
+      // Ignore malformed messages — never let a preview push break the storefront.
+    }
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('message', handleThemePreviewMessage);
+  }
+
+  /**
    * Apply homepage flow from manifest.
    * Shows/hides and reorders sections based on manifest.homepageFlow.
    * Sections with data-slot NOT in the flow are hidden.
