@@ -6809,12 +6809,41 @@
     return matId;
   }
 
-  // Single-sourced import-log entry. Shared by legacy runImport + the V2 bridge.
-  async function logMaterialsImport(filename, rowsAttempted, imported, skipped, now) {
+  // Single-sourced write of ONE mapped PRODUCT import record. Shared by the
+  // legacy 3-step wizard (runImport) and the products-v2 twin (MakerProductBridge.
+  // productImportRecords) so the product CSV import persists identically from
+  // either surface. `idx` disambiguates the synthetic pid when the row has no SKU.
+  // Returns the new product id.
+  async function persistProductImportRecord(record, now, idx) {
+    var pid = record.pid ? sanitizeString(record.pid) : ('p' + Date.now().toString(36) + (idx || 0));
+    var priceCents = record.price ? Math.round(record.price * 100) : 0;
+    await MastDB.products.set(pid, {
+      pid: pid,
+      name: record.name,
+      description: record.description || '',
+      categories: record.category ? [record.category] : [],
+      priceCents: priceCents,
+      price: priceCents > 0 ? '$' + (priceCents / 100).toFixed(2) : '',
+      status: record.status || 'draft',
+      availability: 'available',
+      images: [],
+      imageIds: [],
+      url: '',
+      options: [],
+      importedFrom: 'csv',
+      createdAt: now,
+      updatedAt: now
+    });
+    writeAudit('create', 'products', pid);
+    return pid;
+  }
+
+  // Single-sourced import-log entry. Shared by legacy runImport + the V2 bridges.
+  async function logImport(type, filename, rowsAttempted, imported, skipped, now) {
     var logId = MastDB.importLog.newKey();
     await MastDB.importLog.set(logId, {
       importId: logId,
-      type: 'materials',
+      type: type,
       filename: filename || '',
       rowsAttempted: rowsAttempted,
       rowsImported: imported,
@@ -6822,6 +6851,10 @@
       importedAt: now,
       importedBy: auth.currentUser ? auth.currentUser.uid : 'unknown'
     });
+  }
+  // Back-compat alias (existing materials-v2 bridge calls logMaterialsImport).
+  async function logMaterialsImport(filename, rowsAttempted, imported, skipped, now) {
+    return logImport('materials', filename, rowsAttempted, imported, skipped, now);
   }
 
   async function runImport() {
@@ -6845,26 +6878,7 @@
         if (importState.type === 'materials') {
           await persistMaterialImportRecord(record, now);
         } else {
-          var pid = record.pid ? sanitizeString(record.pid) : ('p' + Date.now().toString(36) + i);
-          var priceCents = record.price ? Math.round(record.price * 100) : 0;
-          await MastDB.products.set(pid, {
-            pid: pid,
-            name: record.name,
-            description: record.description || '',
-            categories: record.category ? [record.category] : [],
-            priceCents: priceCents,
-            price: priceCents > 0 ? '$' + (priceCents / 100).toFixed(2) : '',
-            status: record.status || 'draft',
-            availability: 'available',
-            images: [],
-            imageIds: [],
-            url: '',
-            options: [],
-            importedFrom: 'csv',
-            createdAt: now,
-            updatedAt: now
-          });
-          writeAudit('create', 'products', pid);
+          await persistProductImportRecord(record, now, i);
         }
         imported++;
       } catch (err) {
@@ -6873,18 +6887,8 @@
       }
     }
 
-    // Log the import
-    var logId = MastDB.importLog.newKey();
-    await MastDB.importLog.set(logId, {
-      importId: logId,
-      type: importState.type,
-      filename: importState.filename,
-      rowsAttempted: rows.length,
-      rowsImported: imported,
-      rowsSkipped: skipped,
-      importedAt: now,
-      importedBy: auth.currentUser ? auth.currentUser.uid : 'unknown'
-    });
+    // Log the import (single-sourced with the V2 twins).
+    await logImport(importState.type, importState.filename, rows.length, imported, skipped, now);
 
     // Show completion
     var tab = importState.type === 'materials' ? document.getElementById('materialsTab') : document.getElementById('piecesTab');
@@ -7658,6 +7662,149 @@
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
+  // ============================================================
+  // V2 product POWER-TOOLS bridge — what-if metal sim, bulk reprice,
+  // product CSV import. These were the only three tools still reachable
+  // through the products-v2 "Advanced ↗" door (navigateToClassic('products')).
+  // Each DELEGATES to the existing legacy logic so V1/V2 behave identically and
+  // the price-write core stays single-sourced. The "Advanced ↗" hatch is retired
+  // once products-v2 calls these instead.
+  // ============================================================
+
+  // Ensure recipes + materials + spot prices are warm before a power-tool run
+  // (cold pure-v2 session: the maker listeners may not have fired). Mirrors
+  // ensureRecipeCtx / bridgeRecipeMaterials' self-heal.
+  async function ensurePowerToolCtx() {
+    if (!materialsLoaded || !Object.keys(materialsData).length) {
+      try { var m = await MastDB.materials.list(500); if (m) { materialsData = m; materialsLoaded = true; } } catch (e) {}
+    }
+    if (!recipesLoaded || !Object.keys(recipesData).length) {
+      try { var r = await MastDB.recipes.list(200); if (r) { recipesData = Object.assign({}, r, recipesData); recipesLoaded = true; } } catch (e) {}
+    }
+    // Spot prices + drift threshold (admin/spotPrices/current). Refresh if absent.
+    if (spotPricesCurrent == null) { try { await loadVolatilePricingData(); } catch (e) {} }
+  }
+
+  // What-if metal simulator — preview ONLY (zero writes). Reuses the legacy
+  // runMetalShiftSimulation (the canonical sim math). Returns the affected-recipe
+  // rows + whether spot prices are available.
+  async function bridgeWhatIfSimulate(shifts) {
+    try {
+      await ensurePowerToolCtx();
+      var s = shifts || {};
+      if (!spotPricesCurrent) return { ok: true, spot: null, results: [] };
+      var results = runMetalShiftSimulation(Number(s.gold) || 0, Number(s.silver) || 0, Number(s.platinum) || 0);
+      return { ok: true, spot: spotPricesCurrent, results: results };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // Bulk Reprice — candidate recipes. Mirrors the legacy openRepriceAllModal
+  // selection: active, recipe-linked, drift past the configured threshold from a
+  // published baseline. Each row carries the fields the preview table needs.
+  async function bridgeRepriceCandidates() {
+    try {
+      await ensurePowerToolCtx();
+      var out = [];
+      Object.keys(recipesData).forEach(function (rid) {
+        var r = recipesData[rid];
+        if (!r || r.status === 'archived') return;
+        if (!r.productId) return; // only recipe-linked products are repriced
+        var d = typeof r.currentDriftPct === 'number' ? r.currentDriftPct : 0;
+        if (Math.abs(d) >= repricingThresholdPct && r.driftBaseline) {
+          out.push({
+            recipeId: rid, productId: r.productId, name: r.name || 'Recipe',
+            activePriceTier: r.activePriceTier || 'direct',
+            currentDriftPct: d, driftBaseline: r.driftBaseline || 0, totalCost: r.totalCost || 0
+          });
+        }
+      });
+      out.sort(function (a, b) { return Math.abs(b.currentDriftPct) - Math.abs(a.currentDriftPct); });
+      return { ok: true, candidates: out, thresholdPct: repricingThresholdPct };
+    } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // Bulk Reprice — EXECUTE. For each recipe: recalc (recost from materials) →
+  // publishRecipe (snapshots publishedPrices) → applyRecipeToProduct (THE
+  // centralized product-price write core — writes product/variant tier prices +
+  // syncs Etsy + audits 'apply-recipe'). This is the SAME core the product-detail
+  // "apply recipe" path uses; NO parallel price write is introduced. `onProgress`
+  // (optional) is called as (done, total, name) after each recipe.
+  async function bridgeRepriceExecute(recipeIds, onProgress) {
+    await ensurePowerToolCtx();
+    var ids = Array.isArray(recipeIds) ? recipeIds : [];
+    var ok = 0, fail = 0, total = ids.length, errors = [];
+    for (var i = 0; i < ids.length; i++) {
+      var rid = ids[i];
+      var r = recipesData[rid];
+      try {
+        if (!r) { r = await ensureRecipeCtx(rid); }
+        if (!r) throw new Error('Recipe not found');
+        if (!r.productId) throw new Error('Recipe has no linked product');
+        // applyRecipeToProduct looks the product up in window.productsData — warm
+        // it (cold pure-v2 session has an empty global product cache).
+        await bridgeEnsureProduct(r.productId);
+        // 1) recost the recipe from current materials (writes recipe totals/prices)
+        var updates = await recalculateRecipe(rid);
+        Object.assign(recipesData[rid], updates);
+        // 2) publish — snapshot publishedPrices + reset drift baseline (recipe only)
+        await publishRecipe(rid);
+        // re-read so applyRecipeToProduct sees the fresh publishedPrices/version
+        var fresh = await MastDB.recipes.get(rid);
+        if (fresh) recipesData[rid] = fresh;
+        // 3) apply to product — THE shared product-price write core
+        await applyRecipeToProduct(rid);
+        ok++;
+      } catch (err) {
+        fail++;
+        errors.push({ recipeId: rid, name: (r && r.name) || rid, error: (err && err.message) || 'Failed' });
+        console.error('[reprice] recipe ' + rid + ' failed', err);
+      }
+      if (typeof onProgress === 'function') { try { onProgress(i + 1, total, (r && r.name) || rid); } catch (e2) {} }
+    }
+    try { await loadVolatilePricingData(); } catch (e) {}
+    MastAdmin.writeAudit('bulk-reprice', 'products', 'count:' + ok);
+    return { ok: true, succeeded: ok, failed: fail, total: total, errors: errors };
+  }
+
+  // Product CSV import — schema, auto-map, per-row mapper, and writer. Mirrors the
+  // materials-v2 import bridge (PR 566), reusing the legacy PRODUCTS_FIELDS schema,
+  // mapRow mapper, and the (now single-sourced) persistProductImportRecord writer.
+  function bridgeProductImportFields() { return PRODUCTS_FIELDS; }
+  function bridgeProductAutoDetectMappings(headers) { return autoDetectMappings(headers, PRODUCTS_FIELDS); }
+  function bridgeProductMapImportRow(row, mappings, defaults) {
+    // Reuse legacy mapRow by lending it an importState shim (mapRow reads
+    // importState.mappings + importState.defaultCategory).
+    var prev = importState;
+    importState = {
+      type: 'products',
+      mappings: mappings || {},
+      defaultUom: '',
+      defaultCategory: (defaults && defaults.defaultCategory) || ''
+    };
+    try { return mapRow(row, PRODUCTS_FIELDS); }
+    finally { importState = prev; }
+  }
+  async function bridgeProductImportRecords(records, filename) {
+    if (typeof window.can === 'function' && !window.can('products', 'edit')) {
+      return { ok: false, error: 'Permission denied' };
+    }
+    var now = new Date().toISOString();
+    var imported = 0, skipped = 0;
+    var list = records || [];
+    for (var i = 0; i < list.length; i++) {
+      var rec = list[i];
+      if (!rec || rec._valid === false) { skipped++; continue; }
+      try { await persistProductImportRecord(rec, now, i); imported++; }
+      catch (err) { console.error('[products import] row ' + i + ' failed', err); skipped++; }
+    }
+    await logImport('products', filename, list.length, imported, skipped, now);
+    MastAdmin.writeAudit('import', 'products', 'csv:' + imported);
+    // Cold V2 sessions read products via MastDB.products.list(); legacy global
+    // cache (if present) is invalidated so a legacy view also re-loads.
+    window.productsLoaded = false;
+    return { ok: true, imported: imported, skipped: skipped };
+  }
+
   window.MakerProductBridge = {
     // Write a {field: value, ...} patch of top-level product fields. Returns
     // { ok, staged, changed } — staged===true means it went to a pending
@@ -7719,7 +7866,21 @@
     recipeVariantAddLineItem: function (recipeId, vid, opts) { return bridgeRecipeVariantAddLineItem(recipeId, vid, opts); },
     recipeVariantRemoveLineItem: function (recipeId, vid, liId) { return bridgeRecipeVariantRemoveLineItem(recipeId, vid, liId); },
     recipeVariantSetLineItem: function (recipeId, vid, liId, patch) { return bridgeRecipeVariantSetLineItem(recipeId, vid, liId, patch); },
-    recipeVariantSetFields: function (recipeId, vid, patch) { return bridgeRecipeVariantSetFields(recipeId, vid, patch); }
+    recipeVariantSetFields: function (recipeId, vid, patch) { return bridgeRecipeVariantSetFields(recipeId, vid, patch); },
+    // ── Power tools (retire the "Advanced ↗" V1 door) ──────────────────
+    // What-if metal-price simulator — preview only, reuses runMetalShiftSimulation.
+    whatIfSimulate: function (shifts) { return bridgeWhatIfSimulate(shifts); },
+    // Bulk Reprice All — candidates (drift past threshold) + execute through the
+    // shared product-price write core (applyRecipeToProduct). NO parallel write.
+    repriceCandidates: function () { return bridgeRepriceCandidates(); },
+    repriceExecute: function (recipeIds, onProgress) { return bridgeRepriceExecute(recipeIds, onProgress); },
+    // Product CSV import — schema / auto-map / per-row mapper / writer (mirrors
+    // the materials-v2 importer; reuses the legacy PRODUCTS_FIELDS + mapRow + the
+    // single-sourced persistProductImportRecord).
+    productImportFields: function () { return bridgeProductImportFields(); },
+    productAutoDetectMappings: function (headers) { return bridgeProductAutoDetectMappings(headers); },
+    productMapImportRow: function (row, mappings, defaults) { return bridgeProductMapImportRow(row, mappings, defaults); },
+    productImportRecords: function (records, filename) { return bridgeProductImportRecords(records, filename); }
   };
 
 })();
