@@ -71,6 +71,9 @@
   // tagline), logo = config/brand/logo (primary url).
   var V2 = { wp: null, meta: null, status: 'draft', theme: null, brand: null, logo: null,
     nav: null, sectionOrder: null, expanded: {}, importHits: null, loaded: false,
+    // Card 2 (Your words & pictures): featured testimonials map (public/testimonials);
+    // the builder toggles per-entry homepage visibility only (add/remove = CS › Reviews).
+    testimonials: null,
     // Card 1 (Look & feel) · the "Looks" gallery — the full template registry
     // (WebsiteBridge.getTemplates). null until loaded (loaded lazily after the
     // first paint via loadLooks, like productCatCounts). switchBusy guards the
@@ -869,7 +872,52 @@
     var sectionsHtml = list.length
       ? '<div class="wv2-seclist">' + list.map(function (s, i) { return wordsRow(s, i, list.length); }).join('') + '</div>'
       : '<div class="mu-sub">Your homepage sections load with your template…</div>';
-    return wordsImportHtml() + sectionsHtml;
+    return wordsImportHtml() + sectionsHtml + wordsTestimonialsHtml();
+  }
+
+  // ── Featured testimonials (homepage visibility) ─────────────────────
+  // Absorbed from homepage-v2's testimonials card. Add/remove a testimonial =
+  // the Customer Service › Reviews "Feature on site" flow (that's the only place
+  // that creates/deletes public/testimonials/{key}). Here the builder only TOGGLES
+  // a featured entry's homepage VISIBILITY (show/hide WITHOUT un-featuring) — the
+  // one capability with no other home. Single-sourced through the SAME legacy
+  // writer the homepage page builder uses: window.hpToggleTestimonialVisible(key,
+  // vis) → public/testimonials/{key}/visible (storefront filters visible !== false).
+  function wordsTestimonialsHtml() {
+    var data = V2.testimonials || {};
+    var ed = canEdit();
+    var all = Object.keys(data).map(function (k) {
+      var t = data[k] || {};
+      return { _key: k, quote: t.quote, author: t.customerName || t.author || t.authorName || '', visible: t.visible !== false };
+    }).filter(function (t) { return t.quote; })
+      .sort(function (a, b) { return (a._key < b._key ? 1 : -1); });
+    // No featured testimonials yet → a single muted line that points at the only
+    // surface that can add one (CS › Reviews). No empty toggle UI.
+    if (!all.length) {
+      return '<div class="wv2-testimonials">' +
+        '<div class="wv2-sub-h" style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px;">Featured testimonials</div>' +
+        '<div class="mu-sub">No testimonials featured yet. Approve a review in Customer Service › Reviews and click “Feature on site” to add one here.</div>' +
+        '</div>';
+    }
+    var visible = all.filter(function (t) { return t.visible; }).length;
+    var rows = all.map(function (t) {
+      var k = esc(t._key);
+      var control = ed
+        ? '<button type="button" class="wv2-sec-toggle" onclick="WebsiteV2.toggleTestimonial(\'' + k + '\',' + (t.visible ? 'false' : 'true') + ')">' + (t.visible ? 'Hide' : 'Show') + '</button>'
+        : '<span class="wv2-sec-pill ' + (t.visible ? 'on' : 'off') + '">' + (t.visible ? 'Shown' : 'Hidden') + '</span>';
+      return '<div class="wv2-test-row">' +
+        '<div class="wv2-test-main">' +
+          '<div class="wv2-test-quote">' + esc(t.quote) + '</div>' +
+          (t.author ? '<div class="mu-sub">' + esc('— ' + t.author) + '</div>' : '') +
+        '</div>' + control +
+      '</div>';
+    }).join('');
+    return '<div class="wv2-testimonials">' +
+      '<div class="wv2-sub-h" style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px;">' +
+        'Featured testimonials <span class="wv2-test-count">' + visible + ' of ' + all.length + ' shown</span></div>' +
+      '<div class="wv2-test-list">' + rows + '</div>' +
+      '<div class="mu-sub" style="margin-top:10px;">Add or remove testimonials from Customer Service › Reviews (“Feature on site”).</div>' +
+    '</div>';
   }
 
   // "Copy from my old site" — one URL → analyzeExistingSite (the brand/content
@@ -1371,6 +1419,13 @@
       '.wv2-impchip-main{min-width:0;display:flex;flex-direction:column;gap:1px;}' +
       '.wv2-impchip-label{font-size:0.72rem;font-weight:600;color:var(--text-secondary,var(--warm-gray));}' +
       '.wv2-impchip-val{font-size:0.85rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;}' +
+      // featured testimonials (homepage visibility toggles)
+      '.wv2-test-count{font-size:0.72rem;font-weight:600;color:var(--text-secondary,var(--warm-gray));margin-left:6px;}' +
+      '.wv2-test-list{display:flex;flex-direction:column;}' +
+      '.wv2-test-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--border);}' +
+      '.wv2-test-row:first-child{border-top:none;}' +
+      '.wv2-test-main{min-width:0;}' +
+      '.wv2-test-quote{font-size:0.85rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;}' +
       // ── Card 3 · Your shop (categories) ──
       '.wv2-catlist{display:flex;flex-direction:column;}' +
       '.wv2-cat{border-top:1px solid var(--border);}.wv2-cat:first-child{border-top:none;}' +
@@ -1680,6 +1735,19 @@
       if (typeof navigateToClassic === 'function') navigateToClassic('homepage');
       else if (typeof navigateTo === 'function') navigateTo('homepage');
     },
+    // Featured-testimonial visibility → window.hpToggleTestimonialVisible (the
+    // SAME single-source writer the legacy page builder uses; arg-taking, no DOM)
+    // → public/testimonials/{key}/visible. Toggles show/hide on the homepage
+    // WITHOUT un-featuring; add/remove stays in CS › Reviews. Optimistic cache so
+    // the row flips instantly, then re-mount Card 2.
+    toggleTestimonial: function (key, visible) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      if (!hpReady('hpToggleTestimonialVisible')) return;
+      if (!V2.testimonials) V2.testimonials = {};
+      if (!V2.testimonials[key]) V2.testimonials[key] = {};
+      V2.testimonials[key].visible = !!visible; // optimistic so the toggle flips
+      withSave(Promise.resolve(window.hpToggleTestimonialVisible(key, !!visible)), { reload: false }).then(mountWords);
+    },
 
     // ── Card 3 · Your shop ──────────────────────────────────────────────
     // Add a category from the new-category input. Slug auto-derived (unique);
@@ -1861,7 +1929,13 @@
       // Card 3 (Your shop) read: storefront categories (plain ARRAY at
       // public/config/categories). Guarded/cold-safe; normalized in getCategories
       // when the bridge is present, else this raw read is filtered below.
-      Promise.resolve(MastDB.get('public/config/categories')).catch(function () { return null; })
+      Promise.resolve(MastDB.get('public/config/categories')).catch(function () { return null; }),
+      // Card 2 (Your words & pictures) read: featured testimonials
+      // (public/testimonials — keyed map written by the Customer Service ›
+      // Reviews "Feature on site" flow). The builder only TOGGLES per-testimonial
+      // visibility (show/hide on the homepage WITHOUT un-featuring) — add/remove
+      // stays in CS › Reviews. Guarded/cold-safe.
+      Promise.resolve(MastDB.get('public/testimonials')).catch(function () { return null; })
     ]).then(function (r) {
       var wp = r[0];
       V2.wp = wp || {};
@@ -1878,6 +1952,8 @@
       // {id,label}). If the bridge isn't loaded yet, fall back to a guarded direct
       // read so the card still paints; the bridge warms via ensureHostModules.
       V2.cats = Array.isArray(r[7]) ? r[7].filter(function (c) { return c && c.id && c.label; }) : [];
+      // Card 2: featured testimonials (keyed map → public/testimonials/{key}).
+      V2.testimonials = r[8] || {};
       V2.loaded = true;
       render();
       // Products power the delete-safety count + stray-category suggestions; read
