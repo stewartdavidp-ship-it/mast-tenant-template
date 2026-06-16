@@ -1508,15 +1508,16 @@
 
   function nlPreview() { nlExportHTML('preview'); }
 
-  function nlExportHTML(mode) {
-    if (!nlCurrentIssue) return;
-    var isPreview = mode === 'preview';
-    if (!nlCurrentIssue.title || !nlCurrentIssue.title.trim()) {
-      showToast(isPreview ? 'Add an issue title before previewing' : 'Add an issue title before exporting', true);
-      return;
-    }
+  // Pure builder: an issue → its full export-quality email HTML + a download
+  // filename. Single-sourced between the legacy Export-HTML modal/preview AND
+  // the V2 twin's Export-HTML action (NewsletterBridge.exportIssueHtml), so both
+  // produce byte-identical output. Takes the issue explicitly (defaults to
+  // nlCurrentIssue for the legacy callers).
+  function nlBuildExportHtml(issueArg) {
+    var issue = issueArg || nlCurrentIssue;
+    if (!issue) return { html: '', filename: 'newsletter.html' };
 
-    var sections = nlCurrentIssue.sections ? Object.values(nlCurrentIssue.sections)
+    var sections = issue.sections ? Object.values(issue.sections)
       .filter(function(s) { return s.included; })
       .sort(function(a, b) { return (a.order || 0) - (b.order || 0); }) : [];
 
@@ -1579,7 +1580,7 @@
 
     var _ec = TENANT_CONFIG || { brand: { name: 'Newsletter', tagline: '', location: '', logoUrl: '' }, domain: 'localhost' };
     var emailHtml = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">' +
-      '<title>' + esc(nlCurrentIssue.subjectLine || nlCurrentIssue.title || (_ec.brand.name + ' — Issue #' + nlCurrentIssue.issueNumber)) + '</title></head>' +
+      '<title>' + esc(issue.subjectLine || issue.title || (_ec.brand.name + ' — Issue #' + issue.issueNumber)) + '</title></head>' +
       '<body style="margin:0;padding:0;background:#F5F0EB;font-family:\'DM Sans\',Arial,sans-serif;">' +
       '<table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0EB;"><tr><td align="center" style="padding:30px 10px;">' +
       '<table width="600" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border-radius:8px;overflow:hidden;max-width:600px;">' +
@@ -1590,11 +1591,11 @@
       '<td style="padding-left:14px;">' +
       '<h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;color:#F5F0EB;font-size:20px;margin:0;font-weight:300;letter-spacing:0.02em;">' + esc(_ec.brand.name) + '</h1>' +
       '<p style="color:rgba(245,240,235,0.4);font-size:9px;letter-spacing:0.12em;text-transform:uppercase;margin:0;">' + esc(_ec.brand.tagline) + ' &bull; ' + esc(_ec.brand.location) + '</p></td>' +
-      '<td style="text-align:right;white-space:nowrap;"><span style="color:rgba(245,240,235,0.5);font-size:10px;">Issue #' + nlCurrentIssue.issueNumber + '</span></td>' +
+      '<td style="text-align:right;white-space:nowrap;"><span style="color:rgba(245,240,235,0.5);font-size:10px;">Issue #' + issue.issueNumber + '</span></td>' +
       '</tr></table>' +
       '</td></tr>' +
       '<!-- Title -->' +
-      '<tr><td style="padding:30px 30px 10px;"><h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:26px;color:#2C2C2C;margin:0;font-weight:400;">' + nlEscHtml(nlCurrentIssue.title) + '</h1></td></tr>' +
+      '<tr><td style="padding:30px 30px 10px;"><h1 style="font-family:\'Cormorant Garamond\',Georgia,serif;font-size:26px;color:#2C2C2C;margin:0;font-weight:400;">' + nlEscHtml(issue.title) + '</h1></td></tr>' +
       '<!-- Sections -->' +
       sectionsHtml +
       '<!-- Footer -->' +
@@ -1611,7 +1612,20 @@
       ' &bull; <a href="https://' + esc(_ec.domain) + '/newsletter/preferences" style="color:rgba(245,240,235,0.35);font-size:10px;text-decoration:underline;">Manage Preferences</a></p>' +
       '</td></tr></table></td></tr></table></body></html>';
 
-    var filename = ((TENANT_CONFIG && TENANT_CONFIG.brand.newsletterDownloadPrefix) || 'newsletter') + '-' + nlCurrentIssue.issueNumber + '-' + (nlCurrentIssue.slug || 'newsletter') + '.html';
+    var filename = ((TENANT_CONFIG && TENANT_CONFIG.brand.newsletterDownloadPrefix) || 'newsletter') + '-' + issue.issueNumber + '-' + (issue.slug || 'newsletter') + '.html';
+
+    return { html: emailHtml, filename: filename };
+  }
+
+  function nlExportHTML(mode) {
+    if (!nlCurrentIssue) return;
+    var isPreview = mode === 'preview';
+    if (!nlCurrentIssue.title || !nlCurrentIssue.title.trim()) {
+      showToast(isPreview ? 'Add an issue title before previewing' : 'Add an issue title before exporting', true);
+      return;
+    }
+    var built = nlBuildExportHtml(nlCurrentIssue);
+    var emailHtml = built.html, filename = built.filename;
 
     var modalHtml =
       '<div style="padding:24px;">' +
@@ -2576,6 +2590,54 @@
     pickWinnerNow: async function (issueId) {
       await MastDB.newsletter.issues.ref(issueId).update({ 'abTest/testWindowExpiresAt': new Date().toISOString() });
       return true;
+    },
+
+    // ── marketing-v2 LOW closer: duplicate-as-template + export-HTML ──
+    // Duplicate an issue as a fresh draft TEMPLATE — single-sourced with the
+    // legacy nlDuplicateIssue: a new draft (next issue number) that clones the
+    // source's section STRUCTURE (type / title / prompt / layout) but clears the
+    // authored content (rawInput / aiVersion / finalContent / images / coupon),
+    // so it's a reusable starting template. Returns the new issue id (the V2
+    // twin opens it in the native composer). The source is untouched.
+    duplicateIssue: async function (issueId) {
+      var source = await MastDB.get('newsletter/issues/' + issueId);
+      source = (source && typeof source.val === 'function') ? source.val() : source;
+      if (!source || !source.sections) throw new Error('Nothing to duplicate');
+      var counterRef = MastDB.newsletter.meta.issueCounter();
+      var result = await counterRef.transaction(function (current) { return (current || 0) + 1; });
+      var issueNumber = result.snapshot.val();
+      var newId = MastDB.newsletter.issues.newKey();
+      var newIssue = {
+        id: newId, issueNumber: issueNumber, title: '', subjectLine: '', slug: '',
+        status: 'draft', sentAt: null, publishedAt: null, sentSubscriberCount: null,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+      };
+      var sections = {};
+      Object.values(source.sections).sort(function (a, b) { return (a.order || 0) - (b.order || 0); }).forEach(function (s) {
+        var secId = MastDB.newKey('_ids');
+        sections[secId] = {
+          id: secId, type: s.type, title: s.title, guidedPrompt: s.guidedPrompt || '',
+          rawInput: '', aiVersion: null, finalContent: '', usedAI: false,
+          images: [], order: s.order, included: s.included,
+          cardSize: s.cardSize || 'medium', gridWidth: s.gridWidth || 1,
+          gridCol: s.gridCol || 0, gridRow: s.gridRow || 0, couponCode: null
+        };
+      });
+      newIssue.sections = sections;
+      await MastDB.newsletter.issues.ref(newId).set(newIssue);
+      if (typeof nlIssues !== 'undefined' && Array.isArray(nlIssues)) nlIssues.unshift(newIssue);
+      return newId;
+    },
+    // Export an issue's rendered email HTML — single-sourced with the legacy
+    // Export-HTML modal via nlBuildExportHtml. Reads the issue FRESH so any
+    // just-saved sections are reflected. Returns { html, filename }; the V2 twin
+    // triggers a client-side blob download (not an outward send).
+    exportIssueHtml: async function (issueId) {
+      var issue = await MastDB.get('newsletter/issues/' + issueId);
+      issue = (issue && typeof issue.val === 'function') ? issue.val() : issue;
+      if (!issue) throw new Error('Issue not found');
+      if (!issue.id) issue.id = issueId;
+      return nlBuildExportHtml(issue);
     }
   };
 

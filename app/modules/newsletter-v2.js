@@ -232,10 +232,21 @@
           { k: 'Sections', v: N.count(sectionCount(n)) },
           { k: st === 'draft' ? 'Created' : 'Sent / published', v: (n.sentAt || n.publishedAt || n.createdAt) ? N.date(n.sentAt || n.publishedAt || n.createdAt) : '—' }
         ]);
-        var actions = '';
-        if (st === 'draft' && (typeof window.can !== 'function' || window.can('newsletter', 'delete'))) {
-          actions = '<div style="margin:0 0 12px;"><button class="btn btn-secondary btn-small" style="color:var(--text-danger);" onclick="NewsletterV2.removeIssue(\'' + esc(id) + '\')">Delete draft</button></div>';
+        // Issue actions: Duplicate-as-template (any issue → fresh draft, gated on
+        // edit) + Export HTML (any issue → client-side download, read-only) +
+        // Delete (drafts only, gated on delete). Mirrors the legacy per-issue
+        // Duplicate/Export controls.
+        var canEdit = (typeof window.can !== 'function' || window.can('newsletter', 'edit'));
+        var canDelete = (typeof window.can !== 'function' || window.can('newsletter', 'delete'));
+        var actBtns = [];
+        if (canEdit && sectionCount(n) > 0) {
+          actBtns.push('<button class="btn btn-secondary btn-small" onclick="NewsletterV2.duplicateIssue(\'' + esc(id) + '\')" title="Duplicate this issue as a fresh draft template">📋 Duplicate as template</button>');
         }
+        actBtns.push('<button class="btn btn-secondary btn-small" onclick="NewsletterV2.exportHtml(\'' + esc(id) + '\')" title="Download this issue\'s email HTML">↓ Export HTML</button>');
+        if (st === 'draft' && canDelete) {
+          actBtns.push('<button class="btn btn-secondary btn-small" style="color:var(--text-danger);" onclick="NewsletterV2.removeIssue(\'' + esc(id) + '\')">Delete draft</button>');
+        }
+        var actions = '<div style="margin:0 0 12px;display:flex;gap:8px;flex-wrap:wrap;">' + actBtns.join('') + '</div>';
         var meta = UI.kv([
           { k: 'Title', v: esc(issueTitle(n)) },
           { k: 'Slug', v: n.slug ? '<span style="font-family:monospace;font-size:0.78rem;">' + esc(n.slug) + '</span>' : '—' },
@@ -863,6 +874,53 @@
           reloadSoon();
         });
       }).catch(function (e) { console.error('[newsletter-v2] removeIssue', e); if (window.showToast) showToast('Delete failed.', true); });
+    },
+    // ── Duplicate-as-template (marketing-v2 LOW closer) ──
+    // Clone an issue's section structure into a fresh draft template via
+    // NewsletterBridge.duplicateIssue (single-sourced with the legacy
+    // nlDuplicateIssue write). Opens the new draft in the native composer.
+    duplicateIssue: function (id) {
+      if (typeof window.can === 'function' && !window.can('newsletter', 'edit')) {
+        if (window.showToast) showToast('You don\'t have permission to create issues.', true); return;
+      }
+      function go() {
+        if (!window.NewsletterBridge || !NewsletterBridge.duplicateIssue) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return; }
+        Promise.resolve(NewsletterBridge.duplicateIssue(id)).then(function (newId) {
+          if (window.writeAudit) writeAudit('create', 'newsletter-issue', newId);
+          if (window.showToast) showToast('Duplicated as a draft template.');
+          try { U.slideOut.requestCloseForce(); } catch (e) {}
+          reloadSoon();
+          if (newId) NewsletterV2.compose(newId);
+        }).catch(function (e) { console.error('[newsletter-v2] duplicateIssue', e); if (window.showToast) showToast('Could not duplicate: ' + (e && e.message || e), true); });
+      }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        Promise.resolve(MastAdmin.loadModule('newsletter')).then(go).catch(go);
+      } else go();
+    },
+    // ── Export HTML (marketing-v2 LOW closer) ──
+    // Build the issue's email HTML via NewsletterBridge.exportIssueHtml
+    // (single-sourced with the legacy Export-HTML modal) and trigger a
+    // client-side blob download. Read-only — NOT an outward send.
+    exportHtml: function (id) {
+      function go() {
+        if (!window.NewsletterBridge || !NewsletterBridge.exportIssueHtml) { if (window.showToast) showToast('Newsletter engine still loading — try again', true); return; }
+        Promise.resolve(NewsletterBridge.exportIssueHtml(id)).then(function (built) {
+          built = built || {};
+          if (!built.html) { if (window.showToast) showToast('Nothing to export yet.', true); return; }
+          try {
+            var blob = new Blob([built.html], { type: 'text/html' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = built.filename || 'newsletter.html';
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            if (window.showToast) showToast('Exported HTML downloaded.');
+          } catch (e) { console.error('[newsletter-v2] exportHtml download', e); if (window.showToast) showToast('Download failed.', true); }
+        }).catch(function (e) { console.error('[newsletter-v2] exportHtml', e); if (window.showToast) showToast('Could not export: ' + (e && e.message || e), true); });
+      }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        Promise.resolve(MastAdmin.loadModule('newsletter')).then(go).catch(go);
+      } else go();
     },
     exportIssuesCsv: function () { return MastEntity.exportRows('newsletter-issues-v2', visibleIssues(), 'all'); },
     exportCsv: function () { return MastEntity.exportRows('newsletter-v2', visibleRows(), V2.statusFilter); }

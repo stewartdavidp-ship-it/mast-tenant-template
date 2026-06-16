@@ -25,7 +25,10 @@
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
   var now = new Date();
-  var CAL = { year: now.getFullYear(), month: now.getMonth(), events: [], byId: {}, loaded: false };
+  // view: 'month' (the calendar-control index) | 'list' (a flat date-sorted
+  // table of the SAME aggregated events) — mirrors the legacy marketing-calendar
+  // Month/List toggle. Pure client-side view state; no new reads or writes.
+  var CAL = { year: now.getFullYear(), month: now.getMonth(), view: 'month', events: [], byId: {}, loaded: false };
 
   // Read budget per source — bound every collection read (lint-unbounded-read).
   var READ_LIMIT = 500;
@@ -149,18 +152,52 @@
     (document.getElementById('content') || document.body).appendChild(el);
     return el;
   }
+  // Month/List toggle (mirrors the legacy marketing-calendar header control).
+  // Engine-first: btn-primary marks the active lens, btn-secondary the other.
+  function viewToggle() {
+    function btn(v, label) {
+      var on = CAL.view === v;
+      return '<button class="btn ' + (on ? 'btn-primary' : 'btn-secondary') + ' btn-small" ' +
+        'onclick="MarketingCalendarV2.setView(\'' + v + '\')">' + label + '</button>';
+    }
+    return btn('month', 'Month') + ' ' + btn('list', 'List');
+  }
+
+  // List lens — the SAME aggregated events as the month grid, flattened and
+  // sorted newest-first, on the engine list primitive. Clicking a row OUTPUTS
+  // the entry in the same slide-out the month grid uses (openEntry).
+  function listView() {
+    var rows = CAL.events.slice().sort(function (a, b) { return b.date - a.date; });
+    return U.list({
+      columns: [
+        { key: 'date', label: 'Date', render: function (r) { return r.date ? N.date(r.date) : '—'; } },
+        { key: 'type', label: 'Type', render: function (r) { return U.badge(typeLabel(r.type), typeTone(r.type)); } },
+        { key: 'title', label: 'Title', render: function (r) { return esc(r.title); } },
+        { key: 'status', label: 'Status', render: function (r) { return r.status ? U.badge(r.status, 'neutral') : '—'; } }
+      ],
+      rows: rows,
+      rowId: function (r) { return r.id; },
+      onRowClickFnName: 'MarketingCalendarV2.openEntry',
+      empty: { title: 'No marketing activity yet', message: CAL.loaded ? 'Blog posts, newsletter issues, social posts and stories will appear here.' : 'Loading…' }
+    });
+  }
+
   function render() {
     var tab = ensureTab();
+    var body = (CAL.view === 'list')
+      ? listView()
+      : U.calendar({
+          year: CAL.year, month: CAL.month, entriesByDate: entriesByDate(),
+          onEntryFnName: 'MarketingCalendarV2.openEntry', onNavFnName: 'MarketingCalendarV2.nav'
+        });
     tab.innerHTML =
       U.pageHeader({
         title: 'Marketing Calendar',
-        count: N.count(CAL.events.length) + (CAL.events.length === 1 ? ' item' : ' items')
+        count: N.count(CAL.events.length) + (CAL.events.length === 1 ? ' item' : ' items'),
+        actionsHtml: viewToggle()
       }) +
       '<div style="color:var(--warm-gray);font-size:0.78rem;margin:-6px 0 12px;">Aggregated from Blog / Newsletter / Social / Stories</div>' +
-      U.calendar({
-        year: CAL.year, month: CAL.month, entriesByDate: entriesByDate(),
-        onEntryFnName: 'MarketingCalendarV2.openEntry', onNavFnName: 'MarketingCalendarV2.nav'
-      });
+      body;
   }
 
   // ── Detail: clicking an entry OUTPUTS it; drill goes to the SOURCE ──
@@ -192,6 +229,7 @@
   }
 
   window.MarketingCalendarV2 = {
+    setView: function (v) { CAL.view = (v === 'list') ? 'list' : 'month'; render(); },
     nav: function (dir) {
       if (dir === 'today') { var d = new Date(); CAL.year = d.getFullYear(); CAL.month = d.getMonth(); }
       else if (dir === 'prev') { CAL.month--; if (CAL.month < 0) { CAL.month = 11; CAL.year--; } }
