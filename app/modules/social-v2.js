@@ -70,6 +70,18 @@
     { id: 'instagram-feed', label: '📸 Instagram Feed' }
   ];
 
+  // Scoped loading spinner — deliberately NOT the global `.loading` class. The
+  // multi-collection load (posts + pendingClips) and AI caption generation can
+  // legitimately run >8s on a cold cache / slow LLM round-trip; the global
+  // stalled-spinner watchdog (index.html, polls visible `.loading` and auto-
+  // files a "spinner-timeout" feedback report) would otherwise false-fire.
+  // Reuses the global `spin` keyframe so it still reads as a spinner.
+  function scopedSpinner(label, style) {
+    return '<div style="padding:24px;color:var(--text-secondary);display:flex;align-items:center;gap:10px;' + (style || '') + '">' +
+      '<span style="width:16px;height:16px;border:2px solid var(--cream-dark);border-top-color:var(--teal);border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;flex-shrink:0;"></span>' +
+      esc(label || 'Loading…') + '</div>';
+  }
+
   function statusKey(p) { return String(p.status || 'posted').toLowerCase(); } // legacy pre-status docs are posted
   function postTitle(p) { return p.description || p.productName || p.eventName || (p.caption || '').slice(0, 60) || '(untitled post)'; }
   function platformNames(p) {
@@ -133,7 +145,7 @@
           { k: statusKey(p) === 'posted' ? 'Posted' : 'Scheduled', v: ms ? N.date(new Date(ms).toISOString()) : '—' }
         ]);
 
-        // Actions — signal toggle + mark-posted for drafts + classic pipeline link.
+        // Actions — signal toggle, mark-posted for drafts, copy caption, delete draft.
         var actions = '';
         if (canEdit()) {
           actions += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px;">' +
@@ -348,6 +360,35 @@
     return stepDots() + U.card('Upload your clip', inner) + createNav();
   }
 
+  // Product <select> for the subject picker — broken out so it can be
+  // re-rendered in place when an async products load resolves (ensureProducts).
+  function productPickerHtml() {
+    var c = CREATE;
+    var products = window.productsData || [];
+    var opts = '<option value="">— Choose a product —</option>';
+    products.forEach(function (p) {
+      var priceStr = (typeof p.priceCents === 'number' && p.priceCents > 0 && window.formatCents) ? (' — ' + window.formatCents(p.priceCents)) : '';
+      opts += '<option value="' + esc(p.pid) + '"' + (c.productId === p.pid ? ' selected' : '') + '>' + esc(p.name) + priceStr + '</option>';
+    });
+    return '<div class="form-group" style="margin-top:12px;"><label class="form-label">Select product</label>' +
+      '<select class="form-input" id="smCreateProduct" onchange="SocialV2.createSetProduct(this.value)" style="width:100%;">' + opts + '</select>' +
+      (products.length ? '' : '<div class="mu-sub" style="margin-top:4px;font-size:0.78rem;">Loading products…</div>') + '</div>';
+  }
+  // Kick off the global product load (if not already loaded) and, when it
+  // resolves, re-render JUST the product picker sub-region so the list appears
+  // without a manual reload. Non-blocking: the rest of the wizard (incl. the
+  // "No specific product" path) stays usable immediately.
+  function ensureProducts() {
+    if ((window.productsData && window.productsData.length) || typeof window.loadProducts !== 'function') return;
+    var p;
+    try { p = window.loadProducts(); } catch (e) { return; }
+    if (!p || typeof p.then !== 'function') return;
+    p.then(function () {
+      var host = document.getElementById('smCreateProductPicker');
+      if (host && CREATE && CREATE.subjectType === 'product') host.innerHTML = productPickerHtml();
+    }).catch(function () {});
+  }
+
   // ---- Step 2: details ----
   function createDetailsStep() {
     var c = CREATE;
@@ -359,15 +400,10 @@
 
     var subjectDetail = '';
     if (c.subjectType === 'product') {
-      var products = window.productsData || [];
-      var opts = '<option value="">— Choose a product —</option>';
-      products.forEach(function (p) {
-        var priceStr = (typeof p.priceCents === 'number' && p.priceCents > 0 && window.formatCents) ? (' — ' + window.formatCents(p.priceCents)) : '';
-        opts += '<option value="' + esc(p.pid) + '"' + (c.productId === p.pid ? ' selected' : '') + '>' + esc(p.name) + priceStr + '</option>';
-      });
-      subjectDetail = '<div class="form-group" style="margin-top:12px;"><label class="form-label">Select product</label>' +
-        '<select class="form-input" id="smCreateProduct" onchange="SocialV2.createSetProduct(this.value)" style="width:100%;">' + opts + '</select>' +
-        (products.length ? '' : '<div class="mu-sub" style="margin-top:4px;font-size:0.78rem;">No products loaded yet.</div>') + '</div>';
+      // Stable container so the product <select> can be re-rendered in place
+      // once an async loadProducts() resolves (the list is empty on the very
+      // first #social-v2 open before products finish loading — see ensureProducts).
+      subjectDetail = '<div id="smCreateProductPicker">' + productPickerHtml() + '</div>';
     } else if (c.subjectType === 'event') {
       subjectDetail = '<div class="form-group" style="margin-top:12px;"><label class="form-label">Event name</label>' +
         '<input class="form-input" id="smCreateEvent" value="' + esc(c.eventName || '') + '" placeholder="e.g. Spring Craft Fair" oninput="SocialV2.createField(\'eventName\', this.value)" style="width:100%;"></div>';
@@ -402,7 +438,7 @@
     var c = CREATE;
     var inner;
     if (c.generating) {
-      inner = '<div class="loading">Generating captions…</div>';
+      inner = scopedSpinner('Generating captions…');
     } else if (!c.captions.length) {
       inner = '<button class="btn btn-primary" onclick="SocialV2.createGenerate()">✨ Generate captions</button>' +
         '<div class="mu-sub" style="margin-top:8px;font-size:0.78rem;">Uses your subject + content style to draft caption options and hashtags.</div>';
@@ -547,7 +583,7 @@
   function render() {
     var tab = ensureTab();
     if (!V2.loaded) {
-      tab.innerHTML = U.pageHeader({ title: 'Social Media' }) + '<div class="loading" style="margin-top:14px;">Loading…</div>';
+      tab.innerHTML = U.pageHeader({ title: 'Social Media' }) + scopedSpinner('Loading…', 'margin-top:14px;');
       return;
     }
     var filters = [['all', 'All'], ['posted', 'Posted'], ['draft', 'Drafts']].map(function (f) {
@@ -609,8 +645,9 @@
     create: function () {
       if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to create social posts.', true); return; }
       if (!bridge()) return;
-      // Make sure products are available for the subject picker.
-      if (!window.productsData && window.loadProducts) { try { loadProducts(); } catch (e) {} }
+      // Make sure products are available for the subject picker — loads async
+      // and re-renders the picker in place when ready (ensureProducts).
+      ensureProducts();
       CREATE = freshCreate();
       openCreatePane();
     },
@@ -624,7 +661,7 @@
       if (!bridge()) return;
       var clip = V2.pendingClipDocs.filter(function (c) { return c.clipId === clipId; })[0];
       if (!clip) { if (window.showToast) showToast('That clip is no longer available.', true); return; }
-      if (!window.productsData && window.loadProducts) { try { loadProducts(); } catch (e) {} }
+      ensureProducts();
       CREATE = freshCreate();
       CREATE.step = 'details';
       CREATE.clipId = clip.clipId;
@@ -677,6 +714,8 @@
       CREATE.subjectType = type;
       if (type !== 'product') { CREATE.productId = null; CREATE.productName = null; CREATE.productPriceCents = 0; CREATE.productMaterials = null; CREATE.productCategory = null; }
       renderCreate();
+      // Re-render the picker in place once products resolve (no-op if already loaded).
+      if (type === 'product') ensureProducts();
     },
     createSetProduct: function (pid) {
       if (!CREATE) return;
