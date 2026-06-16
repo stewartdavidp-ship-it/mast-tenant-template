@@ -585,7 +585,7 @@
       rows += '<div style="font-size:0.85rem;line-height:1.6;">' + icon + ' <strong>' + esc(chk.label) + ':</strong> ' + esc(chk.msg) + '</div>';
     });
     if (!rows) return '';
-    return U.card('Clip readiness <span class="mu-sub" style="font-weight:400;font-size:0.78rem;">(advisory)</span>', rows);
+    return U.card('Clip readiness (advisory)', rows);
   }
 
   // (D) Caption-in-Claude available only when Ask AI is configured (mirrors the
@@ -693,7 +693,7 @@
       body = '<button class="btn btn-secondary btn-small" onclick="SocialV2.createPickCoupon()">🏷️ Attach coupon</button>' +
         '<div class="mu-sub" style="margin-top:6px;font-size:0.78rem;">Adds a coupon claim link to your caption.</div>';
     }
-    return U.card('Attach coupon <span class="mu-sub" style="font-weight:400;font-size:0.78rem;">(optional)</span>', body);
+    return U.card('Attach coupon (optional)', body);
   }
 
   // ---- Step 4: post (review + write) ----
