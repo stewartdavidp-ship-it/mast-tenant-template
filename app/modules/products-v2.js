@@ -471,10 +471,9 @@
       var body = head +
         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">' +
         '<button class="btn btn-primary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(p.recipeId) + '\')">Open recipe →</button>' +
-        (canEd ? '<button class="btn btn-secondary btn-small" title="Legacy builder — what-if metal pricing, bulk reprice, CSV import" onclick="ProductsV2.recipeEditInBuilder(\'' + esc(p.recipeId) + '\',\'' + esc(pid) + '\')">Advanced ↗</button>' : '') +
         (canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeUnlink(\'' + esc(pid) + '\')">Unlink</button>' : '') +
         '</div>';
-      return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” edits the full recipe here — materials, labor, pricing tiers, and per-variant cost (Back returns). “Advanced” opens the legacy builder for what-if metal pricing, bulk reprice, and CSV import.</div>';
+      return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” edits the full recipe here — materials, labor, pricing tiers, and per-variant cost (Back returns). Metal what-if pricing, bulk reprice, and CSV import are on the product list toolbar.</div>';
     }
     return U.card('Recipe', '<div style="color:var(--warm-gray);font-size:0.9rem;margin-bottom:10px;">No recipe linked. A recipe tracks the materials, labor, and cost behind this product.</div>' +
       (canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCreate(\'' + esc(pid) + '\')">+ Create a recipe</button>' : '<span style="color:var(--warm-gray);font-size:0.85rem;">No recipe.</span>'));
@@ -486,44 +485,13 @@
     if (pane) pane.innerHTML = recipePane(rec);
   }
   // Open the legacy recipe builder — R5 retired this as the everyday edit path
-  // (the v2 recipe SO now owns BOM / labor / pricing / per-variant cost). It
-  // survives ONLY as the "Advanced ↗" door for power tools not yet ported to v2
-  // (what-if metal pricing, bulk reprice, CSV import). It hijacks the legacy
-  // pieces tab, so navigate there first.
-  // `pid` lets us push a v2 return-target so the builder's "← Back to Products"
-  // (maker.closeRecipeBuilder → MastNavStack.popAndReturn) lands back on the v2
-  // slide-out instead of the V1 legacy product page.
-  function openRecipeBuilderGated(recipeId, pid, variantId, fromDrill) {
-    withProductBridge(function () {
-      MastAdmin.showToast('Opening recipe builder…');
-      // The recipe will likely change in the builder — drop its cached headline so
-      // the Recipe tab refetches fresh cost/status on return.
-      if (recipeId) delete _recipeCache[recipeId];
-      if (pid && window.MastNavStack && typeof MastNavStack.push === 'function') {
-        // Capture the EXACT view to restore on Back: the active tab pane, or — when
-        // launched from the recipe drill — the recipe drill itself (no .mu-pane there).
-        var visEl = document.querySelector('#mastSlideOutBody .mu-pane:not([hidden])');
-        var pane = visEl && visEl.getAttribute('data-pane');
-        MastNavStack.push({ route: 'products-v2', view: 'detail', label: 'Product',
-          state: { pid: pid, vid: variantId || null, pane: pane || null, drillRecipe: fromDrill ? recipeId : null } });
-      }
-      // navigateTo() clears MastNavStack on every non-internal nav, so guard the
-      // classic hop with _mastNavInternal (canonical push-then-nav pattern) —
-      // otherwise the return-target we just pushed gets wiped before Back fires.
-      window._mastNavInternal = true;
-      try {
-        if (typeof navigateToClassic === 'function') navigateToClassic('products');
-        else if (window.navigateTo) window.navigateTo('products');
-      } finally { window._mastNavInternal = false; }
-      setTimeout(function () {
-        // makerOpenRecipeBuilder(recipeId, variantId) focuses the variant's slot
-        // (a variant's "own recipe" = its independent slot in the product recipe).
-        if (window.makerOpenRecipeBuilder) window.makerOpenRecipeBuilder(recipeId, variantId);
-        else MastAdmin.showToast('Recipe builder unavailable', true);
-      }, 320);
-    });
-  }
-  // Restore the originating tab after the builder's Back pops us back. The SO can
+  // (the v2 recipe SO now owns BOM / labor / pricing / per-variant cost). The
+  // former "Advanced ↗" door (navigateToClassic('products') → legacy builder) is
+  // RETIRED: the three power tools it reached — what-if metal pricing, bulk
+  // reprice, and product CSV import — are now native on the product list toolbar
+  // (ProductsV2.openWhatIf / openReprice / importCsv), single-sourced through
+  // window.MakerProductBridge. No products-v2 surface hops to the V1 builder.
+  // Restore the originating tab after a stacked pop. The SO can
   // render more than once (e.g. a deep-link auto-open followed by our reopen), and
   // each render defaults to the first tab — so RE-ASSERT: keep clicking the target
   // tab whenever we're not on it, across a short window, so a late render can't
@@ -540,27 +508,11 @@
     }
     if (tries < 12) setTimeout(function () { restorePaneWhenReady(pane, tries + 1); }, 80);
   }
-  // Rebuild product Recipe-tab → recipe drill (so the user returns to the exact
-  // recipe view they edited from, and Back from it still lands on the Recipe tab).
-  // Drill only once the Recipe tab is actually showing (so drill()'s back-target
-  // captures 'recipe'), and not if we've already drilled in.
-  function rebuildRecipeDrillWhenReady(recipeId, tries) {
-    tries = tries || 0;
-    var body = document.getElementById('mastSlideOutBody');
-    if (body && body.querySelector('.pv2-bom')) return; // recipe drill already open
-    var vis = body && body.querySelector('.mu-pane:not([hidden])');
-    if (vis && vis.getAttribute('data-pane') === 'recipe') {
-      MastEntity.drill('recipe-v2', recipeId); return;
-    }
-    var btn = body && body.querySelector('.mu-ptabs button[onclick*="\'recipe\'"]');
-    if (btn) btn.click();
-    if (tries < 14) setTimeout(function () { rebuildRecipeDrillWhenReady(recipeId, tries + 1); }, 80);
-  }
-  // Restore target for the builder's Back: pop returns to the v2 list (via
-  // popAndReturn → navigateTo('products-v2')); reopen the EXACT view the user came
-  // from — variant SO, recipe drill, or the product on its originating tab. We
-  // chain on the reopen so the first restore attempt runs after its render, then
-  // the re-assert poll defends against any later (deep-link) re-render.
+  // Restore target for a stacked pop: pop returns to the v2 list (via popAndReturn
+  // → navigateTo('products-v2')); reopen the EXACT view the user came from — the
+  // variant SO or the product on its originating tab. We chain on the reopen so the
+  // first restore attempt runs after its render, then the re-assert poll defends
+  // against any later (deep-link) re-render.
   if (window.MastNavStack && typeof MastNavStack.registerRestorer === 'function') {
     MastNavStack.registerRestorer('products-v2', function (view, state) {
       if (view !== 'detail' || !state || !state.pid) return;
@@ -572,8 +524,7 @@
             return;
           }
           Promise.resolve(reopenProduct(state.pid)).then(function () {
-            if (state.drillRecipe) rebuildRecipeDrillWhenReady(state.drillRecipe);
-            else restorePaneWhenReady(state.pane);
+            restorePaneWhenReady(state.pane);
           });
         });
       }, 60);
@@ -2464,9 +2415,15 @@
       facetBar = '<div style="margin:0 0 14px;display:flex;align-items:center;gap:0;flex-wrap:wrap;">' +
         '<span style="font-size:0.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);margin-right:10px;">Tags</span>' + chips + clear + '</div>';
     }
+    var canEd = canEditProduct();
+    var toolsHtml = canEd
+      ? '<button class="btn btn-secondary" title="Simulate metal spot-price shifts and preview the impact on recipe-costed products" onclick="ProductsV2.openWhatIf()">What-if pricing</button> ' +
+        '<button class="btn btn-secondary" title="Recompute &amp; write every recipe-linked product price from its recipe" onclick="ProductsV2.openReprice()">Bulk reprice</button> ' +
+        '<button class="btn btn-secondary" onclick="ProductsV2.importCsv()">↑ Import CSV</button> '
+      : '';
     tab.innerHTML =
       U.pageHeader({ title: 'Products', count: N.count(V2.rows.length) + ' products',
-        actionsHtml: (canEditProduct() ? '<button class="btn btn-primary" onclick="ProductsV2.newProduct()">+ New product</button> ' : '') + '<button class="btn btn-secondary" onclick="ProductsV2.exportCsv()">↓ Export</button>' }) +
+        actionsHtml: (canEd ? '<button class="btn btn-primary" onclick="ProductsV2.newProduct()">+ New product</button> ' : '') + toolsHtml + '<button class="btn btn-secondary" onclick="ProductsV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin:14px 0 10px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + lensPills + '</div>' +
       '<div style="margin:0 0 14px;display:flex;align-items:center;gap:8px 0;flex-wrap:wrap;">' + pills + search + '</div>' +
       facetBar +
@@ -2507,8 +2464,408 @@
       '</div></div>';
   }
 
+  // ════════════════ Power tools (retired the "Advanced ↗" V1 door) ════════════
+  // Three recipe/product power-tools that used to live only in the legacy maker.js
+  // builder, reached via navigateToClassic('products'). Now native here, all
+  // single-sourced through window.MakerProductBridge — no pricing math or CSV
+  // parse/write is reimplemented; the simulator, the bulk-reprice (THROUGH the
+  // shared applyRecipeToProduct price-write core), and the CSV import/writer all
+  // delegate to the bridge. All three are gated on can('products','edit').
+
+  // ── What-if metal-price simulator (preview only — zero writes) ──────────
+  var WhatIf = (function () {
+    var st = null;
+    function open() {
+      if (!canEditProduct()) { MastAdmin.showToast('You do not have permission to do this', true); return; }
+      st = { gold: 0, silver: 0, platinum: 0, spot: null, results: null, loading: true };
+      render();
+      withProductBridge(function () { run(); });
+    }
+    function close() { st = null; if (typeof closeModal === 'function') closeModal(); }
+    function setShift(metal, val) {
+      if (!st) return;
+      st[metal] = parseFloat(val) || 0;
+      run();
+    }
+    function run() {
+      if (!st) return;
+      st.loading = true;
+      Promise.resolve(window.MakerProductBridge.whatIfSimulate({ gold: st.gold, silver: st.silver, platinum: st.platinum }))
+        .then(function (res) {
+          if (!st) return;
+          st.loading = false;
+          if (!res || !res.ok) { st.results = []; st.spot = null; renderResults(); return; }
+          st.spot = res.spot; st.results = res.results || [];
+          renderResults();
+        }, function (e) { console.error('[products-v2] whatif', e); if (st) { st.loading = false; st.results = []; renderResults(); } });
+    }
+    function metalInputs() {
+      var spot = st.spot || {};
+      return ['gold', 'silver', 'platinum'].map(function (m) {
+        var label = m.charAt(0).toUpperCase() + m.slice(1);
+        return '<div style="flex:1;">' +
+          '<label style="display:block;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + label + ' shift %</label>' +
+          '<input type="number" step="1" value="' + esc(String(st[m] || 0)) + '" oninput="ProductsV2.whatIfSet(\'' + m + '\', this.value)" style="width:100%;padding:8px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-family:monospace;background:var(--cream);color:inherit;box-sizing:border-box;">' +
+          '<div style="font-size:0.72rem;color:var(--warm-gray);margin-top:2px;">spot $' + (Number(spot[m]) || 0).toFixed(2) + '/oz</div>' +
+          '</div>';
+      }).join('');
+    }
+    function resultsHtml() {
+      if (st.loading && st.results == null) return '<div class="mu-sub" style="text-align:center;padding:12px;">Simulating…</div>';
+      if (st.spot == null) return '<div class="mu-sub" style="text-align:center;padding:12px;">No spot prices available yet. Refresh metals pricing first.</div>';
+      var results = st.results || [];
+      if (!results.length) return '<div class="mu-sub" style="text-align:center;padding:12px;">No spot-linked recipes are affected by this shift.</div>';
+      var h = '<div class="mu-sub" style="margin-bottom:6px;">' + results.length + ' recipe' + (results.length === 1 ? '' : 's') + ' affected (sorted by cost impact):</div>';
+      h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr>' +
+        '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Recipe</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Current</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Simulated</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Δ Cost</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Margin → sim</th>' +
+        '</tr></thead><tbody>';
+      results.forEach(function (r) {
+        var up = r.costDelta > 0, dn = r.costDelta < 0;
+        var dc = up ? 'var(--danger)' : (dn ? 'var(--success)' : 'var(--warm-gray)');
+        var floorWarn = r.breachesFloor ? ' <span title="Breaches minimum margin floor" style="color:var(--danger);">⚠</span>' : '';
+        h += '<tr>' +
+          '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.name || '') + '</td>' +
+          '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (N.money(r.currentTotalCost) || '$0.00') + '</td>' +
+          '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (N.money(r.simulatedTotalCost) || '$0.00') + '</td>' +
+          '<td style="text-align:right;font-family:monospace;color:' + dc + ';padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (r.costDelta >= 0 ? '+' : '') + (N.money(r.costDelta) || '$0.00') + '</td>' +
+          '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (Number(r.currentMarginPct) || 0).toFixed(1) + '% → ' + (Number(r.simulatedMarginPct) || 0).toFixed(1) + '%' + floorWarn + '</td>' +
+          '</tr>';
+      });
+      h += '</tbody></table></div>';
+      return h;
+    }
+    function renderResults() {
+      var box = document.getElementById('pv2WhatIfResults');
+      if (box) box.innerHTML = resultsHtml();
+    }
+    function render() {
+      if (!st || typeof openModal !== 'function') return;
+      openModal(
+        '<div style="max-width:780px;">' +
+          '<h2 style="font-size:1.15rem;margin:0 0 6px;">What-if metal pricing</h2>' +
+          '<div class="mu-sub" style="margin-bottom:14px;">Shift metals spot prices and preview how every recipe that uses spot-linked materials would move. Preview only — nothing is written.</div>' +
+          '<div style="display:flex;gap:12px;margin-bottom:16px;">' + metalInputs() + '</div>' +
+          '<div id="pv2WhatIfResults">' + resultsHtml() + '</div>' +
+          '<div style="display:flex;justify-content:flex-end;margin-top:18px;">' +
+            '<button class="btn btn-secondary" onclick="ProductsV2.whatIfClose()">Done</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+    return { open: open, close: close, setShift: setShift };
+  })();
+
+  // ── Bulk Reprice All (writes THROUGH the shared price core) ─────────────
+  var Reprice = (function () {
+    var st = null;
+    function open() {
+      if (!canEditProduct()) { MastAdmin.showToast('You do not have permission to do this', true); return; }
+      st = { candidates: null, thresholdPct: null, running: false, done: null };
+      render();
+      withProductBridge(function () { loadCandidates(); });
+    }
+    function close() { st = null; if (typeof closeModal === 'function') closeModal(); }
+    function loadCandidates() {
+      Promise.resolve(window.MakerProductBridge.repriceCandidates()).then(function (res) {
+        if (!st) return;
+        if (!res || !res.ok) { st.candidates = []; render(); return; }
+        st.candidates = res.candidates || []; st.thresholdPct = res.thresholdPct;
+        render();
+      }, function (e) { console.error('[products-v2] reprice candidates', e); if (st) { st.candidates = []; render(); } });
+    }
+    function run() {
+      if (!st || st.running || !st.candidates || !st.candidates.length) return;
+      st.running = true;
+      st.progress = { done: 0, total: st.candidates.length, name: '' };
+      render();
+      var ids = st.candidates.map(function (c) { return c.recipeId; });
+      Promise.resolve(window.MakerProductBridge.repriceExecute(ids, function (done, total, name) {
+        if (!st) return;
+        st.progress = { done: done, total: total, name: name };
+        var p = document.getElementById('pv2RepriceProgress');
+        if (p) p.innerHTML = progressHtml();
+      })).then(function (res) {
+        if (!st) return;
+        st.running = false; st.done = res || { succeeded: 0, failed: 0, total: 0, errors: [] };
+        render();
+        reloadProducts();
+      }, function (e) {
+        console.error('[products-v2] reprice execute', e);
+        if (!st) return;
+        st.running = false; st.done = { succeeded: 0, failed: (st.candidates || []).length, total: (st.candidates || []).length, errors: [] };
+        render();
+      });
+    }
+    function progressHtml() {
+      var p = st.progress || { done: 0, total: 0, name: '' };
+      var pct = p.total ? Math.round((p.done / p.total) * 100) : 0;
+      return '<div class="mu-sub" style="margin-bottom:8px;">Repricing ' + p.done + ' / ' + p.total + (p.name ? ' — ' + esc(p.name) : '') + '…</div>' +
+        '<div style="height:8px;border-radius:4px;background:var(--cream-dark);overflow:hidden;"><div style="height:100%;width:' + pct + '%;background:var(--amber);transition:width .2s;"></div></div>';
+    }
+    function tableHtml() {
+      var c = st.candidates || [];
+      var h = '<div style="overflow-x:auto;margin-bottom:14px;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr>' +
+        '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Recipe</th>' +
+        '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Tier</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Drift</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Baseline</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Now</th>' +
+        '</tr></thead><tbody>';
+      c.forEach(function (r) {
+        h += '<tr>' +
+          '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.name || '') + '</td>' +
+          '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.activePriceTier || 'direct') + '</td>' +
+          '<td style="text-align:right;font-family:monospace;color:var(--warning);padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (r.currentDriftPct > 0 ? '+' : '') + (Number(r.currentDriftPct) || 0).toFixed(1) + '%</td>' +
+          '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (N.money(r.driftBaseline) || '$0.00') + '</td>' +
+          '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (N.money(r.totalCost) || '$0.00') + '</td>' +
+          '</tr>';
+      });
+      h += '</tbody></table></div>';
+      return h;
+    }
+    function doneHtml() {
+      var d = st.done;
+      var h = '<div style="text-align:center;padding:20px 10px;">' +
+        '<div style="font-size:1.6rem;margin-bottom:8px;">' + (d.failed ? '⚠️' : '✅') + '</div>' +
+        '<p style="font-weight:500;margin:0 0 6px;">Reprice complete</p>' +
+        '<p class="mu-sub" style="margin:0;">' + d.succeeded + ' product' + (d.succeeded === 1 ? '' : 's') + ' repriced' + (d.failed ? ', ' + d.failed + ' failed' : '') + '.</p>';
+      if (d.errors && d.errors.length) {
+        h += '<div style="text-align:left;margin-top:14px;font-size:0.78rem;color:var(--danger);">';
+        d.errors.slice(0, 8).forEach(function (e) { h += '<div>• ' + esc(e.name) + ': ' + esc(e.error) + '</div>'; });
+        if (d.errors.length > 8) h += '<div>… and ' + (d.errors.length - 8) + ' more</div>';
+        h += '</div>';
+      }
+      h += '</div>';
+      return h;
+    }
+    function render() {
+      if (!st || typeof openModal !== 'function') return;
+      var body, foot;
+      if (st.done) {
+        body = doneHtml();
+        foot = '<button class="btn btn-primary" onclick="ProductsV2.repriceClose()">Done</button>';
+      } else if (st.running) {
+        body = '<div id="pv2RepriceProgress">' + progressHtml() + '</div>';
+        foot = '<button class="btn btn-secondary" disabled>Repricing…</button>';
+      } else if (st.candidates == null) {
+        body = '<div class="mu-sub" style="text-align:center;padding:12px;">Checking recipes…</div>';
+        foot = '<button class="btn btn-secondary" onclick="ProductsV2.repriceClose()">Cancel</button>';
+      } else if (!st.candidates.length) {
+        body = '<div class="mu-sub" style="text-align:center;padding:12px;">No recipe-linked products need repricing — all are within the ' + (st.thresholdPct != null ? st.thresholdPct + '% ' : '') + 'drift threshold.</div>';
+        foot = '<button class="btn btn-secondary" onclick="ProductsV2.repriceClose()">Close</button>';
+      } else {
+        body = '<div class="mu-sub" style="margin-bottom:12px;">' + st.candidates.length + ' recipe-linked product' + (st.candidates.length === 1 ? '' : 's') + ' drifted past the ' + (st.thresholdPct != null ? st.thresholdPct + '% ' : '') + 'threshold. Each recipe is recosted, then its prices are written to the linked product through the standard recipe-apply path (variant tier prices + Etsy sync).</div>' + tableHtml();
+        foot = '<button class="btn btn-secondary" onclick="ProductsV2.repriceClose()">Cancel</button>' +
+          '<button class="btn btn-primary" onclick="ProductsV2.repriceRun()">Reprice all ' + st.candidates.length + '</button>';
+      }
+      openModal(
+        '<div style="max-width:700px;">' +
+          '<h2 style="font-size:1.15rem;margin:0 0 12px;">Bulk reprice</h2>' +
+          body +
+          '<div style="display:flex;justify-content:flex-end;gap:8px;margin-top:18px;">' + foot + '</div>' +
+        '</div>'
+      );
+    }
+    function reloadProducts() {
+      // Refresh the legacy global product cache (recipe/product data the bridge
+      // reads) AND the V2 list (module-level load) so the new prices show on close.
+      Promise.resolve(window.loadProducts ? window.loadProducts() : null).then(function () { load(); });
+    }
+    return { open: open, close: close, run: run };
+  })();
+
+  // ── Product CSV import wizard (mirrors the materials-v2 importer, PR 566) ─
+  var Import = (function () {
+    var st = null;
+    function fields() { return window.MakerProductBridge.productImportFields(); }
+    function open() {
+      if (!canEditProduct()) { MastAdmin.showToast('You do not have permission to do this', true); return; }
+      st = { step: 1, parsedData: null, headers: [], mappings: {}, filename: '', defaultCategory: '' };
+      withProductBridge(function () { render(); });
+    }
+    function close() { st = null; if (typeof closeModal === 'function') closeModal(); }
+    function setMapping(key, val) { if (!st) return; if (val === '' || val == null) delete st.mappings[key]; else st.mappings[key] = parseInt(val, 10); }
+    function setDefault(key, val) { if (st) st[key] = val; }
+    function step(dir) {
+      if (!st) return;
+      if (dir > 0 && st.step === 1 && !st.parsedData) { MastAdmin.showToast('Upload a file first', true); return; }
+      if (dir > 0 && st.step === 2) {
+        var missing = fields().filter(function (f) {
+          if (!f.required) return false;
+          if (st.mappings[f.key] !== undefined) return false;
+          return true;
+        });
+        if (missing.length) { MastAdmin.showToast('Map required fields: ' + missing.map(function (f) { return f.label; }).join(', '), true); return; }
+      }
+      st.step = Math.max(1, Math.min(3, st.step + dir));
+      render();
+    }
+    function pickFile(input) {
+      if (!st) return;
+      var file = input && input.files && input.files[0];
+      if (!file) return;
+      if (file.size > 5 * 1024 * 1024) { MastAdmin.showToast('File must be under 5MB', true); return; }
+      st.filename = file.name;
+      var ext = (file.name.split('.').pop() || '').toLowerCase();
+      function ingest(headers, dataRows) {
+        if (!dataRows || dataRows.length < 1) { MastAdmin.showToast('File has no data rows', true); return; }
+        if (dataRows.length > 1000) { MastAdmin.showToast('Max 1,000 rows allowed. File has ' + dataRows.length, true); return; }
+        st.headers = headers.map(function (h) { return String(h); });
+        st.parsedData = dataRows.filter(function (row) { return row.some(function (c) { return c !== '' && c != null; }); });
+        st.mappings = window.MakerProductBridge.productAutoDetectMappings(st.headers);
+        render();
+      }
+      if (['xlsx', 'xls'].indexOf(ext) >= 0 && window.XLSX) {
+        var r = new FileReader();
+        r.onload = function (e) {
+          try {
+            var wb = XLSX.read(e.target.result, { type: 'array' });
+            var ws = wb.Sheets[wb.SheetNames[0]];
+            var data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            if (data.length < 2) { MastAdmin.showToast('File has no data rows', true); return; }
+            ingest(data[0], data.slice(1));
+          } catch (err) { MastAdmin.showToast('Failed to parse file: ' + err.message, true); }
+        };
+        r.readAsArrayBuffer(file);
+      } else if (window.Papa) {
+        Papa.parse(file, {
+          complete: function (res) {
+            if (!res.data || res.data.length < 2) { MastAdmin.showToast('File has no data rows', true); return; }
+            ingest(res.data[0], res.data.slice(1));
+          },
+          error: function (err) { MastAdmin.showToast('Failed to parse CSV: ' + err.message, true); }
+        });
+      } else { MastAdmin.showToast('CSV parser unavailable', true); }
+    }
+    function mappedRows() {
+      var defaults = { defaultCategory: st.defaultCategory };
+      return (st.parsedData || []).map(function (row) { return window.MakerProductBridge.productMapImportRow(row, st.mappings, defaults); });
+    }
+    function run() {
+      if (!canEditProduct()) { MastAdmin.showToast('You do not have permission to import products', true); return; }
+      var records = mappedRows();
+      var valid = records.filter(function (r) { return r._valid !== false; });
+      var btn = document.getElementById('pv2ImportBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
+      Promise.resolve(window.MakerProductBridge.productImportRecords(valid, st.filename)).then(function (res) {
+        if (!res || !res.ok) { MastAdmin.showToast('Import failed' + (res && res.error ? ': ' + res.error : ''), true); if (btn) { btn.disabled = false; btn.textContent = 'Import'; } return; }
+        MastAdmin.showToast(res.imported + ' product' + (res.imported === 1 ? '' : 's') + ' imported' + (res.skipped ? ', ' + res.skipped + ' skipped' : ''));
+        close();
+        Promise.resolve(window.loadProducts ? window.loadProducts() : null).then(function () { load(); });
+      }).catch(function (e) {
+        console.error('[products-v2] import', e);
+        MastAdmin.showToast('Import failed', true);
+        if (btn) { btn.disabled = false; btn.textContent = 'Import'; }
+      });
+    }
+    function steps(cur) {
+      var h = '<div style="display:flex;gap:4px;margin:0 0 16px;">';
+      for (var s = 1; s <= 3; s++) {
+        var bg = s === cur ? 'var(--amber)' : (s < cur ? 'var(--teal)' : 'var(--cream-dark)');
+        h += '<div style="flex:1;height:4px;border-radius:2px;background:' + bg + ';"></div>';
+      }
+      return h + '</div>';
+    }
+    function renderStep1() {
+      var h = '<div style="font-weight:600;margin-bottom:8px;">Step 1 · Upload file</div>';
+      h += '<div class="mu-sub" style="margin-bottom:14px;">Upload a .csv or .xlsx file. Max 5MB, 1,000 rows. The first row must be column headers. Imported products land as <strong>draft</strong>.</div>';
+      h += '<div style="border:2px dashed var(--cream-dark);border-radius:8px;padding:26px;text-align:center;">';
+      h += '<input type="file" accept=".csv,.xlsx,.xls" onchange="ProductsV2.importPickFile(this)">';
+      h += '</div>';
+      if (st.parsedData) {
+        h += '<div style="margin-top:14px;font-size:0.85rem;color:var(--teal);font-weight:600;">' + esc(st.filename) + ' — ' + st.parsedData.length + ' rows, ' + st.headers.length + ' columns</div>';
+        h += '<div style="overflow-x:auto;margin-top:10px;"><table style="width:100%;border-collapse:collapse;font-size:0.78rem;"><thead><tr>';
+        st.headers.forEach(function (hd) { h += '<th style="padding:4px 8px;text-align:left;border-bottom:1px solid var(--cream-dark);font-weight:600;white-space:nowrap;">' + esc(hd) + '</th>'; });
+        h += '</tr></thead><tbody>';
+        st.parsedData.slice(0, 5).forEach(function (row) {
+          h += '<tr>';
+          st.headers.forEach(function (hd, i) { h += '<td style="padding:4px 8px;border-bottom:1px solid var(--cream-dark);white-space:nowrap;max-width:150px;overflow:hidden;text-overflow:ellipsis;">' + esc(String(row[i] == null ? '' : row[i])) + '</td>'; });
+          h += '</tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      return h;
+    }
+    function renderStep2() {
+      var h = '<div style="font-weight:600;margin-bottom:8px;">Step 2 · Map columns</div>';
+      h += '<div class="mu-sub" style="margin-bottom:14px;">Match your file columns to product fields. Auto-detected matches are pre-selected. Required fields are marked *.</div>';
+      fields().forEach(function (f) {
+        var mapped = st.mappings[f.key];
+        var auto = mapped !== undefined;
+        h += '<div style="display:flex;gap:12px;align-items:center;margin-bottom:10px;padding:6px 10px;border-radius:6px;background:' + (auto ? 'rgba(42,124,111,0.06)' : 'transparent') + ';">';
+        h += '<div style="min-width:150px;font-size:0.85rem;font-weight:500;">' + esc(f.label) + (f.required ? ' *' : '') + '</div>';
+        h += '<select class="form-input" onchange="ProductsV2.importSetMapping(\'' + f.key + '\', this.value)" style="flex:1;">';
+        h += '<option value="">— Don\'t import —</option>';
+        st.headers.forEach(function (hd, i) { h += '<option value="' + i + '"' + (mapped === i ? ' selected' : '') + '>' + esc(hd) + '</option>'; });
+        h += '</select></div>';
+      });
+      h += '<div style="margin-top:14px;padding:10px 12px;background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;">';
+      h += '<div style="font-size:0.85rem;font-weight:500;margin-bottom:6px;">Default category (when not mapped)</div>';
+      h += '<input class="form-input" type="text" value="' + esc(st.defaultCategory || '') + '" placeholder="e.g. Imported" onchange="ProductsV2.importSetDefault(\'defaultCategory\', this.value)"></div>';
+      return h;
+    }
+    function renderStep3() {
+      var records = mappedRows();
+      var valid = [], invalid = 0;
+      records.forEach(function (r) { if (r._valid !== false) valid.push(r); else invalid++; });
+      var fs = fields().filter(function (f) { return st.mappings[f.key] !== undefined || f.required; });
+      var h = '<div style="font-weight:600;margin-bottom:8px;">Step 3 · Preview &amp; confirm</div>';
+      h += '<div class="mu-sub" style="margin-bottom:12px;">' + valid.length + ' valid row' + (valid.length === 1 ? '' : 's') + ' ready' + (invalid ? ', ' + invalid + ' will be skipped (missing required fields)' : '') + '. Imported products land as <strong>draft</strong>.</div>';
+      h += '<div style="overflow-x:auto;margin-bottom:14px;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr>';
+      fs.forEach(function (f) { h += '<th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;font-weight:600;">' + esc(f.label) + '</th>'; });
+      h += '</tr></thead><tbody>';
+      valid.slice(0, 10).forEach(function (rec) {
+        h += '<tr>';
+        fs.forEach(function (f) { h += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(String(rec[f.key] == null ? '' : rec[f.key])) + '</td>'; });
+        h += '</tr>';
+      });
+      if (valid.length > 10) h += '<tr><td colspan="' + fs.length + '" style="padding:8px;text-align:center;color:var(--warm-gray);font-style:italic;">… and ' + (valid.length - 10) + ' more rows</td></tr>';
+      h += '</tbody></table></div>';
+      return h;
+    }
+    function render() {
+      if (!st || typeof openModal !== 'function') return;
+      var body = st.step === 1 ? renderStep1() : st.step === 2 ? renderStep2() : renderStep3();
+      var records = st.step === 3 ? mappedRows() : null;
+      var validCount = records ? records.filter(function (r) { return r._valid !== false; }).length : 0;
+      var foot = '<div style="display:flex;justify-content:space-between;gap:8px;margin-top:18px;">';
+      foot += st.step > 1
+        ? '<button class="btn btn-secondary" onclick="ProductsV2.importStep(-1)">← Back</button>'
+        : '<button class="btn btn-secondary" onclick="ProductsV2.importClose()">Cancel</button>';
+      foot += st.step < 3
+        ? '<button class="btn btn-primary" onclick="ProductsV2.importStep(1)">Continue</button>'
+        : '<button class="btn btn-primary" id="pv2ImportBtn" onclick="ProductsV2.importRun()"' + (validCount ? '' : ' disabled') + '>Import ' + validCount + ' product' + (validCount === 1 ? '' : 's') + '</button>';
+      foot += '</div>';
+      openModal(
+        '<div style="max-width:760px;">' +
+          '<h2 style="font-size:1.15rem;margin:0 0 12px;">Import products</h2>' +
+          steps(st.step) + body + foot +
+        '</div>'
+      );
+    }
+    return { open: open, close: close, render: render, step: step, pickFile: pickFile, setMapping: setMapping, setDefault: setDefault, run: run };
+  })();
+
   window.ProductsV2 = {
     setFilter: function (s) { V2.filter = s; render(); },
+    // ── Power tools (native, single-sourced via MakerProductBridge) ──
+    openWhatIf: function () { WhatIf.open(); },
+    whatIfSet: function (metal, val) { WhatIf.setShift(metal, val); },
+    whatIfClose: function () { WhatIf.close(); },
+    openReprice: function () { Reprice.open(); },
+    repriceRun: function () { Reprice.run(); },
+    repriceClose: function () { Reprice.close(); },
+    importCsv: function () { Import.open(); },
+    importClose: function () { Import.close(); },
+    importStep: function (dir) { Import.step(dir); },
+    importPickFile: function (input) { Import.pickFile(input); },
+    importSetMapping: function (key, val) { Import.setMapping(key, val); Import.render(); },
+    importSetDefault: function (key, val) { Import.setDefault(key, val); },
+    importRun: function () { Import.run(); },
     // ── New product (v2 create) — a small standard dialog → creates a draft and
     // opens it in the v2 SO (no legacy builder/define bounce). ──
     // "+ New product" → a standard slide-out wizard: choose From scratch / Clone
@@ -2986,9 +3343,6 @@
         }, function (e) { console.error('[products-v2] recipeCreate', e); MastAdmin.showToast('Failed', true); });
       });
     },
-    // "Advanced ↗" — the single remaining door to the legacy builder (power tools:
-    // what-if pricing, bulk reprice, CSV import — not yet ported to v2).
-    recipeEditInBuilder: function (recipeId, pid, fromDrill) { openRecipeBuilderGated(recipeId, pid, null, fromDrill); },
     // ── R2: editable BOM in the recipe-v2 drill ──
     recipeSetLineQty: function (liId, value) { _applyRecipeLine(liId, { quantity: value }); },
     recipeSetLineWaste: function (liId, value) { _applyRecipeLine(liId, { scrapPercent: value }); },
