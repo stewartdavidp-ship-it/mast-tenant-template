@@ -530,6 +530,99 @@
     if (first) first.focus();
   }
 
+  // ── Instant-apply controls (live "no Save button" editing) ───────────
+  // The "Your Website" builder writes on every keystroke/pick instead of behind
+  // a Save button. Two pieces: a KEYED debounce (so many live fields share one
+  // timer registry without colliding) and bindInstant (wire an input → debounced
+  // writer). Generalized from homepage.js' debounce closure + website.js' onchange
+  // color inputs. Usage example (no UI surface here — primitives only):
+  //   var hex = MastUI.colorInput({ value: cfg.primary, id: 'brandPrimary',
+  //     onInput: function (h) { MastDB.set('brand/config/primary', h); } });
+  //   // …after inserting hex.html into the DOM:
+  //   MastUI.bindInstant(document.getElementById('brandPrimary'),
+  //     { key: 'brand:primary', writer: function (v) { MastDB.set('brand/config/primary', v); } });
+
+  // debounce(key, fn, delay=500): repeated calls with the SAME key reset that
+  // key's timer; fn fires once after `delay` ms of quiet. Keyed so distinct
+  // fields don't clobber each other's pending writes.
+  var _debounceTimers = Object.create(null);
+  function debounce(key, fn, delay) {
+    if (typeof key === 'function') { fn = key; key = '__default'; } // tolerant: bare-fn call
+    if (_debounceTimers[key]) clearTimeout(_debounceTimers[key]);
+    _debounceTimers[key] = setTimeout(function () {
+      delete _debounceTimers[key];
+      if (typeof fn === 'function') fn();
+    }, delay == null ? 500 : delay);
+  }
+
+  // bindInstant(el, cfg): attach a live listener that runs the value through an
+  // optional transform, debounces via debounce(key,…), then calls writer(value).
+  // cfg: { key, writer(value), event?, transform?(rawValue)->value, delay? }
+  // Default event: 'change' for <select>, 'input' for everything else (text/color/
+  // range update continuously). Returns el (chainable). No-op if el/writer absent.
+  function bindInstant(el, cfg) {
+    cfg = cfg || {};
+    if (!el || typeof el.addEventListener !== 'function' || typeof cfg.writer !== 'function') return el;
+    var evt = cfg.event || (el.tagName === 'SELECT' ? 'change' : 'input');
+    var key = cfg.key || ('bi:' + (el.id || el.name || Math.random().toString(36).slice(2)));
+    el.addEventListener(evt, function () {
+      var raw = (el.type === 'checkbox') ? el.checked : el.value;
+      var val = (typeof cfg.transform === 'function') ? cfg.transform(raw) : raw;
+      debounce(key, function () { cfg.writer(val); }, cfg.delay);
+    });
+    return el;
+  }
+
+  // colorInput(cfg): paired <input type=color> + hex text input that stay in
+  // sync; every edit (either field) calls onInput(hex). Markup-returning like the
+  // other primitives. cfg: { value, onInput?(hex), id?, label? }. onInput, when a
+  // global fn name (string) or set via cfg.onInputFnName, is invoked inline; when
+  // a function, it's wired by bindInstant after insertion (see usage note above).
+  // CHROME uses tokens; the color VALUE is data passed in (kept out of styling so
+  // no literal-hex chrome). The two inputs share a class so the sync delegate
+  // mirrors one into the other on input.
+  function colorInput(cfg) {
+    cfg = cfg || {};
+    var id = cfg.id || ('mu-col-' + Math.random().toString(36).slice(2));
+    var val = cfg.value == null ? '' : String(cfg.value);
+    var lbl = cfg.label ? '<label class="mu-ci-label" for="' + esc(id) + '-hex">' + esc(cfg.label) + '</label>' : '';
+    // Inline-handler path (string fn name) mirrors website.js:926; the function
+    // path is wired by the caller with bindInstant on #<id>-hex / #<id>-color.
+    var fn = typeof cfg.onInput === 'string' ? cfg.onInput : cfg.onInputFnName;
+    var oninput = fn ? (' oninput="' + esc(fn) + '(this.value)"') : '';
+    return '<div class="mu-colorinput" data-ci="' + esc(id) + '">' + lbl +
+      '<div class="mu-ci-row">' +
+        '<input type="color" id="' + esc(id) + '-color" class="mu-ci-swatch" value="' + esc(val) + '"' + oninput + ' aria-label="' + esc(cfg.label || 'Color') + ' swatch">' +
+        '<input type="text" id="' + esc(id) + '-hex" class="mu-ci-hex" value="' + esc(val) + '"' + oninput + ' maxlength="7" spellcheck="false" placeholder="#000000" aria-label="' + esc(cfg.label || 'Color') + ' hex">' +
+      '</div></div>';
+  }
+
+  // swatchGrid(cfg): a responsive grid of selectable tiles — color schemes, font
+  // pairs, "Looks" bundles, layout variants. renderItem(item) renders each tile's
+  // inner content (default: a small color swatch keyed off item.value/item.color);
+  // the `selected` tile gets a check + ring; click fires onSelectFnName(value).
+  // cfg: { items:[{value, label?, color?}], selected, onSelectFnName, renderItem?,
+  //        idKey? }. Click is delegated (data-sw / data-val) — no per-tile inline.
+  function swatchGrid(cfg) {
+    cfg = cfg || {};
+    var items = cfg.items || [];
+    var idKey = cfg.idKey || 'value';
+    var render = typeof cfg.renderItem === 'function' ? cfg.renderItem : function (it) {
+      var c = it.color || it.value || '';
+      var sw = c ? '<span class="mu-sw-color" style="background:' + esc(c) + ';"></span>' : '';
+      return sw + (it.label ? '<span class="mu-sw-label">' + esc(it.label) + '</span>' : '');
+    };
+    var fn = cfg.onSelectFnName || '';
+    return '<div class="mu-swgrid" role="listbox">' + items.map(function (it) {
+      var v = it == null ? '' : (it[idKey] != null ? it[idKey] : it.value);
+      var on = String(v) === String(cfg.selected);
+      return '<button type="button" class="mu-sw' + (on ? ' on' : '') + '" role="option"' +
+        ' aria-selected="' + on + '" data-sw="' + esc(fn) + '" data-val="' + esc(v) + '">' +
+        render(it) + (on ? '<span class="mu-sw-check" aria-hidden="true">✓</span>' : '') +
+        '</button>';
+    }).join('') + '</div>';
+  }
+
   // ── validate — shared format checks (empty passes: presence is the form's
   // call; these only reject malformed values).
   var validate = {
@@ -613,7 +706,33 @@
     if (window.__muWired) return; window.__muWired = true;
     document.addEventListener('click', function (e) {
       var t = e.target.closest && e.target.closest('.mu-thumb');
-      if (t) { openImg(t.getAttribute('data-img'), t.getAttribute('data-src')); }
+      if (t) { openImg(t.getAttribute('data-img'), t.getAttribute('data-src')); return; }
+      // swatchGrid tile → call the module's global handler with the tile value.
+      var sw = e.target.closest && e.target.closest('.mu-sw');
+      if (sw) {
+        var fn = sw.getAttribute('data-sw');
+        var ref = fn && (window[fn] || (window.MastUI && window.MastUI[fn]));
+        if (typeof ref === 'function') ref(sw.getAttribute('data-val'));
+      }
+    });
+    // colorInput: keep the <input type=color> and the hex text field in sync as
+    // either is edited (the onInput/bindInstant write still fires per field).
+    document.addEventListener('input', function (e) {
+      var el = e.target;
+      if (!el || !el.classList) return;
+      var host = el.closest && el.closest('.mu-colorinput');
+      if (!host) return;
+      var sw = host.querySelector('.mu-ci-swatch');
+      var hx = host.querySelector('.mu-ci-hex');
+      if (!sw || !hx) return;
+      var v = String(el.value || '');
+      if (el.classList.contains('mu-ci-hex')) {
+        // Only mirror a complete, valid #rrggbb into the native color picker
+        // (it rejects partials); the text field stays free-form as the user types.
+        if (/^#[0-9a-fA-F]{6}$/.test(v) && sw.value !== v) sw.value = v;
+      } else if (el.classList.contains('mu-ci-swatch')) {
+        if (hx.value !== v) hx.value = v;
+      }
     });
   }
   // panel tabs: switch panes inside the slide-out body
@@ -709,6 +828,20 @@
       '.mu-launch{all:unset;display:block;box-sizing:border-box;height:100%;cursor:pointer;} .mu-launch:focus-visible .mu-card{box-shadow:0 0 0 2px var(--amber,#C4853C);} .mu-launch:hover .mu-card{border-color:var(--amber,#C4853C);}',
       '.mu-launch .mu-arrow{color:var(--teal,#2A7C6F);font-weight:600;}',
       '.mu-cardgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:14px;align-items:stretch;}',
+      // colorInput: paired native color swatch + hex text field (instant-apply).
+      // Chrome only — the color VALUE is inline data, never baked into these rules.
+      '.mu-colorinput{display:flex;flex-direction:column;gap:5px;}',
+      '.mu-ci-label{font-size:0.78rem;color:var(--warm-gray);}',
+      '.mu-ci-row{display:flex;gap:8px;align-items:center;}',
+      '.mu-ci-swatch{width:40px;height:40px;border:1px solid var(--border,rgba(127,127,127,.3));border-radius:8px;cursor:pointer;padding:0;background:transparent;flex:0 0 40px;}',
+      '.mu-ci-hex{flex:1;min-width:0;font:inherit;font-size:0.85rem;font-variant-numeric:tabular-nums;text-transform:lowercase;padding:8px 10px;border:1px solid var(--border,rgba(127,127,127,.3));border-radius:8px;background:var(--bg-secondary,rgba(127,127,127,.06));color:var(--text-primary);} .mu-ci-hex:focus{outline:none;border-color:var(--amber,#C4853C);}',
+      // swatchGrid: responsive grid of selectable tiles (schemes/fonts/looks/layouts).
+      '.mu-swgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin:6px 0 14px;}',
+      '.mu-sw{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:64px;padding:10px;border:1px solid var(--border,rgba(127,127,127,.3));border-radius:10px;background:var(--surface-card,var(--card-bg,#1e1e1e));color:var(--text-primary);font:inherit;font-size:0.78rem;cursor:pointer;text-align:center;} .mu-sw:hover{border-color:var(--amber,#C4853C);} .mu-sw:focus-visible{outline:none;box-shadow:0 0 0 2px var(--amber,#C4853C);}',
+      '.mu-sw.on{border-color:var(--amber,#C4853C);box-shadow:0 0 0 1px var(--amber,#C4853C) inset;}',
+      '.mu-sw-color{display:block;width:34px;height:34px;border-radius:8px;border:1px solid var(--border,rgba(127,127,127,.25));}',
+      '.mu-sw-label{font-size:0.72rem;color:var(--warm-gray);line-height:1.2;}',
+      '.mu-sw-check{position:absolute;top:4px;right:6px;font-size:0.72rem;font-weight:700;color:var(--amber,#C4853C);}',
       '.mu-card>h3.mu-cardhead{display:flex;align-items:center;justify-content:space-between;gap:10px;}',
       '.mu-kv{display:grid;grid-template-columns:auto 1fr;gap:8px 24px;font-size:0.9rem;}',
       // Values left-align in a column just past the widest label (not flush-right) —
@@ -781,12 +914,13 @@
       imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
       stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader,
       launchCard: launchCard, cardGrid: cardGrid,
-      repeatRows: repeatRows, repeatRowsAdd: repeatRowsAdd, validate: validate
+      repeatRows: repeatRows, repeatRowsAdd: repeatRowsAdd, validate: validate,
+      debounce: debounce, bindInstant: bindInstant, colorInput: colorInput, swatchGrid: swatchGrid
     };
   }
 
   // CommonJS export for node-based unit tests of the pure helpers.
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid, repeatRows: repeatRows, validate: validate, sanitizeHtml: sanitizeHtml, _safeUrl: safeUrl, _sanitizeAllowed: SANITIZE_ALLOWED };
+    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid, repeatRows: repeatRows, validate: validate, sanitizeHtml: sanitizeHtml, _safeUrl: safeUrl, _sanitizeAllowed: SANITIZE_ALLOWED, debounce: debounce, bindInstant: bindInstant, colorInput: colorInput, swatchGrid: swatchGrid };
   }
 })();
