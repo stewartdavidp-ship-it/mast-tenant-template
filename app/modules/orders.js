@@ -237,7 +237,19 @@
     all.forEach(function(o) { byKey[o._key] = o; });
     return keys.map(function(k) { return byKey[k]; }).filter(Boolean);
   }
+  // Bulk mark-shipped — now delegates to OrdersBridge.bulkMarkShipped so the
+  // legacy bulk path runs the FULL ship core per row (statusHistory +
+  // onOrderShipped → inventory deduction + customer shipped-email), instead of
+  // the bare status flip it used to do (the latent V1 bug: bulk skipped every
+  // ship side-effect that the per-order detail screen runs). The Etsy-skip and
+  // confirm prompt stay HERE (caller-side UI concerns); the bridge has no RBAC
+  // gate, so we gate hasPermission('orders','edit') before invoking, matching
+  // the per-order legacy ship path.
   async function bulkOrdersMarkShipped() {
+    if (typeof hasPermission === 'function' && !hasPermission('orders', 'edit')) {
+      if (window.MastToast && window.MastToast.warn) window.MastToast.warn('You don\'t have permission to edit orders.');
+      return;
+    }
     var orders = _bulkOrdersSelected();
     if (!orders.length) return;
     var etsyBlocked = orders.filter(function(o) { return o.source === 'etsy'; });
@@ -248,33 +260,41 @@
     }
     var eligible = orders.filter(function(o) { return o.source !== 'etsy'; });
     if (!eligible.length) return;
-    if (!window.confirm('Mark ' + eligible.length + ' order(s) as shipped?')) return;
-    var ok = 0, fail = 0;
-    for (var i = 0; i < eligible.length; i++) {
-      try {
-        if (window.MastDB && MastDB.orders && MastDB.orders.update) {
-          await MastDB.orders.update(eligible[i]._key, { status: 'shipped', shippedAt: new Date().toISOString() });
-        }
-        ok++;
-      } catch (e) { fail++; }
-    }
-    if (window.MastToast && window.MastToast.success) window.MastToast.success('Marked ' + ok + ' shipped' + (fail ? ' (' + fail + ' failed)' : ''));
+    if (!window.confirm('Mark ' + eligible.length + ' order(s) as shipped? This deducts inventory and emails each customer their shipping notification.')) return;
+    var keys = eligible.map(function(o) { return o._key; });
+    var res = { ok: 0, fail: 0 };
+    try {
+      res = await OrdersBridge.bulkMarkShipped(keys) || res;
+    } catch (e) { res.fail = keys.length; }
+    if (window.MastToast && window.MastToast.success) window.MastToast.success('Marked ' + res.ok + ' shipped' + (res.fail ? ' (' + res.fail + ' failed)' : ''));
     bulkOrdersClear();
   }
+  // Bulk cancel — now delegates to OrdersBridge.bulkCancel so the legacy bulk
+  // path runs the FULL cancel core per row (release inventory + cancel open
+  // buildJobs + MastFlow close + CS ticket), instead of the bare status flip it
+  // used to do (the latent V1 bug). The confirm prompt stays HERE (caller-side);
+  // a fixed bulk reason is passed to the core (the orders-v2 bulk bar captures an
+  // operator-entered reason). Gated hasPermission('orders','edit') before
+  // invoking (the bridge has no RBAC gate).
   async function bulkOrdersCancel() {
+    if (typeof hasPermission === 'function' && !hasPermission('orders', 'edit')) {
+      if (window.MastToast && window.MastToast.warn) window.MastToast.warn('You don\'t have permission to edit orders.');
+      return;
+    }
     var orders = _bulkOrdersSelected();
     if (!orders.length) return;
-    if (!window.confirm('Cancel ' + orders.length + ' order(s)? This cannot be undone via this dialog.')) return;
-    var ok = 0, fail = 0;
-    for (var i = 0; i < orders.length; i++) {
-      try {
-        if (window.MastDB && MastDB.orders && MastDB.orders.update) {
-          await MastDB.orders.update(orders[i]._key, { status: 'cancelled', cancelledAt: new Date().toISOString() });
-        }
-        ok++;
-      } catch (e) { fail++; }
-    }
-    if (window.MastToast && window.MastToast.success) window.MastToast.success('Cancelled ' + ok + (fail ? ' (' + fail + ' failed)' : ''));
+    if (!window.confirm('Cancel ' + orders.length + ' order(s)? This releases committed inventory, cancels open production requests, and opens a CS ticket for each. This cannot be undone via this dialog.')) return;
+    // The cancel core records a reason (it flows to the CS ticket). The legacy
+    // bulk dialog has no free-text field (a native browser text dialog would
+    // violate the UX native-dialog rule), so pass a fixed bulk reason — the
+    // orders-v2 bulk bar captures an operator-entered reason via its slide-out.
+    var reason = 'Bulk cancellation';
+    var keys = orders.map(function(o) { return o._key; });
+    var res = { ok: 0, fail: 0 };
+    try {
+      res = await OrdersBridge.bulkCancel(keys, reason) || res;
+    } catch (e) { res.fail = keys.length; }
+    if (window.MastToast && window.MastToast.success) window.MastToast.success('Cancelled ' + res.ok + (res.fail ? ' (' + res.fail + ' failed)' : ''));
     bulkOrdersClear();
   }
   function bulkOrdersExportCsv() {
@@ -3284,10 +3304,10 @@
   // (server-side inventory deduction + customer shipped-email). It does NOT
   // emit toasts / re-render / run the transition-validity guard — those are
   // caller concerns. Reads the live record from the global `orders` cache
-  // (seeded by the bridge). This core is consumed ONLY by
-  // OrdersBridge.bulkMarkShipped, which is DEFINED but NOT wired this PR (PR3
-  // refactors the legacy bulk handler onto it so bulk runs FULL side-effects
-  // instead of today's bare status flip). Returns void.
+  // (seeded by the bridge). This core is consumed by OrdersBridge.bulkMarkShipped,
+  // which BOTH the legacy bulk handler (bulkOrdersMarkShipped) and the orders-v2
+  // twin's bulk bar now call (PR3) — so the legacy bulk path runs FULL ship
+  // side-effects instead of the bare status flip it used to do. Returns void.
   async function _markOrderShippedCore(orderId) {
     var o = orders[orderId];
     if (!o) return;
@@ -6264,11 +6284,12 @@
         return emails;
       });
     },
-    // bulkMarkShipped(keys) → { ok, fail }. DEFINED but NOT wired this PR (PR3
-    // refactors the legacy bulk handler onto it so bulk runs FULL ship side
-    // effects — statusHistory + onOrderShipped inventory deduction + email —
-    // instead of today's bare status flip). Delegates per-row to the same
-    // _markOrderShippedCore the detail surface will use. Etsy-skip / confirm
+    // bulkMarkShipped(keys) → { ok, fail }. Wired in PR3 to BOTH the legacy bulk
+    // handler (bulkOrdersMarkShipped) and the orders-v2 twin's bulk bar, so bulk
+    // mark-shipped runs FULL ship side-effects — statusHistory + onOrderShipped
+    // inventory deduction + customer email — instead of the bare status flip the
+    // legacy bulk path used to do (the latent V1 bug). Delegates per-row to the
+    // same _markOrderShippedCore the detail surface uses. Etsy-skip / confirm
     // prompts stay on the caller (UI concern), matching exportCsv staying in
     // the twin (MastEntity.exportRows).
     bulkMarkShipped: function (keys) {
@@ -6282,11 +6303,12 @@
         });
       }, Promise.resolve()).then(function () { return { ok: ok, fail: fail }; });
     },
-    // bulkCancel(keys, reason?) → { ok, fail }. DEFINED but NOT wired this PR
-    // (PR3). Delegates per-row to the SAME _cancelOrderCore the detail surface
-    // uses, so bulk cancellation runs FULL side effects (inventory release,
-    // buildJobs cancel, MastFlow transition, CS ticket) instead of today's bare
-    // status flip. Confirm prompt stays on the caller (UI concern).
+    // bulkCancel(keys, reason?) → { ok, fail }. Wired in PR3 to BOTH the legacy
+    // bulk handler (bulkOrdersCancel) and the orders-v2 twin's bulk bar.
+    // Delegates per-row to the SAME _cancelOrderCore the detail surface uses, so
+    // bulk cancellation runs FULL side effects (inventory release, buildJobs
+    // cancel, MastFlow transition, CS ticket) instead of the bare status flip the
+    // legacy bulk path used to do. Confirm + reason prompts stay on the caller.
     bulkCancel: function (keys, reason) {
       keys = keys || [];
       var ok = 0, fail = 0;

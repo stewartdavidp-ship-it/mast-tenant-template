@@ -385,7 +385,7 @@
         ? '<div class="mu-sub" style="margin-bottom:10px;">This order hasn\'t been routed yet. Confirm it to reserve stock and send build items to production.</div>' +
           '<button class="btn btn-primary btn-small" onclick="OrdersV2Actions.openTriage(\'' + esc(orderId) + '\')">Confirm order…</button>'
         : ungated;
-      blocks += UI.card('Confirm &amp; route', triageInner);
+      blocks += UI.card('Confirm & route', triageInner);
     }
 
     // 2) Order note — internal note list + add field.
@@ -542,12 +542,12 @@
       '</div>';
     }).join('');
     var head = '<div style="display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:12px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;color:var(--warm-gray);padding-bottom:4px;"><span>Item</span><span>Inventory</span><span>Source</span></div>';
-    var body = U.card('Route &amp; confirm order ' + esc(getDisplayNum(r)),
+    var body = U.card('Route & confirm order ' + esc(getDisplayNum(r)),
       '<div class="mu-sub" style="margin-bottom:10px;">Choose how to fulfill each item. Stock items reserve inventory; build items create production requests and move the order to Building.</div>' +
       head + rows);
     U.slideOut.open({
       id: 'triage-' + orderId, title: 'Confirm order', subtitle: esc(getDisplayNum(r)), size: 'lg',
-      mode: 'create', deepLink: false, createLabel: 'Confirm &amp; route',
+      mode: 'create', deepLink: false, createLabel: 'Confirm & route',
       render: function () { return body; },
       isDirty: function () { return true; },
       onSave: function () { return submitTriage(orderId); }
@@ -711,15 +711,62 @@
 
   // Confirm helper — the canonical mastConfirm rich modal (never a native dialog,
   // per UX standards 02 §3). If mastConfirm somehow isn't loaded, proceed (the
-  // running app always ships it; this guard only avoids a hard throw).
-  function confirmThen(msg, fn) {
+  // running app always ships it; this guard only avoids a hard throw). opts
+  // overrides the default {title, confirmLabel} (the email actions keep the
+  // default; the bulk actions pass their own).
+  function confirmThen(msg, fn, opts) {
+    var o = Object.assign({ title: 'Send customer email', confirmLabel: 'Send' }, opts || {});
     if (typeof window.mastConfirm === 'function') {
-      Promise.resolve(window.mastConfirm(msg, { title: 'Send customer email', confirmLabel: 'Send' })).then(function (ok) { if (ok) fn(); });
+      Promise.resolve(window.mastConfirm(msg, o)).then(function (ok) { if (ok) fn(); });
     } else { fn(); }
   }
 
+  // Reason capture for bulk cancel. Native browser dialogs are banned (UX
+  // standards 02 §3), so render a small reason form in the canonical slide-out
+  // shell and invoke the callback with the entered reason on Save. The
+  // destructive copy + a required reason is the confirm-equivalent (no separate
+  // mastConfirm needed).
+  function promptReason(prompt, fn) {
+    var U = window.MastUI;
+    if (!U || !U.slideOut) {
+      // Last-ditch fallback (running app always ships the slide-out): proceed
+      // with an empty reason rather than hard-throw.
+      fn('');
+      return;
+    }
+    var body = U.card('Cancel orders',
+      '<div class="mu-sub" style="margin-bottom:10px;">' + esc(prompt) + '</div>' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;">Reason' +
+        '<textarea id="ordersV2BulkCancelReason" class="form-input" rows="3" placeholder="Why are these orders being cancelled?" style="width:100%;margin-top:4px;font-size:0.85rem;"></textarea>' +
+      '</label>');
+    U.slideOut.open({
+      id: 'bulk-cancel', title: 'Cancel orders', size: 'md',
+      mode: 'create', deepLink: false, createLabel: 'Cancel orders',
+      render: function () { return body; },
+      isDirty: function () { return true; },
+      onSave: function () {
+        var el = document.getElementById('ordersV2BulkCancelReason');
+        var reason = el ? el.value.trim() : '';
+        if (!reason) { toast('Please enter a cancellation reason', true); return false; }
+        U.slideOut.requestCloseForce();
+        fn(reason);
+        return false;
+      }
+    });
+  }
+
   // ── State + data (same source as legacy: admin/orders) ──────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'placedAt', sortDir: 'desc', filter: 'all', off: null };
+  // sel: _key → true (bulk multi-select; mirrors finance-expenses-v2's V2.sel).
+  var V2 = { rows: [], byId: {}, sortKey: 'placedAt', sortDir: 'desc', filter: 'all', off: null, sel: {} };
+
+  // Etsy orders ship via Etsy, never from here — carry the legacy bulk
+  // mark-shipped skip rule. Native orders set `source:'etsy'`; ingested
+  // external orders carry externalSource.platform === 'etsy'.
+  function isEtsyOrder(o) {
+    if (!o) return false;
+    if (o.source === 'etsy') return true;
+    return !!(o.externalSource && o.externalSource.platform === 'etsy');
+  }
 
   function toRows(tree) {
     var out = [];
@@ -736,6 +783,8 @@
     var apply = function (tree) {
       V2.rows = toRows(tree);
       V2.byId = {}; V2.rows.forEach(function (r) { V2.byId[r._key] = r; });
+      // Drop any selected ids that no longer exist (mirrors finance-expenses-v2).
+      Object.keys(V2.sel).forEach(function (id) { if (!V2.byId[id]) delete V2.sel[id]; });
       render();
     };
     // Real source = the orders entity accessor (53 records), NOT raw admin/orders
@@ -773,6 +822,33 @@
     return el;
   }
 
+  // Selected keys that are still visible (legacy caps the batch at 100). Reads
+  // from V2.sel; intersects with the currently-visible rows so a filter change
+  // never bulk-acts on rows the operator can't see (mirrors finance-expenses-v2
+  // selectedVisibleIds).
+  function selectedVisibleKeys() {
+    return visibleRows().slice(0, 100).filter(function (r) { return V2.sel[r._key]; }).map(function (r) { return r._key; });
+  }
+
+  // Bulk action bar (mirrors finance-expenses-v2 bulkBar): mark-shipped / cancel
+  // / export over the selected keys, the destructive actions disabled when none
+  // selected. RBAC-gated — render nothing for non-editors (the per-row detail
+  // actions are gated the same way). The select-all toggle is owned by the
+  // engine list header (MastUI.list selectable), so this bar is actions only.
+  // Export stays enabled with nothing selected (it falls back to all visible).
+  function bulkBar(rows) {
+    if (!canEdit()) return '';
+    var sel = rows.filter(function (r) { return V2.sel[r._key]; });
+    var n = sel.length;
+    var dis = n === 0 ? ' disabled' : '';
+    return '<div style="display:flex;gap:8px;align-items:center;margin:0 0 10px;flex-wrap:wrap;">' +
+      '<span style="font-size:0.85rem;color:var(--warm-gray);">' + (n ? (window.MastUI.Num.count(n) + ' selected') : 'Select rows for bulk actions') + '</span>' +
+      '<button class="btn btn-secondary btn-small" id="ordersV2BulkShip" onclick="OrdersV2.bulkMarkShipped()"' + dis + '>Mark shipped' + (n ? ' (' + n + ')' : '') + '</button>' +
+      '<button class="btn btn-secondary btn-small" id="ordersV2BulkCancel" style="color:var(--danger);" onclick="OrdersV2.bulkCancel()"' + dis + '>Cancel</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="OrdersV2.bulkExportCsv()">↓ Export' + (n ? ' (' + n + ')' : '') + '</button>' +
+      '</div>';
+  }
+
   function render() {
     var tab = ensureTab();
     var counts = statusCounts();
@@ -785,13 +861,19 @@
         s.charAt(0).toUpperCase() + s.slice(1) + ' <span style="color:var(--warm-gray);">' + (counts[s] || 0) + '</span></button>';
     }).join('');
 
+    var rows = visibleRows();
     tab.innerHTML =
       window.MastUI.pageHeader({ title: 'Orders', count: window.MastUI.Num.count(V2.rows.length) + ' orders',
         actionsHtml: '<button class="btn btn-secondary" onclick="OrdersV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin:14px 0;">' + pills + '</div>' +
+      bulkBar(rows) +
       window.MastEntity.renderList('orders-v2', {
-        rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
+        rows: rows, sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'OrdersV2.sort', onRowClickFnName: 'OrdersV2.open',
+        // Bulk multi-select (editors only) — engine owns the row checkboxes +
+        // select-all header (MastUI.list selectable). recordId keys on _key.
+        selectable: canEdit(), selectedIds: V2.sel,
+        onSelectFnName: 'OrdersV2.toggleRow', onSelectAllFnName: 'OrdersV2.toggleAll',
         empty: { title: 'No orders match these filters', message: 'Try clearing filters.' }
       });
   }
@@ -806,7 +888,78 @@
     setFilter: function (s) { V2.filter = s; render(); },
     open: function (id) { var rec = V2.byId[id]; if (rec) window.MastEntity.openRecord('orders-v2', rec, 'read'); },
     has: function (id) { return !!(V2.byId && V2.byId[id]); },  // readiness probe for external openers (dashboard card, history links)
-    exportCsv: function () { return window.MastEntity.exportRows('orders-v2', visibleRows(), V2.filter); }
+    exportCsv: function () { return window.MastEntity.exportRows('orders-v2', visibleRows(), V2.filter); },
+
+    // ── Bulk multi-select ───────────────────────────────────────────────
+    toggleRow: function (id, checked) {
+      if (checked) V2.sel[id] = true; else delete V2.sel[id];
+      render();
+    },
+    toggleAll: function (checked) {
+      var vis = visibleRows();
+      if (checked) vis.forEach(function (r) { V2.sel[r._key] = true; });
+      else vis.forEach(function (r) { delete V2.sel[r._key]; });
+      render();
+    },
+    // Bulk mark-shipped → OrdersBridge.bulkMarkShipped. Each row runs the FULL
+    // ship core (statusHistory + onOrderShipped → inventory deduction + customer
+    // SHIPPED EMAIL), so this is outward-facing — the confirm makes that clear.
+    // Etsy orders are skipped (they ship via Etsy), carrying the legacy rule.
+    bulkMarkShipped: function () {
+      if (!canEdit()) { toast('You don\'t have permission to edit orders.', true); return; }
+      var keys = selectedVisibleKeys();
+      if (!keys.length) return;
+      var eligible = keys.filter(function (k) { return !isEtsyOrder(V2.byId[k]); });
+      var skipped = keys.length - eligible.length;
+      if (!eligible.length) { toast('All selected orders are Etsy — they ship via Etsy and were skipped.', true); return; }
+      var msg = 'Mark ' + eligible.length + ' order' + (eligible.length === 1 ? '' : 's') + ' as shipped?' +
+        (skipped ? ' (' + skipped + ' Etsy order' + (skipped === 1 ? '' : 's') + ' will be skipped.)' : '') +
+        ' This deducts inventory and emails each customer their shipping notification.';
+      confirmThen(msg, function () {
+        ensureBridge().then(function (bridge) {
+          if (!bridge || typeof bridge.bulkMarkShipped !== 'function') { toast('Orders engine still loading — try again', true); return; }
+          var btn = document.getElementById('ordersV2BulkShip');
+          if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
+          return Promise.resolve(bridge.bulkMarkShipped(eligible)).then(function (res) {
+            res = res || { ok: 0, fail: 0 };
+            toast('Marked ' + res.ok + ' shipped' + (res.fail ? ' (' + res.fail + ' failed)' : '') + (skipped ? ' · ' + skipped + ' Etsy skipped' : ''), !!res.fail && !res.ok);
+            V2.sel = {};
+            load();
+          });
+        }).catch(function (e) { toast('Could not mark shipped: ' + (e && e.message || e), true); load(); });
+      }, { title: 'Mark orders shipped', confirmLabel: 'Mark shipped' });
+    },
+    // Bulk cancel → OrdersBridge.bulkCancel(keys, reason). Each row runs the FULL
+    // cancel core (release inventory + cancel open buildJobs + MastFlow close + CS
+    // ticket). Reason is prompted once and applied to every row. Confirm first —
+    // these fire real side-effects and cannot be undone via this dialog.
+    bulkCancel: function () {
+      if (!canEdit()) { toast('You don\'t have permission to edit orders.', true); return; }
+      var keys = selectedVisibleKeys();
+      if (!keys.length) return;
+      promptReason('Cancel ' + keys.length + ' order' + (keys.length === 1 ? '' : 's') + '? This releases committed inventory, cancels open production requests, and opens a CS ticket for each. Enter a cancellation reason:', function (reason) {
+        ensureBridge().then(function (bridge) {
+          if (!bridge || typeof bridge.bulkCancel !== 'function') { toast('Orders engine still loading — try again', true); return; }
+          var btn = document.getElementById('ordersV2BulkCancel');
+          if (btn) { btn.disabled = true; btn.textContent = 'Cancelling…'; }
+          return Promise.resolve(bridge.bulkCancel(keys, reason)).then(function (res) {
+            res = res || { ok: 0, fail: 0 };
+            toast('Cancelled ' + res.ok + (res.fail ? ' (' + res.fail + ' failed)' : ''), !!res.fail && !res.ok);
+            V2.sel = {};
+            load();
+          });
+        }).catch(function (e) { toast('Could not cancel: ' + (e && e.message || e), true); load(); });
+      });
+    },
+    // Bulk CSV export (client) → twin's MastEntity.exportRows. Exports the
+    // selected rows when any are selected, else all currently-visible rows
+    // (mirrors the legacy bulkOrdersExportCsv fallback). No writes, no confirm.
+    bulkExportCsv: function () {
+      var keys = selectedVisibleKeys();
+      var rows = keys.length ? keys.map(function (k) { return V2.byId[k]; }).filter(Boolean) : visibleRows();
+      if (!rows.length) { toast('No orders to export.', true); return; }
+      return window.MastEntity.exportRows('orders-v2', rows, V2.filter);
+    }
   };
 
   // ── Register the side-by-side route ─────────────────────────────────
