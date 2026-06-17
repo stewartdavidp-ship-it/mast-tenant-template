@@ -664,11 +664,20 @@
     var r = V2.byId[orderId];
     if (!r) return;
     var U = window.MastUI;
-    var defaultDollars = (orderTotalCents(r) / 100).toFixed(2);
+    // Client-side refundable ceiling = the order total (the server resolves the
+    // TRUE remaining ceiling via resolveRefundCeilingCents — e.g. less on a
+    // partially_returned order). We seed + cap the field at the order total so an
+    // obviously-over-amount entry is rejected here, BEFORE submitRefund drives the
+    // RMA lifecycle — otherwise the lifecycle (approve→received→inspect) runs and
+    // only the final 'complete' CF rejects, leaving an orphaned stuck RMA. The CF
+    // still caps server-side as defense-in-depth.
+    var maxCents = orderTotalCents(r);
+    var maxDollars = (maxCents / 100).toFixed(2);
+    var defaultDollars = maxDollars;
     var body = U.card('Issue refund for order ' + esc(getDisplayNum(r)),
-      '<div class="mu-sub" style="margin-bottom:12px;">The refund is processed server-side and capped at the order total (' + esc(U.Num.money(orderTotalCents(r) / 100) || '$0.00') + '). Store credit lands in the customer wallet instantly; original payment queues a refund request for processing.</div>' +
+      '<div class="mu-sub" style="margin-bottom:12px;">The refund is processed server-side and capped at the order total (' + esc(U.Num.money(maxCents / 100) || '$0.00') + '). Store credit lands in the customer wallet instantly; original payment queues a refund request for processing.</div>' +
       '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:12px;">Refund amount ($)' +
-        '<input type="number" id="ordersV2RefundAmount" class="form-input" min="0" step="0.01" value="' + esc(defaultDollars) + '" style="width:100%;margin-top:4px;font-size:0.85rem;">' +
+        '<input type="number" id="ordersV2RefundAmount" class="form-input" min="0" max="' + esc(maxDollars) + '" step="0.01" value="' + esc(defaultDollars) + '" style="width:100%;margin-top:4px;font-size:0.85rem;">' +
       '</label>' +
       '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:12px;">Method' +
         '<select id="ordersV2RefundMethod" class="form-input" style="width:100%;margin-top:4px;font-size:0.85rem;">' +
@@ -702,6 +711,17 @@
     var reasonEl = document.getElementById('ordersV2RefundReason');
     var amountCents = amtEl ? Math.round(parseFloat(amtEl.value) * 100) : NaN;
     if (!Number.isFinite(amountCents) || amountCents <= 0) { toast('Enter a refund amount greater than $0.', true); return false; }
+    // Reject an over-amount entry HERE, before the RMA lifecycle is driven. An
+    // amount above the order total would only be caught by the final 'complete'
+    // CF — by then approve→received→inspect have already run, orphaning a stuck
+    // RMA (no money moves, but a junk record). The order total is the client-side
+    // ceiling; the CF re-caps at the true remaining amount as defense-in-depth.
+    var maxCents = orderTotalCents(r);
+    if (maxCents > 0 && amountCents > maxCents) {
+      var maxLabel = window.MastUI.Num.money(maxCents / 100) || ('$' + (maxCents / 100).toFixed(2));
+      toast('Refund amount can\'t exceed the order total (' + maxLabel + ').', true);
+      return false;
+    }
     var method = methodEl && methodEl.value === 'store-credit' ? 'store-credit' : 'credit-card';
     var reason = reasonEl ? reasonEl.value.trim() : '';
     var methodLabel = method === 'store-credit' ? 'store credit' : 'original payment';
