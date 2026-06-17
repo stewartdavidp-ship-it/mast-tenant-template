@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-000016-ee3f2d6"></script>
+  <script src="../shared/mastdb.js?v=20260617-002004-82371dc"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-000016-ee3f2d6"></script>
-  <script src="../shared/brand-sync.js?v=20260617-000016-ee3f2d6"></script>
+  <script src="../shared/customer-filters.js?v=20260617-002004-82371dc"></script>
+  <script src="../shared/brand-sync.js?v=20260617-002004-82371dc"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-000016-ee3f2d6"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-002004-82371dc"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-000016-ee3f2d6"></script>
-  <script src="../shared/mast-io.js?v=20260617-000016-ee3f2d6"></script>
-  <script src="../shared/mast-entity.js?v=20260617-000016-ee3f2d6"></script>
+  <script src="../shared/mast-ui.js?v=20260617-002004-82371dc"></script>
+  <script src="../shared/mast-io.js?v=20260617-002004-82371dc"></script>
+  <script src="../shared/mast-entity.js?v=20260617-002004-82371dc"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-000016-ee3f2d6"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-002004-82371dc"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-000016-ee3f2d6"></script>
+  <script src="../shared/mast-intake.js?v=20260617-002004-82371dc"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -9463,7 +9463,7 @@
         <p class="tab-section-purpose">Choose how shipping labels get generated when you fulfill an order. Manual means you paste tracking numbers from Pirate Ship or any external service. Shippo (API) buys labels and pulls tracking directly inside Mast &mdash; the default ship-from location + package presets configured here drive that flow.</p>
         <!-- Label Provider Config -->
         <div class="form-group">
-          <!-- W2 R2 Fix 7: status chip — populated by loadShippoKeyStatus() -->
+          <!-- W2 R2 Fix 7: status chip — populated by loadShippoSecureField() -->
           <div style="margin-bottom:12px;">
             <span id="shippoStatusChip" style="font-size:0.72rem;font-weight:600;padding:3px 10px;border-radius:10px;background:rgba(160,160,160,0.15);color:var(--warm-gray);border:1px solid rgba(160,160,160,0.35);">Not configured</span>
           </div>
@@ -9485,23 +9485,21 @@
             </label>
           </div>
 
-          <!-- Shippo API Key -->
+          <!-- Shippo API Key — migrated to the MastIntake secure vault. The carrier
+               token now persists ONLY through the server vault (GCP Secret Manager via
+               mastIntakeVaultPut); there is no client-side write path and the key is
+               never read back into the browser. MastIntake renders the input/Save/Revoke
+               + guided steps into this host; loadShippoSecureField() populates + hydrates
+               it. The server consumer (shipping-abstraction.js) reads it vault-first via
+               getTenantHeldSecret, falling back to the legacy {prefix}-shippo-api-token. -->
           <div id="shippoApiKeySection" style="display:none;margin-bottom:16px;">
             <div style="border:1px solid var(--cream-dark);border-radius:8px;padding:16px;">
               <label style="font-size:0.85rem;font-weight:600;display:block;margin-bottom:8px;">Shippo API Key</label>
-              <div style="display:flex;gap:8px;align-items:center;">
-                <input type="password" id="shippoApiKeyInput" placeholder="shippo_live_..." style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.85rem;font-family:monospace;">
-                <button class="btn btn-secondary" style="font-size:0.78rem;padding:6px 12px;" onclick="toggleShippoKeyVisibility()">Show</button>
-              </div>
+              <div id="shippoSecureFieldHost"></div>
               <div style="display:flex;gap:8px;margin-top:8px;">
-                <button class="btn btn-primary" style="font-size:0.78rem;padding:6px 14px;" onclick="saveShippoApiKey()">Save Key</button>
                 <button class="btn btn-secondary" style="font-size:0.78rem;padding:6px 14px;" onclick="testShippoApiKey()">Test Key</button>
               </div>
               <div id="shippoKeyStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-              <p style="font-size:0.78rem;color:var(--warm-gray);margin-top:8px;">
-                Get your API key from <a href="https://apps.goshippo.com/settings/api" target="_blank" style="color:var(--teal);">goshippo.com/settings/api</a>.
-                Use a test key (shippo_test_...) for testing, live key for production.
-              </p>
             </div>
           </div>
 
@@ -22396,7 +22394,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-000016-ee3f2d6';
+var MAST_MODULES_V = '20260617-002004-82371dc';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -29377,42 +29375,11 @@ function onShipProviderChange() {
   document.getElementById('shippoApiKeySection').style.display = isApi ? 'block' : 'none';
   document.getElementById('shipDefaultFromSection').style.display = isApi ? 'block' : 'none';
   document.getElementById('shipPresetsSection').style.display = isApi ? 'block' : 'none';
+  if (isApi) loadShippoSecureField();
 
   // Highlight selected radio card
   document.getElementById('shipProviderManualLabel').style.borderColor = val === 'manual' ? 'var(--teal)' : 'var(--cream-dark)';
   document.getElementById('shipProviderShippoLabel').style.borderColor = val === 'shippo' ? 'var(--teal)' : 'var(--cream-dark)';
-}
-
-function toggleShippoKeyVisibility() {
-  var el = document.getElementById('shippoApiKeyInput');
-  if (el.type === 'password') { el.type = 'text'; } else { el.type = 'password'; }
-}
-
-async function saveShippoApiKey() {
-  var keyInput = document.getElementById('shippoApiKeyInput');
-  var keyVal = keyInput ? keyInput.value.trim() : '';
-  var statusEl = document.getElementById('shippoKeyStatus');
-  if (!keyVal) { showToast('Enter an API key first', true); return; }
-  if (!keyVal.startsWith('shippo_test_') && !keyVal.startsWith('shippo_live_')) {
-    showToast('Shippo keys start with shippo_test_ or shippo_live_', true);
-    return;
-  }
-  try {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving...</span>';
-    var sp = MastDB.tenantId();
-    await firebase.functions().httpsCallable('secretsManager')({
-      action: 'write',
-      service: 'shippo',
-      tenantId: sp,
-      secrets: { [sp + '-shippo-api-token']: keyVal }
-    });
-    keyInput.value = '';
-    loadShippoKeyStatus();
-    showToast('Shippo API key saved');
-  } catch (err) {
-    showToast('Error saving key: ' + err.message, true);
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--danger);">Error: ' + esc(err.message) + '</span>';
-  }
 }
 
 async function testShippoApiKey() {
@@ -29462,14 +29429,24 @@ function loadShipProviderConfig() {
     loadShipFromLocations(config.defaultFromLocationKey || '');
   });
 
-  // Load Shippo API key status
-  loadShippoKeyStatus();
+  // Render + hydrate the Shippo key secure field (vault status)
+  loadShippoSecureField();
 }
 
-function loadShippoKeyStatus() {
-  var statusEl = document.getElementById('shippoKeyStatus');
+// Shippo carrier API token — migrated to the MastIntake secure vault. The token used
+// to be written to GCP Secret Manager via secretsManager (plaintext through the
+// browser); it is now collected via MastIntake.secureField('shippo') and persisted
+// ONLY through the server vault (mastIntakeVaultPut) — no client write path, never
+// read back. The server consumer (shipping-abstraction.js) reads it vault-first via
+// getTenantHeldSecret, so existing tenants keep working via the legacy
+// {prefix}-shippo-api-token fallback. Mirrors loadSendgridSecureField(): renders +
+// hydrates the secure field and caches the vault state for the shipping-tab status.
+var _shippoVaultCollected = false;
+
+async function loadShippoSecureField() {
+  var host = document.getElementById('shippoSecureFieldHost');
   var chipEl = document.getElementById('shippoStatusChip');
-  // W2 R2 Fix 7: drive chip + statusEl from same source.
+  // W2 R2 Fix 7: drive chip from the vault status.
   function _setChip(configured) {
     if (!chipEl) return;
     if (configured) {
@@ -29484,24 +29461,25 @@ function loadShippoKeyStatus() {
       chipEl.style.border = '1px solid rgba(160,160,160,0.35)';
     }
   }
-  firebase.functions().httpsCallable('secretsManager')({
-    action: 'read',
-    service: 'shippo',
-    tenantId: MastDB.tenantId()
-  }).then(function(result) {
-    var data = result.data;
-    if (data && data.apiKey && data.apiKey !== '') {
-      document.getElementById('shippoApiKeyInput').placeholder = data.apiKey;
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Key configured</span>';
-      _setChip(true);
-    } else {
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No API key set.</span>';
-      _setChip(false);
+  if (!host || !window.MastIntake) return;
+  try {
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      await MastAdmin.loadModule('connections-providers');
     }
-  }).catch(function() {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No API key set.</span>';
+    if (!host.getAttribute('data-rendered')) {
+      host.innerHTML = MastIntake.secureField({ provider: 'shippo' });
+      host.setAttribute('data-rendered', '1'); // render guard (a flag, never a secret)
+    }
+    MastIntake.hydrate(host);
+    var st = await MastIntake.status('shippo');
+    _shippoVaultCollected = !!(st && st.state === 'collected');
+    _setChip(_shippoVaultCollected);
+  } catch (e) {
+    // Fail-closed: leave the field disabled; never fall back to a plaintext path.
+    _shippoVaultCollected = false;
     _setChip(false);
-  });
+  }
+  if (typeof refreshShippingTabStatus === 'function') refreshShippingTabStatus();
 }
 
 function loadShipFromLocations(selectedKey) {
@@ -44859,8 +44837,7 @@ function refreshShippingTabStatus() {
   // Provider — green if a non-manual provider is selected (Shippo), gray if manual, red if Shippo selected without a key.
   var shippoRadio = document.getElementById('shipProviderShippo');
   var manualRadio = document.getElementById('shipProviderManual');
-  var keyEl = document.getElementById('shippoApiKeyInput');
-  var hasKey = !!(keyEl && keyEl.value && keyEl.value.trim());
+  var hasKey = !!_shippoVaultCollected; // vault-backed (key never lives in the DOM)
   if (shippoRadio && shippoRadio.checked) {
     setDot('provider', hasKey ? 'ok' : 'missing');
     setPill('provider', hasKey ? 'ok' : 'missing', hasKey ? 'Shippo' : 'Shippo (no key)');

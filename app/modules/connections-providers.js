@@ -19,12 +19,14 @@
  * §6.2), which is why there is no MastDB write anywhere in this file.
  *
  * REGISTERED PROVIDERS — held-secret: `github` (the GitHub personal access
- * token, the first proven vault provider) and `sendgrid` (the email-sender API
+ * token, the first proven vault provider), `sendgrid` (the email-sender API
  * key; server consumer sendTenantEmail reads it vault-first via getTenantHeldSecret
- * with a legacy {prefix}-sendgrid-api-key fallback). domain-control: `email-domain`
+ * with a legacy {prefix}-sendgrid-api-key fallback), and `shippo` (the carrier API
+ * token; server consumer shipping-abstraction.js reads it vault-first with a legacy
+ * {prefix}-shippo-api-token fallback). domain-control: `email-domain`
  * + `custom-domain` (DNS proofs, no secret). All field keys here MUST match the
  * mast-architecture/functions/mast-intake-vault.js allowlist. The remaining
- * held-secret sites (Stripe, Shippo, Maps, Anthropic, …) are deferred to later
+ * held-secret sites (Stripe, Maps, Anthropic, …) are deferred to later
  * sessions and are NOT registered here.
  */
 (function () {
@@ -141,6 +143,62 @@
       connect: function (ctx) {
         if (window.MastIntake && typeof window.MastIntake.collect === 'function') {
           return window.MastIntake.collect('sendgrid', ctx || {});
+        }
+        return Promise.resolve({ ok: false, error: 'secure-intake-unavailable' });
+      }
+    }
+  };
+
+  // ── Shippo carrier API token — family: held-secret, archetype C (paste) ──
+  //
+  // The maker creates an API token in Shippo, copies it, and pastes it here; the
+  // engine sends it over an encrypted channel to the server vault (GCP Secret
+  // Manager) and never stores it in the browser. credentialOwner: 'customer' — it
+  // is the maker's own Shippo token, used by the server shipping layer
+  // (shipping-abstraction.js reads it vault-first via getTenantHeldSecret, falling
+  // back to the legacy {prefix}-shippo-api-token for tenants who haven't re-entered it).
+  var shippo = {
+    id: 'shippo',
+    label: 'Shippo',
+    icon: '📦',
+    family: 'held-secret',
+    category: 'shipping',
+    authType: 'C',                 // guided key-paste
+    credentialOwner: 'customer',
+    gate: 'skippable',             // manual label entry (Pirate Ship / CSV) works without it
+    conciergeEligible: false,      // a human must never receive a raw held secret (design §6.5)
+
+    guide: {
+      deepLink: 'https://apps.goshippo.com/settings/api',
+      steps: [
+        'Open Shippo → Settings → API.',
+        'Generate a live token (shippo_live_…) — or a test token (shippo_test_…) to trial it.',
+        'Copy the token and paste it here.'
+      ],
+      estSeconds: 90
+    },
+
+    fields: [
+      {
+        key: 'apiToken',                    // MUST match the vault allowlist field key
+        label: 'API token',
+        mask: true,
+        // Permissive shape check (recoverable hint only — the server vault is
+        // authoritative): Shippo tokens are shippo_live_/shippo_test_ + a token body.
+        validate: /^shippo_(live|test)_[A-Za-z0-9]{16,}$/,
+        example: 'shippo_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+        minLen: 16                          // matches the server vault minLen
+      }
+    ],
+
+    // Held-secret persistence is gated by the engine's RUNTIME vault-CF probe,
+    // NOT by anything declared here. `kind` is descriptive metadata only.
+    vault: { kind: 'api-key' },
+
+    adapter: {
+      connect: function (ctx) {
+        if (window.MastIntake && typeof window.MastIntake.collect === 'function') {
+          return window.MastIntake.collect('shippo', ctx || {});
         }
         return Promise.resolve({ ok: false, error: 'secure-intake-unavailable' });
       }
@@ -373,11 +431,13 @@
   window.ConnectionsProviders = window.ConnectionsProviders || {};
   window.ConnectionsProviders.github = github;
   window.ConnectionsProviders.sendgrid = sendgrid;
+  window.ConnectionsProviders.shippo = shippo;
   window.ConnectionsProviders['email-domain'] = emailDomain;
   window.ConnectionsProviders['custom-domain'] = customDomain;
   if (window.MastIntake && typeof window.MastIntake.register === 'function') {
     window.MastIntake.register(github);
     window.MastIntake.register(sendgrid);
+    window.MastIntake.register(shippo);
     window.MastIntake.register(emailDomain);
     window.MastIntake.register(customDomain);
   }
