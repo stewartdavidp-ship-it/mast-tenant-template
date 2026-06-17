@@ -80,7 +80,9 @@ const MODULE_GATE_BASELINE = new Set([
   'homepage.js', 'lookbooks.js', 'maker.js', 'mapping.js', 'newsletter.js',
   'procurement.js', 'promotions.js', 'social.js', 'wholesale.js',
   // UI-redesign (?ui=1) proof modules — flag-gated; gate or retire as they graduate:
-  'customers-v2.js', 'orders-v2.js', 'cs-tickets-v2.js', 'duplicates-v2.js',
+  // orders-v2.js graduated: native detail actions (triage/cancel/note/email) are
+  // can('orders','edit')-gated (PR2; writes delegate to OrdersBridge).
+  'customers-v2.js', 'cs-tickets-v2.js', 'duplicates-v2.js',
   // finance-expenses-v2.js graduated: bulk approve/mark-personal are can()-gated.
   'promotions-v2.js', 'wallet-v2.js',
 ]);
