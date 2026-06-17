@@ -13,10 +13,19 @@
  * render the record's data read-only.
  *
  * Variant: a show is a lifecycle record (an application that moves
- * considering→applied→accepted→… and accumulates prep/execute/history subtrees) —
- * but PR2 is READ-ONLY: no status machine, no sub-editors, no AI builder. Those
- * arrive in later PRs and will SINGLE-SOURCE every write through window.ShowsBridge
- * (shipped in PR1), never reimplementing the nested admin/shows/{id} write paths.
+ * considering→applied→accepted→… and accumulates prep/execute/history subtrees).
+ * PR3 makes the APPLY lens + record detail WRITEABLE — native create / edit /
+ * status-machine / deep-dive-enrich / delete — all SINGLE-SOURCED through
+ * window.ShowsBridge (shipped in PR1), never reimplementing the nested
+ * admin/shows/{id} write paths. The prep/execute/history sub-editors (PR4-6), the
+ * Find lens /showFinder (PR7) and the AI builder (PR8) remain read-only for now.
+ *
+ * Apply-lens write surface (all → window.ShowsBridge):
+ *   + New show / Edit  → ShowsBridge.create(data) / .update(id,data)  (gate: can('show-prep','edit'))
+ *   Status actions     → ShowsBridge.setStatus(id,newStatus,record)   (any→any; accepted auto-publishes
+ *                        to public events/{id}, admin-gated INSIDE the bridge)
+ *   Enrich (deep dive) → /showDeepDive CF read (bearer + X-Tenant-ID), then ShowsBridge.applyDeepDive(id,details)
+ *   Delete             → ShowsBridge.remove(id) (clears events/{id} mirror)  (gate: can('show-prep','delete'))
  *
  * Record shape (admin/shows/{id}, money in CENTS): name / type / format / entryType /
  * locationCity / locationState / startDate / endDate / websiteUrl / boothFee /
@@ -45,9 +54,16 @@
 
   var U = window.MastUI, N = U.Num, esc = U._esc;
   function can(route, axis) { return (typeof window.can === 'function') ? window.can(route, axis) : true; }
-  // Shows' only RBAC axis is 'show-prep' (no create/separate axes); read-only this
-  // PR so this gates mostly view affordances, seeded for the later write PRs.
+  // Shows' RBAC axis is 'show-prep'. Create / edit / status all gate on
+  // can('show-prep','edit'); delete gates on can('show-prep','delete') (mirrors
+  // the legacy saveShow / updateShowStatus / archiveShow gating).
   function canEdit() { return can('show-prep', 'edit'); }
+  function canDelete() { return can('show-prep', 'delete'); }
+  function toast(msg, isErr) { if (typeof window.showToast === 'function') window.showToast(msg, !!isErr); }
+  function notPermitted() { toast('You don\'t have permission to do that.', true); }
+  function bridge() { return window.ShowsBridge; }
+  function bridgeLoading() { toast('Shows engine still loading — try again.', true); }
+  function actionErr(e) { console.error('[shows-v2] action', e); toast('Error: ' + ((e && e.message) || e), true); }
 
   // ── Label / lens maps (mirror shows.js SHOW_TYPE_LABELS + status set) ────────
   var SHOW_TYPE_LABELS = {
@@ -175,7 +191,94 @@
           '<div class="mu-pane" data-pane="prep" hidden>' + renderPrepPane(UI, s) + '</div>' +
           '<div class="mu-pane" data-pane="execute" hidden>' + renderExecutePane(UI, s) + '</div>' +
           '<div class="mu-pane" data-pane="history" hidden>' + renderHistoryPane(UI, s) + '</div>';
+      },
+      // Native create / edit form — mirrors the legacy createShowModal field set
+      // (shows.js openCreateShowModal / saveShow): name (required) / type / city /
+      // state / start+end dates / website / booth+jury fees (entered as DOLLARS,
+      // converted to CENTS in onSave) / application deadline / application URL /
+      // notes. prep / execute / history / applicationHistory / status are NOT
+      // touched here — a partial update via the bridge preserves them.
+      editRender: function (s, mode) {
+        s = s || {};
+        function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:140px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+        function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        function val(v) { return esc(v == null ? '' : v); }
+        function money(c) { return (c != null && c !== '') ? (c / 100).toFixed(2) : ''; }
+        var typeOpts = ['juried', 'pop-up', 'market', 'recurring', 'trade', 'other'].map(function (t) {
+          var sel = (s.type || 'juried') === t ? ' selected' : '';
+          return '<option value="' + t + '"' + sel + '>' + esc(SHOW_TYPE_LABELS[t] || t) + '</option>';
+        }).join('');
+        return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' +
+            (mode === 'create' ? 'New show' : 'Edit this show') + '</div>' +
+          fg('Show name *', '<input class="form-input" id="showV2Name" value="' + val(s.name) + '" style="width:100%;" placeholder="e.g. Paradise City Arts Festival">') +
+          fg('Type', '<select class="form-input" id="showV2Type" style="width:100%;">' + typeOpts + '</select>') +
+          row2(
+            fg('City', '<input class="form-input" id="showV2City" value="' + val(s.locationCity) + '" style="width:100%;" placeholder="e.g. Northampton">', true),
+            fg('State', '<input class="form-input" id="showV2State" value="' + val(s.locationState) + '" style="width:100%;" placeholder="e.g. MA">', true)
+          ) +
+          row2(
+            fg('Start date', '<input class="form-input" type="date" id="showV2Start" value="' + val(s.startDate) + '" style="width:100%;">', true),
+            fg('End date', '<input class="form-input" type="date" id="showV2End" value="' + val(s.endDate) + '" style="width:100%;">', true)
+          ) +
+          fg('Website', '<input class="form-input" id="showV2Website" value="' + val(s.websiteUrl) + '" style="width:100%;" placeholder="https://…">') +
+          row2(
+            fg('Booth fee ($)', '<input class="form-input" type="number" step="0.01" id="showV2BoothFee" value="' + money(s.boothFee) + '" style="width:100%;" placeholder="0.00">', true),
+            fg('Jury fee ($)', '<input class="form-input" type="number" step="0.01" id="showV2JuryFee" value="' + money(s.juryFee) + '" style="width:100%;" placeholder="0.00">', true)
+          ) +
+          fg('Application deadline', '<input class="form-input" type="date" id="showV2Deadline" value="' + val(s.applicationDeadline) + '" style="width:100%;">') +
+          fg('Application URL', '<input class="form-input" id="showV2AppUrl" value="' + val(s.applicationUrl) + '" style="width:100%;" placeholder="https://…">') +
+          fg('Notes', '<textarea class="form-input" id="showV2Notes" rows="3" style="width:100%;resize:vertical;">' + val(s.notes) + '</textarea>');
       }
+    },
+    // onSave — reads the editRender DOM, builds the basic-record object (money →
+    // CENTS), and delegates to ShowsBridge.create / .update (the SAME write cores
+    // the legacy saveShow uses). Returns false on validation/engine error so the
+    // engine keeps the form open; a resolved-true closes it.
+    onSave: function (rec, mode) {
+      if (!canEdit()) { notPermitted(); return false; }
+      if (!bridge() || !bridge().create) { bridgeLoading(); return false; }
+      function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+      var name = (v('showV2Name') || '').trim();
+      if (!name) { toast('Show name is required.', true); return false; }
+      var boothFeeVal = parseFloat(v('showV2BoothFee'));
+      var juryFeeVal = parseFloat(v('showV2JuryFee'));
+      var data = {
+        name: name,
+        type: v('showV2Type') || 'juried',
+        locationCity: (v('showV2City') || '').trim(),
+        locationState: (v('showV2State') || '').trim(),
+        startDate: v('showV2Start') || null,
+        endDate: v('showV2End') || null,
+        websiteUrl: (v('showV2Website') || '').trim() || null,
+        boothFee: boothFeeVal ? Math.round(boothFeeVal * 100) : null,
+        juryFee: juryFeeVal ? Math.round(juryFeeVal * 100) : null,
+        applicationDeadline: v('showV2Deadline') || null,
+        applicationUrl: (v('showV2AppUrl') || '').trim() || null,
+        notes: (v('showV2Notes') || '').trim() || null,
+        updatedAt: new Date().toISOString()
+      };
+      if (mode === 'create') {
+        return Promise.resolve(bridge().create(data)).then(function (id) {
+          toast('Show created.');
+          // Refresh the cache then land in the new show's read detail.
+          V2.loaded = false;
+          return ensureLoaded().then(function () {
+            render();
+            var rec2 = V2.byId[id];
+            if (rec2) MastEntity.openRecord('shows-v2', rec2, 'read');
+            return true;
+          });
+        }).catch(function (e) { actionErr(e); return false; });
+      }
+      var sid = (rec && (rec._key || rec.id)) || (V2.current);
+      return Promise.resolve(bridge().update(sid, data)).then(function () {
+        toast('Show updated.');
+        // Mutate the live cached record so the post-save read re-render shows the
+        // edits immediately; reloadThenOpen refreshes the cache for the next open.
+        Object.assign(V2.byId[sid] || rec || {}, data);
+        reloadThenOpen(sid);
+        return true;
+      }).catch(function (e) { actionErr(e); return false; });
     }
   });
 
@@ -224,6 +327,13 @@
       if (ddPairs.length) out += UI.card('Deep dive details ' + UI.badge('AI Researched', 'teal'), UI.kv(ddPairs));
     }
 
+    // Application status actions + deep-dive enrich + delete (writeable this PR —
+    // all delegate to window.ShowsBridge). Mirrors the legacy "Application Status"
+    // button row (any status → any status; the bridge no-ops old===new) + the
+    // Deep Dive + Delete affordances. Gated: change/enrich on can('show-prep',
+    // 'edit'), delete on can('show-prep','delete').
+    out += UI.card('Actions', renderActions(UI, s));
+
     // Application status history (newest first; mirrors the legacy Status History).
     var hist = s.applicationHistory
       ? Object.keys(s.applicationHistory).map(function (k) { return s.applicationHistory[k]; })
@@ -244,6 +354,49 @@
       }).join('');
     }
     out += UI.card('Status history', histBody);
+    return out;
+  }
+
+  // Actions card — status machine + deep-dive enrich + delete. All writes route
+  // through window.ShowsBridge (PR1); RBAC + confirm stay here on the caller.
+  // The status set + "any → any" transition rule mirrors the legacy detail
+  // (shows.js renderShowDetailInfo): every status is a button, the current one is
+  // highlighted, and the bridge's setStatus no-ops a same-status click.
+  var STATUS_ORDER = ['considering', 'applied', 'accepted', 'waitlisted', 'rejected', 'withdrawn'];
+  function renderActions(UI, s) {
+    var id = s._key || s.id;
+    var jid = "'" + id + "'";
+    var cur = statusOf(s);
+    var out = '';
+
+    if (canEdit()) {
+      var btns = STATUS_ORDER.map(function (st) {
+        var on = cur === st;
+        return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '"' +
+          (on ? ' disabled' : '') +
+          ' onclick="ShowsV2.setStatus(' + jid + ',\'' + st + '\')">' + esc(STATUS_LABEL[st] || st) + '</button>';
+      }).join(' ');
+      out += '<div class="mu-sub" style="margin-bottom:6px;">Application status</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + btns + '</div>' +
+        '<div class="mu-sub" style="margin-top:8px;">Marking a show <strong>Accepted</strong> publishes it to the public events calendar (admins only — a non-admin change is recorded but the publish is skipped).</div>';
+    } else {
+      out += '<div class="mu-sub">Status: ' + esc(statusLabel(s)) + '. You don\'t have permission to change it.</div>';
+    }
+
+    // Deep-dive enrich (AI research over the show's website) + delete.
+    var extra = [];
+    if (canEdit()) {
+      var hasUrl = !!(s.websiteUrl);
+      extra.push('<button class="btn btn-secondary"' + (hasUrl ? '' : ' disabled title="Add a website URL first"') +
+        ' onclick="ShowsV2.enrich(' + jid + ')">🔍 Enrich (deep dive)</button>');
+    }
+    if (canDelete()) {
+      extra.push('<button class="btn btn-secondary" style="color:var(--danger);" onclick="ShowsV2.remove(' + jid + ')">Delete show</button>');
+    }
+    if (extra.length) {
+      out += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--cream-dark,rgba(127,127,127,.18));">' + extra.join('') + '</div>';
+      if (canEdit()) out += '<div class="mu-sub" style="margin-top:6px;">Deep dive researches the show\'s website for booth/jury fees, deadlines, requirements and more, then fills in the details above.</div>';
+    }
     return out;
   }
 
@@ -514,7 +667,22 @@
   }
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', lens: 'apply', loaded: false };
+  var V2 = { rows: [], byId: {}, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', lens: 'apply', loaded: false, current: null };
+
+  // Re-open the slide-out on the same record after a write (so the refreshed
+  // status badge + action set + enriched fields render). Lets the legacy write
+  // settle, refreshes the cache, re-renders the list, then re-opens. Mirrors
+  // sales-events-v2's reloadThenOpen.
+  function reloadThenOpen(id) {
+    V2.loaded = false;
+    setTimeout(function () {
+      loadData().then(function () {
+        render();
+        var rec = V2.byId[id];
+        if (rec) MastEntity.openRecord('shows-v2', rec, 'read');
+      });
+    }, 250);
+  }
 
   // Run-once data load shared by route setup and cold drills (fetch gate).
   var _loadPromise = null;
@@ -577,10 +745,14 @@
         return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="ShowsV2.lens(\'' + l[0] + '\')">' + l[1] + '</button>';
       }).join(' ') + '</div>';
 
+    // "+ New show" — native create (gated). Available on every list lens so a
+    // maker can start an application from anywhere; opens the create form.
+    var newShowBtn = canEdit() ? '<button class="btn btn-primary" onclick="ShowsV2.create()">+ New show</button>' : '';
+
     // Find lens — placeholder this PR (the /showFinder AI form + results land later).
     if (V2.lens === 'find') {
-      tab.innerHTML = U.pageHeader({ title: 'Shows', count: 'find new shows' }) + lensPills +
-        U.card('Find shows', '<span class="mu-sub">AI show discovery lands in a later PR. For now, add shows from the Apply lens (legacy New Show form).</span>');
+      tab.innerHTML = U.pageHeader({ title: 'Shows', count: 'find new shows', actionsHtml: newShowBtn }) + lensPills +
+        U.card('Find shows', '<span class="mu-sub">AI show discovery lands in a later PR. For now, add a show with <strong>+ New show</strong>.</span>');
       return;
     }
 
@@ -594,7 +766,7 @@
     }[V2.lens] || 'No shows.';
 
     tab.innerHTML =
-      U.pageHeader({ title: 'Shows', count: N.count(rows.length) + ' ' + lensTitle }) +
+      U.pageHeader({ title: 'Shows', count: N.count(rows.length) + ' ' + lensTitle, actionsHtml: newShowBtn }) +
       lensPills +
       '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name, location or type…" value="' + esc(V2.q) +
         '" oninput="ShowsV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
@@ -606,14 +778,94 @@
   }
 
   // ── Public API (referenced by the rendered HTML + route setup) ──────
+  // Ensure the legacy shows module (and thus window.ShowsBridge) is loaded before
+  // a write — mirrors SalesEventsV2.create / jobs-v2.
+  function ensureEngine() {
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('shows'); } catch (e) {} }
+  }
+
   window.ShowsV2 = {
     lens: function (lens) { V2.lens = lens; render(); },
     search: function (v) { V2.q = v; render(); },
     sort: function (key, dir) { V2.sortKey = key; V2.sortDir = dir; render(); },
     open: function (id) {
+      V2.current = id;
       MastEntity.get('shows-v2').fetch(id).then(function (rec) {
         if (rec) MastEntity.openRecord('shows-v2', rec, 'read');
       });
+    },
+    // ── Create / edit ──
+    create: function () {
+      if (!canEdit()) return notPermitted();
+      ensureEngine();
+      V2.current = null;
+      MastEntity.openRecord('shows-v2', {}, 'create');
+    },
+    // ── Status machine ── (any → any; the bridge no-ops old===new + handles the
+    // admin-gated autoPublish to the public events calendar on 'accepted')
+    setStatus: function (id, newStatus) {
+      if (!canEdit()) return notPermitted();
+      if (!bridge() || !bridge().setStatus) return bridgeLoading();
+      var rec = V2.byId[id];
+      Promise.resolve(bridge().setStatus(id, newStatus, rec)).then(function (res) {
+        if (res === null) return; // no-op (clicked the current status)
+        if (newStatus === 'accepted' && res && res.publishSkippedNonAdmin) {
+          toast('Show accepted. An admin must publish it to the public calendar.');
+        } else if (newStatus === 'accepted' && res && res.published) {
+          toast('Show accepted and published to the public calendar.');
+        } else {
+          toast('Status updated to ' + (STATUS_LABEL[newStatus] || newStatus) + '.');
+        }
+        reloadThenOpen(id);
+      }).catch(actionErr);
+    },
+    // ── Deep-dive enrich ── (the /showDeepDive CF call is a READ and stays here;
+    // only the resulting WRITE goes through ShowsBridge.applyDeepDive — mirrors
+    // the legacy runShowDeepDive split.)
+    enrich: function (id) {
+      if (!canEdit()) return notPermitted();
+      if (!bridge() || !bridge().applyDeepDive) return bridgeLoading();
+      var s = V2.byId[id];
+      if (!s || !s.websiteUrl) { toast('No website URL available for deep dive.', true); return; }
+      toast('Researching show details…');
+      var run = function (token) {
+        return callCF('/showDeepDive', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ websiteUrl: s.websiteUrl, showName: s.name || '', notes: s.notes || '' })
+        }).then(function (resp) {
+          return resp.json().then(function (data) {
+            if (!resp.ok) throw new Error(data.error || 'Deep dive failed');
+            var details = data.details || {};
+            if (!Object.keys(details).length) { toast('Deep dive completed but no additional details found.', true); return; }
+            return Promise.resolve(bridge().applyDeepDive(id, details)).then(function () {
+              toast('Deep dive complete — details updated.');
+              reloadThenOpen(id);
+            });
+          });
+        });
+      };
+      try {
+        window.auth.currentUser.getIdToken().then(run).catch(function (e) { toast('Deep dive failed: ' + ((e && e.message) || e), true); });
+      } catch (e) { toast('Deep dive failed: ' + ((e && e.message) || e), true); }
+    },
+    // ── Delete / archive ── (clears the public events/{id} mirror inside the
+    // bridge). Gated can('show-prep','delete') + confirm.
+    remove: function (id) {
+      if (!canDelete()) return notPermitted();
+      if (!bridge() || !bridge().remove) return bridgeLoading();
+      var go = function () {
+        Promise.resolve(bridge().remove(id)).then(function () {
+          toast('Show deleted.');
+          // Close the slide-out (the record no longer exists) and refresh the list.
+          if (window.MastUI && MastUI.slideOut && typeof MastUI.slideOut.requestCloseForce === 'function') { try { MastUI.slideOut.requestCloseForce(); } catch (e) {} }
+          V2.loaded = false;
+          setTimeout(function () { loadData().then(render); }, 250);
+        }).catch(actionErr);
+      };
+      if (typeof window.mastConfirm === 'function') {
+        Promise.resolve(window.mastConfirm('Delete this show? This cannot be undone.', { title: 'Delete Show', danger: true })).then(function (ok) { if (ok) go(); });
+      } else { go(); }
     },
     exportCsv: function () { return MastEntity.exportRows('shows-v2', visibleRows(), V2.lens); }
   };
