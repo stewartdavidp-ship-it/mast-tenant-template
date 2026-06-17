@@ -3199,10 +3199,29 @@
     // Create CS ticket for admin-initiated cancellation (non-fatal)
     if (!o.cancellationTicketId) {
       try {
-        var tcSnap = await MastDB.get('cs_config/ticketing');
-        var tc = (tcSnap && tcSnap.val && tcSnap.val()) || {};
-        var tcPrefix = tc.prefix || 'T';
-        var nextNum = typeof tc.nextNumber === 'number' ? tc.nextNumber : 1;
+        // Allocate the human-facing ticket number ATOMICALLY. The old
+        // get→compute→write-back raced under bulk cancellation: bulkCancel runs
+        // _cancelOrderCore per row, but each row's MastDB.get('cs_config/ticketing')
+        // returned the same (stale) nextNumber, so every cancel minted T-0001 and
+        // the counter never advanced. A Firestore transaction read-modify-writes
+        // the counter in one atomic step (server read, retried on contention), so
+        // every concurrent ticket creation — bulk OR the detail-screen path — gets
+        // a distinct number. The closure replaces the whole doc, so copy existing
+        // fields forward; read the allocated number back from the committed value.
+        var tcPrefix = 'T';
+        var nextNum = 1;
+        var txRes = await MastDB.transaction('cs_config/ticketing', function(cur) {
+          var doc = (cur && typeof cur === 'object') ? cur : {};
+          var next = {};
+          for (var f in doc) next[f] = doc[f];
+          next.prefix = doc.prefix || 'T';
+          next.nextNumber = (typeof doc.nextNumber === 'number' ? doc.nextNumber : 1) + 1;
+          return next;
+        });
+        if (txRes && txRes.value && typeof txRes.value.nextNumber === 'number') {
+          tcPrefix = txRes.value.prefix || 'T';
+          nextNum = txRes.value.nextNumber - 1;
+        }
         var ticketNumber = tcPrefix + '-' + String(nextNum).padStart(4, '0');
         var ticketId = 'ticket_' + Date.now().toString(36);
         var cMsgId = 'msg_' + Date.now().toString(36);
@@ -3233,11 +3252,6 @@
           authorEmail: null,
           createdAt: now
         });
-        if (tcSnap && tcSnap.val && tcSnap.val()) {
-          await MastDB.update('cs_config/ticketing', { nextNumber: nextNum + 1 });
-        } else {
-          await MastDB.set('cs_config/ticketing', { prefix: tcPrefix, nextNumber: nextNum + 1 });
-        }
         await MastDB.orders.update(orderId, {
           cancellationTicketId: ticketId,
           cancellationTicketNumber: ticketNumber
