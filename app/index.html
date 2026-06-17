@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260616-231240-358b69f"></script>
+  <script src="../shared/mastdb.js?v=20260617-000016-ee3f2d6"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260616-231240-358b69f"></script>
-  <script src="../shared/brand-sync.js?v=20260616-231240-358b69f"></script>
+  <script src="../shared/customer-filters.js?v=20260617-000016-ee3f2d6"></script>
+  <script src="../shared/brand-sync.js?v=20260617-000016-ee3f2d6"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260616-231240-358b69f"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-000016-ee3f2d6"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260616-231240-358b69f"></script>
-  <script src="../shared/mast-io.js?v=20260616-231240-358b69f"></script>
-  <script src="../shared/mast-entity.js?v=20260616-231240-358b69f"></script>
+  <script src="../shared/mast-ui.js?v=20260617-000016-ee3f2d6"></script>
+  <script src="../shared/mast-io.js?v=20260617-000016-ee3f2d6"></script>
+  <script src="../shared/mast-entity.js?v=20260617-000016-ee3f2d6"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260616-231240-358b69f"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-000016-ee3f2d6"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260616-231240-358b69f"></script>
+  <script src="../shared/mast-intake.js?v=20260617-000016-ee3f2d6"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -9987,14 +9987,15 @@
             <div id="emailGmailStatus" style="font-size:0.85rem;margin-bottom:8px;"></div>
           </div>
 
-          <!-- SendGrid provider fields -->
+          <!-- SendGrid provider fields — the API key now persists ONLY through the
+               server vault (GCP Secret Manager via mastIntakeVaultPut); there is no
+               client-side write path and the key is never read back into the browser.
+               MastIntake renders the input/Save/Revoke + guided steps into this host
+               and binds via delegation; loadSendgridSecureField() populates + hydrates
+               it. The server email sender (sendTenantEmail) reads it vault-first via
+               getTenantHeldSecret, falling back to the legacy {prefix}-sendgrid-api-key. -->
           <div id="emailProviderSendgrid" style="display:none;margin-bottom:12px;">
-            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">SendGrid API Key</label>
-            <div style="display:flex;gap:6px;margin-bottom:8px;">
-              <input type="password" id="emailSendgridApiKey" placeholder="SG...."
-                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-              <button type="button" onclick="toggleReveal('emailSendgridApiKey',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
-            </div>
+            <div id="emailSendgridSecureFieldHost"></div>
           </div>
 
           <!-- Resend provider fields -->
@@ -22395,7 +22396,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260616-231240-358b69f';
+var MAST_MODULES_V = '20260617-000016-ee3f2d6';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -29947,6 +29948,7 @@ function onEmailProviderChange() {
   } else if (provider === 'sendgrid') {
     var el = document.getElementById('emailProviderSendgrid');
     if (el) el.style.display = '';
+    loadSendgridSecureField();
   } else if (provider === 'resend') {
     var el = document.getElementById('emailProviderResend');
     if (el) el.style.display = '';
@@ -29956,6 +29958,37 @@ function onEmailProviderChange() {
   }
   // Refresh domain section to show appropriate content for selected provider
   loadEmailDomainSection();
+}
+
+// SendGrid API key — migrated to the MastIntake secure vault. The key used to be
+// written to GCP Secret Manager via secretsManager (plaintext through the browser);
+// it is now collected via MastIntake.secureField('sendgrid') and persisted ONLY
+// through the server vault (mastIntakeVaultPut) — no client write path, never read
+// back. The server sender reads it vault-first (getTenantHeldSecret), so existing
+// tenants keep working via the legacy {prefix}-sendgrid-api-key fallback. Mirrors
+// updateGitHubTokenStatus(): renders + hydrates the secure field and caches the
+// vault state for the email-tab status pill.
+var _sendgridVaultCollected = false;
+
+async function loadSendgridSecureField() {
+  var host = document.getElementById('emailSendgridSecureFieldHost');
+  if (!host || !window.MastIntake) return;
+  try {
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      await MastAdmin.loadModule('connections-providers');
+    }
+    if (!host.getAttribute('data-rendered')) {
+      host.innerHTML = MastIntake.secureField({ provider: 'sendgrid' });
+      host.setAttribute('data-rendered', '1'); // render guard (a flag, never a secret)
+    }
+    MastIntake.hydrate(host);
+    var st = await MastIntake.status('sendgrid');
+    _sendgridVaultCollected = !!(st && st.state === 'collected');
+  } catch (e) {
+    // Fail-closed: leave the field disabled; never fall back to a plaintext path.
+    _sendgridVaultCollected = false;
+  }
+  if (typeof refreshEmailTabStatus === 'function') refreshEmailTabStatus();
 }
 
 async function saveEmailConfig() {
@@ -29970,11 +30003,11 @@ async function saveEmailConfig() {
   var sp = MastDB.tenantId();
   var secrets = {};
 
-  // Collect provider-specific secrets
-  if (provider === 'sendgrid') {
-    var apiKey = getFieldValue('emailSendgridApiKey');
-    if (apiKey && !apiKey.includes('••••')) secrets[sp + '-sendgrid-api-key'] = apiKey;
-  } else if (provider === 'resend') {
+  // Collect provider-specific secrets. NOTE: SendGrid's API key is NOT collected
+  // here — it persists ONLY through the MastIntake server vault (Save/Revoke on the
+  // secure field, host emailSendgridSecureFieldHost). The server sender reads it
+  // vault-first via getTenantHeldSecret. The common metadata below still saves.
+  if (provider === 'resend') {
     // BYO Resend: route the key through byoResendConnect (validates against
     // Resend API + stores in Secret Manager + flips config/email.provider).
     // Skip the secretsManager path for the key itself; common fields below
@@ -30045,10 +30078,10 @@ function loadEmailConfig() {
     if (config.noReplyEmail) document.getElementById('emailNoReplyEmail').value = config.noReplyEmail;
     if (config.ownerEmail) document.getElementById('emailOwnerEmail').value = config.ownerEmail;
 
-    // Provider-specific fields
-    if (provider === 'sendgrid' && config.apiKey) {
-      setMaskedField('emailSendgridApiKey', config.apiKey);
-    } else if (provider === 'resend' && config.apiKey) {
+    // Provider-specific fields. SendGrid's API key lives in the server vault and
+    // is rendered/hydrated by loadSendgridSecureField() (off onEmailProviderChange),
+    // never read back here.
+    if (provider === 'resend' && config.apiKey) {
       setMaskedField('emailResendApiKey', config.apiKey);
     } else if (provider === 'custom') {
       if (config.apiKey) setMaskedField('emailCustomApiKey', config.apiKey);
@@ -44698,7 +44731,7 @@ function refreshEmailTabStatus() {
   var providerLabel = 'Mast-managed';
   if (prov === '') { providerState = 'ok'; providerLabel = 'Mast-managed'; }
   else if (prov === 'gmail') { providerState = hasFrom ? 'ok' : 'partial'; providerLabel = 'Gmail' + (hasFrom ? '' : ' — incomplete'); }
-  else if (prov === 'sendgrid') { var sg = document.getElementById('emailSendgridApiKey'); var ok = !!(sg && sg.value); providerState = ok ? 'ok' : 'missing'; providerLabel = 'SendGrid' + (ok ? '' : ' — key missing'); }
+  else if (prov === 'sendgrid') { var ok = !!_sendgridVaultCollected; providerState = ok ? 'ok' : 'missing'; providerLabel = 'SendGrid' + (ok ? '' : ' — key missing'); }
   else if (prov === 'resend') { var re = document.getElementById('emailResendApiKey'); var ok2 = !!(re && re.value); providerState = ok2 ? 'ok' : 'partial'; providerLabel = 'Resend' + (ok2 ? '' : ' — key needed'); }
   else if (prov === 'custom') { var ce = document.getElementById('emailCustomEndpoint'); var ck = document.getElementById('emailCustomApiKey'); var okc = !!(ce && ce.value) && !!(ck && ck.value); providerState = okc ? 'ok' : 'partial'; providerLabel = 'Custom' + (okc ? '' : ' — incomplete'); }
   setDot('provider', providerState);
