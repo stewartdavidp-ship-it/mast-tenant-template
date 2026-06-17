@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-113931-df0cfbc"></script>
+  <script src="../shared/mastdb.js?v=20260617-115529-958a7a0"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-113931-df0cfbc"></script>
-  <script src="../shared/brand-sync.js?v=20260617-113931-df0cfbc"></script>
+  <script src="../shared/customer-filters.js?v=20260617-115529-958a7a0"></script>
+  <script src="../shared/brand-sync.js?v=20260617-115529-958a7a0"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-113931-df0cfbc"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-115529-958a7a0"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-113931-df0cfbc"></script>
-  <script src="../shared/mast-io.js?v=20260617-113931-df0cfbc"></script>
-  <script src="../shared/mast-entity.js?v=20260617-113931-df0cfbc"></script>
+  <script src="../shared/mast-ui.js?v=20260617-115529-958a7a0"></script>
+  <script src="../shared/mast-io.js?v=20260617-115529-958a7a0"></script>
+  <script src="../shared/mast-entity.js?v=20260617-115529-958a7a0"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-113931-df0cfbc"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-115529-958a7a0"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-113931-df0cfbc"></script>
+  <script src="../shared/mast-intake.js?v=20260617-115529-958a7a0"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22439,7 +22439,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-113931-df0cfbc';
+var MAST_MODULES_V = '20260617-115529-958a7a0';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -23177,6 +23177,7 @@ var CHANNEL_PLATFORMS = [
   { id: 'shopify', label: 'Shopify', icon: '\uD83D\uDED2', note: 'Custom distribution — store sub-domain only.' },
   { id: 'etsy', label: 'Etsy', icon: '\uD83C\uDF3F', note: 'Per-tenant developer app — enter your Etsy API keystring first.' },
   { id: 'square', label: 'Square', icon: '\u25A1', note: 'Per-tenant developer app — enter sandbox or production credentials first.' },
+  { id: 'wix', label: 'Wix', icon: '◆', note: 'Platform-wide Mast app — approve on Wix’s consent page (no keys to paste).' },
   { id: 'woocommerce', label: 'WooCommerce', icon: '🪵', note: 'One-click authorize — enter your store URL; WooCommerce sends the API key to Mast.' }
 ];
 
@@ -23539,11 +23540,28 @@ async function connectChannel(platform) {
   if (platform === 'shopify') return _connectShopifyFlow();
   if (platform === 'etsy') return _connectEtsyFlow();
   if (platform === 'square') return _connectSquareFlow();
+  if (platform === 'wix') return _connectWixFlow();
   if (platform === 'woocommerce') return _connectWooCommerceFlow();
 }
 
 async function reconnectChannel(platform) {
   return connectChannel(platform);
+}
+
+// Wix — authType 'A' (platform-wide Mast Wix app). No credential pre-leg and no
+// sub-domain prompt: just start OAuth and open Wix's consent page. Mirrors the
+// shopify flow minus the store-domain step.
+async function _connectWixFlow() {
+  try {
+    var fn = firebase.functions().httpsCallable('wixOAuthStart');
+    var result = await fn({ tenantId: MastDB.tenantId() });
+    var data = (result && result.data) || {};
+    if (!data.authUrl) throw new Error('wixOAuthStart returned no authUrl');
+    window.open(data.authUrl, '_blank', 'noopener');
+    _setChannelNote('wix', 'Approve the Mast app in the new tab, then reload this page to see the updated status.');
+  } catch (err) {
+    _setChannelNote('wix', 'Connect failed: ' + (err.message || err), 'error');
+  }
 }
 
 async function _connectShopifyFlow() {
@@ -29503,11 +29521,11 @@ async function saveSquareConfig() {
     return;
   }
 
-  // No secrets in this payload — tokens live in the vault. The server verify
-  // reads the active-env token vault-first and provisions the webhook (arch #299).
-  var secrets = {};
-
-  // Non-secret metadata for RTDB — only include environments with data
+  // No secrets in this payload — tokens live in the vault. The non-secret config
+  // is written via channelSettings (off the legacy secretsManager); its square
+  // write runs the server-side verify, which reads the active-env token vault-first
+  // and auto-provisions the webhook (arch lib/square-connect-verify.js, #299).
+  // Non-secret metadata — only include environments with data.
   var metadata = {
     environment: env,
     siteUrl: siteUrl,
@@ -29517,11 +29535,10 @@ async function saveSquareConfig() {
   if (prodLocation) metadata.production = { locationId: prodLocation };
 
   try {
-    var result = await firebase.functions().httpsCallable('secretsManager')({
+    var result = await firebase.functions().httpsCallable('channelSettings')({
       action: 'write',
       service: 'square',
       tenantId: MastDB.tenantId(),
-      secrets: secrets,
       metadata: metadata
     });
     await MastDB.config.testMode().set(env === 'sandbox');
@@ -29668,7 +29685,7 @@ function loadStripeConfig() {
   // The secret key is rendered + hydrated by the vault-backed secure field.
   loadStripeSecureField();
   var statusEl = document.getElementById('stripeConfigStatus');
-  firebase.functions().httpsCallable('secretsManager')({
+  firebase.functions().httpsCallable('channelSettings')({
     action: 'read',
     service: 'stripe',
     tenantId: MastDB.tenantId()
@@ -29740,11 +29757,10 @@ async function saveStripeConfig() {
   };
 
   try {
-    await firebase.functions().httpsCallable('secretsManager')({
+    await firebase.functions().httpsCallable('channelSettings')({
       action: 'write',
       service: 'stripe',
       tenantId: MastDB.tenantId(),
-      secrets: {},
       metadata: metadata
     });
     // Ensure paymentProcessor is set to stripe
@@ -29803,13 +29819,18 @@ function loadSquareConfig() {
   // config exists yet, so a maker can enter tokens). The secureField shows its
   // own collected/not-collected state independent of the metadata read below.
   loadSquareSecureFields();
-  firebase.functions().httpsCallable('secretsManager')({
+  firebase.functions().httpsCallable('channelSettings')({
     action: 'read',
     service: 'square',
     tenantId: MastDB.tenantId()
   }).then(function(result) {
     var config = result.data;
-    if (!config || (!(config.sandbox && config.sandbox.accessToken) && !(config.production && config.production.accessToken))) {
+    var sb = config && config.sandbox || {};
+    var pr = config && config.production || {};
+    // "Configured" now keys off the vault-derived presence booleans + saved
+    // Location IDs (no masked secret is returned). channelSettings reports
+    // tokenConfigured/webhookConfigured per env instead of a masked accessToken.
+    if (!config || (!sb.tokenConfigured && !pr.tokenConfigured && !sb.locationId && !pr.locationId)) {
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No Square config set. Payment checkout will not work until configured.</span>';
       return;
     }
@@ -29818,22 +29839,19 @@ function loadSquareConfig() {
     var envEl = document.getElementById('squareEnvironment');
     if (envEl && config.environment) envEl.value = config.environment;
 
-    // Server returns masked secrets — display them as placeholders + show saved badges.
-    // The access tokens now live in the vault (rendered by the secureField hosts), so
-    // only the non-secret Location IDs are populated into plain fields here.
-    var sb = config.sandbox || {};
-    var pr = config.production || {};
+    // Only the non-secret Location IDs are populated into plain fields; the access
+    // tokens live in the vault (rendered by the secureField hosts above).
     setMaskedField('sqSandboxLocation', sb.locationId);
     setMaskedField('sqProdLocation', pr.locationId);
 
     // Show "Saved" badges for fields that have values
     if (sb.locationId) setFieldBadge('sqSandboxLocationBadge', 'valid', 'Saved');
-    if (sb.webhookSignatureKey) {
+    if (sb.webhookConfigured) {
       var whEl = document.getElementById('sqSandboxWebhookBadge');
       if (whEl) whEl.innerHTML = '<span style="background:#059669;color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;font-weight:600;">Webhook Saved</span>';
     }
     if (pr.locationId) setFieldBadge('sqProdLocationBadge', 'valid', 'Saved');
-    if (pr.webhookSignatureKey) {
+    if (pr.webhookConfigured) {
       var whElProd = document.getElementById('sqProdWebhookBadge');
       if (whElProd) whElProd.innerHTML = '<span style="background:#059669;color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;font-weight:600;">Webhook Saved</span>';
     }
@@ -29844,7 +29862,7 @@ function loadSquareConfig() {
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : 'unknown') + '</span>';
   }).catch(function(err) {
     // Fallback to direct RTDB read (pre-migration)
-    console.warn('secretsManager read failed, falling back to RTDB:', err.message);
+    console.warn('channelSettings read failed, falling back to RTDB:', err.message);
     MastDB.config.square().once('value').then(function(snap) {
       var config = snap.val();
       if (!config) {
@@ -30880,7 +30898,7 @@ function loadEtsyConfig() {
   var connectedEl = document.getElementById('etsyConnected');
   var disconnectedEl = document.getElementById('etsyDisconnected');
 
-  firebase.functions().httpsCallable('secretsManager')({
+  firebase.functions().httpsCallable('channelSettings')({
     action: 'read',
     service: 'etsy',
     tenantId: MastDB.tenantId()
@@ -30905,7 +30923,7 @@ function loadEtsyConfig() {
     }
   }).catch(function(err) {
     // Fallback to RTDB (pre-migration)
-    console.warn('secretsManager Etsy read failed, falling back:', err.message);
+    console.warn('channelSettings Etsy read failed, falling back:', err.message);
     MastDB.config.etsy().once('value').then(function(snap) {
       var config = snap.val();
       if (config && config.accessToken && config.shopId) {
@@ -31057,7 +31075,7 @@ async function connectShopifyOAuth() {
     window.__shopifyOAuthPoll = setInterval(function() {
       tries++;
       if (tries > 20) { clearInterval(window.__shopifyOAuthPoll); window.__shopifyOAuthPoll = null; return; }
-      firebase.functions().httpsCallable('secretsManager')({ action: 'read', service: 'shopify', tenantId: MastDB.tenantId() })
+      firebase.functions().httpsCallable('channelSettings')({ action: 'read', service: 'shopify', tenantId: MastDB.tenantId() })
         .then(function(r) {
           var cfg = (r && r.data) || {};
           if (cfg.connected && cfg.shopDomain) {
@@ -31110,7 +31128,7 @@ function loadShopifyConfig() {
   var detailsEl = document.getElementById('shopifyConnectedDetails');
   if (!disconnectedEl || !connectedEl) return; // Not rendered yet
 
-  firebase.functions().httpsCallable('secretsManager')({
+  firebase.functions().httpsCallable('channelSettings')({
     action: 'read',
     service: 'shopify',
     tenantId: MastDB.tenantId()
@@ -31125,7 +31143,8 @@ function loadShopifyConfig() {
       var resultColor = lastResult === 'ok' ? 'var(--teal)' : (lastResult.indexOf('error') === 0 ? '#ef4444' : 'var(--warm-gray)');
       if (statusEl) statusEl.innerHTML =
         '<span style="color:var(--teal);">&#10003; Connected to <strong>' + esc(shopName) + '</strong></span>';
-      var webhookSecretStatus = config.webhookSecret
+      // webhookSecretConfigured is a vault-derived presence boolean (no masked reveal).
+      var webhookSecretStatus = config.webhookSecretConfigured
         ? '<span style="color:var(--teal);">&#10003; configured</span>'
         : '<span style="color:#f59e0b;">&#9888; not set — webhooks accepted unsigned</span>';
       loadShopifyWebhookStatus();
@@ -31137,7 +31156,7 @@ function loadShopifyConfig() {
           '<div><strong>Connected:</strong> ' + esc(config.connectedAt ? new Date(config.connectedAt).toLocaleString() : 'Unknown') + '</div>' +
           '<div><strong>Last test:</strong> ' + esc(lastTest) + ' <span style="color:' + resultColor + ';">' + esc(lastResult) + '</span></div>' +
           '<div><strong>Webhook HMAC:</strong> ' + webhookSecretStatus +
-            (config.webhookSecret ? '' : ' <button class="btn btn-small" style="font-size:0.72rem;padding:2px 8px;margin-left:6px;" onclick="showSetWebhookSecret()">Set Secret</button>') +
+            (config.webhookSecretConfigured ? '' : ' <button class="btn btn-small" style="font-size:0.72rem;padding:2px 8px;margin-left:6px;" onclick="showSetWebhookSecret()">Set Secret</button>') +
           '</div>' +
           '<div id="shopifyWebhookSecretInline" style="display:none;margin-top:8px;">' +
             '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Paste your Shopify app\'s <strong>API secret key</strong> (found under API credentials tab). This verifies inbound webhooks are genuinely from Shopify. Stored in secure vault \u2014 never read back.</p>' +
@@ -31152,7 +31171,7 @@ function loadShopifyConfig() {
       loadShopifySecureFields(); // render + hydrate the vault-backed secret fields
     }
   }).catch(function(err) {
-    console.warn('secretsManager Shopify read failed:', err && err.message);
+    console.warn('channelSettings Shopify read failed:', err && err.message);
     if (disconnectedEl) disconnectedEl.style.display = 'block';
     if (connectedEl) connectedEl.style.display = 'none';
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Not connected.</span>';
@@ -32379,8 +32398,11 @@ async function testShopifyConnection() {
   var statusEl = document.getElementById('shopifyConfigStatus');
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Testing connection…</span>';
   try {
-    // Re-run write with empty secrets + current metadata to trigger verification path
-    var snap = await firebase.functions().httpsCallable('secretsManager')({
+    // Read current non-secret config via channelSettings, then re-run the legacy
+    // secretsManager write (empty secrets) to trigger the shop.json verify path —
+    // the verify side-effect for Shopify still lives on the secretsManager write
+    // (channelSettings has no Shopify side-effect), so the test write stays there.
+    var snap = await firebase.functions().httpsCallable('channelSettings')({
       action: 'read',
       service: 'shopify',
       tenantId: MastDB.tenantId()
@@ -32440,7 +32462,7 @@ function editShopifyConfig() {
   if (disconnectedEl) disconnectedEl.style.display = 'block';
   loadShopifySecureFields(); // render + hydrate the vault-backed secret fields
   // Pre-fill the current shop domain
-  firebase.functions().httpsCallable('secretsManager')({
+  firebase.functions().httpsCallable('channelSettings')({
     action: 'read',
     service: 'shopify',
     tenantId: MastDB.tenantId()
@@ -32931,7 +32953,7 @@ async function syncEtsyOrders() {
   // (feedback DjwV3af6X39LsBCaq8lY). Catch the not-connected case in the
   // client so we can point the user at Settings instead.
   try {
-    var cfgRes = await firebase.functions().httpsCallable('secretsManager')({
+    var cfgRes = await firebase.functions().httpsCallable('channelSettings')({
       action: 'read', service: 'etsy', tenantId: MastDB.tenantId()
     });
     var cfg = cfgRes && cfgRes.data;
@@ -32944,7 +32966,7 @@ async function syncEtsyOrders() {
     // Pre-check itself failed (network / permissions). Fall through to the
     // real sync attempt — its error surface will at least surface something
     // actionable, and we don't want to block a legitimate sync on a transient
-    // secretsManager hiccup.
+    // channelSettings hiccup.
   }
 
   try {
