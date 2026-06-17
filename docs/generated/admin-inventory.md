@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **61,199** lines
-- **Feature modules:** **119** files in `app/modules/` (**109** routed), **142,851** lines combined
+- **Feature modules:** **119** files in `app/modules/` (**109** routed), **143,056** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -24,7 +24,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/calendar-v2.js` | 108 | calendar-v2 |
 | `modules/campaigns-v2.js` | 405 | campaigns-v2 |
 | `modules/campaigns.js` | 560 | campaigns |
-| `modules/cart.js` | 1,577 | wallet, gift-cards, loyalty, membership |
+| `modules/cart.js` | 1,639 | wallet, gift-cards, loyalty, membership |
 | `modules/channels-v2.js` | 697 | channels-v2 |
 | `modules/channels.js` | 2,946 | channels |
 | `modules/classes-v2.js` | 1,276 | classes-v2, book-reports-v2, classes-rooms-v2, classes-settings-v2 |
@@ -73,7 +73,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/lookbooks-v2.js` | 558 | lookbooks-v2 |
 | `modules/lookbooks.js` | 822 | lookbooks |
 | `modules/lots-v2.js` | 178 | lots-v2 |
-| `modules/loyalty-v2.js` | 357 | loyalty-v2 |
+| `modules/loyalty-v2.js` | 500 | loyalty-v2 |
 | `modules/maker.js` | 7,886 | materials, products |
 | `modules/mapping-v2.js` | 382 | mapping-v2 |
 | `modules/mapping.js` | 1,809 | mapping |
