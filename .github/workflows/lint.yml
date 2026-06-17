@@ -53,6 +53,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+      # Conflict-marker guard: fail any PR whose checked-out tree contains
+      # committed `<<<<<<< / ======= / >>>>>>>` merge-conflict markers. On a
+      # pull_request the checkout IS the prospective merge commit, so this catches
+      # markers introduced by the merge itself (not just by a PR's own commits).
+      # Added after #613 auto-merged unresolved markers into app/index.html and
+      # took the whole served dev admin down — the cache-bust guard missed it
+      # (MAST_MODULES_V was duplicated *inside* the conflict block) and the module
+      # syntax check below only parses app/modules/*.js, not index.html's inline
+      # script. Runs first so a structurally broken tree fails fast.
+      - name: Conflict-marker guard
+        run: node scripts/lint-conflict-markers.js
       # Cache-bust guard: fail a PR that changes admin JS/HTML without bumping
       # MAST_MODULES_V. Build 5 (internal release model — private repo) — replaces the opt-in
       # local pre-commit hook as the authoritative, un-skippable enforcement.
@@ -133,4 +144,5 @@ jobs:
           node test/brand-sync-business-name.test.js &&
           node test/consignment-commission-rate.test.js &&
           node test/mastdb-fieldpath.test.js &&
-          node test/lint-ratchet.test.js
+          node test/lint-ratchet.test.js &&
+          node test/lint-conflict-markers.test.js
