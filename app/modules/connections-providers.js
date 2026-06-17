@@ -815,6 +815,33 @@
       disconnectTitle: 'Disconnect Square'
     }
   });
+  // WooCommerce — archetype B (one-click authorize). UNLIKE the C→A hybrids
+  // (Etsy/Square) there is NO held-secret pre-leg: the maker enters their store
+  // URL, approves on their own store, and WooCommerce mints + POSTs the REST API
+  // key straight to Mast's woocommerceAuthCallback CF (the maker never pastes a
+  // key). The key is permanent (no refresh). connect → window.connectChannel
+  // ('woocommerce') → _connectWooCommerceFlow → woocommerceAuthStart; disconnect →
+  // disconnectChannelCallable (deletes the vaulted key, best-effort — WooCommerce
+  // has no remote key-revoke API, so the maker removes it in wp-admin).
+  var wooChannel = _channelDef({
+    id: 'woocommerce', label: 'WooCommerce', icon: '🪵', authType: 'B',
+    refreshable: false, tokenLifetime: 'permanent',
+    guide: {
+      steps: [
+        'Click Connect and enter your WooCommerce store URL (e.g. https://yourstore.com).',
+        'Approve access on your store’s own page (opens in a new tab) — WooCommerce sends the API key straight to Mast.',
+        'Return here and click Refresh status.'
+      ],
+      estSeconds: 120
+    },
+    copy: {
+      connectLabel: 'Connect WooCommerce',
+      connectPrompt: 'Connect your WooCommerce store to sync products and inventory. You authorize once on your own store — Mast never asks you to copy a key. You can skip this and add it later.',
+      pendingDetail: 'Approve access in the WooCommerce tab that just opened, then click Refresh status.',
+      disconnectConfirm: 'Disconnect WooCommerce? Mast deletes its stored copy of the API key. To fully revoke it, also remove the key in your WooCommerce admin (Settings → Advanced → REST API). You can reconnect later.',
+      disconnectTitle: 'Disconnect WooCommerce'
+    }
+  });
 
   // ── New OAuth providers — family: delegated-auth, COMING SOON (available:false) ──
   //
@@ -861,11 +888,6 @@
     id: 'squarespace', label: 'Squarespace', icon: '⬛', authType: 'A', category: 'channel',
     refreshable: true, tokenLifetime: 'short-refreshable',   // Squarespace: 30-min access / 7-day refresh
     comingSoon: 'One-click Squarespace connect is coming soon — store sync via Squarespace OAuth.'
-  });
-  var wooChannel = _comingSoonDef({
-    id: 'woocommerce', label: 'WooCommerce', icon: '🪵', authType: 'B', category: 'channel',
-    refreshable: false, tokenLifetime: 'permanent',          // wc-auth one-click authorize → server callback auto-provisions a permanent key
-    comingSoon: 'One-click WooCommerce connect is coming soon — authorize once and Mast receives the API key automatically.'
   });
   var plaidConnection = _comingSoonDef({
     id: 'plaid', label: 'Plaid (bank link)', icon: '🏦', authType: 'A', category: 'banking',
