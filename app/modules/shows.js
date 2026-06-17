@@ -4004,25 +4004,29 @@ async function _showApplyDeepDiveCore(showId, details) {
     });
   }
 
-  MastAdmin.registerModule('shows', {
-    routes: {
-      'show':          { tab: 'showTab', setup: function() { ensureShowsData(); navigateTo('show-apply'); } },
-      'show-find':     { tab: 'showTab', setup: function() { ensureShowsData(); switchShowSubView('find'); } },
-      'show-apply':    { tab: 'showTab', setup: function() {
-        ensureShowsData();
-        switchShowSubView('apply');
-        // MCP-link landings carry filter params; force the manual list
-        // mode so the filtered shows are visible (default AI mode hides
-        // the shows list).
-        var rp = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
-        if (rp && (rp.status || rp.dateFrom || rp.dateTo || rp.showIds)) {
-          switchShowApplyMode('manual');
-        }
-      } },
-      'show-prep':     { tab: 'showTab', setup: function() { ensureShowsData(); switchShowSubView('prep'); } },
-      'show-execute':  { tab: 'showTab', setup: function() { ensureShowsData(); switchShowSubView('execute'); } },
-      'show-history':  { tab: 'showTab', setup: function() { ensureShowsData(); switchShowSubView('history'); } }
-    }
-  });
+  // [shows-v2 PR8 — legacy views DARKED]
+  // The #show* routes are CUT OVER to the shows-v2 twin (PR7, via
+  // MAST_V2_ROUTE_MAP) and the static #showTab markup has been removed.
+  // This module therefore NO LONGER registers any routes — the legacy
+  // view/render functions above (switchShowSubView / openCreateShowModal /
+  // renderShowDetail* / saveShow* etc.) are now unreachable dead code,
+  // intentionally left in place because the shared write cores (_show*Core)
+  // are interleaved with them and the bridge must not be put at risk.
+  //
+  // What this module STILL provides (single-sourced by the twin — DO NOT remove):
+  //   • window.ShowsBridge — every show WRITE, delegating to the DOM-free cores
+  //   • the _show*Core write functions the bridge calls
+  //   • window.showsData + the shows listener (loadShows) — populated lazily via
+  //     ensureShowsData(); trips.js reads window.showsData (with its own
+  //     MastDB.shows fallback) as a cross-module cache
+  //   • ensureShowsData()
+  // The module is loaded on demand by the twin via MastAdmin.loadModule('shows')
+  // purely to install the bridge. Register with an EMPTY routes set: this marks
+  // the module loaded (so loadModule short-circuits and never re-injects the
+  // script) WITHOUT adding any #show* route targets to ROUTE_MAP — so an explicit
+  // navigateToClassic('show') finds no legacy view config and degrades to a
+  // graceful no-op (applyRoute returns early on a missing ROUTE_MAP entry)
+  // instead of resurrecting a dead view or crashing.
+  MastAdmin.registerModule('shows', { routes: {} });
 
 })();
