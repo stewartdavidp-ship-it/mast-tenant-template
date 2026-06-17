@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-095637-a557699"></script>
+  <script src="../shared/mastdb.js?v=20260617-104232-78273b9"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-095637-a557699"></script>
-  <script src="../shared/brand-sync.js?v=20260617-095637-a557699"></script>
+  <script src="../shared/customer-filters.js?v=20260617-104232-78273b9"></script>
+  <script src="../shared/brand-sync.js?v=20260617-104232-78273b9"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-095637-a557699"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-104232-78273b9"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-095637-a557699"></script>
-  <script src="../shared/mast-io.js?v=20260617-095637-a557699"></script>
-  <script src="../shared/mast-entity.js?v=20260617-095637-a557699"></script>
+  <script src="../shared/mast-ui.js?v=20260617-104232-78273b9"></script>
+  <script src="../shared/mast-io.js?v=20260617-104232-78273b9"></script>
+  <script src="../shared/mast-entity.js?v=20260617-104232-78273b9"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-095637-a557699"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-104232-78273b9"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-095637-a557699"></script>
+  <script src="../shared/mast-intake.js?v=20260617-104232-78273b9"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22412,7 +22412,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-095637-a557699';
+var MAST_MODULES_V = '20260617-104232-78273b9';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -30244,7 +30244,7 @@ async function saveEmailConfig() {
   var ownerEmail = document.getElementById('emailOwnerEmail').value.trim();
 
   var sp = MastDB.tenantId();
-  var secrets = {};
+  var customApiKey = null;
 
   // Collect provider-specific secrets. NOTE: SendGrid's API key is NOT collected
   // here — it persists ONLY through the MastIntake server vault (Save/Revoke on the
@@ -30253,8 +30253,6 @@ async function saveEmailConfig() {
   if (provider === 'resend') {
     // BYO Resend: route the key through byoResendConnect (validates against
     // Resend API + stores in Secret Manager + flips config/email.provider).
-    // Skip the secretsManager path for the key itself; common fields below
-    // still go through it.
     var apiKey = getFieldValue('emailResendApiKey');
     if (apiKey && !apiKey.includes('••••')) {
       try {
@@ -30269,10 +30267,10 @@ async function saveEmailConfig() {
     }
   } else if (provider === 'custom') {
     var apiKey = getFieldValue('emailCustomApiKey');
-    if (apiKey && !apiKey.includes('••••')) secrets[sp + '-email-api-key'] = apiKey;
+    if (apiKey && !apiKey.includes('••••')) customApiKey = apiKey;
   }
 
-  // Build metadata (non-secret config written to RTDB)
+  // Build metadata (non-secret config)
   var metadata = {
     provider: provider,
     fromEmail: fromEmail,
@@ -30289,9 +30287,23 @@ async function saveEmailConfig() {
   }
 
   try {
-    await firebase.functions().httpsCallable('secretsManager')({
-      action: 'write', service: 'email', tenantId: MastDB.tenantId(), secrets: secrets, metadata: metadata
+    // Non-secret metadata now routes through the dedicated emailSettings CF, NOT
+    // secretsManager (secretsManager decommission — non-secret config rehome). It
+    // writes the same config/email doc the server reads. Held secrets keep their
+    // own paths: SendGrid → MastIntake vault, Resend → byoResendConnect (above),
+    // custom-provider key → legacy secretsManager below (no vault provider yet).
+    await firebase.functions().httpsCallable('emailSettings')({
+      action: 'write', tenantId: MastDB.tenantId(), metadata: metadata
     });
+    // Custom provider's API key is a held secret with no MastIntake vault provider
+    // yet — persist it via the legacy secretsManager write (secrets only). This is
+    // the one remaining email→secretsManager dependency (decommission backlog).
+    if (provider === 'custom' && customApiKey) {
+      await firebase.functions().httpsCallable('secretsManager')({
+        action: 'write', service: 'email', tenantId: MastDB.tenantId(),
+        secrets: { [sp + '-email-api-key']: customApiKey }, metadata: {}
+      });
+    }
     await updateConfigChecklist('email', true);
     await writeAudit('update', 'settings', 'emailConfig');
     loadEmailConfig();
@@ -30304,8 +30316,11 @@ async function saveEmailConfig() {
 
 function loadEmailConfig() {
   var statusEl = document.getElementById('emailConfigStatus');
-  firebase.functions().httpsCallable('secretsManager')({
-    action: 'read', service: 'email', tenantId: MastDB.tenantId()
+  // Non-secret email config now reads through emailSettings, NOT secretsManager
+  // (secretsManager decommission). Returns non-secret metadata + presence
+  // booleans (keyConfigured/gmailConfigured) — never a masked secret value.
+  firebase.functions().httpsCallable('emailSettings')({
+    action: 'read', tenantId: MastDB.tenantId()
   }).then(function(result) {
     var config = result.data;
     var provider = config.provider || '';
@@ -30323,17 +30338,20 @@ function loadEmailConfig() {
 
     // Provider-specific fields. SendGrid's API key lives in the server vault and
     // is rendered/hydrated by loadSendgridSecureField() (off onEmailProviderChange),
-    // never read back here.
-    if (provider === 'resend' && config.apiKey) {
-      setMaskedField('emailResendApiKey', config.apiKey);
-    } else if (provider === 'custom') {
-      if (config.apiKey) setMaskedField('emailCustomApiKey', config.apiKey);
+    // never read back here. Resend's key status comes from loadByoResendStatus().
+    // emailSettings returns NO masked secret value — only presence booleans, so
+    // custom/gmail show a non-revealing "saved ✓" indicator.
+    if (provider === 'custom') {
+      if (config.keyConfigured) {
+        var customKeyEl = document.getElementById('emailCustomApiKey');
+        if (customKeyEl) { customKeyEl.value = ''; customKeyEl.placeholder = 'Saved ✓  (enter a new key to replace)'; }
+      }
       if (config.endpointUrl) document.getElementById('emailCustomEndpoint').value = config.endpointUrl;
       if (config.authHeaderFormat) document.getElementById('emailCustomAuthFormat').value = config.authHeaderFormat;
     } else if (provider === 'gmail') {
       var gmailStatusEl = document.getElementById('emailGmailStatus');
       if (gmailStatusEl) {
-        if (config.gmailUser) {
+        if (config.gmailConfigured) {
           gmailStatusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Gmail credentials configured</span>';
         } else {
           gmailStatusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Gmail secrets not yet set in Secret Manager.</span>';
