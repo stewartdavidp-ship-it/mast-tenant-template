@@ -64,9 +64,10 @@
  *
  * Cold-safe: doesn't assume legacy shows.js ran — lazy-loads the shows module so
  * window.ShowsBridge + the live showsData cache exist, and reads MastDB.shows
- * directly. Flag-gated (?ui=1). Routes are REGISTERED but intentionally NOT in
- * MAST_V2_ROUTE_MAP yet — reachable by direct hash (#shows-v2) for QA; cutover is
- * a later PR.
+ * directly. Flag-gated (?ui=1). CUT OVER (PR7): #show / #show-find / #show-apply /
+ * #show-prep / #show-execute / #show-history remap to this twin via
+ * MAST_V2_ROUTE_MAP for V2 users; legacy shows.js still reachable via
+ * navigateToClassic (darked in PR8).
  */
 (function () {
   'use strict';
@@ -290,14 +291,18 @@
       if (mode === 'create') {
         return Promise.resolve(bridge().create(data)).then(function (id) {
           toast('Show created.');
-          // Refresh the cache then land in the new show's read detail.
+          // Returning true lets the engine close the create form (slideOut._save
+          // force-closes on a truthy create resolve). Refresh the cache + re-render
+          // the list so the new record shows immediately — deferred a tick so the
+          // list re-paint lands AFTER the engine has torn the form down (mirrors the
+          // jobs-v2 create pattern; rendering synchronously here raced the close and
+          // left a stale pane behind). The maker stays on the list, not bounced into
+          // a detail pane that the force-close would immediately shut.
           V2.loaded = false;
-          return ensureLoaded().then(function () {
-            render();
-            var rec2 = V2.byId[id];
-            if (rec2) MastEntity.openRecord('shows-v2', rec2, 'read');
-            return true;
-          });
+          setTimeout(function () {
+            ensureLoaded().then(function () { render(); }).catch(function (e) { console.error('[shows-v2] load', e); });
+          }, 60);
+          return true;
         }).catch(function (e) { actionErr(e); return false; });
       }
       var sid = (rec && (rec._key || rec.id)) || (V2.current);
@@ -1778,10 +1783,22 @@
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('shows'); } catch (e) {} }
   }
 
+  // Close the detail slide-out (if open) and drop the stale open-record state, so
+  // switching lenses / re-rendering the list never leaves an orphaned slide-out
+  // floating over the new lens or a stale V2.current behind it. requestCloseForce
+  // skips the dirty prompt — a read-detail has no dirty key, and an in-pane editor
+  // shouldn't trap a lens switch. Guarded so a closed panel is a no-op.
+  function closeDetailIfOpen() {
+    V2.current = null;
+    try { if (U.slideOut && U.slideOut.isOpen && U.slideOut.isOpen()) U.slideOut.requestCloseForce(); } catch (e) {}
+  }
+
   window.ShowsV2 = {
     // Switching lenses (or re-clicking Apply) drops out of the AI builder so the
     // list reappears — the builder is a modal-ish takeover of the Apply lens.
-    lens: function (lens) { V2.ai.active = false; V2.lens = lens; render(); },
+    // Also close any open detail slide-out + clear the stale open record so the
+    // pane never lingers over the lens you just switched to.
+    lens: function (lens) { closeDetailIfOpen(); V2.ai.active = false; V2.lens = lens; render(); },
     search: function (v) { V2.q = v; render(); },
     sort: function (key, dir) { V2.sortKey = key; V2.sortDir = dir; render(); },
     open: function (id) {
@@ -2545,11 +2562,11 @@
   }
 
   // ── Routes ──────────────────────────────────────────────────────────
-  // Each lifecycle route enters the matching lens. REGISTERED here, but
-  // intentionally NOT added to MAST_V2_ROUTE_MAP yet (#show etc. still resolve to
-  // the legacy shows.js) — reachable by direct hash (#shows-v2 / #show-apply-v2 …)
-  // for QA; cutover is a later PR. Cold-safe: setup runs ensureTab + render + load
-  // without assuming legacy shows.js ran.
+  // Each lifecycle route enters the matching lens. CUT OVER (PR7): #show /
+  // #show-find / #show-apply / … now remap to these twin routes via
+  // MAST_V2_ROUTE_MAP for V2 users; an explicit-legacy user (navigateToClassic)
+  // still reaches the legacy shows.js routes. Cold-safe: setup runs ensureTab +
+  // render + load without assuming legacy shows.js ran.
   function routeSetup(lens) {
     return function () { V2.lens = lens; ensureTab(); render(); load(); };
   }
