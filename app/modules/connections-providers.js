@@ -796,22 +796,30 @@
       disconnectTitle: 'Disconnect Etsy'
     }
   });
+  // Square — pure-A (the "Wix method"): ONE platform-wide Mast Square OAuth app, so
+  // the maker pastes NO developer keys — they just approve on Square's own consent
+  // page. The live squareOAuthStart / squareOAuthCallback CFs + the refreshSquareTokens
+  // cron (mast-architecture) read the platform-wide mast-square-app-id/-secret pod
+  // secrets, not per-tenant creds. authType 'A' — converged from the original C→A
+  // hybrid (mast-architecture PR 317), mirroring Wix. Existing tenants connected under
+  // the old per-tenant app keep working (dual-path refresh) and converge to pure-A on
+  // their next reconnect; see the PR for the migration detail.
   var squareChannel = _channelDef({
-    id: 'square', label: 'Square', icon: '◻', authType: 'C',  // C→A hybrid: paste the developer-app client id + secret, then OAuth
+    id: 'square', label: 'Square', icon: '◻', authType: 'A',
     refreshable: true, tokenLifetime: 'short-refreshable',
     guide: {
       steps: [
-        'Click Connect, pick Sandbox or Production, and paste your Square developer-app client id + secret.',
-        'Approve the connection on Square’s own page (opens in a new tab).',
+        'Click Connect — Square opens in a new tab.',
+        'Approve the Mast app on Square’s own consent page.',
         'Return here and click Refresh status.'
       ],
-      estSeconds: 180
+      estSeconds: 120
     },
     copy: {
       connectLabel: 'Connect Square',
-      connectPrompt: 'Connect your Square account to sync sales and inventory. You can skip this and add it later.',
-      pendingDetail: 'Approve the connection in the Square tab that just opened, then click Refresh status.',
-      disconnectConfirm: 'Disconnect Square? Tokens are revoked and stored credentials deleted. You can reconnect later.',
+      connectPrompt: 'Connect your Square account to sync sales and inventory. You authorize once on Square — Mast never asks you to copy a key. You can skip this and add it later.',
+      pendingDetail: 'Approve the Mast app in the Square tab that just opened, then click Refresh status.',
+      disconnectConfirm: 'Disconnect Square? Mast’s stored access is revoked and deleted. The Mast app may still appear in your Square account until you remove it there. You can reconnect later.',
       disconnectTitle: 'Disconnect Square'
     }
   });
