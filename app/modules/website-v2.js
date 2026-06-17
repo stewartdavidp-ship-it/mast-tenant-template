@@ -1859,11 +1859,17 @@
     // website route to its Import tab (the async catalog-import subsystem is NOT
     // rebuilt natively — it lives behind this single door). navigateToClassic
     // bypasses the V2 remap so it lands on the legacy Import surface, not the twin.
-    // `importOnly:1` tells website.js to strip the other five (now-native) tabs and
+    // importOnly tells website.js to strip the other five (now-native) tabs and
     // render JUST the Import surface + a "← Back to Your Website" link to the builder.
+    // Pass it as a STRING ('1', not 1): navigateToClassic sets the hash, which fires
+    // a hashchange that re-parses params as strings. A numeric 1 would not deep-equal
+    // the round-tripped '1', flipping the router's paramsChanged check true and
+    // re-navigating WITHOUT the skip-remap flag — bouncing a V2 user back to the
+    // website-v2 twin instead of the legacy Import surface. A string round-trips
+    // identically (the pre-existing tab:'import' relies on the same equality).
     openImport: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('website', { tab: 'import', importOnly: 1 });
-      else if (typeof navigateTo === 'function') navigateTo('website', { tab: 'import', importOnly: 1 });
+      if (typeof navigateToClassic === 'function') navigateToClassic('website', { tab: 'import', importOnly: '1' });
+      else if (typeof navigateTo === 'function') navigateTo('website', { tab: 'import', importOnly: '1' });
     },
 
     // Card 4 · viewport toggle — resize the existing frame in place (no reload,
