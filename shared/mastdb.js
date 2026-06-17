@@ -1193,14 +1193,14 @@ var MastDB = (function() {
         // entry points are the OAuth initiate/callback Cloud Functions.
         channels: (function() {
           var BASE = 'admin/businessEntity/channels';
-          var VALID_PLATFORMS = { shopify: 1, etsy: 1, square: 1 };
+          var VALID_PLATFORMS = { shopify: 1, etsy: 1, square: 1, woocommerce: 1 };
 
           function _maskTokenRefs(rec) {
             if (!rec) return rec;
             var out = {};
             for (var k in rec) {
               if (!Object.prototype.hasOwnProperty.call(rec, k)) continue;
-              if (k === 'tokenRef' || k === 'refreshTokenRef' || k === 'webhookSecretRef') {
+              if (k === 'tokenRef' || k === 'refreshTokenRef' || k === 'webhookSecretRef' || k === 'consumerSecretRef') {
                 out[k] = rec[k] ? '••masked••' : null;
               } else {
                 out[k] = rec[k];
@@ -1228,7 +1228,7 @@ var MastDB = (function() {
             // Read a single channel record (masked).
             getHealth: function(channelId) {
               if (!VALID_PLATFORMS[channelId]) {
-                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square."));
+                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square, woocommerce."));
               }
               return tenantStore.get(BASE + '/' + channelId).then(function(rec) {
                 if (!rec) return { channelId: channelId, status: 'not-connected' };
@@ -1267,7 +1267,7 @@ var MastDB = (function() {
             // PB-1 returns the OAuth-initiate URL pattern so UI code can target it.
             connect: function(platform /*, authCode (unused in PB-1) */) {
               if (!VALID_PLATFORMS[platform]) {
-                return Promise.reject(new Error("Invalid platform '" + platform + "'. Valid: shopify, etsy, square."));
+                return Promise.reject(new Error("Invalid platform '" + platform + "'. Valid: shopify, etsy, square, woocommerce."));
               }
               return Promise.resolve({
                 ok: false,
@@ -1280,7 +1280,7 @@ var MastDB = (function() {
             // Client-side disconnect — same hint posture as connect().
             disconnect: function(channelId) {
               if (!VALID_PLATFORMS[channelId]) {
-                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square."));
+                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square, woocommerce."));
               }
               return Promise.resolve({
                 ok: false,
@@ -1293,7 +1293,7 @@ var MastDB = (function() {
             // Client-side manual sync — same hint posture.
             sync: function(channelId /*, direction */) {
               if (!VALID_PLATFORMS[channelId]) {
-                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square."));
+                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square, woocommerce."));
               }
               return Promise.resolve({
                 ok: false,
@@ -1309,7 +1309,7 @@ var MastDB = (function() {
             // ergonomic path used in Settings UI.
             updateSyncConfig: function(channelId, patch) {
               if (!VALID_PLATFORMS[channelId]) {
-                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square."));
+                return Promise.reject(new Error("Invalid channelId '" + channelId + "'. Valid: shopify, etsy, square, woocommerce."));
               }
               if (!patch || typeof patch !== 'object') {
                 return Promise.reject(new Error('patch must be a non-empty object'));
