@@ -173,11 +173,7 @@
     });
   })();
   </script>
-<<<<<<< HEAD
-  <script src="../shared/mastdb.js?v=20260617-115217-b784a2e"></script>
-=======
-  <script src="../shared/mastdb.js?v=20260617-115217-b784a2e"></script>
->>>>>>> d606b6c (feat(channels): flip Squarespace connect to available (delegated-auth) — dev)
+  <script src="../shared/mastdb.js?v=20260617-115535-329e132"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -188,53 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-<<<<<<< HEAD
-  <script src="../shared/customer-filters.js?v=20260617-115217-b784a2e"></script>
-  <script src="../shared/brand-sync.js?v=20260617-115217-b784a2e"></script>
+  <script src="../shared/customer-filters.js?v=20260617-115535-329e132"></script>
+  <script src="../shared/brand-sync.js?v=20260617-115535-329e132"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-115217-b784a2e"></script>
-=======
-  <script src="../shared/customer-filters.js?v=20260617-115217-b784a2e"></script>
-  <script src="../shared/brand-sync.js?v=20260617-115217-b784a2e"></script>
-  <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-115217-b784a2e"></script>
->>>>>>> d606b6c (feat(channels): flip Squarespace connect to available (delegated-auth) — dev)
+  <script src="../shared/variant-reconcile.js?v=20260617-115535-329e132"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-<<<<<<< HEAD
-  <script src="../shared/mast-ui.js?v=20260617-115217-b784a2e"></script>
-  <script src="../shared/mast-io.js?v=20260617-115217-b784a2e"></script>
-  <script src="../shared/mast-entity.js?v=20260617-115217-b784a2e"></script>
-=======
-  <script src="../shared/mast-ui.js?v=20260617-115217-b784a2e"></script>
-  <script src="../shared/mast-io.js?v=20260617-115217-b784a2e"></script>
-  <script src="../shared/mast-entity.js?v=20260617-115217-b784a2e"></script>
->>>>>>> d606b6c (feat(channels): flip Squarespace connect to available (delegated-auth) — dev)
+  <script src="../shared/mast-ui.js?v=20260617-115535-329e132"></script>
+  <script src="../shared/mast-io.js?v=20260617-115535-329e132"></script>
+  <script src="../shared/mast-entity.js?v=20260617-115535-329e132"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-<<<<<<< HEAD
-  <script src="../shared/product-readiness.core.js?v=20260617-115217-b784a2e"></script>
-=======
-  <script src="../shared/product-readiness.core.js?v=20260617-115217-b784a2e"></script>
->>>>>>> d606b6c (feat(channels): flip Squarespace connect to available (delegated-auth) — dev)
+  <script src="../shared/product-readiness.core.js?v=20260617-115535-329e132"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-<<<<<<< HEAD
-  <script src="../shared/mast-intake.js?v=20260617-115217-b784a2e"></script>
-=======
-  <script src="../shared/mast-intake.js?v=20260617-115217-b784a2e"></script>
->>>>>>> d606b6c (feat(channels): flip Squarespace connect to available (delegated-auth) — dev)
+  <script src="../shared/mast-intake.js?v=20260617-115535-329e132"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22464,11 +22439,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-<<<<<<< HEAD
-var MAST_MODULES_V = '20260617-115217-b784a2e';
-=======
-var MAST_MODULES_V = '20260617-115217-b784a2e';
->>>>>>> d606b6c (feat(channels): flip Squarespace connect to available (delegated-auth) — dev)
+var MAST_MODULES_V = '20260617-115535-329e132';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
