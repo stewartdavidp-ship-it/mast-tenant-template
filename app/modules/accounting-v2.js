@@ -53,6 +53,14 @@
 
   var U = window.MastUI, esc = U._esc;
 
+  // Webhook URL is one-per-Intuit-App (NOT per-tenant) — same constant V1 uses.
+  // Intuit routes every realm's events to this single URL; the CF reverse-looks-up
+  // the tenant via platform_qboRealmIndex/{realmId}. Operator pastes it into the
+  // Intuit Developer Portal once; verifier token lives in Secret Manager. Kept
+  // reachable in this Connection sub-view per QBO-3 scope (operator config — not a
+  // per-tenant connect concern, but operators need the URL).
+  var QBO_WEBHOOK_URL = 'https://us-central1-mast-platform-prod.cloudfunctions.net/qboWebhook';
+
   // ── Same Mast→QBO category map + required-field gate as V1 (kept in lockstep;
   //    these are the ratified D-ACC-2/3 concepts). If V1 changes them, this twin
   //    must follow — they are the contract the setQboMapping CF validates against. ──
@@ -133,6 +141,16 @@
       (ctaHtml || ''));
   }
 
+  // QBO-3: the Connections board (Settings → Channels) is the canonical connect /
+  // disconnect surface. This sub-view shows a read-only status summary and links
+  // back to that board instead of hosting standalone Connect/Disconnect buttons.
+  // switchSettingsSubView('channels') renders the board (renderConnectionsBoard),
+  // where the QBO card owns connect/disconnect/status.
+  function manageInConnectionsLink(label) {
+    return '<button class="btn btn-secondary" onclick="window.AccountingV2.openConnectionsBoard()">' +
+      esc(label || 'Manage connection in Connections') + ' →</button>';
+  }
+
   // ════════════════════════ Connection sub-view ════════════════════════
   function renderConnectView(body) {
     body.innerHTML = loadingHtml();
@@ -150,13 +168,13 @@
       var connected = doc && doc.realmId && !doc.disconnectedAt && (doc.status !== 'disconnected');
       var html = collisionBanner(meta);
       if (connected) {
-        html += connectedCard(doc) + backfillRow(doc, meta) + connectionActions();
+        html += connectedCard(doc) + webhookCard(meta) + backfillRow(doc, meta) + connectionActions();
       } else {
+        // QBO-3: the Connections board owns connect/disconnect. This sub-view no
+        // longer hosts a standalone Connect button — it deep-links to the board card.
         html += notConnectedCard(
-          'Connect your QuickBooks Online sandbox to start syncing data. After connecting, map your chart of accounts on the COA Map tab. Once mapping is saved, every day close, wholesale invoice, vendor bill, and reviewed expense will sync automatically to QBO.',
-          canEdit()
-            ? '<button class="btn btn-primary" onclick="window.AccountingV2.connect()">Connect QuickBooks</button>'
-            : '<div style="font-size:0.78rem;color:var(--warm-gray);">You don\'t have permission to connect integrations.</div>');
+          'QuickBooks Online isn\'t connected yet. Connect it from the Connections board — you authorize once on Intuit, then return here to map your chart of accounts on the COA Map tab. Once mapping is saved, every day close, wholesale invoice, vendor bill, and reviewed expense syncs automatically to QBO.',
+          manageInConnectionsLink('Connect in Connections'));
       }
       body.innerHTML = html;
     }).catch(function (err) {
@@ -182,6 +200,40 @@
     return U.card('QuickBooks connection', rows + note);
   }
 
+  // Webhook (real-time pull) section — one-per-Intuit-App operator config. Status
+  // pill from _meta.lastWebhookAt with the same fresh/stale bands V1 used (<30d
+  // green, 30-90d amber, >90d red), the copyable webhook URL, and the operator
+  // note. The Copy action reuses the loaded V1 window._qboCopyWebhookUrl util.
+  // Kept reachable here per QBO-3 scope (operators need the URL to register in the
+  // Intuit Developer Portal); verifier token is platform-wide so no paste field.
+  function webhookCard(meta) {
+    var lastWebhookAt = meta && meta.lastWebhookAt ? meta.lastWebhookAt : null;
+    var tone, label, ageLine;
+    if (!lastWebhookAt) {
+      tone = 'danger'; label = 'Not registered';
+      ageLine = 'No webhook events received yet. Register the URL below in the Intuit Developer Portal to enable real-time pulls.';
+    } else {
+      var lastMs = (typeof lastWebhookAt === 'number') ? lastWebhookAt : Date.parse(lastWebhookAt);
+      var ageDays = isFinite(lastMs) ? Math.floor((Date.now() - lastMs) / 86400000) : 999;
+      if (ageDays < 30) { tone = 'success'; label = 'Registered'; }
+      else if (ageDays < 90) { tone = 'warning'; label = 'Stale'; }
+      else { tone = 'danger'; label = 'Stale (' + ageDays + 'd)'; }
+      ageLine = 'Last webhook event: ' + tsFmt(lastMs) + '.';
+    }
+    var copyBtn = '<button class="btn btn-secondary" style="font-size:0.78rem;padding:4px 10px;" ' +
+      'onclick="window._qboCopyWebhookUrl && window._qboCopyWebhookUrl()">Copy URL</button>';
+    var inner =
+      '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.4;margin-bottom:8px;">' + esc(ageLine) + '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">' +
+        '<code style="font-size:0.78rem;background:var(--border,rgba(127,127,127,0.12));padding:4px 8px;border-radius:4px;color:var(--text-primary);word-break:break-all;flex:1;min-width:0;">' + esc(QBO_WEBHOOK_URL) + '</code>' +
+        copyBtn +
+      '</div>' +
+      '<div style="font-size:0.72rem;color:var(--warm-gray);line-height:1.4;">' +
+        esc('Register this URL in Intuit Developer Portal → Webhooks for your app. Verifier token is managed centrally — no paste step needed.') +
+      '</div>';
+    return U.card('Webhook (real-time pull)', inner, { headerRight: U.badge(label, tone) });
+  }
+
   // Countdown badge — same daysUntilReconnect math + tier thresholds as V1's
   // _renderReconnectCountdownChip (100d idle, 30d amber, 7d red), rendered via
   // MastUI.badge tones for engine parity.
@@ -201,12 +253,19 @@
     return U.badge(label, tone);
   }
 
+  // QBO-3: connect/disconnect moved to the Connections board card. This row keeps
+  // only the operational collision-check action and a deep-link to the board for
+  // connection management (disconnect lives there now). The "Check for collisions"
+  // button is a sync-hygiene action, NOT a connect/disconnect control, so it stays.
   function connectionActions() {
-    if (!canEdit()) return '';
+    var manageLink = '<div style="margin-top:16px;font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' +
+      'Connect or disconnect QuickBooks from the Connections board.' +
+      '<div style="margin-top:8px;">' + manageInConnectionsLink('Manage connection in Connections') + '</div>' +
+    '</div>';
+    if (!canEdit()) return manageLink;
     return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;">' +
       '<button class="btn btn-secondary" onclick="window.AccountingV2.checkCollisions()">Check for collisions</button>' +
-      '<button class="btn btn-danger" onclick="window.AccountingV2.disconnect()">Disconnect</button>' +
-    '</div>';
+    '</div>' + manageLink;
   }
 
   // Bank-feed collision banner — reads _meta.bankFeedCollisions[] pending-ack,
@@ -691,21 +750,13 @@
   // loaded V1 global (the canonical write path / modal). We NEVER redefine the
   // V1 globals; we call them.
   window.AccountingV2 = {
-    connect: function () {
-      if (!canEdit()) { toastErr('You don\'t have permission to connect integrations.'); return; }
-      audit('qbo.connect.start', {});
-      if (typeof window.connectQbo === 'function') window.connectQbo();
-      else toastErr('Connect unavailable (accounting module not loaded)');
-    },
-    disconnect: function () {
-      if (!canEdit()) { toastErr('You don\'t have permission to disconnect integrations.'); return; }
-      audit('qbo.disconnect', {});
-      if (typeof window.disconnectQbo === 'function') {
-        window.disconnectQbo();
-        // V1 disconnectQbo re-renders via renderQboPanel('connection') (V1 view).
-        // Re-render the V2 panel after its CF resolves so the twin reflects state.
-        setTimeout(function () { var b = panelBody(); if (b) renderConnectView(b); }, 1400);
-      } else toastErr('Disconnect unavailable (accounting module not loaded)');
+    // QBO-3: connect/disconnect are owned by the Connections board card now (which
+    // delegates to the V1 connectQbo / disconnectQbo globals). This sub-view links
+    // to the board instead of hosting those buttons.
+    openConnectionsBoard: function () {
+      audit('qbo.manage.openBoard', {});
+      if (typeof window.switchSettingsSubView === 'function') window.switchSettingsSubView('channels');
+      else toastErr('Connections board unavailable');
     },
     checkCollisions: function () {
       if (!canEdit()) { toastErr('You don\'t have permission to run a collision check.'); return; }

@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-183421-bf598f92"></script>
+  <script src="../shared/mastdb.js?v=20260617-185016-e7198e64"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-183421-bf598f92"></script>
-  <script src="../shared/brand-sync.js?v=20260617-183421-bf598f92"></script>
+  <script src="../shared/customer-filters.js?v=20260617-185016-e7198e64"></script>
+  <script src="../shared/brand-sync.js?v=20260617-185016-e7198e64"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-183421-bf598f92"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-185016-e7198e64"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-183421-bf598f92"></script>
-  <script src="../shared/mast-io.js?v=20260617-183421-bf598f92"></script>
-  <script src="../shared/mast-entity.js?v=20260617-183421-bf598f92"></script>
+  <script src="../shared/mast-ui.js?v=20260617-185016-e7198e64"></script>
+  <script src="../shared/mast-io.js?v=20260617-185016-e7198e64"></script>
+  <script src="../shared/mast-entity.js?v=20260617-185016-e7198e64"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-183421-bf598f92"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-185016-e7198e64"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-183421-bf598f92"></script>
+  <script src="../shared/mast-intake.js?v=20260617-185016-e7198e64"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22181,7 +22181,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-183421-bf598f92';
+var MAST_MODULES_V = '20260617-185016-e7198e64';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -45606,22 +45606,18 @@ function refreshAiTabStatus() {
 window.refreshAiTabStatus = refreshAiTabStatus;
 
 // Consolidated QBO surfaces — inner tab switcher for Settings → Integrations → QuickBooks.
-// Lazy-loads the accounting module then calls renderQboPanel(tab) into #qboPanelBody.
+// Lazy-loads the accounting modules then renders the QuickBooks settings panel into
+// #qboPanelBody.
 //
-// QBO-V2 opt-in (QBO-1): when ?ui=1 (or a prior ?ui=1 that persisted the opt-in)
-// is present, render the accounting-v2 twin (the 4 sub-views on the V2 engine).
-// V1 stays the LIVE DEFAULT — the boot-seeded mastUiRedesign='1' is deliberately
-// NOT honored here, so a normal session keeps V1 until the QBO-3 cutover PR. We
-// load V1 accounting.js EITHER WAY: the V2 twin delegates its write modals
-// (backfill / retry / conflict-resolve / collision / default-sales-item) to the
-// V1 globals, and finance.js's frozen cross-module contract (__qboConflicts,
-// openQboConflictModal, _qboFindConflict, _qboPreloadConflicts) is defined there.
-function _qboV2OptIn() {
-  try {
-    if (/[?&#]ui=1\b/.test(location.href)) { localStorage.setItem('mastQboV2OptIn', '1'); return true; }
-    return localStorage.getItem('mastQboV2OptIn') === '1';
-  } catch (e) { return false; }
-}
+// QBO-3 CUTOVER: accounting-v2 (renderQboPanelV2 — the 4 sub-views on the V2 engine)
+// is now the DEFAULT QuickBooks settings surface for ALL users — the old `?ui=1`
+// opt-in gate is gone. We still load V1 accounting.js EITHER WAY: the V2 twin
+// delegates its write modals (backfill / retry / conflict-resolve / collision /
+// default-sales-item / connect / disconnect) to the V1 action globals, and
+// finance.js's FROZEN cross-module contract (__qboConflicts, openQboConflictModal,
+// _qboFindConflict, _qboPreloadConflicts, triggerQboPush) is defined there. V1's
+// read-only VIEW renderers are dead post-cutover; V2 owns the panel. V1 falls back
+// only if the V2 twin failed to load (never a blank tab on a financial surface).
 function switchQboInnerTab(tab) {
   window.__qboInnerActiveTab = tab;
   document.querySelectorAll('#qboInnerTabBar .view-tab').forEach(function(btn) {
@@ -45629,21 +45625,19 @@ function switchQboInnerTab(tab) {
   });
   var body = document.getElementById('qboPanelBody');
   if (body) body.innerHTML = '<div style="color:var(--warm-gray);font-size:0.9rem;padding:16px 0;">Loading…</div>';
-  var useV2 = _qboV2OptIn();
   if (typeof MastAdmin !== 'undefined' && MastAdmin.loadModule) {
-    // Always load V1 (frozen globals + delegated write modals); load the V2 twin
-    // too when opted in, then prefer its renderer.
+    // Always load V1 (frozen finance.js globals + the delegated write modals the V2
+    // twin hands off to), then load the V2 twin and render it as the canonical panel.
     MastAdmin.loadModule('accounting').then(function() {
-      if (!useV2) {
-        if (typeof window.renderQboPanel === 'function') window.renderQboPanel(tab);
-        return;
-      }
       MastAdmin.loadModule('accounting-v2').then(function() {
         if (typeof window.renderQboPanelV2 === 'function') window.renderQboPanelV2(tab);
         else if (typeof window.renderQboPanel === 'function') window.renderQboPanel(tab);
+      }).catch(function() {
+        // V2 twin failed to load — fall back to V1 so the financial surface is never blank.
+        if (typeof window.renderQboPanel === 'function') window.renderQboPanel(tab);
       });
     });
-  } else if (useV2 && typeof window.renderQboPanelV2 === 'function') {
+  } else if (typeof window.renderQboPanelV2 === 'function') {
     window.renderQboPanelV2(tab);
   } else if (typeof window.renderQboPanel === 'function') {
     window.renderQboPanel(tab);
