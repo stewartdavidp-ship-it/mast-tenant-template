@@ -217,8 +217,9 @@
           { k: 'Lead time', v: (leadDays(v) != null ? (N.count(leadDays(v)) + ' days') : '—') },
           { k: 'Default currency', v: v.defaultCurrency ? esc(v.defaultCurrency) : '—' },
           { k: 'Ship method', v: v.defaultShipMethod ? esc(v.defaultShipMethod) : '—' },
-          { k: 'Tax ID', v: v.taxId ? esc(v.taxId) : '—' },
-          { k: 'Account #', v: v.accountNumber ? esc(v.accountNumber) : '—' }
+          // PII (identity-data): masked last-4 only, never the raw value.
+          { k: 'Tax ID', v: (window.VendorSecureId && VendorSecureId.has(v, 'taxId')) ? esc(VendorSecureId.masked(v, 'taxId')) : '—' },
+          { k: 'Account #', v: (window.VendorSecureId && VendorSecureId.has(v, 'accountNumber')) ? esc(VendorSecureId.masked(v, 'accountNumber')) : '—' }
         ]);
         var notesBody = v.notes
           ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(v.notes) + '</div>'
@@ -315,6 +316,19 @@
         v = v || {};
         function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
         function row2(a, b) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;">' + a + b + '</div>'; }
+        // Tax ID (EIN/SSN) + bank account number are PII, encrypted at rest via
+        // MastIntake (identity-data). The secure host (own label + counsel + masked/
+        // reveal) replaces the legacy plaintext inputs. A saved vendor hosts the real
+        // field; a new vendor (create mode) is prompted to save first so the ref has a
+        // stable id to attach to. Hydrate after the engine mounts this string.
+        var vendorId = (mode === 'create') ? null : (v.vendorId || v._key || v.id || null);
+        var secureBlock = window.VendorSecureId
+          ? '<div class="form-group">' + VendorSecureId.host(vendorId, 'taxId', v) + '</div>' +
+            '<div class="form-group">' + VendorSecureId.host(vendorId, 'accountNumber', v) + '</div>'
+          : '';
+        if (vendorId && window.MastIntake && typeof MastIntake.hydrate === 'function') {
+          setTimeout(function () { try { MastIntake.hydrate(); } catch (e) { /* fail-closed */ } }, 0);
+        }
         return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New vendor' : 'Edit this vendor') + '</div>' +
           fg('Name *', '<input class="form-input" id="vnV2Name" value="' + esc(v.name || '') + '" style="width:100%;" placeholder="Supplier name">') +
           row2(
@@ -334,10 +348,7 @@
             fg('Default lead time (days)', '<input class="form-input" type="number" min="0" id="vnV2Lead" value="' + esc(v.defaultLeadTimeDays == null ? '' : v.defaultLeadTimeDays) + '" style="width:100%;">', true),
             fg('Ship method', '<input class="form-input" id="vnV2Ship" value="' + esc(v.defaultShipMethod || '') + '" style="width:100%;">', true)
           ) +
-          row2(
-            fg('Tax ID', '<input class="form-input" id="vnV2TaxId" value="' + esc(v.taxId || '') + '" style="width:100%;">', true),
-            fg('Account number', '<input class="form-input" id="vnV2Acct" value="' + esc(v.accountNumber || '') + '" style="width:100%;">', true)
-          ) +
+          secureBlock +
           fg('Notes', '<textarea class="form-input" id="vnV2Notes" rows="3" style="width:100%;resize:vertical;">' + esc(v.notes || '') + '</textarea>');
       }
     },
@@ -355,8 +366,8 @@
         defaultPaymentTerms: val('vnV2Terms') || null,
         defaultLeadTimeDays: val('vnV2Lead') || null,
         defaultShipMethod: val('vnV2Ship') || null,
-        taxId: val('vnV2TaxId') || null,
-        accountNumber: val('vnV2Acct') || null,
+        // taxId / accountNumber are PII encrypted at rest via the MastIntake secure
+        // fields, which persist their own Ref/Masked pointers — never collected here.
         notes: val('vnV2Notes') || null
       };
       if (!data.name) { if (window.showToast) showToast('Vendor name is required.', true); return false; }
@@ -384,8 +395,13 @@
 
   function load() {
     // Ensure the legacy procurement module is loaded so window.VendorsBridge
-    // (the delegated write path) exists — mirrors contacts-v2.
-    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+    // (the delegated write path) exists — mirrors contacts-v2. Also load the
+    // MastIntake provider catalog so the editor's secure Tax ID / bank account
+    // fields (identity-data) render + hydrate inline (fail-closed if it can't load).
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      try { MastAdmin.loadModule('procurement'); } catch (e) {}
+      try { MastAdmin.loadModule('connections-providers'); } catch (e) {}
+    }
     // Vendors + product-suppliers (Supplies facet/count) + materials (target
     // label lookup) load together; all one-shot keyed-object reads at admin/*.
     // Purchase orders + receipts feed the read-only Purchase orders facet (the PO

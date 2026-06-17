@@ -4258,14 +4258,29 @@ window.finCloseModal = _finCloseModal;
 
 window.finApNewVendor = function(presetId) {
   var isEdit = !!presetId;
+  // The Tax ID (EIN/SSN) is structured PII, now encrypted at rest via MastIntake
+  // (identity-data). Load the provider catalog up front so the secure field renders
+  // + hydrates inline (fail-closed: if it can't load, host() degrades gracefully).
+  var ensureProviders = (window.MastAdmin && typeof MastAdmin.loadModule === 'function')
+    ? Promise.resolve(MastAdmin.loadModule('connections-providers')).catch(function() {})
+    : Promise.resolve();
   // Pre-populate on edit
-  (isEdit ? MastDB.get('admin/vendors/' + presetId) : Promise.resolve({})).then(function(v) {
-    v = v || {};
+  Promise.all([
+    isEdit ? MastDB.get('admin/vendors/' + presetId) : Promise.resolve({}),
+    ensureProviders
+  ]).then(function(res) {
+    var v = res[0] || {};
+    // Secure field needs a saved vendor (stable id for the ref). On a new vendor it
+    // prompts to save first; on edit it hosts the encrypted Tax ID for this record.
+    // The host owns its own label + counsel, so it is emitted bare (no outer label).
+    var taxIdHost = (window.VendorSecureId)
+      ? '<div>' + window.VendorSecureId.host(isEdit ? presetId : null, 'taxId', v) + '</div>'
+      : '';
     var body =
       '<div style="display:flex;flex-direction:column;gap:10px;">' +
       _fInput('vName', 'Name *', v.name || '') +
       _fInput('vEmail', 'Email', v.email || '') +
-      _fInput('vTaxId', 'Tax ID (EIN/SSN)', v.taxId || '') +
+      taxIdHost +
       _fSelect('vVendorType', 'Vendor Type', [['', '— Select —'], ['supplier', 'Supplier'], ['contractor', 'Contractor'], ['utility', 'Utility'], ['other', 'Other']], v.vendorType || v.payeeType || '') +
       _fInput('vPhone', 'Phone', v.phone || '') +
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px;">' +
@@ -4274,6 +4289,11 @@ window.finApNewVendor = function(presetId) {
       '<button class="btn btn-primary btn-small" onclick="finApSaveVendor(' + (isEdit ? '\'' + (window._jsAttr ? window._jsAttr(presetId) : presetId) + '\'' : 'null') + ')">' + (isEdit ? 'Save' : 'Create Vendor') + '</button>' +
       '</div></div>';
     _finOpenModal(isEdit ? 'Edit Vendor' : 'New Vendor', body);
+    // Bind/hydrate the secure Tax ID field (runs the fail-closed availability probe).
+    if (window.MastIntake && typeof MastIntake.hydrate === 'function') {
+      var modal = document.getElementById('finW22Modal');
+      try { MastIntake.hydrate(modal || undefined); } catch (e) { /* fail-closed */ }
+    }
   });
 };
 
@@ -4300,7 +4320,8 @@ window.finApSaveVendor = async function(vendorId) {
   var payload = {
     name: name.trim(),
     email: ((document.getElementById('vEmail') || {}).value || '').trim() || null,
-    taxId: ((document.getElementById('vTaxId') || {}).value || '').trim() || null,
+    // taxId (EIN/SSN) is no longer written here — it is encrypted at rest via the
+    // MastIntake secure field, which persists taxIdRef/taxIdMasked on its own.
     vendorType: ((document.getElementById('vVendorType') || {}).value || '').trim() || null,
     phone: ((document.getElementById('vPhone') || {}).value || '').trim() || null,
     updatedAt: now
@@ -4479,7 +4500,7 @@ async function renderApVendorDetail(vendorId) {
     h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Type</div><div style="font-size:0.9rem;margin-top:3px;">' + e((vendor.vendorType || vendor.payeeType || '—').replace(/^\w/, function(c) { return c.toUpperCase(); })) + '</div></div>';
     h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Email</div><div style="font-size:0.9rem;margin-top:3px;">' + e(vendor.email || '—') + '</div></div>';
     h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Phone</div><div style="font-size:0.9rem;margin-top:3px;">' + e(vendor.phone || '—') + '</div></div>';
-    h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Tax ID</div><div style="font-size:0.9rem;margin-top:3px;">' + (vendor.taxId ? e(_maskTaxId(vendor.taxId)) : '—') + '</div></div>';
+    h += '<div><div style="font-size:0.72rem;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;">Tax ID</div><div style="font-size:0.9rem;margin-top:3px;">' + (_vendorHasTaxId(vendor) ? e(_vendorTaxMask(vendor)) : '—') + '</div></div>';
     h += '</div>';
 
     // Summary
@@ -4893,6 +4914,21 @@ function _maskTaxId(taxId) {
   return digits ? 'XXX-XX-' + digits.slice(-4) : '';
 }
 
+// Vendor Tax ID is now PII encrypted at rest via MastIntake (identity-data): the
+// record carries taxIdRef + taxIdMasked instead of plaintext taxId. These two
+// helpers read either shape — the stored last-4 mask for an encrypted value, or a
+// freshly-masked last-4 for a not-yet-migrated legacy plaintext — so the 1099 prep,
+// vendor detail, and CSV exports stay correct through the migration. The plaintext
+// is NEVER rendered in full and (post-migration) is no longer present to render.
+function _vendorTaxMask(v) {
+  if (!v) return '';
+  if (v.taxIdMasked) return String(v.taxIdMasked);
+  return v.taxId ? _maskTaxId(v.taxId) : '';
+}
+function _vendorHasTaxId(v) {
+  return !!(v && (v.taxIdRef || (v.taxId != null && String(v.taxId).trim() !== '')));
+}
+
 function loadTax1099() {
   var el = document.getElementById('fTaxContent');
   if (!el) return;
@@ -4941,11 +4977,10 @@ async function _tax1099ForYearCore(year) {
     var total = totals[vid];
     if (total <= 60000) return; // > $600 threshold (exclusive)
     var v = vendors[vid];
-    var taxId = v.taxId;
-    var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
+    var hasTaxId = _vendorHasTaxId(v);
     contractors.push({
-      name: v.name || 'Unknown', taxId: taxId,
-      maskedTaxId: hasTaxId ? _maskTaxId(taxId) : null,
+      name: v.name || 'Unknown',
+      maskedTaxId: hasTaxId ? _vendorTaxMask(v) : null,
       hasTaxId: hasTaxId, totalPaid: total
     });
   });
@@ -5011,7 +5046,7 @@ function render1099(contractors, year) {
   _finExporters['finance-tax-1099'] = function() {
     var rows = [['Contractor','Tax ID (masked)','Total Paid (USD)','1099 Required']];
     contractors.forEach(function(c) {
-      rows.push([c.name, c.hasTaxId ? _maskTaxId(c.taxId) : 'MISSING', (c.totalPaid / 100).toFixed(2), 'Yes']);
+      rows.push([c.name, c.hasTaxId ? c.maskedTaxId : 'MISSING', (c.totalPaid / 100).toFixed(2), 'Yes']);
     });
     _finDownloadCsv('finance-tax-1099', rows, 'Period: tax year ' + year + ' · Basis: admin/vendors + admin/purchaseReceipts');
   };
@@ -5057,7 +5092,7 @@ window.fin1099Export = function() {
   }
   var rows = [['Name','Tax ID (masked)','Total Paid','1099 Required']];
   _1099ContractorData.forEach(function(c) {
-    rows.push([c.name, c.hasTaxId ? _maskTaxId(c.taxId) : 'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
+    rows.push([c.name, c.hasTaxId ? c.maskedTaxId : 'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
   });
   downloadCsv(rows, '1099s_' + _1099Year + '.csv');
   showToast('1099s.csv downloaded');
@@ -5360,7 +5395,7 @@ window.finReportVendor1099Prep = async function() {
     if (contractors.length === 0) { picker.innerHTML = '<div style="color:var(--warm-gray,#888);font-size:0.85rem;">No contractor vendors found. Mark a vendor as type=contractor first.</div>'; return; }
     var opts = '<option value="__all__">— All contractors —</option>';
     contractors.forEach(function(v) {
-      opts += '<option value="' + e(v._id) + '">' + e(v.name || '(no name)') + (v.taxId ? ' (TIN on file)' : ' (TIN MISSING)') + '</option>';
+      opts += '<option value="' + e(v._id) + '">' + e(v.name || '(no name)') + (_vendorHasTaxId(v) ? ' (TIN on file)' : ' (TIN MISSING)') + '</option>';
     });
     picker.innerHTML =
       '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
@@ -5404,9 +5439,8 @@ async function _vendor1099RowsCore(pick, start, end) {
   var keys = Object.keys(totals).sort(function(a, b) { return totals[b].total - totals[a].total; });
   keys.forEach(function(vid) {
     var d = totals[vid];
-    var taxId = d.vendor.taxId;
-    var hasTaxId = !!(taxId && String(taxId).trim().length > 0);
-    var masked = hasTaxId ? _maskTaxId(taxId) : '';
+    var hasTaxId = _vendorHasTaxId(d.vendor);
+    var masked = hasTaxId ? _vendorTaxMask(d.vendor) : '';
     var tinStatus = hasTaxId ? 'On file' : 'MISSING — request W-9';
     var required = d.total > 60000 ? 'Yes' : 'No (below threshold)';
     rows.push([d.vendor.name || 'Unknown', masked, tinStatus, (d.total / 100).toFixed(2), '$600 (period-windowed)', required]);
@@ -5695,8 +5729,7 @@ async function compute1099DataForYear(year) {
   var result = [];
   Object.keys(totals).forEach(function(vid) {
     var d = totals[vid]; if (d.total<=60000) return;
-    var taxId = d.vendor.taxId;
-    result.push({ name:d.vendor.name||'Unknown', taxId:taxId, hasTaxId:!!(taxId&&String(taxId).trim().length>0), totalPaid:d.total });
+    result.push({ name:d.vendor.name||'Unknown', maskedTaxId:_vendorTaxMask(d.vendor), hasTaxId:_vendorHasTaxId(d.vendor), totalPaid:d.total });
   });
   return result.sort(function(a,b){return b.totalPaid-a.totalPaid;});
 }
@@ -5796,7 +5829,7 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
     contractors.forEach(function(c) {
       h += '<tr style="border-bottom:1px solid rgba(255,255,255,0.05);">';
       h += '<td style="padding:7px 10px;font-weight:600;">' + e(c.name) + '</td>';
-      h += '<td style="padding:7px 10px;font-size:0.78rem;">' + (c.hasTaxId?'<span style="font-family:monospace;">'+e(_maskTaxId(c.taxId))+'</span>':'<span style="color:#ef4444;">Missing</span>') + '</td>';
+      h += '<td style="padding:7px 10px;font-size:0.78rem;">' + (c.hasTaxId?'<span style="font-family:monospace;">'+e(c.maskedTaxId)+'</span>':'<span style="color:#ef4444;">Missing</span>') + '</td>';
       h += '<td style="padding:7px 10px;font-weight:700;">' + fmt$(c.totalPaid) + '</td>';
       h += '<td style="padding:7px 10px;color:#22c55e;">Yes</td>';
       h += '</tr>';
@@ -5899,7 +5932,7 @@ window.finExportTaxCsv = function() {
 function _yearEndExport1099Csv(d) {
   var rows = [['Name','Tax ID (masked)','Total Paid','1099 Required']];
   d.contractors.forEach(function(c) {
-    rows.push([c.name, c.hasTaxId?_maskTaxId(c.taxId):'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
+    rows.push([c.name, c.hasTaxId?c.maskedTaxId:'MISSING', (c.totalPaid/100).toFixed(2), 'Yes']);
   });
   downloadCsv(rows, '1099s_'+d.year+'.csv');
   showToast('1099s.csv downloaded');
