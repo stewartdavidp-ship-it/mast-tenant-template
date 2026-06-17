@@ -842,27 +842,29 @@
       disconnectTitle: 'Disconnect WooCommerce'
     }
   });
-  // Squarespace — C→A hybrid (paste the developer-app client id + secret, then
-  // OAuth), mirroring Square. The live squarespaceOAuthStart / squarespaceOAuthCallback
-  // CFs (mast-architecture) + the squarespaceTokenRefresh cron back this; the
-  // server reads the same per-tenant client-id/client-secret the connect pre-leg
-  // stores. authType 'C' (NOT 'A'): there is no platform-wide Mast Squarespace app.
+  // Squarespace — pure-A (the "Wix method"): ONE platform-wide Mast Squarespace
+  // OAuth app, so the maker pastes NO developer keys — they just approve on
+  // Squarespace’s own consent page. The live squarespaceOAuthStart /
+  // squarespaceOAuthCallback CFs + the squarespaceTokenRefresh cron
+  // (mast-architecture) read the platform-wide mast-squarespace-app-id/-secret pod
+  // secrets, not per-tenant creds. authType 'A' — converged from the original C→A
+  // hybrid (mast-architecture PR 307 then PR 314), mirroring Wix.
   var squarespaceChannel = _channelDef({
-    id: 'squarespace', label: 'Squarespace', icon: '⬛', authType: 'C',
+    id: 'squarespace', label: 'Squarespace', icon: '⬛', authType: 'A',
     refreshable: true, tokenLifetime: 'short-refreshable',   // Squarespace: 30-min access / 7-day refresh (squarespaceTokenRefresh cron)
     guide: {
       steps: [
-        'Click Connect and paste your Squarespace Developer-app client id + secret.',
-        'Approve the connection on Squarespace’s own page (opens in a new tab).',
+        'Click Connect — Squarespace opens in a new tab.',
+        'Approve the Mast app on Squarespace’s own consent page.',
         'Return here and click Refresh status.'
       ],
-      estSeconds: 180
+      estSeconds: 120
     },
     copy: {
       connectLabel: 'Connect Squarespace',
-      connectPrompt: 'Connect your Squarespace store to sync products and inventory. You can skip this and add it later.',
-      pendingDetail: 'Approve the connection in the Squarespace tab that just opened, then click Refresh status.',
-      disconnectConfirm: 'Disconnect Squarespace? Tokens are revoked, stored credentials deleted, and webhook subscriptions removed. You can reconnect later.',
+      connectPrompt: 'Connect your Squarespace store to sync products and inventory. You authorize once on Squarespace — Mast never asks you to copy a key. You can skip this and add it later.',
+      pendingDetail: 'Approve the Mast app in the Squarespace tab that just opened, then click Refresh status.',
+      disconnectConfirm: 'Disconnect Squarespace? Mast’s stored access is deleted and webhook subscriptions removed. The Mast app may still appear in your Squarespace account until you remove it there. You can reconnect later.',
       disconnectTitle: 'Disconnect Squarespace'
     }
   });
