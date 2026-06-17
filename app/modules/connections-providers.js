@@ -18,12 +18,14 @@
  * secrets persist ONLY through the engine's vetted server-vault path (design
  * §6.2), which is why there is no MastDB write anywhere in this file.
  *
- * SCOPE OF THIS SLICE — exactly ONE provider: `github` (the GitHub personal
- * access token, today the worst-exposed secret in the template — written to
- * Firestore admin/githubToken in plaintext). It is the proven Step-0 vault
- * provider (mast-architecture/functions/mast-intake-vault.js allowlist). The
- * other held-secret sites (Stripe, Shippo, Maps, Anthropic, SendGrid, …) are
- * deferred to later sessions and are NOT registered here.
+ * REGISTERED PROVIDERS — held-secret: `github` (the GitHub personal access
+ * token, the first proven vault provider) and `sendgrid` (the email-sender API
+ * key; server consumer sendTenantEmail reads it vault-first via getTenantHeldSecret
+ * with a legacy {prefix}-sendgrid-api-key fallback). domain-control: `email-domain`
+ * + `custom-domain` (DNS proofs, no secret). All field keys here MUST match the
+ * mast-architecture/functions/mast-intake-vault.js allowlist. The remaining
+ * held-secret sites (Stripe, Shippo, Maps, Anthropic, …) are deferred to later
+ * sessions and are NOT registered here.
  */
 (function () {
   'use strict';
@@ -83,6 +85,62 @@
       connect: function (ctx) {
         if (window.MastIntake && typeof window.MastIntake.collect === 'function') {
           return window.MastIntake.collect('github', ctx || {});
+        }
+        return Promise.resolve({ ok: false, error: 'secure-intake-unavailable' });
+      }
+    }
+  };
+
+  // ── SendGrid API key — family: held-secret, archetype C (paste) ──
+  //
+  // The maker creates an API key in SendGrid, copies it, and pastes it here; the
+  // engine sends it over an encrypted channel to the server vault (GCP Secret
+  // Manager) and never stores it in the browser. credentialOwner: 'customer' — it
+  // is the maker's own SendGrid key, used by the server email sender (sendTenantEmail
+  // reads it vault-first via getTenantHeldSecret, falling back to the legacy
+  // {prefix}-sendgrid-api-key for tenants who haven't re-entered it).
+  var sendgrid = {
+    id: 'sendgrid',
+    label: 'SendGrid',
+    icon: '✉',
+    family: 'held-secret',
+    category: 'email',
+    authType: 'C',                 // guided key-paste
+    credentialOwner: 'customer',
+    gate: 'skippable',             // Mast-managed mail works without it
+    conciergeEligible: false,      // a human must never receive a raw held secret (design §6.5)
+
+    guide: {
+      deepLink: 'https://app.sendgrid.com/settings/api_keys',
+      steps: [
+        'Open SendGrid → Settings → API Keys.',
+        'Create an API key with Mail Send permission.',
+        'Copy the key (SendGrid shows it only once) and paste it here.'
+      ],
+      estSeconds: 90
+    },
+
+    fields: [
+      {
+        key: 'apiKey',                      // MUST match the vault allowlist field key
+        label: 'API key',
+        mask: true,
+        // Permissive shape check (recoverable hint only — the server vault is
+        // authoritative): SendGrid keys are `SG.` + two base64url segments.
+        validate: /^SG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}$/,
+        example: 'SG.xxxxxxxxxxxxxxxxxxxxxx.yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy',
+        minLen: 16                          // matches the server vault minLen
+      }
+    ],
+
+    // Held-secret persistence is gated by the engine's RUNTIME vault-CF probe,
+    // NOT by anything declared here. `kind` is descriptive metadata only.
+    vault: { kind: 'api-key' },
+
+    adapter: {
+      connect: function (ctx) {
+        if (window.MastIntake && typeof window.MastIntake.collect === 'function') {
+          return window.MastIntake.collect('sendgrid', ctx || {});
         }
         return Promise.resolve({ ok: false, error: 'secure-intake-unavailable' });
       }
@@ -314,10 +372,12 @@
   // load-order fallback the engine can read if it hydrates before register runs.
   window.ConnectionsProviders = window.ConnectionsProviders || {};
   window.ConnectionsProviders.github = github;
+  window.ConnectionsProviders.sendgrid = sendgrid;
   window.ConnectionsProviders['email-domain'] = emailDomain;
   window.ConnectionsProviders['custom-domain'] = customDomain;
   if (window.MastIntake && typeof window.MastIntake.register === 'function') {
     window.MastIntake.register(github);
+    window.MastIntake.register(sendgrid);
     window.MastIntake.register(emailDomain);
     window.MastIntake.register(customDomain);
   }
