@@ -39,6 +39,14 @@
   var importedProducts = null;
   var tenantCategories = null; // array of { id, label, wholesaleGroup? }
   var currentSubTab = 'overview';
+  // Import-only mode: when this legacy page is entered via the website-v2 builder's
+  // "Import →" door (Card 3 "Your shop"), the other five tabs (Overview/Template/
+  // Style/Categories/Storefront) are now fully native in website-v2 and redundant
+  // here. The door passes importOnly:1 so we strip the tab strip down to the Import
+  // surface + a "← Back to Your Website" link. NOT unconditional: a Legacy-UI-ON
+  // user reaches #website → website.js directly (full tabs expected), so this only
+  // engages when the import door explicitly requests it.
+  var importOnlyMode = false;
   var importReviewTab = 'products';
   var importJobsListener = null;
   var cherryPickSelections = {}; // jobId -> { products: {url: bool}, images: {url: bool}, ... }
@@ -350,7 +358,23 @@
       websiteLoaded = true;
     }
 
-    var html = '<div class="section-header"><h2>Website</h2></div>';
+    var html = '';
+
+    if (importOnlyMode) {
+      // Entered via the website-v2 builder's "Import →" door. Overview/Template/
+      // Style/Categories/Storefront are now fully native in website-v2, so we
+      // strip the tab strip down to JUST the Import surface and offer a clear way
+      // back to the builder. currentSubTab is forced to 'import' at route setup.
+      html += '<button class="detail-back" onclick="navigateTo(\'website\')" title="Back to Your Website">← Back to Your Website</button>';
+      html += '<div class="section-header"><h2>Import your catalog</h2></div>';
+      html += '<div id="wpTabContent">';
+      html += renderImportTab();
+      html += '</div>';
+      root.innerHTML = html;
+      return;
+    }
+
+    html += '<div class="section-header"><h2>Website</h2></div>';
 
     // Sub-tabs
     html += '<div class="view-tabs">';
@@ -3433,13 +3457,20 @@
       'website': { tab: 'websiteTab', setup: function() {
         // Deep-link support: the v2 "Your shop" card's single retained classic
         // hatch reaches the catalog Import subsystem via
-        // navigateToClassic('website', { tab: 'import' }). Honor a ?tab= param
-        // (whitelisted to real sub-tabs) so the door lands on Import, not Overview.
+        // navigateToClassic('website', { tab: 'import', importOnly: 1 }). Honor a
+        // ?tab= param (whitelisted to real sub-tabs) so the door lands on Import,
+        // not Overview; and an importOnly flag that strips the other five (now
+        // native-in-website-v2) tabs down to just the Import surface + back link.
+        importOnlyMode = false;
         try {
           var p = (typeof window.getRouteParams === 'function') ? window.getRouteParams() : {};
           var want = p && p.tab;
           var VALID = { overview: 1, template: 1, style: 1, categories: 1, 'import': 1, storefront: 1 };
           if (want && VALID[want]) currentSubTab = want;
+          if (p && (p.importOnly === 1 || p.importOnly === '1' || p.importOnly === true)) {
+            importOnlyMode = true;
+            currentSubTab = 'import'; // force Import in case ?tab= was absent/other
+          }
         } catch (e) {}
         renderWebsite();
       } }
