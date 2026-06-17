@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-182259-2040d466"></script>
+  <script src="../shared/mastdb.js?v=20260617-183421-bf598f92"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-182259-2040d466"></script>
-  <script src="../shared/brand-sync.js?v=20260617-182259-2040d466"></script>
+  <script src="../shared/customer-filters.js?v=20260617-183421-bf598f92"></script>
+  <script src="../shared/brand-sync.js?v=20260617-183421-bf598f92"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-182259-2040d466"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-183421-bf598f92"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-182259-2040d466"></script>
-  <script src="../shared/mast-io.js?v=20260617-182259-2040d466"></script>
-  <script src="../shared/mast-entity.js?v=20260617-182259-2040d466"></script>
+  <script src="../shared/mast-ui.js?v=20260617-183421-bf598f92"></script>
+  <script src="../shared/mast-io.js?v=20260617-183421-bf598f92"></script>
+  <script src="../shared/mast-entity.js?v=20260617-183421-bf598f92"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-182259-2040d466"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-183421-bf598f92"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-182259-2040d466"></script>
+  <script src="../shared/mast-intake.js?v=20260617-183421-bf598f92"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22181,7 +22181,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-182259-2040d466';
+var MAST_MODULES_V = '20260617-183421-bf598f92';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -23013,10 +23013,14 @@ async function renderConnectionsBoard() {
     (recList || []).forEach(function (r) { if (r && r.channelId) chRecords[r.channelId] = r; });
   } catch (e) { /* extras are best-effort */ }
 
-  // Aggregate health summary across the channels-OAuth family.
+  // Aggregate health summary across the channels-OAuth family. QBO is delegated-auth
+  // too, but it is NOT a channels/{id} record (it reads the bespoke
+  // admin/integrations/qbo doc), so it is excluded from the channels health tally —
+  // it carries its own "Manage sync & mapping →" deep-link to accounting-v2 instead.
   if (healthCardEl && healthSummaryEl) {
     var counts = { connected: 0, reauth: 0, error: 0, pending: 0, idle: 0, soon: 0 };
     channelDefs.forEach(function (def) {
+      if (def.id === 'qbo') return;   // non-channel record — excluded from the channels summary
       if (def.available === false) { counts.soon++; return; }
       var st = (chStatus[def.id] && chStatus[def.id].state) || 'not-collected';
       if (st === 'connected') counts.connected++;
@@ -23048,6 +23052,12 @@ async function renderConnectionsBoard() {
     html += MastIntake.secureField({ provider: def.id });
     if (def.available !== false && SYNCABLE.indexOf(def.id) !== -1 && chStatus[def.id] && chStatus[def.id].state === 'connected') {
       html += _channelSyncExtraHtml(def.id, chRecords[def.id] || null);
+    }
+    // QBO is a delegated-auth connection but NOT a channels record — instead of the
+    // Sync now/cadence extras, a connected QBO card deep-links to its own sync &
+    // mapping surface (accounting-v2: COA Map / Sync Log / Conflicts / Backfill).
+    if (def.id === 'qbo' && chStatus[def.id] && (chStatus[def.id].state === 'connected' || chStatus[def.id].state === 'needs-reauth')) {
+      html += _qboManageExtraHtml();
     }
     html += '</div>';
   });
@@ -23094,6 +23104,26 @@ function _channelSyncExtraHtml(platform, rec) {
     '<span id="channelNote_' + platform + '" style="display:none;"></span>' +
   '</div>';
 }
+
+// QBO-specific extra for a CONNECTED (or needs-reauth) QuickBooks card — a deep-link
+// to the accounting-v2 sync & mapping surface (COA Map / Sync Log / Conflicts /
+// Backfill). QBO is delegated-auth but NOT a channels record, so it gets this in
+// place of the channel Sync now/cadence controls. mastOpenQboSettings() routes to
+// Settings → Integrations → QuickBooks (the QBO-1 surface).
+function _qboManageExtraHtml() {
+  return '<div class="mastintake-channel-extra">' +
+    '<button class="btn btn-secondary btn-small" onclick="mastOpenQboSettings()">Manage sync &amp; mapping →</button>' +
+  '</div>';
+}
+
+// Deep-link from the Connections board to Settings → Integrations → QuickBooks (the
+// accounting-v2 sync/mapping surface). Mirrors how switchSettingsSubView opens the
+// integrations sub-view, then selects the QBO tab (which lazy-hydrates its panel).
+window.mastOpenQboSettings = function () {
+  window.__integrationsActiveTab = 'qbo';
+  if (typeof switchSettingsSubView === 'function') switchSettingsSubView('integrations');
+  if (typeof switchIntegrationsTab === 'function') switchIntegrationsTab('qbo');
+};
 
 // A read-only cross-family overview row (held-secret / domain-control) — status badge +
 // a Manage action that opens the family's own secure grammar via MastIntake.collect.
