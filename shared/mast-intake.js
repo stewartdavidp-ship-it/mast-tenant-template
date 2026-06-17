@@ -471,32 +471,74 @@
     }
     if (state === STATE.NOT_COLLECTED) {
       wrap.setAttribute('data-state', 'ready');
+      wrap.removeAttribute('data-domain');
       showAdd(true);
-      setStatusLine(wrap, 'No sending domain set up yet. Add the domain you send email from.', '');
+      setStatusLine(wrap, (def.copy && def.copy.addPrompt) || 'No domain connected yet. Add your domain below.', '');
       return;
     }
-    // A domain exists.
+    // A domain exists. Remember it so verify/remove can name it (custom-domain's
+    // CF needs the domain; email-domain's adapter ignores the arg).
     showAdd(false);
-    var dom = s.domain ? esc(s.domain) : 'your domain';
+    var dom = s.domain ? String(s.domain) : 'your domain';
+    wrap.setAttribute('data-domain', s.domain ? String(s.domain) : '');
     if (state === STATE.CONNECTED) {
       wrap.setAttribute('data-state', 'connected');
-      setStatusLine(wrap, '✓ Verified — ' + dom + ' is ready to send.', 'ok');
+      setStatusLine(wrap, s.detail || ('✓ Verified — ' + dom + ' is connected.'), 'ok');
       if (actionsEl) actionsEl.innerHTML = removeBtnHtml();
       return;
     }
-    // pending or needs-reauth (failed): show records + Verify + Remove.
+    // pending or needs-reauth (failed): show records/instructions + Verify + Remove.
+    // The adapter may supply `detail` (e.g. "DNS verified — SSL provisioning") and
+    // `instructions` (records from an add/verify response, when not in the status read).
     wrap.setAttribute('data-state', state === STATE.NEEDS_REAUTH ? 'error' : 'pending');
     if (state === STATE.NEEDS_REAUTH) {
-      setStatusLine(wrap, '✗ Verification failed for ' + dom + '. Check the DNS records below, then verify again.', 'error');
+      setStatusLine(wrap, s.detail || ('✗ Verification failed for ' + dom + '. Check the DNS records below, then verify again.'), 'error');
     } else {
-      setStatusLine(wrap, '⏳ Pending — add the DNS records below at your registrar, then verify. DNS can take up to 48 hours.', '');
+      setStatusLine(wrap, s.detail || '⏳ Pending — add the DNS records below at your registrar, then verify. DNS can take up to 48 hours.', '');
     }
-    renderRecords(recordsEl, s.records || []);
+    if (s.instructions) renderInstructions(recordsEl, s.instructions);
+    else renderRecords(recordsEl, s.records || []);
     if (actionsEl) {
       actionsEl.innerHTML =
         '<button type="button" class="btn btn-primary mastintake-verify" data-mastintake-action="domain-verify">Verify</button> ' +
         removeBtnHtml();
     }
+  }
+
+  // Richer DNS-instructions renderer (custom-domain): message + registrar deep-links
+  // + records table (with TTL) + numbered steps + note. Records sourced from an
+  // adapter add/verify RESPONSE (not a persisted status doc). Copy via data-attr.
+  function renderInstructions(el, instr) {
+    if (!el) return;
+    if (!instr) { el.innerHTML = ''; return; }
+    var html = '';
+    if (instr.message) html += '<p class="mastintake-note">' + esc(instr.message) + '</p>';
+    if (instr.registrarLinks) {
+      var names = { porkbun: 'Porkbun', godaddy: 'GoDaddy', namecheap: 'Namecheap', cloudflare: 'Cloudflare', squarespace: 'Squarespace', google: 'Google Domains' };
+      var links = '';
+      for (var k in instr.registrarLinks) {
+        if (!Object.prototype.hasOwnProperty.call(instr.registrarLinks, k)) continue;
+        links += '<a class="mastintake-registrar" href="' + esc(instr.registrarLinks[k]) + '" target="_blank" rel="noopener noreferrer">' + esc(names[k] || k) + '</a> ';
+      }
+      if (links) html += '<div class="mastintake-registrars"><span class="mastintake-note">Open your registrar:</span> ' + links + '</div>';
+    }
+    var recs = instr.records || [];
+    if (recs.length) {
+      var rows = recs.map(function (rec) {
+        var value = String(rec.value || rec.content || '');
+        return '<tr><td class="mastintake-rec-type">' + esc(rec.type || rec.record_type || '') + '</td>' +
+          '<td class="mastintake-rec-name">' + esc(rec.name || '') + '</td>' +
+          '<td class="mastintake-rec-value">' + esc(value) +
+          ' <button type="button" class="mastintake-copy" data-mastintake-action="domain-copy" data-copy="' + esc(value) + '" title="Copy value">⧉</button></td>' +
+          '<td class="mastintake-rec-ttl">' + esc(rec.ttl || '600') + '</td></tr>';
+      }).join('');
+      html += '<table class="mastintake-records-table"><thead><tr><th>Type</th><th>Name</th><th>Value</th><th>TTL</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+    if (instr.steps && instr.steps.length) {
+      html += '<ol class="mastintake-steps">' + instr.steps.map(function (s) { return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>';
+    }
+    if (instr.note) html += '<p class="mastintake-note mastintake-domain-note">' + esc(instr.note) + '</p>';
+    el.innerHTML = html;
   }
 
   // DNS records table. Tolerates BOTH Resend snake_case (record_type/content) and
@@ -550,7 +592,14 @@
     Promise.resolve(def.adapter.setup({ domain: domain })).then(function (r) {
       if (btn) { btn.disabled = false; btn.textContent = 'Add domain'; }
       if (r && r.ok === false) { setFeedback(wrap, r.error || 'Could not add the domain.', 'error'); return; }
-      return refresh(def.id, wrap); // re-read the persisted doc → records + status
+      setFeedback(wrap, '', '');
+      // If the response carries instructions (custom-domain — records aren't yet in
+      // the status read), render them directly. Otherwise re-read status (email-domain).
+      if (r && r.instructions) {
+        applyDomainState(wrap, def, { available: true, status: { state: r.state || STATE.PENDING, domain: domain, instructions: r.instructions, detail: r.detail } });
+      } else {
+        return refresh(def.id, wrap);
+      }
     }).catch(function (err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Add domain'; }
       setFeedback(wrap, (err && err.message) || 'Could not add the domain.', 'error');
@@ -564,8 +613,15 @@
     var btn = wrap.querySelector('.mastintake-verify');
     if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
     setStatusLine(wrap, 'Checking verification status…', '');
-    Promise.resolve(def.adapter.verify()).then(function () {
-      return refresh(def.id, wrap);
+    var activeDomain = wrap.getAttribute('data-domain') || '';
+    Promise.resolve(def.adapter.verify({ domain: activeDomain })).then(function (r) {
+      // Re-render instructions if the verify response returns them (custom-domain
+      // still-pending); otherwise re-read status (email-domain / verified).
+      if (r && r.instructions) {
+        applyDomainState(wrap, def, { available: true, status: { state: r.state || STATE.PENDING, domain: activeDomain, instructions: r.instructions, detail: r.detail } });
+      } else {
+        return refresh(def.id, wrap);
+      }
     }).catch(function (err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
       setFeedback(wrap, (err && err.message) || 'Could not verify right now.', 'error');
@@ -576,18 +632,21 @@
     var def = getDef(wrap.getAttribute('data-provider'));
     if (!def || !def.adapter || typeof def.adapter.remove !== 'function') return;
     if (!canMutate(def)) { toast('You don’t have permission to change this.', true); return; }
+    var activeDomain = wrap.getAttribute('data-domain') || '';
     function doRemove() {
-      Promise.resolve(def.adapter.remove()).then(function () {
+      Promise.resolve(def.adapter.remove({ domain: activeDomain })).then(function () {
         return refresh(def.id, wrap);
       }).catch(function (err) {
         setFeedback(wrap, (err && err.message) || 'Could not remove the domain.', 'error');
       });
     }
-    // Honest copy — NO false "deletes from your email provider" claim (the live
-    // remove is a local config clear; provider-side cleanup is handled separately).
+    // Provider-supplied honest copy (def.copy.removeConfirm / removeTitle). The
+    // default avoids any false "deletes from the provider" claim.
+    var copy = (def.copy && def.copy.removeConfirm) || 'Remove this domain from Mast? Provider-side cleanup is handled separately.';
+    var title = (def.copy && def.copy.removeTitle) || 'Remove domain';
+    if (activeDomain) copy = copy.replace('{domain}', activeDomain);
     if (typeof window.mastConfirm === 'function') {
-      window.mastConfirm('Remove this sending domain from Mast? Cleanup in your email provider is handled separately.',
-        { title: 'Remove sending domain', danger: true }).then(function (ok) { if (ok) doRemove(); });
+      window.mastConfirm(copy, { title: title, danger: true }).then(function (ok) { if (ok) doRemove(); });
     } else { doRemove(); }
   }
 
