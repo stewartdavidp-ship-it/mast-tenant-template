@@ -159,6 +159,11 @@
   async function loadCategories() {
     try {
       var raw = await MastDB.get('public/config/categories');
+      // The registry may arrive as a numeric-keyed map (the import writes indexed
+      // entries via set('.../categories/{idx}')) rather than an array — normalize
+      // before the array check, else this tab loads nothing AND a later save would
+      // overwrite the map and destroy those categories. Mirrors loadTenantCategories.
+      if (raw && !Array.isArray(raw) && typeof raw === 'object') raw = Object.values(raw).filter(Boolean);
       tenantCategories = (raw && Array.isArray(raw)) ? raw.filter(function(c) { return c && c.id && c.label; }) : [];
     } catch (err) {
       console.warn('[Website] Failed to load categories:', err.message);
