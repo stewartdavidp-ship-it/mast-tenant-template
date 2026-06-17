@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-131128-d47e7ce6"></script>
+  <script src="../shared/mastdb.js?v=20260617-140110-669af618"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-131128-d47e7ce6"></script>
-  <script src="../shared/brand-sync.js?v=20260617-131128-d47e7ce6"></script>
+  <script src="../shared/customer-filters.js?v=20260617-140110-669af618"></script>
+  <script src="../shared/brand-sync.js?v=20260617-140110-669af618"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-131128-d47e7ce6"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-140110-669af618"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-131128-d47e7ce6"></script>
-  <script src="../shared/mast-io.js?v=20260617-131128-d47e7ce6"></script>
-  <script src="../shared/mast-entity.js?v=20260617-131128-d47e7ce6"></script>
+  <script src="../shared/mast-ui.js?v=20260617-140110-669af618"></script>
+  <script src="../shared/mast-io.js?v=20260617-140110-669af618"></script>
+  <script src="../shared/mast-entity.js?v=20260617-140110-669af618"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-131128-d47e7ce6"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-140110-669af618"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-131128-d47e7ce6"></script>
+  <script src="../shared/mast-intake.js?v=20260617-140110-669af618"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11643,6 +11643,7 @@
     <div id="customersTab" style="display:none;"></div>
     <div id="ordersV2Tab" class="tab-content" style="display:none;"></div>
     <div id="analyticsV2Tab" class="tab-content" style="display:none;"></div><!-- analytics-v2 (scaffolded) -->
+    <div id="advisorV2Tab" class="tab-content" style="display:none;"></div><!-- advisor-v2: read-port twin of Business-Plan advisor -->
     <div id="auditlogV2Tab" class="tab-content" style="display:none;"></div><!-- auditlog-v2 (scaffolded) -->
     <div id="subscriptionV2Tab" class="tab-content" style="display:none;"></div><!-- subscription-v2: Plan & billing hub (Plan + Top-ups + About lenses) -->
     <div id="employeesV2Tab" class="tab-content" style="display:none;"></div><!-- employees-v2 (scaffolded) -->
@@ -21083,7 +21084,9 @@ var ALL_TAB_IDS = ['mappingTab', 'inquiriesTab', 'scheduleTab', 'galleryTab', 'h
 // W2 — marketing aggregator tabs
 'marketingCalendarTab', 'composerTab', 'engagementInboxTab', 'campaignsTab',
 // W2.3 — Commission Terms admin editor
-'commissionTermsTab'];
+'commissionTermsTab',
+// advisor-v2 — read-port twin of the Business-Plan advisor (#advisor remaps here)
+'advisorV2Tab'];
 
 // Hide every routed tab before showing the target. Covers the fixed legacy list
 // (ALL_TAB_IDS) PLUS the redesign's `*-v2` tabs, which are created dynamically by
@@ -21199,7 +21202,13 @@ var MAST_V2_ROUTE_MAP = {
   // the route picks the entry lens (admin-v2-build-plan.md, finance-hub precedent).
   'subscription': 'subscription-v2',
   'coins': 'plan-billing-coins-v2',
-  'analytics': 'analytics-v2'
+  'analytics': 'analytics-v2',
+  // Business Plan advisor → read-port twin (advisor-v2). The advisor is
+  // 100% read/render (plan content is MCP-authored into admin/businessPlan/*);
+  // the only writes are entity-domain actions through MastDB.businessEntity.*.
+  // Reverse-lookup keeps the "Business Plan" nav item highlighted; permissions
+  // stay keyed to `advisor`.
+  'advisor': 'advisor-v2'
 };
 // V2 is the default: the flags are seeded at body-top boot (see the nav-v2
 // chrome hook) so a user with no stored choice starts in V2; only an explicit
@@ -22442,7 +22451,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-131128-d47e7ce6';
+var MAST_MODULES_V = '20260617-140110-669af618';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22587,6 +22596,7 @@ homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
   'auditlog-v2': { src: 'modules/auditlog-v2.js', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'subscription-v2': { src: 'modules/subscription-v2.js', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
   'analytics-v2': { src: 'modules/analytics-v2.js', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'advisor-v2': { src: 'modules/advisor-v2.js', routes: ['advisor-v2'] }, // read-port twin of Business-Plan advisor (#advisor remaps here); entity writes via MastDB.businessEntity.* — no new bridge
   workflowEngine: { src: 'modules/workflows/workflow-engine.js', routes: [] },
   commissionsWorkflow: { src: 'modules/workflows/commissions.workflow.js', routes: [] },
   pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', routes: [] },
