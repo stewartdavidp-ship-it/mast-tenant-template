@@ -385,7 +385,7 @@
         ? '<div class="mu-sub" style="margin-bottom:10px;">This order hasn\'t been routed yet. Confirm it to reserve stock and send build items to production.</div>' +
           '<button class="btn btn-primary btn-small" onclick="OrdersV2Actions.openTriage(\'' + esc(orderId) + '\')">Confirm order…</button>'
         : ungated;
-      blocks += UI.card('Confirm &amp; route', triageInner);
+      blocks += UI.card('Confirm & route', triageInner);
     }
 
     // 2) Order note — internal note list + add field.
@@ -542,12 +542,12 @@
       '</div>';
     }).join('');
     var head = '<div style="display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:12px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;color:var(--warm-gray);padding-bottom:4px;"><span>Item</span><span>Inventory</span><span>Source</span></div>';
-    var body = U.card('Route &amp; confirm order ' + esc(getDisplayNum(r)),
+    var body = U.card('Route & confirm order ' + esc(getDisplayNum(r)),
       '<div class="mu-sub" style="margin-bottom:10px;">Choose how to fulfill each item. Stock items reserve inventory; build items create production requests and move the order to Building.</div>' +
       head + rows);
     U.slideOut.open({
       id: 'triage-' + orderId, title: 'Confirm order', subtitle: esc(getDisplayNum(r)), size: 'lg',
-      mode: 'create', deepLink: false, createLabel: 'Confirm &amp; route',
+      mode: 'create', deepLink: false, createLabel: 'Confirm & route',
       render: function () { return body; },
       isDirty: function () { return true; },
       onSave: function () { return submitTriage(orderId); }
