@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260616-145550-f4efceb"></script>
+  <script src="../shared/mastdb.js?v=20260616-222837-ce3059d"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260616-145550-f4efceb"></script>
-  <script src="../shared/brand-sync.js?v=20260616-145550-f4efceb"></script>
+  <script src="../shared/customer-filters.js?v=20260616-222837-ce3059d"></script>
+  <script src="../shared/brand-sync.js?v=20260616-222837-ce3059d"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260616-145550-f4efceb"></script>
+  <script src="../shared/variant-reconcile.js?v=20260616-222837-ce3059d"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260616-145550-f4efceb"></script>
-  <script src="../shared/mast-io.js?v=20260616-145550-f4efceb"></script>
-  <script src="../shared/mast-entity.js?v=20260616-145550-f4efceb"></script>
+  <script src="../shared/mast-ui.js?v=20260616-222837-ce3059d"></script>
+  <script src="../shared/mast-io.js?v=20260616-222837-ce3059d"></script>
+  <script src="../shared/mast-entity.js?v=20260616-222837-ce3059d"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260616-145550-f4efceb"></script>
+  <script src="../shared/product-readiness.core.js?v=20260616-222837-ce3059d"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260616-145550-f4efceb"></script>
+  <script src="../shared/mast-intake.js?v=20260616-222837-ce3059d"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -1419,6 +1419,22 @@
     .mastintake-deeplink { color: var(--teal); font-weight: 600; text-decoration: none; }
     .mastintake-deeplink:hover { text-decoration: underline; }
     .mastintake-collect-title { font-size: 1.15rem; margin: 0 0 12px; color: var(--text-primary); }
+    /* domain-control (email sending domain) */
+    .mastintake-domain-input {
+      flex: 1; padding: 9px 12px; border-radius: 6px;
+      border: 1px solid var(--border, var(--cream-dark));
+      font-family: 'DM Sans', sans-serif; font-size: 0.9rem;
+      background: var(--bg-primary, var(--cream)); color: var(--text-primary);
+    }
+    .mastintake-domain-actions { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .mastintake-records { margin-top: 8px; overflow-x: auto; }
+    .mastintake-records-table { width: 100%; border-collapse: collapse; font-family: monospace; font-size: 0.78rem; }
+    .mastintake-records-table th { text-align: left; padding: 2px 8px 4px 0; color: var(--warm-gray-light); border-bottom: 1px solid var(--border, var(--cream-dark)); }
+    .mastintake-records-table td { padding: 3px 8px 3px 0; vertical-align: top; }
+    .mastintake-rec-type { color: var(--teal); }
+    .mastintake-rec-name { color: var(--amber); }
+    .mastintake-rec-value { color: var(--text-primary); word-break: break-all; }
+    .mastintake-copy { background: none; border: none; cursor: pointer; color: var(--teal); font-size: 0.85rem; padding: 0 2px; }
 
     /* ========== BUTTONS ========== */
     .btn {
@@ -22409,7 +22425,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260616-145550-f4efceb';
+var MAST_MODULES_V = '20260616-222837-ce3059d';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -30498,139 +30514,32 @@ function loadEmailDomainSection() {
     return;
   }
 
-  // Check if tenant has a domain configured
-  MastDB.get('config/email/domain').then(function(domain) {
-    if (!domain || !domain.resendDomainId) {
-      // No domain configured — show add form
-      container.innerHTML =
-        '<p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Add a custom sending domain so emails come from your own address (e.g., orders@yourbusiness.com).</p>' +
-        '<div style="display:flex;gap:6px;margin-bottom:8px;">' +
-          '<input type="text" id="emailDomainInput" placeholder="yourbusiness.com" style="flex:1;padding:9px 12px;border:1px solid var(--border,#ddd);border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.9rem;box-sizing:border-box;background:var(--input-bg,#fff);color:var(--text,#333);">' +
-          '<button class="btn btn-primary" onclick="addEmailDomain()" style="font-size:0.85rem;padding:6px 14px;white-space:nowrap;">Add Domain</button>' +
-        '</div>' +
-        '<div id="emailDomainStatus" style="font-size:0.85rem;"></div>';
-      return;
-    }
-
-    // Domain exists — show status and DNS records
-    var statusColor = domain.status === 'verified' ? 'var(--teal)' : domain.status === 'failed' ? '#EF5350' : '#FFB74D';
-    var statusLabel = domain.status === 'verified' ? '✓ Verified' : domain.status === 'failed' ? '✗ Failed' : '⏳ Pending Verification';
-
-    var html = '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:14px 16px;">';
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">';
-    html += '<div><strong style="font-size:0.9rem;">' + esc(domain.domain) + '</strong></div>';
-    html += '<span style="color:' + statusColor + ';font-size:0.85rem;font-weight:600;">' + statusLabel + '</span>';
-    html += '</div>';
-
-    if (domain.status !== 'verified' && domain.dnsRecords && domain.dnsRecords.length > 0) {
-      html += '<p style="font-size:0.85rem;color:var(--warm-gray);margin:8px 0 6px;">Add these DNS records at your domain registrar:</p>';
-      html += '<div style="background:rgba(0,0,0,0.2);border-radius:6px;padding:10px 12px;font-family:monospace;font-size:0.78rem;overflow-x:auto;">';
-      html += '<table style="width:100%;border-collapse:collapse;">';
-      html += '<tr style="color:var(--warm-gray-light);border-bottom:1px solid rgba(255,255,255,0.08);">';
-      html += '<th style="text-align:left;padding:2px 8px 4px 0;">Type</th>';
-      html += '<th style="text-align:left;padding:2px 8px 4px 0;">Name</th>';
-      html += '<th style="text-align:left;padding:2px 8px 4px 0;">Value</th>';
-      html += '</tr>';
-      domain.dnsRecords.forEach(function(rec) {
-        html += '<tr>';
-        html += '<td style="padding:3px 8px 3px 0;color:#81D4FA;">' + esc(rec.type || rec.record_type || '') + '</td>';
-        html += '<td style="padding:3px 8px 3px 0;color:#FFD54F;">' + esc(rec.name || '') + '</td>';
-        html += '<td style="padding:3px 8px 3px 0;color:#A5D6A7;word-break:break-all;">' + esc(rec.value || rec.content || '') + '</td>';
-        html += '</tr>';
-      });
-      html += '</table></div>';
-    }
-
-    html += '<div style="display:flex;gap:8px;margin-top:12px;">';
-    if (domain.status !== 'verified') {
-      html += '<button class="btn btn-primary" onclick="checkEmailDomainStatus()" style="font-size:0.85rem;padding:6px 14px;">Check Verification</button>';
-    }
-    html += '<button class="btn btn-secondary" onclick="removeEmailDomain()" style="font-size:0.85rem;padding:6px 12px;color:#EF5350;">Remove Domain</button>';
-    html += '</div>';
-    html += '<div id="emailDomainStatus" style="font-size:0.85rem;margin-top:8px;"></div>';
-    html += '</div>';
-
-    container.innerHTML = html;
-  }).catch(function(err) {
-    container.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);">Could not load domain config.</p>';
-  });
-}
-
-async function addEmailDomain() {
-  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
-  var domainInput = document.getElementById('emailDomainInput');
-  var domain = domainInput ? domainInput.value.trim() : '';
-  if (!domain) { showToast('Enter a domain name.', true); return; }
-
-  var statusEl = document.getElementById('emailDomainStatus');
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Adding domain to Resend…</span>';
-
-  try {
-    // F-M3: setupBYOResendDomain is BYO-aware AND auto-applies Cloudflare DNS
-    // when the domain is on the runmast.com zone (Path A). For other domains
-    // it falls through to the same record-return shape verifyEmailDomain used,
-    // and the existing manual-DNS flow continues to work.
-    var result = await firebase.functions().httpsCallable('setupBYOResendDomain')({ domain: domain });
-    var data = (result && result.data) || {};
-    if (data.path === 'A' && data.status === 'verified') {
-      showToast('Domain auto-verified — DNS records added to Cloudflare and Resend confirmed.');
-    } else if (data.path === 'A') {
-      showToast('DNS records added to Cloudflare. Resend verification is still propagating — check again in a moment.');
-    } else {
-      showToast('Domain added — configure DNS records shown below.');
-    }
-    await writeAudit('create', 'settings', 'emailDomain', { domain: domain });
-    loadEmailDomainSection();
-  } catch (err) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#EF5350;">Error: ' + esc(err.message) + '</span>';
-    showToast('Failed to add domain: ' + err.message, true);
+  // BYO provider: the sending domain is a domain-control intake. Mount the
+  // MastIntake field — guided DNS records + Verify + status — which wraps the
+  // existing setupBYOResendDomain / checkEmailDomainStatus CFs and reads the
+  // server-persisted config/email/domain doc. This REPLACES the hand-rolled
+  // add-form/status-card AND the addEmailDomain / checkEmailDomainStatus /
+  // removeEmailDomain handlers (now the engine's domain-control adapter).
+  if (!window.MastIntake) {
+    container.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);">Loading…</p>';
+    return;
   }
+  var mount = function () {
+    container.innerHTML = MastIntake.secureField({ provider: 'email-domain', label: 'Sending domain' });
+    MastIntake.hydrate(container);
+  };
+  if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+    MastAdmin.loadModule('connections-providers').then(mount, mount);
+  } else { mount(); }
 }
 
-async function checkEmailDomainStatus() {
-  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
-  var statusEl = document.getElementById('emailDomainStatus');
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Checking verification status...</span>';
-
-  try {
-    var result = await firebase.functions().httpsCallable('checkEmailDomainStatus')({});
-    var data = result.data;
-    if (data.status === 'verified') {
-      showToast('Domain verified!');
-    } else if (data.status === 'failed') {
-      showToast('Domain verification failed. Check DNS records.', true);
-    } else {
-      showToast('Domain still pending verification. DNS may take up to 48 hours.');
-    }
-    loadEmailDomainSection();
-  } catch (err) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#EF5350;">Error: ' + esc(err.message) + '</span>';
-    showToast('Failed to check status: ' + err.message, true);
-  }
-}
-
-async function removeEmailDomain() {
-  if (!can('settings', 'edit')) { showToast('You do not have permission.', true); return; }
-  if (!await mastConfirm('Remove email domain? This will delete the domain from Resend.', { title: 'Remove Email Domain', danger: true })) return;
-
-  var statusEl = document.getElementById('emailDomainStatus');
-  if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Removing domain...</span>';
-
-  try {
-    // Read domain config to get resendDomainId
-    var domainConfig = await MastDB.get('config/email/domain');
-    if (domainConfig && domainConfig.resendDomainId) {
-      // Remove from Resend via cloud function (or just clear local config — Resend cleanup via MCP)
-      await MastDB.remove('config/email/domain');
-    }
-    await writeAudit('delete', 'settings', 'emailDomain');
-    showToast('Email domain removed.');
-    loadEmailDomainSection();
-  } catch (err) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:#EF5350;">Error: ' + esc(err.message) + '</span>';
-    showToast('Failed to remove domain: ' + err.message, true);
-  }
-}
+// addEmailDomain / checkEmailDomainStatus / removeEmailDomain RETIRED — the email
+// sending-domain is now a MastIntake domain-control intake. Add / Verify / Remove
+// are the engine's domain-control adapter (app/modules/connections-providers.js
+// → email-domain), which wraps the same setupBYOResendDomain / checkEmailDomainStatus
+// CFs, reads the persisted config/email/domain doc, keeps the can('settings','edit')
+// gate + writeAudit rows, and removes locally (no Resend delete CF exists). The
+// engine renders the guided DNS-records table + Verify + status badge in place.
 
 // ============================================================
 // Etsy Config Management
