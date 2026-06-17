@@ -704,12 +704,13 @@
 
   // The forced counsel rail (design §6.3) — single-sourced in BusinessEntityConstants,
   // never inline-authored here. The descriptor may ADD (def.counselAdd) but never
-  // suppress. Uses the counsel-locked compliance SSN warning that already governs
-  // this surface; if the constants aren't loaded the trust copy still carries the
-  // encrypted-at-rest posture (we never substitute hand-authored legal copy).
+  // suppress. Uses the counsel-locked IDENTITY_FIELD_COUNSEL_WARNING (encrypted-at-rest
+  // posture for a TYPED identity number), falling back to the document-upload SSN
+  // warning if a stale constants bundle predates it; if neither is loaded the trust
+  // copy still carries the posture (we never substitute hand-authored legal copy).
   function identityCounselHtml(def) {
     var C = window.BusinessEntityConstants || {};
-    var w = C.DOCUMENT_UPLOAD_SSN_WARNING || {};
+    var w = C.IDENTITY_FIELD_COUNSEL_WARNING || C.DOCUMENT_UPLOAD_SSN_WARNING || {};
     var head = w.headline || '';
     var body = w.body || '';
     var add = (def && def.counselAdd) ? esc(def.counselAdd) : '';
