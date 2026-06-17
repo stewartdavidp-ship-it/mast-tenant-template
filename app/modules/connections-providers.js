@@ -426,6 +426,47 @@
     }
   };
 
+  // ── Compliance identity-data fields — family: identity-data, archetype C (PII) ──
+  //
+  // The three sensitive compliance IDs that round-trip as PLAINTEXT today behind a
+  // cosmetic type=password input in Settings → Compliance: the license number, the
+  // insurance policy number, and the tax-jurisdiction registration ID. These are
+  // structured PII, so they are ENVELOPE-ENCRYPTED at rest by the field-encryption
+  // CF (mast-architecture/functions/mast-intake-identity.js) — never stored in the
+  // browser, never returned except as a masked last-4 (plus a gated admin-only
+  // reveal for editing). credentialOwner: 'customer' (the maker's own IDs).
+  //
+  // FAIL-CLOSED: persistence is gated by the engine's RUNTIME field-encryption CF
+  // probe — NOT by anything declared here. This file names NO write target and does
+  // NO MastDB write; the ref pointer that replaces the plaintext is persisted by the
+  // call-site (Settings → Compliance). `field.kind` MUST match the CF's fail-closed
+  // allowlist (IDENTITY_KINDS): license-number / insurance-policy / tax-registration-id.
+  function _identityDef(id, label, kind, example, minLen) {
+    return {
+      id: id,
+      label: label,
+      icon: '🔐',
+      family: 'identity-data',
+      category: 'compliance',
+      authType: 'C',                 // structured PII the maker enters (encrypted server-side)
+      credentialOwner: 'customer',
+      gate: 'skippable',             // compliance records work without the secured number
+      conciergeEligible: false,      // engine FORCES false anyway (not delegated-auth A);
+                                     // a human must never receive raw PII (design §6.5)
+      // identity-data persistence is gated by the engine's RUNTIME field-encryption
+      // CF probe, NOT by anything declared here. `kind` is descriptive metadata that
+      // MUST equal the CF allowlist key.
+      vault: { kind: kind },
+      fields: [
+        { key: id, kind: kind, label: label, mask: true, example: example, minLen: minLen }
+      ]
+    };
+  }
+
+  var licenseNumber = _identityDef('license-number', 'License number', 'license-number', '•••• 1234', 3);
+  var insurancePolicy = _identityDef('insurance-policy', 'Insurance policy number', 'insurance-policy', '•••• 1234', 3);
+  var taxRegistrationId = _identityDef('tax-registration-id', 'Tax registration ID', 'tax-registration-id', '•••• 1234', 4);
+
   // Register with the engine (primary), and publish a plain-global catalog as a
   // load-order fallback the engine can read if it hydrates before register runs.
   window.ConnectionsProviders = window.ConnectionsProviders || {};
@@ -434,12 +475,18 @@
   window.ConnectionsProviders.shippo = shippo;
   window.ConnectionsProviders['email-domain'] = emailDomain;
   window.ConnectionsProviders['custom-domain'] = customDomain;
+  window.ConnectionsProviders['license-number'] = licenseNumber;
+  window.ConnectionsProviders['insurance-policy'] = insurancePolicy;
+  window.ConnectionsProviders['tax-registration-id'] = taxRegistrationId;
   if (window.MastIntake && typeof window.MastIntake.register === 'function') {
     window.MastIntake.register(github);
     window.MastIntake.register(sendgrid);
     window.MastIntake.register(shippo);
     window.MastIntake.register(emailDomain);
     window.MastIntake.register(customDomain);
+    window.MastIntake.register(licenseNumber);
+    window.MastIntake.register(insurancePolicy);
+    window.MastIntake.register(taxRegistrationId);
   }
 
   // Catalog module: no routes (not a routable view) and no MastDB writes.

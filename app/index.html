@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-002004-82371dc"></script>
+  <script src="../shared/mastdb.js?v=20260617-002346-7350d9b"></script>
   <script src="../shared/business-entity-constants.js?v=4"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-002004-82371dc"></script>
-  <script src="../shared/brand-sync.js?v=20260617-002004-82371dc"></script>
+  <script src="../shared/customer-filters.js?v=20260617-002346-7350d9b"></script>
+  <script src="../shared/brand-sync.js?v=20260617-002346-7350d9b"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-002004-82371dc"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-002346-7350d9b"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-002004-82371dc"></script>
-  <script src="../shared/mast-io.js?v=20260617-002004-82371dc"></script>
-  <script src="../shared/mast-entity.js?v=20260617-002004-82371dc"></script>
+  <script src="../shared/mast-ui.js?v=20260617-002346-7350d9b"></script>
+  <script src="../shared/mast-io.js?v=20260617-002346-7350d9b"></script>
+  <script src="../shared/mast-entity.js?v=20260617-002346-7350d9b"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-002004-82371dc"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-002346-7350d9b"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-002004-82371dc"></script>
+  <script src="../shared/mast-intake.js?v=20260617-002346-7350d9b"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -1443,6 +1443,14 @@
     .mastintake-steps li { margin: 3px 0; }
     .mastintake-rec-ttl { color: var(--warm-gray); }
     .mastintake-domain-note { margin-top: 8px; }
+    /* identity-data: forced counsel rail + masked read-back + edit actions */
+    .mastintake-counsel { margin: 6px 0 10px; padding: 8px 10px; border-radius: 6px; background: var(--bg-secondary, rgba(234,179,8,0.08)); border: 1px solid var(--border, var(--cream-dark)); }
+    .mastintake-counsel-head { margin: 0; font-size: 0.78rem; font-weight: 600; color: var(--text-primary); }
+    .mastintake-counsel-body { margin: 4px 0 0; font-size: 0.78rem; color: var(--warm-gray); }
+    .mastintake-counsel-add { margin: 4px 0 0; font-size: 0.78rem; color: var(--warm-gray); }
+    .mastintake-id-masked { font-size: 0.85rem; color: var(--text-primary); margin: 2px 0 6px; }
+    .mastintake-id-last4 { font-family: monospace; color: var(--teal); }
+    .mastintake-id-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
 
     /* ========== BUTTONS ========== */
     .btn {
@@ -22394,7 +22402,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-002004-82371dc';
+var MAST_MODULES_V = '20260617-002346-7350d9b';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -23503,6 +23511,59 @@ var _COMPLIANCE_SECTION_META = {
   ], canUpload: false }
 };
 
+// Secure-intake (MastIntake identity-data) migration map for the sensitive
+// compliance IDs. Each sensitive field is now ENVELOPE-ENCRYPTED at rest via the
+// field-encryption CF (mast-architecture/functions/mast-intake-identity.js) instead
+// of round-tripping as plaintext in the businessEntity doc. The plaintext key (e.g.
+// `number`) is retired; the item carries an opaque `<key>Ref` (idv://…) pointer + a
+// `<key>Masked` last-4 for display. `kind` MUST match the CF allowlist.
+var _COMPLIANCE_SECURE = {
+  licenses:         { key: 'number',         kind: 'license-number' },
+  insurance:        { key: 'policyNumber',   kind: 'insurance-policy' },
+  taxJurisdictions: { key: 'registrationId', kind: 'tax-registration-id' }
+};
+
+// Drop transient/plaintext keys before a doc write: never persist __unsaved or a
+// legacy plaintext sensitive value (only its encrypted-at-rest ref + masked last-4).
+function _stripComplianceItem(item) {
+  var out = {};
+  Object.keys(item || {}).forEach(function(k) {
+    if (k === '__unsaved') return;
+    out[k] = item[k];
+  });
+  Object.keys(_COMPLIANCE_SECURE).forEach(function(sk) {
+    var key = _COMPLIANCE_SECURE[sk].key;
+    if (Object.prototype.hasOwnProperty.call(out, key)) delete out[key]; // retire plaintext
+  });
+  return out;
+}
+
+// Persist the ref/masked pointer a secure field handed back (MastIntake.onChange).
+// This is the ONLY thing written for a sensitive ID — never the plaintext. Saved
+// items live at the array tail-stable prefix, so we exclude __unsaved items (always
+// appended) to keep the persisted indices aligned with the secure-field closures.
+async function _persistComplianceSecureRef(sectionKey, idx, key, payload) {
+  var arr = (_complianceState.data && _complianceState.data[sectionKey]) || [];
+  var item = arr[idx];
+  if (!item) return;
+  if (payload && payload.ref) {
+    item[key + 'Ref'] = payload.ref;
+    item[key + 'Masked'] = payload.masked || '';
+  } else {
+    delete item[key + 'Ref'];
+    delete item[key + 'Masked'];
+  }
+  delete item[key]; // retire any legacy plaintext now that it is encrypted at rest
+  var toWrite = arr.filter(function(x) { return !x.__unsaved; }).map(_stripComplianceItem);
+  var payloadObj = {};
+  payloadObj[sectionKey] = toWrite;
+  try {
+    await MastDB.businessEntity.update('compliance', payloadObj);
+  } catch (err) {
+    if (window.showToast) showToast('Could not save the secure reference: ' + (err.message || 'unknown'), true);
+  }
+}
+
 async function loadComplianceSettings() {
   var C = window.BusinessEntityConstants || {};
   var warn = C.DOCUMENT_UPLOAD_SSN_WARNING || {};
@@ -23535,6 +23596,12 @@ async function loadComplianceSettings() {
   }
   _complianceState.documents = docMap;
 
+  // Load the MastIntake provider catalog so the sensitive-ID secure fields render +
+  // hydrate inline (fail-closed: if it can't load, the secure field shows disabled).
+  if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+    try { await MastAdmin.loadModule('connections-providers'); } catch (e) { /* fail-closed */ }
+  }
+
   ['licenses','insurance','certifications','taxJurisdictions'].forEach(function(key) {
     _renderComplianceSection(key);
   });
@@ -23561,6 +23628,10 @@ function _renderComplianceSection(sectionKey) {
   listEl.innerHTML = items.map(function(item, idx) {
     return _renderComplianceItemRow(sectionKey, item, idx);
   }).join('');
+  // Bind/hydrate any MastIntake secure fields embedded in the rows (sensitive IDs).
+  if (window.MastIntake && typeof MastIntake.hydrate === 'function') {
+    try { MastIntake.hydrate(listEl); } catch (e) { /* fail-closed: field stays disabled */ }
+  }
 }
 
 function _complianceListId(sectionKey) {
@@ -23592,8 +23663,13 @@ function _renderComplianceItemRow(sectionKey, item, idx) {
   meta.fields.forEach(function(f) {
     var fid = _complianceFieldId(sectionKey, idx, f.key);
     var val = (item && item[f.key] !== undefined && item[f.key] !== null) ? item[f.key] : '';
-    out += '<div>';
-    out += '<label style="display:block;font-size:0.72rem;font-weight:600;color:var(--warm-gray);margin-bottom:3px;">' + esc(f.label) + '</label>';
+    // Sensitive IDs host the full MastIntake secure field (own label + counsel +
+    // masked/reveal) — span the grid and skip the plain outer label to avoid a
+    // duplicate; all other fields keep the compact grid cell + label.
+    out += f.sensitive ? '<div style="grid-column:1/-1;">' : '<div>';
+    if (!f.sensitive) {
+      out += '<label style="display:block;font-size:0.72rem;font-weight:600;color:var(--warm-gray);margin-bottom:3px;">' + esc(f.label) + '</label>';
+    }
     if (f.type === 'select') {
       out += '<select id="' + fid + '" class="compliance-input" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;background:var(--bg-primary,var(--charcoal));color:var(--text,#fff);">';
       (f.options || []).forEach(function(opt) {
@@ -23608,10 +23684,28 @@ function _renderComplianceItemRow(sectionKey, item, idx) {
       out += '<span style="font-size:0.85rem;color:var(--warm-gray);">Actively collecting</span>';
       out += '</label>';
     } else if (f.sensitive) {
-      out += '<div style="display:flex;gap:4px;">';
-      out += '<input type="password" id="' + fid + '" class="compliance-input" placeholder="' + esc(f.placeholder || '') + '" value="' + esc(val) + '" style="flex:1;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;box-sizing:border-box;">';
-      out += '<button type="button" class="btn btn-small" style="font-size:0.72rem;padding:4px 8px;" onclick="toggleComplianceSensitive(\'' + fid + '\',this)">Show</button>';
-      out += '</div>';
+      // Encrypted at rest via MastIntake (identity-data). Replaces the legacy
+      // plaintext password input — never sits beside it (design §9: migration
+      // replaces). Saved items host the secure field; unsaved items must be saved
+      // first so the ref has a stable item to attach to (mirrors document upload).
+      var secure = _COMPLIANCE_SECURE[sectionKey];
+      if (unsaved) {
+        out += '<div style="font-size:0.78rem;color:var(--warm-gray);font-style:italic;padding:7px 0;">Save this ' + esc(meta.label.toLowerCase()) + ' first, then add the secure ' + esc(f.label.toLowerCase()) + '.</div>';
+      } else if (secure && window.MastIntake && typeof MastIntake.secureField === 'function') {
+        var ref = (item && item[f.key + 'Ref']) || null;
+        var legacy = (!ref && item && item[f.key]) ? String(item[f.key]) : '';
+        out += MastIntake.secureField({
+          kind: secure.kind,
+          label: f.label,
+          value: ref,
+          legacyValue: legacy,
+          onChange: (function(sk, i, key) {
+            return function(p) { _persistComplianceSecureRef(sk, i, key, p); };
+          })(sectionKey, idx, f.key)
+        });
+      } else {
+        out += '<div style="font-size:0.78rem;color:var(--warm-gray);font-style:italic;padding:7px 0;">Secure entry is unavailable right now.</div>';
+      }
     } else {
       out += '<input type="' + esc(f.type) + '" id="' + fid + '" class="compliance-input" placeholder="' + esc(f.placeholder || '') + '" value="' + esc(val) + '" style="width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-size:0.85rem;box-sizing:border-box;">';
     }
@@ -23686,6 +23780,14 @@ function _collectComplianceSection(sectionKey) {
   return arr.map(function(item, idx) {
     var out = {};
     meta.fields.forEach(function(f) {
+      if (f.sensitive) {
+        // Encrypted at rest by MastIntake — there is no plaintext input to read.
+        // Carry forward only the ref/masked pointer the secure field persisted; the
+        // plaintext key is retired (never written back to the doc).
+        if (item[f.key + 'Ref']) out[f.key + 'Ref'] = item[f.key + 'Ref'];
+        if (item[f.key + 'Masked']) out[f.key + 'Masked'] = item[f.key + 'Masked'];
+        return;
+      }
       var fid = _complianceFieldId(sectionKey, idx, f.key);
       var el = document.getElementById(fid);
       if (!el) { out[f.key] = item[f.key] || (f.type === 'checkbox' ? false : ''); return; }

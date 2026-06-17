@@ -59,6 +59,24 @@
   var CF_STATUS = 'mastIntakeVaultStatus';
   var CF_REVOKE = 'mastIntakeVaultRevoke';
 
+  // ── Identity-data CF surface (mast-architecture/functions/mast-intake-identity.js,
+  //    same callable surface). UNLIKE the held-secret vault (provider-keyed), these
+  //    are REF/KIND-keyed: the ciphertext lives server-side under an opaque idv://
+  //    ref (envelope-encrypted, masked, gated reveal), and the ref POINTER is
+  //    persisted by the CALL-SITE (into the doc the plaintext used to live in), not
+  //    by the engine. The engine drives encrypt / reveal / status / delete. ───────
+  var CF_ID_ENCRYPT = 'mastIntakeIdentityEncrypt';
+  var CF_ID_REVEAL = 'mastIntakeIdentityReveal';
+  var CF_ID_STATUS = 'mastIntakeIdentityStatus';
+  var CF_ID_DELETE = 'mastIntakeIdentityDelete';
+
+  // Status needs a syntactically-valid ref. For an as-yet-uncollected field we have
+  // none, so we probe availability with this sentinel: the CF resolves it to
+  // not-collected (success ⇒ reachable + authed ⇒ enable the input); ANY throw
+  // (no CF / unauthenticated / network) keeps the field DISABLED (fail-closed). The
+  // value matches the CF's parseRef charset (/^[A-Za-z0-9_-]{6,128}$/).
+  var ID_PROBE_REF = 'idv://availability-probe-0';
+
   // Masked glyph (U+2022). We never SEND a value containing it (the server also
   // rejects it) — guards against re-submitting a masked read-back as the secret.
   var MASK_CHAR = '•';
@@ -92,6 +110,14 @@
   // The probe is the engine's availability gate; cached so repeated hydrate()
   // scans don't hammer the CF.
   var _probeCache = Object.create(null);
+
+  // Per-instance state for identity-data fields (keyed by the rendered wrapper id).
+  // Each secureField({ kind, value:ref, onChange }) host gets one entry: the current
+  // ref, the CF `kind`, the call-site onChange (ref persistence is the call-site's
+  // job — it owns the doc the plaintext used to live in), and a transient legacy
+  // plaintext for one-time migrate-on-save (held in this JS var only, NEVER in the
+  // DOM / dataset / localStorage — inbound hygiene, design §6.6).
+  var _idInstances = Object.create(null);
 
   var _idSeq = 0;
   var _delegationBound = false;
@@ -221,7 +247,11 @@
   // input (never sits disabled beside a still-writing one). Bind via hydrate().
   function secureField(desc) {
     desc = desc || {};
-    var providerId = desc.provider;
+    // Identity-data call-sites address the field by `kind` (api-contract §4-B:
+    // secureField({ kind, label, value: rec.ref })); held-secret/domain-control use
+    // `provider`. The identity ProviderDefinition is registered with id === kind, so
+    // either resolves through the same registry.
+    var providerId = desc.provider || desc.kind;
     var def = getDef(providerId);
     if (!def) {
       return '<div class="' + FIELD_CLASS + '" data-state="error">' +
@@ -231,6 +261,9 @@
     // Family fork: domain-control collects NO secret — render the DNS/verify
     // grammar instead of a secret-paste field (no password input, no vault probe).
     if (def.family === 'domain-control') return domainField(desc, def);
+    // identity-data: structured PII, encrypted at rest. Ref/kind-keyed CF, a forced
+    // counsel rail, and a masked + reveal-to-edit grammar (not a write-once paste).
+    if (def.family === 'identity-data') return identityField(desc, def);
     var field = fieldOf(def);
     var domId = 'mastintake-' + providerId + '-' + (++_idSeq);
     var label = esc(desc.label || (field && field.label) || def.label || 'Credential');
@@ -657,6 +690,285 @@
     }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // identity-data family (archetype C, structured PII) — license #, insurance
+  // policy #, tax registration id, EIN/SSN, bank/routing. FAIL-CLOSED: there is NO
+  // client-side write path; the value is envelope-encrypted server-side by the
+  // field-encryption CF (mast-intake-identity.js) and only a masked last-4 ever
+  // returns. The extra axis vs held-secret is that an encrypted field is EDITABLE —
+  // so this family adds a gated Reveal-to-edit round-trip (admin-only). The ref
+  // POINTER (idv://…) is persisted by the CALL-SITE via desc.onChange; the engine
+  // never writes the doc that replaces the plaintext field. Counsel rail is FORCED
+  // by family (design §6.3), single-sourced in BusinessEntityConstants.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  // The forced counsel rail (design §6.3) — single-sourced in BusinessEntityConstants,
+  // never inline-authored here. The descriptor may ADD (def.counselAdd) but never
+  // suppress. Uses the counsel-locked compliance SSN warning that already governs
+  // this surface; if the constants aren't loaded the trust copy still carries the
+  // encrypted-at-rest posture (we never substitute hand-authored legal copy).
+  function identityCounselHtml(def) {
+    var C = window.BusinessEntityConstants || {};
+    var w = C.DOCUMENT_UPLOAD_SSN_WARNING || {};
+    var head = w.headline || '';
+    var body = w.body || '';
+    var add = (def && def.counselAdd) ? esc(def.counselAdd) : '';
+    if (!head && !body && !add) return '';
+    return '<div class="mastintake-counsel" role="note">' +
+      (head ? '<p class="mastintake-counsel-head">' + esc(head) + '</p>' : '') +
+      (body ? '<p class="mastintake-counsel-body">' + esc(body) + '</p>' : '') +
+      (add ? '<p class="mastintake-counsel-add">' + add + '</p>' : '') +
+      '</div>';
+  }
+
+  function identityField(desc, def) {
+    var providerId = def.id;
+    var field = fieldOf(def);
+    var kind = desc.kind || (field && field.kind) || def.id;
+    var ref = desc.value || desc.ref || null;
+    var domId = 'mastintake-' + providerId + '-' + (++_idSeq);
+    var label = esc(desc.label || (field && field.label) || def.label || 'Sensitive ID');
+    // Stash per-instance state. legacyValue (existing plaintext mid-migration) lives
+    // ONLY here, never in the DOM — a one-click "Encrypt stored value" sends it to
+    // the CF without it ever touching an input.
+    _idInstances[domId] = {
+      kind: kind,
+      ref: (ref ? String(ref) : null),
+      onChange: (typeof desc.onChange === 'function' ? desc.onChange : null),
+      legacy: (desc.legacyValue != null && desc.legacyValue !== '') ? String(desc.legacyValue) : ''
+    };
+    var trust = deriveTrustCopy(def).map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('');
+    var counsel = identityCounselHtml(def);
+    // Initial fail-closed shell: a "checking…" line; entry/masked stay hidden until
+    // the status probe resolves. hydrate() drives the real state.
+    return '' +
+      '<div class="' + FIELD_CLASS + '" id="' + domId + '" data-provider="' + esc(providerId) + '"' +
+      ' data-family="identity-data" data-field="' + esc(field ? field.key : '') + '" data-state="pending">' +
+      '  <label class="mastintake-label" for="' + domId + '-input">' + label + '</label>' +
+      counsel +
+      '  <div class="mastintake-id-masked" style="display:none;"></div>' +
+      '  <div class="mastintake-row mastintake-id-entry" style="display:none;">' +
+      '    <input type="password" id="' + domId + '-input" class="mastintake-input"' +
+      '      placeholder="' + esc((field && field.example) || '') + '"' +
+      '      autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" disabled>' +
+      '    <button type="button" class="btn btn-primary mastintake-save" data-mastintake-action="id-save" disabled>Save</button>' +
+      '  </div>' +
+      '  <div class="mastintake-id-actions"></div>' +
+      '  <p class="mastintake-feedback" aria-live="polite"></p>' +
+      '  <p class="mastintake-status mastintake-note">Checking secure storage…</p>' +
+      '  <ul class="mastintake-trust">' + trust + '</ul>' +
+      '</div>';
+  }
+
+  // Read the masked metadata / availability for a ref (or the sentinel when none).
+  function identityStatusCall(ref) {
+    var tid = tenantId();
+    var fn = callable(CF_ID_STATUS);
+    if (!tid || !fn) return Promise.resolve({ available: false, status: null });
+    return fn({ tenantId: tid, ref: ref || ID_PROBE_REF }).then(function (res) {
+      return { available: true, status: (res && res.data) || {} };
+    }).catch(function (err) {
+      return { available: false, status: null, error: err && err.message };
+    });
+  }
+
+  // Apply a status result: disabled (fail-closed) / collected (masked + reveal/clear)
+  // / error (unreadable → re-enter) / not-collected (entry, + migrate button if a
+  // legacy plaintext is still in the doc).
+  function applyIdentityState(wrap, def, result) {
+    var inst = _idInstances[wrap.id] || {};
+    var maskedEl = wrap.querySelector('.mastintake-id-masked');
+    var entryEl = wrap.querySelector('.mastintake-id-entry');
+    var input = wrap.querySelector('.mastintake-input');
+    var saveBtn = wrap.querySelector('.mastintake-save');
+    var actionsEl = wrap.querySelector('.mastintake-id-actions');
+    function showEntry(v) { if (entryEl) entryEl.style.display = v ? '' : 'none'; }
+    function showMasked(v) { if (maskedEl) maskedEl.style.display = v ? '' : 'none'; }
+    if (actionsEl) actionsEl.innerHTML = '';
+
+    if (!result || !result.available) {
+      // Fail-closed: field-encryption not reachable / not authorized → DISABLED.
+      wrap.setAttribute('data-state', 'disabled');
+      showMasked(false); showEntry(true);
+      if (input) { input.disabled = true; input.value = ''; }
+      if (saveBtn) saveBtn.disabled = true;
+      setStatusLine(wrap, 'Secure storage isn’t available right now — entry is turned off until it’s reachable.', 'error');
+      return;
+    }
+    var status = result.status || {};
+    var collected = status.state === STATE.COLLECTED && inst.ref;
+    var errored = status.state === STATE.ERROR;
+
+    if (collected) {
+      wrap.setAttribute('data-state', 'collected');
+      showEntry(false);
+      showMasked(true);
+      if (maskedEl) maskedEl.innerHTML = 'Stored securely · <span class="mastintake-id-last4">' + esc(status.masked || '••••') + '</span>';
+      setStatusLine(wrap, 'Encrypted at rest. Reveal to edit, or clear it.', 'ok');
+      if (actionsEl) actionsEl.innerHTML =
+        '<button type="button" class="btn btn-secondary mastintake-id-reveal" data-mastintake-action="id-reveal">Reveal to edit</button> ' +
+        '<button type="button" class="btn btn-secondary mastintake-id-clear" data-mastintake-action="id-clear">Clear</button>';
+      return;
+    }
+    if (errored) {
+      wrap.setAttribute('data-state', 'error');
+      showMasked(false); showEntry(true);
+      if (input) { input.disabled = false; input.type = 'password'; input.value = ''; }
+      if (saveBtn) saveBtn.disabled = false;
+      setStatusLine(wrap, 'The stored value couldn’t be read (it may need re-entry). Enter a new value to replace it.', 'error');
+      if (actionsEl && inst.ref) actionsEl.innerHTML =
+        '<button type="button" class="btn btn-secondary mastintake-id-clear" data-mastintake-action="id-clear">Clear</button>';
+      return;
+    }
+    // not-collected
+    wrap.setAttribute('data-state', 'ready');
+    showMasked(false); showEntry(true);
+    if (input) { input.disabled = false; input.type = 'password'; }
+    if (saveBtn) saveBtn.disabled = false;
+    if (inst.legacy) {
+      // One-time migration: the plaintext is still in the doc. Offer a single click
+      // to encrypt it — the value never enters an input (it lives in inst.legacy).
+      setStatusLine(wrap, 'This value is currently stored in plain text. Encrypt it now, or enter a new value below.', '');
+      if (actionsEl) actionsEl.innerHTML =
+        '<button type="button" class="btn btn-primary mastintake-id-migrate" data-mastintake-action="id-migrate">Encrypt stored value</button>';
+    } else {
+      setStatusLine(wrap, 'Not stored yet. Enter the value to encrypt it at rest.', '');
+    }
+  }
+
+  function identityRefresh(wrap, def) {
+    var inst = _idInstances[wrap.id] || {};
+    return identityStatusCall(inst.ref).then(function (result) {
+      applyIdentityState(wrap, def, result);
+      return result;
+    });
+  }
+
+  function _idNotify(inst, payload) {
+    if (inst && typeof inst.onChange === 'function') {
+      try { inst.onChange(payload); } catch (e) { /* call-site cb — never let it break the flow */ }
+    }
+  }
+  function _idSaveFail(wrap, msg) {
+    var saveBtn = wrap.querySelector('.mastintake-save');
+    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+    setFeedback(wrap, msg, 'error');
+    setStatusLine(wrap, '', '');
+  }
+
+  // The ONLY write path: envelope-encrypt via the CF, or HARD refuse. Pass the
+  // existing ref to edit-in-place; a non-`ref` return is never a local write.
+  function _identityEncrypt(wrap, def, inst, value) {
+    var saveBtn = wrap.querySelector('.mastintake-save');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+    setStatusLine(wrap, 'Encrypting…', '');
+    var tid = tenantId();
+    var fn = callable(CF_ID_ENCRYPT);
+    if (!tid || !fn) { _idSaveFail(wrap, 'Secure storage is unavailable.'); return; }
+    var payload = { tenantId: tid, kind: inst.kind, value: value };
+    if (inst.ref) payload.ref = inst.ref; // edit-in-place
+    fn(payload).then(function (res) {
+      var d = (res && res.data) || {};
+      // The opaque `ref` IS the fail-closed probe: truthy ref ⇒ persisted.
+      if (!d.ref || typeof d.ref !== 'string') { _idSaveFail(wrap, 'Storage did not confirm — not saved.'); return; }
+      inst.ref = d.ref;
+      inst.legacy = '';           // migration done — plaintext no longer needed
+      clearField(wrap);           // inbound hygiene: drop the raw value from the DOM
+      var inp = wrap.querySelector('.mastintake-input');
+      if (inp) inp.type = 'password';
+      setFeedback(wrap, '', '');
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+      toast('Encrypted and stored.');
+      // Hand the ref + masked to the call-site to persist (it owns the doc that the
+      // plaintext field used to live in). The engine never writes that doc.
+      _idNotify(inst, { ref: d.ref, masked: d.masked || null, last4: d.last4 || null, state: d.state || STATE.COLLECTED, kind: inst.kind });
+      identityRefresh(wrap, def); // re-read status → flips to collected/masked
+    }).catch(function (err) {
+      _idSaveFail(wrap, (err && err.message) || 'Could not store the value.');
+    });
+  }
+
+  function handleIdentitySave(wrap) {
+    var def = getDef(wrap.getAttribute('data-provider'));
+    var inst = _idInstances[wrap.id];
+    if (!def || !inst) return;
+    var value = takePending(wrap);
+    if (!value) { setFeedback(wrap, 'Enter a value first.', 'error'); return; }
+    var check = runValidate(fieldOf(def), value);
+    if (!check.ok) { setFeedback(wrap, check.hint || 'That value doesn’t look right.', 'error'); return; }
+    if (check.hint) setFeedback(wrap, check.hint, ''); // soft format nudge, non-blocking
+    _identityEncrypt(wrap, def, inst, value);
+  }
+
+  function handleIdentityMigrate(wrap) {
+    var def = getDef(wrap.getAttribute('data-provider'));
+    var inst = _idInstances[wrap.id];
+    if (!def || !inst || !inst.legacy) return;
+    _identityEncrypt(wrap, def, inst, inst.legacy);
+  }
+
+  // The gated decrypt round-trip — admin-only on the server. Puts the plaintext into
+  // the entry input for editing (the one sanctioned plaintext-in-DOM moment); it is
+  // cleared again on save. Never stashed anywhere persistent.
+  function handleIdentityReveal(wrap) {
+    var inst = _idInstances[wrap.id];
+    if (!inst || !inst.ref) return;
+    var tid = tenantId();
+    var fn = callable(CF_ID_REVEAL);
+    if (!tid || !fn) { setFeedback(wrap, 'Secure storage is unavailable.', 'error'); return; }
+    var btn = wrap.querySelector('.mastintake-id-reveal');
+    if (btn) { btn.disabled = true; btn.textContent = 'Revealing…'; }
+    fn({ tenantId: tid, ref: inst.ref }).then(function (res) {
+      var d = (res && res.data) || {};
+      if (typeof d.value !== 'string') {
+        if (btn) { btn.disabled = false; btn.textContent = 'Reveal to edit'; }
+        setFeedback(wrap, 'Could not reveal the value.', 'error');
+        return;
+      }
+      var maskedEl = wrap.querySelector('.mastintake-id-masked');
+      var entryEl = wrap.querySelector('.mastintake-id-entry');
+      var input = wrap.querySelector('.mastintake-input');
+      var saveBtn = wrap.querySelector('.mastintake-save');
+      if (maskedEl) maskedEl.style.display = 'none';
+      if (entryEl) entryEl.style.display = '';
+      if (input) { input.disabled = false; input.type = 'text'; input.value = d.value; input.focus(); }
+      if (saveBtn) saveBtn.disabled = false;
+      wrap.setAttribute('data-state', 'editing');
+      setStatusLine(wrap, 'Editing — Save to re-encrypt, or leave the page to keep the stored value.', '');
+    }).catch(function (err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Reveal to edit'; }
+      setFeedback(wrap, (err && err.message) || 'Only an owner can reveal this to edit.', 'error');
+    });
+  }
+
+  function handleIdentityClear(wrap) {
+    var def = getDef(wrap.getAttribute('data-provider'));
+    var inst = _idInstances[wrap.id];
+    if (!inst) return;
+    function doClear() {
+      var tid = tenantId();
+      var fn = callable(CF_ID_DELETE);
+      if (inst.ref && tid && fn) {
+        fn({ tenantId: tid, ref: inst.ref }).then(function () {
+          inst.ref = null; inst.legacy = '';
+          _idNotify(inst, { ref: null, masked: null, last4: null, state: STATE.NOT_COLLECTED, kind: inst.kind });
+          toast('Cleared.');
+          identityRefresh(wrap, def);
+        }).catch(function (err) { setFeedback(wrap, (err && err.message) || 'Could not clear.', 'error'); });
+      } else {
+        // No server record (e.g. a legacy-plaintext-only field) → just tell the
+        // call-site to drop the pointer/plaintext from its doc.
+        inst.ref = null; inst.legacy = '';
+        _idNotify(inst, { ref: null, masked: null, last4: null, state: STATE.NOT_COLLECTED, kind: inst.kind });
+        identityRefresh(wrap, def);
+      }
+    }
+    if (typeof window.mastConfirm === 'function') {
+      window.mastConfirm('Remove this stored value? This deletes the encrypted record.', { title: 'Clear value', danger: true })
+        .then(function (ok) { if (ok) doClear(); });
+    } else { doClear(); }
+  }
+
   // Single delegated listener set — paste/input feedback + Save/Revoke clicks.
   function bindDelegation() {
     if (_delegationBound || typeof document === 'undefined') return;
@@ -682,6 +994,10 @@
       var action = btn.getAttribute('data-mastintake-action');
       if (action === 'save') { e.preventDefault(); handleSave(wrap); }
       else if (action === 'revoke') { e.preventDefault(); handleRevoke(wrap); }
+      else if (action === 'id-save') { e.preventDefault(); handleIdentitySave(wrap); }
+      else if (action === 'id-migrate') { e.preventDefault(); handleIdentityMigrate(wrap); }
+      else if (action === 'id-reveal') { e.preventDefault(); handleIdentityReveal(wrap); }
+      else if (action === 'id-clear') { e.preventDefault(); handleIdentityClear(wrap); }
       else if (action === 'domain-add') { e.preventDefault(); handleDomainAdd(wrap); }
       else if (action === 'domain-verify') { e.preventDefault(); handleDomainVerify(wrap); }
       else if (action === 'domain-remove') { e.preventDefault(); handleDomainRemove(wrap); }
@@ -708,6 +1024,13 @@
         status(providerId).then(function (s) { applyDomainState(wrap, def, { available: true, status: s }); });
         return;
       }
+      // identity-data status is per-RECORD (ref-keyed), read from the wrapper's
+      // instance — NOT the provider-keyed probe cache (one provider can host many
+      // records, each with its own ref).
+      if (def.family === 'identity-data') {
+        identityRefresh(wrap, def);
+        return;
+      }
       probe(providerId).then(function (result) { applyState(wrap, def, result); });
     });
   }
@@ -715,6 +1038,14 @@
   // Force a re-probe and re-apply (after save/revoke/add/verify/remove).
   function refresh(providerId, wrap) {
     var def = getDef(providerId);
+    // identity-data re-reads its per-record status (ref from the wrapper instance).
+    if (def && def.family === 'identity-data') {
+      if (wrap) return identityRefresh(wrap, def);
+      var inodes = document.querySelectorAll('.' + FIELD_CLASS + '[data-provider="' + providerId + '"]');
+      var ips = [];
+      Array.prototype.forEach.call(inodes, function (w) { ips.push(identityRefresh(w, def)); });
+      return Promise.all(ips);
+    }
     // domain-control re-reads status via the adapter (no vault probe to bust).
     if (def && def.family === 'domain-control') {
       return status(providerId).then(function (s) {
@@ -803,6 +1134,11 @@
   function status(providerId) {
     var def = getDef(providerId);
     var family = def && def.family;
+    if (family === 'identity-data') {
+      // Identity status is per-RECORD (ref-keyed), not provider-keyed — a provider-
+      // level status() has no ref to read. The rendered field drives it via hydrate().
+      return Promise.resolve({ id: providerId, family: family, category: def && def.category, state: STATE.NOT_COLLECTED, detail: 'identity status is per-field (use the rendered field / hydrate)' });
+    }
     if (!family || FAIL_CLOSED_FAMILIES[family]) {
       // Held-secret / identity → vault status CF, fail-closed on any throw.
       var tid = tenantId();
@@ -861,6 +1197,12 @@
   function revoke(providerId, ctx) {
     var def = getDef(providerId);
     var family = def && def.family;
+    if (family === 'identity-data') {
+      // Identity delete is per-RECORD (needs the ref) — the field's Clear action
+      // drives it (handleIdentityClear → CF_ID_DELETE). A provider-level revoke has
+      // no ref, so it is intentionally not wired here.
+      return Promise.resolve({ ok: false, status: STATE.ERROR, error: 'identity delete is per-field (use the field’s Clear action)' });
+    }
     if (!family || FAIL_CLOSED_FAMILIES[family]) {
       var tid = tenantId();
       var fn = callable(CF_REVOKE);
