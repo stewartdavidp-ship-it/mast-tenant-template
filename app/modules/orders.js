@@ -3084,137 +3084,152 @@
     openModal(html);
   }
 
-  async function cancelOrder(orderId) {
-    try {
-      var o = orders[orderId];
-      if (!o) return;
-      var now = new Date().toISOString();
-      var reason = document.getElementById('cancelReason').value.trim();
+  // DOM-free cancellation core (single source for the legacy detail "Cancel
+  // Order" handler + the orders-v2 native action via OrdersBridge.cancelOrder).
+  // The DOM read of #cancelReason and the toast/closeModal UI live in the
+  // legacy handler; this core is the legacy cancellation logic VERBATIM with
+  // the reason lifted to an argument. It reads the live record from the global
+  // `orders` cache (seeded by the bridge when the V2 twin drives the flow).
+  // Firestore writes are byte-identical to the pre-extraction handler:
+  // releaseInventory (variant-aware), cancel open buildJobs reqs, write
+  // cancelledAt/cancelReason, MastFlow 'closed' transition (force), and the
+  // non-fatal CS-ticket creation. Returns void.
+  async function _cancelOrderCore(orderId, reason) {
+    var o = orders[orderId];
+    if (!o) return;
+    var now = new Date().toISOString();
 
-      var history = o.statusHistory ? o.statusHistory.slice() : [];
-      history.push({ status: 'cancelled', at: now, by: 'admin', note: reason || null });
+    var history = o.statusHistory ? o.statusHistory.slice() : [];
+    history.push({ status: 'cancelled', at: now, by: 'admin', note: reason || null });
 
-      // Release committed inventory (variant-aware)
-      if (o.fulfillment) {
-        (o.items || []).forEach(function(item) {
-          var ffKey = getItemFulfillmentKey(item);
-          var ff = o.fulfillment[ffKey];
-          if (ff && ff.source === 'stock' && ff.ready) {
-            releaseInventory(item.pid, item.qty || 1, getItemComboKey(item.pid, item.options));
-          }
-        });
-      }
-
-      // Cancel open production requests
-      var reqKeys = Object.keys(productionRequests).filter(function(k) {
-        return productionRequests[k].orderId === orderId &&
-          (productionRequests[k].status === 'pending' || productionRequests[k].status === 'assigned');
-      });
-      for (var i = 0; i < reqKeys.length; i++) {
-        await MastDB.productionRequests.update(reqKeys[i], {
-          status: 'cancelled',
-          cancelledAt: now
-        });
-        await writeAudit('update', 'buildJobs', reqKeys[i]);
-      }
-
-      // Write only the cancellation-specific fields here; let MastFlow.transition
-      // own the status flip + statusHistory append + workflow audit row, so the
-      // timeline has exactly one entry per transition (not one from here AND
-      // one from recordExtraPatch).
-      await MastDB.orders.update(orderId, {
-        cancelledAt: now,
-        cancelReason: reason || null
-      });
-      await writeAudit('update', 'orders', orderId);
-
-      // Route the workflow transition through MastFlow so the audit row at
-      // admin/workflowTransitions/order/{orderId}/{txId} fires. force:true
-      // bypasses requirement gating (operator's already decided);
-      // expectedFromPhase is omitted to skip the optimistic-lock (this is
-      // an admin-initiated cancellation, not a contested transition).
-      var cancelledRec = orders[orderId] || {};
-      cancelledRec.id = orderId;
-      // Seed statusHistory snapshot so recordExtraPatch appends to the
-      // current history, not an empty one (it reads from the live record).
-      cancelledRec.statusHistory = history;
-      try {
-        if (window.MastFlow && MastFlow.getDefinition('pickship')) {
-          await MastFlow.transition('pickship', cancelledRec, 'closed', {
-            recordId: orderId,
-            force: true,
-            reason: reason || 'admin cancellation'
-          });
-        } else {
-          // Engine not loaded (e.g. order list cancel without detail-view
-          // ever having opened) — fall back to the legacy write so the
-          // status flip still lands. Cancellation audit row is lost.
-          await MastDB.orders.update(orderId, {
-            status: 'cancelled',
-            statusHistory: history
-          });
+    // Release committed inventory (variant-aware)
+    if (o.fulfillment) {
+      (o.items || []).forEach(function(item) {
+        var ffKey = getItemFulfillmentKey(item);
+        var ff = o.fulfillment[ffKey];
+        if (ff && ff.source === 'stock' && ff.ready) {
+          releaseInventory(item.pid, item.qty || 1, getItemComboKey(item.pid, item.options));
         }
-      } catch (mfErr) {
-        console.error('[orders] MastFlow cancellation transition failed; falling back to legacy write:', mfErr);
+      });
+    }
+
+    // Cancel open production requests
+    var reqKeys = Object.keys(productionRequests).filter(function(k) {
+      return productionRequests[k].orderId === orderId &&
+        (productionRequests[k].status === 'pending' || productionRequests[k].status === 'assigned');
+    });
+    for (var i = 0; i < reqKeys.length; i++) {
+      await MastDB.productionRequests.update(reqKeys[i], {
+        status: 'cancelled',
+        cancelledAt: now
+      });
+      await writeAudit('update', 'buildJobs', reqKeys[i]);
+    }
+
+    // Write only the cancellation-specific fields here; let MastFlow.transition
+    // own the status flip + statusHistory append + workflow audit row, so the
+    // timeline has exactly one entry per transition (not one from here AND
+    // one from recordExtraPatch).
+    await MastDB.orders.update(orderId, {
+      cancelledAt: now,
+      cancelReason: reason || null
+    });
+    await writeAudit('update', 'orders', orderId);
+
+    // Route the workflow transition through MastFlow so the audit row at
+    // admin/workflowTransitions/order/{orderId}/{txId} fires. force:true
+    // bypasses requirement gating (operator's already decided);
+    // expectedFromPhase is omitted to skip the optimistic-lock (this is
+    // an admin-initiated cancellation, not a contested transition).
+    var cancelledRec = orders[orderId] || {};
+    cancelledRec.id = orderId;
+    // Seed statusHistory snapshot so recordExtraPatch appends to the
+    // current history, not an empty one (it reads from the live record).
+    cancelledRec.statusHistory = history;
+    try {
+      if (window.MastFlow && MastFlow.getDefinition('pickship')) {
+        await MastFlow.transition('pickship', cancelledRec, 'closed', {
+          recordId: orderId,
+          force: true,
+          reason: reason || 'admin cancellation'
+        });
+      } else {
+        // Engine not loaded (e.g. order list cancel without detail-view
+        // ever having opened) — fall back to the legacy write so the
+        // status flip still lands. Cancellation audit row is lost.
         await MastDB.orders.update(orderId, {
           status: 'cancelled',
           statusHistory: history
         });
       }
+    } catch (mfErr) {
+      console.error('[orders] MastFlow cancellation transition failed; falling back to legacy write:', mfErr);
+      await MastDB.orders.update(orderId, {
+        status: 'cancelled',
+        statusHistory: history
+      });
+    }
 
+    // Create CS ticket for admin-initiated cancellation (non-fatal)
+    if (!o.cancellationTicketId) {
+      try {
+        var tcSnap = await MastDB.get('cs_config/ticketing');
+        var tc = (tcSnap && tcSnap.val && tcSnap.val()) || {};
+        var tcPrefix = tc.prefix || 'T';
+        var nextNum = typeof tc.nextNumber === 'number' ? tc.nextNumber : 1;
+        var ticketNumber = tcPrefix + '-' + String(nextNum).padStart(4, '0');
+        var ticketId = 'ticket_' + Date.now().toString(36);
+        var cMsgId = 'msg_' + Date.now().toString(36);
+        var orderNum = o.orderNumber || orderId;
+        var contactEmail = o.email || o.billingEmail || '';
+        var contactName = o.billingName || o.customerName || '';
+        var cancellationMsg = 'Order #' + orderNum + ' was cancelled by an admin.' + (reason ? ' Reason: ' + reason : '');
+        await MastDB.set('cs_tickets/' + ticketId, {
+          id: ticketId,
+          ticketNumber: ticketNumber,
+          subject: 'Order #' + orderNum + ' cancelled by admin',
+          status: 'open',
+          priority: 'normal',
+          source: 'inquiry',
+          contactEmail: contactEmail,
+          contactName: contactName || null,
+          orderId: orderId,
+          body: 'Admin cancelled order #' + orderNum + '.',
+          createdAt: now,
+          updatedAt: now
+        });
+        await MastDB.set('cs_tickets/' + ticketId + '/messages/' + cMsgId, {
+          id: cMsgId,
+          body: cancellationMsg,
+          direction: 'outbound',
+          isInternal: true,
+          authorName: 'System',
+          authorEmail: null,
+          createdAt: now
+        });
+        if (tcSnap && tcSnap.val && tcSnap.val()) {
+          await MastDB.update('cs_config/ticketing', { nextNumber: nextNum + 1 });
+        } else {
+          await MastDB.set('cs_config/ticketing', { prefix: tcPrefix, nextNumber: nextNum + 1 });
+        }
+        await MastDB.orders.update(orderId, {
+          cancellationTicketId: ticketId,
+          cancellationTicketNumber: ticketNumber
+        });
+      } catch (csErr) {
+        console.warn('CS ticket creation failed for cancelled order', orderId, csErr);
+      }
+    }
+  }
+
+  async function cancelOrder(orderId) {
+    try {
+      var o = orders[orderId];
+      if (!o) return;
+      var reason = document.getElementById('cancelReason').value.trim();
+      await _cancelOrderCore(orderId, reason);
       closeModal();
       showToast('Order cancelled');
-
-      // Create CS ticket for admin-initiated cancellation (non-fatal)
-      if (!o.cancellationTicketId) {
-        try {
-          var tcSnap = await MastDB.get('cs_config/ticketing');
-          var tc = (tcSnap && tcSnap.val && tcSnap.val()) || {};
-          var tcPrefix = tc.prefix || 'T';
-          var nextNum = typeof tc.nextNumber === 'number' ? tc.nextNumber : 1;
-          var ticketNumber = tcPrefix + '-' + String(nextNum).padStart(4, '0');
-          var ticketId = 'ticket_' + Date.now().toString(36);
-          var cMsgId = 'msg_' + Date.now().toString(36);
-          var orderNum = o.orderNumber || orderId;
-          var contactEmail = o.email || o.billingEmail || '';
-          var contactName = o.billingName || o.customerName || '';
-          var cancellationMsg = 'Order #' + orderNum + ' was cancelled by an admin.' + (reason ? ' Reason: ' + reason : '');
-          await MastDB.set('cs_tickets/' + ticketId, {
-            id: ticketId,
-            ticketNumber: ticketNumber,
-            subject: 'Order #' + orderNum + ' cancelled by admin',
-            status: 'open',
-            priority: 'normal',
-            source: 'inquiry',
-            contactEmail: contactEmail,
-            contactName: contactName || null,
-            orderId: orderId,
-            body: 'Admin cancelled order #' + orderNum + '.',
-            createdAt: now,
-            updatedAt: now
-          });
-          await MastDB.set('cs_tickets/' + ticketId + '/messages/' + cMsgId, {
-            id: cMsgId,
-            body: cancellationMsg,
-            direction: 'outbound',
-            isInternal: true,
-            authorName: 'System',
-            authorEmail: null,
-            createdAt: now
-          });
-          if (tcSnap && tcSnap.val && tcSnap.val()) {
-            await MastDB.update('cs_config/ticketing', { nextNumber: nextNum + 1 });
-          } else {
-            await MastDB.set('cs_config/ticketing', { prefix: tcPrefix, nextNumber: nextNum + 1 });
-          }
-          await MastDB.orders.update(orderId, {
-            cancellationTicketId: ticketId,
-            cancellationTicketNumber: ticketNumber
-          });
-        } catch (csErr) {
-          console.warn('CS ticket creation failed for cancelled order', orderId, csErr);
-        }
-      }
     } catch (err) {
       showToast('Error cancelling order: ' + err.message, true);
     }
@@ -3224,6 +3239,30 @@
   // Order Notes
   // ============================================================
 
+  // DOM-free note-append core (single source for the legacy detail note handler
+  // + the orders-v2 native action via OrdersBridge.addNote). The DOM read of
+  // #orderNoteInput and the toast/input-clear UI live in the legacy handler;
+  // this core is the legacy note-write logic VERBATIM with the note text lifted
+  // to an argument. Shape-aware: preserves the map shape (tenant-MCP) when the
+  // existing notes are an object, else appends to the array form. Reads the
+  // live record from the global `orders` cache (seeded by the bridge when the
+  // V2 twin drives the flow). Firestore writes are byte-identical. Returns void.
+  async function _addOrderNoteCore(orderId, text) {
+    var o = orders[orderId];
+    var rawNotes = o && o.notes;
+    var newNote = { text: text, at: new Date().toISOString(), by: 'admin' };
+    if (rawNotes && !Array.isArray(rawNotes) && typeof rawNotes === 'object') {
+      // Map shape (tenant-MCP) — append a new map entry, preserve shape
+      var noteId = 'n' + Date.now() + Math.random().toString(36).slice(2, 6);
+      await MastDB.orders.subRef(orderId, 'notes', noteId).set(newNote);
+    } else {
+      var notes = Array.isArray(rawNotes) ? rawNotes.slice() : [];
+      notes.push(newNote);
+      await MastDB.orders.subRef(orderId, 'notes').set(notes);
+    }
+    await writeAudit('update', 'orders', orderId);
+  }
+
   async function addOrderNote(orderId) {
     var input = document.getElementById('orderNoteInput');
     if (!input) return;
@@ -3231,24 +3270,39 @@
     if (!text) return;
 
     try {
-      var o = orders[orderId];
-      var rawNotes = o && o.notes;
-      var newNote = { text: text, at: new Date().toISOString(), by: 'admin' };
-      if (rawNotes && !Array.isArray(rawNotes) && typeof rawNotes === 'object') {
-        // Map shape (tenant-MCP) — append a new map entry, preserve shape
-        var noteId = 'n' + Date.now() + Math.random().toString(36).slice(2, 6);
-        await MastDB.orders.subRef(orderId, 'notes', noteId).set(newNote);
-      } else {
-        var notes = Array.isArray(rawNotes) ? rawNotes.slice() : [];
-        notes.push(newNote);
-        await MastDB.orders.subRef(orderId, 'notes').set(notes);
-      }
-      await writeAudit('update', 'orders', orderId);
+      await _addOrderNoteCore(orderId, text);
       input.value = '';
       showToast('Note added');
     } catch (err) {
       showToast('Error adding note: ' + err.message, true);
     }
+  }
+
+  // DOM-free full-side-effect "mark shipped" core. Mirrors the direct-to-shipped
+  // writes of the legacy transitionOrder('shipped') path: status='shipped' +
+  // shippedAt, a 'shipped' statusHistory entry, and the onOrderShipped CF
+  // (server-side inventory deduction + customer shipped-email). It does NOT
+  // emit toasts / re-render / run the transition-validity guard — those are
+  // caller concerns. Reads the live record from the global `orders` cache
+  // (seeded by the bridge). This core is consumed ONLY by
+  // OrdersBridge.bulkMarkShipped, which is DEFINED but NOT wired this PR (PR3
+  // refactors the legacy bulk handler onto it so bulk runs FULL side-effects
+  // instead of today's bare status flip). Returns void.
+  async function _markOrderShippedCore(orderId) {
+    var o = orders[orderId];
+    if (!o) return;
+    var now = new Date().toISOString();
+    var history = Array.isArray(o.statusHistory) ? o.statusHistory.slice() : (o.statusHistory ? Object.values(o.statusHistory) : []);
+    history.push({ status: 'shipped', at: now, by: 'admin' });
+    var updates = { status: 'shipped', shippedAt: now, statusHistory: history };
+    await MastDB.orders.update(orderId, updates);
+    Object.keys(updates).forEach(function(k) { o[k] = updates[k]; });
+    await writeAudit('update', 'orders', orderId);
+    // Trigger inventory deduction + shipped email via cloud function (non-fatal,
+    // matches the legacy transitionOrder shipped branch).
+    try {
+      await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
+    } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
   }
 
   // ============================================================
@@ -6107,6 +6161,143 @@
     // milestoneStages() → the canonical stage list (key/label/template) so the
     // twin's Post-Milestone form matches the legacy modal exactly.
     milestoneStages: function () { return COMMISSION_MILESTONE_STAGES.slice(); }
+  };
+
+  // ============================================================
+  // OrdersBridge — data-object entry to the SAME order write cores
+  // ============================================================
+  //
+  // Orders is the DEFAULT admin screen and the orders-v2 redesign twin (later
+  // PRs) is a Process surface that must NOT reimplement the inventory /
+  // production-request / refund / cancellation / note logic — a second copy
+  // would drift from the legacy detail screen on the most-trafficked surface.
+  // This bridge exposes those write actions parameterized by data (the legacy
+  // detail handlers read the form DOM, so they can't be called with an object).
+  // It mirrors window.CommissionsBridge / window.ProductionBridge: thin,
+  // additive, delegates to the shared cores extracted above. It changes NO
+  // behavior on the legacy surface — the legacy detail handlers now call the
+  // same cores, so V1 and V2 share ONE byte-identical Firestore write path.
+  //
+  // The cores read the live record from the global `orders` cache (keyed by
+  // _key — the order id). When the twin drives the flow, the legacy orders
+  // listener may not have populated that cache, so each bridge method seeds it
+  // from the supplied record (or a fresh single-record fetch) before calling
+  // the core. Refund is intentionally absent — it stays on the transitionRma CF
+  // path (a later PR), keeping its separate hasPermission('rma','approve')
+  // server gate. There is no extra RBAC gate inside the bridge: the twin gates
+  // can('orders','edit') before invoking, matching the CommissionsBridge model.
+  function _ordersBridgeSeed(orderId, record) {
+    if (record && typeof record === 'object') {
+      var prev = orders[orderId] || {};
+      orders[orderId] = Object.assign({}, prev, record, { _key: orderId });
+      return Promise.resolve(orders[orderId]);
+    }
+    if (orders[orderId]) return Promise.resolve(orders[orderId]);
+    return Promise.resolve(MastDB.orders.get(orderId)).then(function (o) {
+      orders[orderId] = Object.assign({ _key: orderId }, o || {});
+      return orders[orderId];
+    });
+  }
+
+  window.OrdersBridge = {
+    // triageConfirm(orderId, itemActions, record?) → void. itemActions carries
+    // the per-item source choices the legacy triage DOM used to supply:
+    // [{ item, action:'stock'|'build' }]. Applies per-item fulfillment source,
+    // reserveInventory for stock items, createProductionRequests (admin/buildJobs
+    // status:'pending', links fulfillment.{ffKey}.buildJobId) for build items,
+    // sets status→pack|building, writes statusHistory, audits. Delegates to the
+    // pre-existing DOM-free core triageAndConfirmOrder (which the legacy
+    // executeTriageConfirm also calls after its DOM read).
+    triageConfirm: function (orderId, itemActions, record) {
+      return _ordersBridgeSeed(orderId, record).then(function () { return triageAndConfirmOrder(orderId, itemActions); });
+    },
+    // cancelOrder(orderId, reason, record?) → void. reason replaces the legacy
+    // #cancelReason DOM read. Releases committed inventory (variant-aware),
+    // cancels open admin/buildJobs reqs (pending/assigned→cancelled), writes
+    // cancelledAt/cancelReason, MastFlow transition to 'closed' (force), and
+    // auto-creates the CS ticket. Delegates to _cancelOrderCore.
+    cancelOrder: function (orderId, reason, record) {
+      return _ordersBridgeSeed(orderId, record).then(function () { return _cancelOrderCore(orderId, reason); });
+    },
+    // addNote(orderId, text, record?) → void. text replaces the legacy
+    // #orderNoteInput DOM read. Shape-aware notes write (map shape preserved for
+    // tenant-MCP orders, else array append) + audit. Delegates to _addOrderNoteCore.
+    addNote: function (orderId, text, record) {
+      return _ordersBridgeSeed(orderId, record).then(function () { return _addOrderNoteCore(orderId, text); });
+    },
+    // sendEmail(orderId, opts) → CF result. Thin pass-through over the EXISTING
+    // order-email CFs (no new logic). opts.emailType present → templated
+    // testOrderEmail; else opts.subject+opts.body → sendCustomOrderEmail. Returns
+    // the httpsCallable result (result.data.sentTo). Throws on transport error.
+    sendEmail: function (orderId, opts) {
+      opts = opts || {};
+      var tenantId = MastDB.tenantId();
+      if (opts.emailType) {
+        return firebase.functions().httpsCallable('testOrderEmail')({
+          orderId: orderId,
+          emailType: opts.emailType,
+          tenantId: tenantId
+        });
+      }
+      return firebase.functions().httpsCallable('sendCustomOrderEmail')({
+        orderId: orderId,
+        subject: opts.subject,
+        body: opts.body,
+        tenantId: tenantId
+      });
+    },
+    // listEmails(orderId) → [email] sorted newest-first (read-only). Thin
+    // pass-through over MastDB.emails.queryByOrder, normalizing the RTDB
+    // DataSnapshot / Firestore-map / array shapes the same way loadOrderEmails
+    // does for render.
+    listEmails: function (orderId) {
+      return Promise.resolve(MastDB.emails.queryByOrder(orderId)).then(function (snap) {
+        var emails = [];
+        if (snap && typeof snap.forEach === 'function' && typeof snap.val === 'function' && !Array.isArray(snap)) {
+          snap.forEach(function (child) { var e = child.val() || {}; e._key = child.key; emails.push(e); });
+        } else if (Array.isArray(snap)) {
+          snap.forEach(function (e, i) { if (e && typeof e === 'object') { if (!e._key) e._key = 'idx_' + i; emails.push(e); } });
+        } else if (snap && typeof snap === 'object') {
+          Object.keys(snap).forEach(function (key) { var e = snap[key]; if (e && typeof e === 'object') { e._key = key; emails.push(e); } });
+        }
+        emails.sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+        return emails;
+      });
+    },
+    // bulkMarkShipped(keys) → { ok, fail }. DEFINED but NOT wired this PR (PR3
+    // refactors the legacy bulk handler onto it so bulk runs FULL ship side
+    // effects — statusHistory + onOrderShipped inventory deduction + email —
+    // instead of today's bare status flip). Delegates per-row to the same
+    // _markOrderShippedCore the detail surface will use. Etsy-skip / confirm
+    // prompts stay on the caller (UI concern), matching exportCsv staying in
+    // the twin (MastEntity.exportRows).
+    bulkMarkShipped: function (keys) {
+      keys = keys || [];
+      var ok = 0, fail = 0;
+      return keys.reduce(function (chain, orderId) {
+        return chain.then(function () {
+          return _ordersBridgeSeed(orderId).then(function () { return _markOrderShippedCore(orderId); })
+            .then(function () { ok++; })
+            .catch(function () { fail++; });
+        });
+      }, Promise.resolve()).then(function () { return { ok: ok, fail: fail }; });
+    },
+    // bulkCancel(keys, reason?) → { ok, fail }. DEFINED but NOT wired this PR
+    // (PR3). Delegates per-row to the SAME _cancelOrderCore the detail surface
+    // uses, so bulk cancellation runs FULL side effects (inventory release,
+    // buildJobs cancel, MastFlow transition, CS ticket) instead of today's bare
+    // status flip. Confirm prompt stays on the caller (UI concern).
+    bulkCancel: function (keys, reason) {
+      keys = keys || [];
+      var ok = 0, fail = 0;
+      return keys.reduce(function (chain, orderId) {
+        return chain.then(function () {
+          return _ordersBridgeSeed(orderId).then(function () { return _cancelOrderCore(orderId, reason || ''); })
+            .then(function () { ok++; })
+            .catch(function () { fail++; });
+        });
+      }, Promise.resolve()).then(function () { return { ok: ok, fail: fail }; });
+    }
   };
   window.renderDashCardNewOrders = renderDashCardNewOrders;
   window.renderDashCardReadyToShip = renderDashCardReadyToShip;
