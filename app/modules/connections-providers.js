@@ -815,6 +815,30 @@
       disconnectTitle: 'Disconnect Square'
     }
   });
+  // Squarespace — C→A hybrid (paste the developer-app client id + secret, then
+  // OAuth), mirroring Square. The live squarespaceOAuthStart / squarespaceOAuthCallback
+  // CFs (mast-architecture) + the squarespaceTokenRefresh cron back this; the
+  // server reads the same per-tenant client-id/client-secret the connect pre-leg
+  // stores. authType 'C' (NOT 'A'): there is no platform-wide Mast Squarespace app.
+  var squarespaceChannel = _channelDef({
+    id: 'squarespace', label: 'Squarespace', icon: '⬛', authType: 'C',
+    refreshable: true, tokenLifetime: 'short-refreshable',   // Squarespace: 30-min access / 7-day refresh (squarespaceTokenRefresh cron)
+    guide: {
+      steps: [
+        'Click Connect and paste your Squarespace Developer-app client id + secret.',
+        'Approve the connection on Squarespace’s own page (opens in a new tab).',
+        'Return here and click Refresh status.'
+      ],
+      estSeconds: 180
+    },
+    copy: {
+      connectLabel: 'Connect Squarespace',
+      connectPrompt: 'Connect your Squarespace store to sync products and inventory. You can skip this and add it later.',
+      pendingDetail: 'Approve the connection in the Squarespace tab that just opened, then click Refresh status.',
+      disconnectConfirm: 'Disconnect Squarespace? Tokens are revoked, stored credentials deleted, and webhook subscriptions removed. You can reconnect later.',
+      disconnectTitle: 'Disconnect Squarespace'
+    }
+  });
 
   // ── New OAuth providers — family: delegated-auth, COMING SOON (available:false) ──
   //
@@ -875,11 +899,6 @@
       disconnectConfirm: 'Disconnect Wix? Mast’s stored access is deleted. The Mast app may still appear in your Wix dashboard until you remove it there. You can reconnect later.',
       disconnectTitle: 'Disconnect Wix'
     }
-  });
-  var squarespaceChannel = _comingSoonDef({
-    id: 'squarespace', label: 'Squarespace', icon: '⬛', authType: 'A', category: 'channel',
-    refreshable: true, tokenLifetime: 'short-refreshable',   // Squarespace: 30-min access / 7-day refresh
-    comingSoon: 'One-click Squarespace connect is coming soon — store sync via Squarespace OAuth.'
   });
   var wooChannel = _comingSoonDef({
     id: 'woocommerce', label: 'WooCommerce', icon: '🪵', authType: 'B', category: 'channel',
