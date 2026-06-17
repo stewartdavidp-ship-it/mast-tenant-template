@@ -26,8 +26,17 @@
  * {prefix}-shippo-api-token fallback), and `stripe` (the payment-processor SECRET
  * key; server consumer payment-abstraction.js reads it vault-first with a legacy
  * {prefix}-stripe-secret-key fallback — only the sk_ secret key is vaulted, the
- * pk_ publishable key stays a client-side plain field). domain-control:
- * `email-domain` + `custom-domain` (DNS proofs, no secret). All field keys here
+ * pk_ publishable key stays a client-side plain field), and the CHANNEL
+ * held-secrets — `square-sandbox-access-token`, `square-production-access-token`,
+ * `etsy-api-key`, `etsy-shared-secret`, `shopify-admin-token`,
+ * `shopify-webhook-secret`, `shopify-client-secret` (each a single secret the
+ * server consumer reads vault-first via getTenantHeldSecret with a legacy
+ * `{prefix}-<base>` fallback, mast-architecture PR 297). ONE PROVIDER PER SECRET:
+ * the engine is single-secret-per-provider, so a channel that holds several
+ * secrets (Square sandbox+prod tokens; Etsy keystring+shared-secret; Shopify
+ * admin-token+webhook-secret+client-secret) registers one provider per secret —
+ * mirroring the identity-data fields. domain-control: `email-domain` +
+ * `custom-domain` (DNS proofs, no secret). All provider ids + field keys here
  * MUST match the mast-architecture/functions/mast-intake-vault.js allowlist. The
  * remaining held-secret sites (Maps, Anthropic, …) are deferred to later sessions
  * and are NOT registered here.
@@ -266,6 +275,128 @@
       }
     }
   };
+
+  // ── Channel held-secrets — family: held-secret, archetype C (paste) ──
+  //
+  // The custom-app secrets / access tokens / webhook secrets a maker pastes for
+  // their Square / Etsy / Shopify connection. DISTINCT from the OAuth channel
+  // tokens (those flow through the connect-channel OAuth dance, not the vault) —
+  // only the manually-supplied held secrets register here. ONE PROVIDER PER
+  // SECRET (the engine renders/PUTs exactly def.fields[0]); the provider id +
+  // field key MUST match mast-architecture/functions/mast-intake-vault.js. Each
+  // server consumer reads it vault-first via getTenantHeldSecret with a legacy
+  // {prefix}-<base> fallback (mast-architecture PR 297). credentialOwner:'customer'.
+  function _channelHeldSecret(spec) {
+    return {
+      id: spec.id,
+      label: spec.label,
+      icon: spec.icon || '🔌',
+      family: 'held-secret',
+      category: 'channel',
+      authType: 'C',                 // guided key-paste
+      credentialOwner: 'customer',
+      gate: 'skippable',             // the channel works via OAuth / manual entry without it
+      conciergeEligible: false,      // a human must never receive a raw held secret (design §6.5)
+      guide: spec.guide,
+      fields: [
+        {
+          key: spec.fieldKey,        // MUST match the vault allowlist field key
+          label: spec.fieldLabel || spec.label,
+          mask: true,
+          // Permissive shape check (recoverable hint only — the server vault is
+          // authoritative).
+          validate: spec.validate,
+          example: spec.example,
+          minLen: spec.minLen        // matches the server vault minLen
+        }
+      ],
+      // Held-secret persistence is gated by the engine's RUNTIME vault-CF probe,
+      // NOT by anything declared here. `kind` is descriptive metadata only.
+      vault: { kind: 'api-key' },
+      adapter: {
+        connect: function (ctx) {
+          if (window.MastIntake && typeof window.MastIntake.collect === 'function') {
+            return window.MastIntake.collect(spec.id, ctx || {});
+          }
+          return Promise.resolve({ ok: false, error: 'secure-intake-unavailable' });
+        }
+      }
+    };
+  }
+
+  // Square — per-env access tokens (the sandbox + production OAuth/manual access
+  // tokens the storefront uses to call Square). Location IDs are non-secret config
+  // and stay plain; the webhook signature key is server-auto-provisioned, not pasted.
+  var squareGuide = {
+    deepLink: 'https://developer.squareup.com/apps',
+    steps: [
+      'Open Square → Developer Dashboard → your application.',
+      'Copy the access token for the environment you’re configuring (Sandbox or Production).',
+      'Paste it here.'
+    ],
+    estSeconds: 90
+  };
+  var squareSandboxToken = _channelHeldSecret({
+    id: 'square-sandbox-access-token', label: 'Square sandbox access token', icon: '◻',
+    fieldKey: 'accessToken', fieldLabel: 'Sandbox access token',
+    validate: /^[A-Za-z0-9_-]{16,}$/, example: 'EAAAl…', minLen: 16, guide: squareGuide
+  });
+  var squareProductionToken = _channelHeldSecret({
+    id: 'square-production-access-token', label: 'Square production access token', icon: '◼',
+    fieldKey: 'accessToken', fieldLabel: 'Production access token',
+    validate: /^[A-Za-z0-9_-]{16,}$/, example: 'EAAAl…', minLen: 16, guide: squareGuide
+  });
+
+  // Etsy — developer-app keystring (api key) + shared secret. Both are required
+  // in the v3 x-api-key header (keystring:sharedSecret) before the OAuth handshake.
+  var etsyGuide = {
+    deepLink: 'https://www.etsy.com/developers/your-apps',
+    steps: [
+      'Open Etsy → Developers → your app.',
+      'Copy the Keystring (API key) and the Shared Secret.',
+      'Paste each here, then connect your shop.'
+    ],
+    estSeconds: 120
+  };
+  var etsyApiKey = _channelHeldSecret({
+    id: 'etsy-api-key', label: 'Etsy API keystring', icon: '🌿',
+    fieldKey: 'apiKey', fieldLabel: 'API keystring',
+    validate: /^[A-Za-z0-9]{16,}$/, example: 'abc123def456…', minLen: 16, guide: etsyGuide
+  });
+  var etsySharedSecret = _channelHeldSecret({
+    id: 'etsy-shared-secret', label: 'Etsy shared secret', icon: '🌿',
+    fieldKey: 'sharedSecret', fieldLabel: 'Shared secret',
+    // Etsy shared secrets are short — minLen 8 (matches the vault).
+    validate: /^[A-Za-z0-9]{8,}$/, example: '••••••••••', minLen: 8, guide: etsyGuide
+  });
+
+  // Shopify — Admin API access token (shpat_…), the webhook secret used for HMAC
+  // verification, and the client_credentials app client secret. The client_id is
+  // the app's public identifier (not a held secret) and stays a plain field.
+  var shopifyGuide = {
+    deepLink: 'https://www.shopify.com/admin/settings/apps',
+    steps: [
+      'Open Shopify admin → Settings → Apps and sales channels → Develop apps.',
+      'Open your custom app → API credentials.',
+      'Copy the Admin API access token (and, for HMAC, the API secret key).'
+    ],
+    estSeconds: 120
+  };
+  var shopifyAdminToken = _channelHeldSecret({
+    id: 'shopify-admin-token', label: 'Shopify Admin API access token', icon: '🛍',
+    fieldKey: 'accessToken', fieldLabel: 'Admin API access token',
+    validate: /^shpat_[A-Za-z0-9]{16,}$/, example: 'shpat_…', minLen: 16, guide: shopifyGuide
+  });
+  var shopifyWebhookSecret = _channelHeldSecret({
+    id: 'shopify-webhook-secret', label: 'Shopify webhook secret', icon: '🛍',
+    fieldKey: 'webhookSecret', fieldLabel: 'Webhook secret (API secret key)',
+    validate: /^[A-Za-z0-9_]{16,}$/, example: 'Shopify API secret key…', minLen: 16, guide: shopifyGuide
+  });
+  var shopifyClientSecret = _channelHeldSecret({
+    id: 'shopify-client-secret', label: 'Shopify client secret', icon: '🛍',
+    fieldKey: 'clientSecret', fieldLabel: 'Client secret',
+    validate: /^[A-Za-z0-9_]{16,}$/, example: 'Shopify app client secret…', minLen: 16, guide: shopifyGuide
+  });
 
   // ── Email sending domain — family: domain-control, archetype D (DNS verify) ──
   //
@@ -547,6 +678,13 @@
   window.ConnectionsProviders.sendgrid = sendgrid;
   window.ConnectionsProviders.shippo = shippo;
   window.ConnectionsProviders.stripe = stripe;
+  window.ConnectionsProviders['square-sandbox-access-token'] = squareSandboxToken;
+  window.ConnectionsProviders['square-production-access-token'] = squareProductionToken;
+  window.ConnectionsProviders['etsy-api-key'] = etsyApiKey;
+  window.ConnectionsProviders['etsy-shared-secret'] = etsySharedSecret;
+  window.ConnectionsProviders['shopify-admin-token'] = shopifyAdminToken;
+  window.ConnectionsProviders['shopify-webhook-secret'] = shopifyWebhookSecret;
+  window.ConnectionsProviders['shopify-client-secret'] = shopifyClientSecret;
   window.ConnectionsProviders['email-domain'] = emailDomain;
   window.ConnectionsProviders['custom-domain'] = customDomain;
   window.ConnectionsProviders['license-number'] = licenseNumber;
@@ -559,6 +697,13 @@
     window.MastIntake.register(sendgrid);
     window.MastIntake.register(shippo);
     window.MastIntake.register(stripe);
+    window.MastIntake.register(squareSandboxToken);
+    window.MastIntake.register(squareProductionToken);
+    window.MastIntake.register(etsyApiKey);
+    window.MastIntake.register(etsySharedSecret);
+    window.MastIntake.register(shopifyAdminToken);
+    window.MastIntake.register(shopifyWebhookSecret);
+    window.MastIntake.register(shopifyClientSecret);
     window.MastIntake.register(emailDomain);
     window.MastIntake.register(customDomain);
     window.MastIntake.register(licenseNumber);
