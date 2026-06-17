@@ -112,6 +112,11 @@
     gate: 'skippable',             // Mast-managed mail.mastplatform.com works without it
     conciergeEligible: false,      // engine forces false anyway (not delegated-auth A)
     rbac: { route: 'settings', axis: 'edit' },  // engine pre-checks; adapter re-gates
+    copy: {
+      addPrompt: 'No sending domain set up yet. Add the domain you send email from.',
+      removeConfirm: 'Remove this sending domain from Mast? Cleanup in your email provider is handled separately.',
+      removeTitle: 'Remove sending domain'
+    },
 
     guide: {
       // No single deepLink — registrar links differ per record; the DNS table the
@@ -191,14 +196,130 @@
     }
   };
 
+  // ── Storefront custom domain — family: domain-control, archetype D (DNS + SSL) ─
+  //
+  // The maker points a domain they own (e.g. mycoolshop.com) at the Mast storefront.
+  // Collects NO secret — DNS-ownership proof via the manageDomain CF. UNLIKE
+  // email-domain: the CF is a RAW HTTP endpoint (Bearer idToken + X-Tenant-ID,
+  // verb-dispatched), the DNS records come from the add/verify RESPONSE (not a
+  // status doc), and the ladder has 3 rungs (SSL Active > DNS Verified > Pending).
+  // The adapter maps all of that to the engine's connected/pending state + a
+  // `detail`/`instructions`, so the engine stays provider-agnostic.
+  //
+  // SCOPE: a single custom storefront domain (the common case). The primary
+  // .runmast.com subdomain + Firebase default are auto-managed and are NOT intakes.
+  // Multi-custom-domain (rare) is a follow-up (an engine domain-list mode).
+  function _manageDomain(action, domain) {
+    return window.firebase.auth().currentUser.getIdToken().then(function (token) {
+      var tid = window.MastDB.tenantId();
+      var body = { action: action, tenantId: tid };
+      if (domain) body.domain = domain;
+      return fetch(window.CLOUD_FUNCTIONS_BASE + '/manageDomain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'X-Tenant-ID': tid },
+        body: JSON.stringify(body)
+      }).then(function (resp) {
+        return resp.json().then(function (data) {
+          if (!resp.ok) throw new Error((data && data.error) || (action + ' failed'));
+          return data || {};
+        });
+      });
+    });
+  }
+
+  var customDomain = {
+    id: 'custom-domain',
+    label: 'Custom storefront domain',
+    icon: '🌐',
+    family: 'domain-control',
+    category: 'hosting',
+    authType: 'D',
+    credentialOwner: 'customer',
+    gate: 'skippable',
+    conciergeEligible: false,
+    rbac: { route: 'settings', axis: 'edit' },  // engine gates add/verify/remove; CF re-checks
+    copy: {
+      addPrompt: 'No custom domain connected yet. Add a domain you own to point it at your storefront.',
+      removeConfirm: 'Remove “{domain}”? This disconnects it from your storefront.',
+      removeTitle: 'Remove domain'
+    },
+    guide: {
+      steps: [
+        'Enter a domain you own (e.g. mycoolshop.com).',
+        'Add the DNS records shown below at your registrar (use the quick-links).',
+        'Click Verify — DNS + SSL can take from a few minutes up to 48 hours.'
+      ],
+      estSeconds: 600
+    },
+    fields: [
+      { key: 'domain', label: 'Custom domain', mask: false,
+        validate: /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/,
+        example: 'mycoolshop.com' }
+    ],
+    // NO `vault` block — domain-control collects no secret.
+    adapter: {
+      // add → manageDomain 'add'. DNS records come back in dnsInstructions and are
+      // rendered directly by the engine (they are NOT in the list/status read).
+      setup: function (ctx) {
+        return _manageDomain('add', ctx.domain).then(function (data) {
+          if (typeof writeAudit === 'function') writeAudit('create', 'settings', 'customDomain', { domain: ctx.domain });
+          return { ok: true, state: 'pending', domain: ctx.domain,
+            instructions: data.dnsInstructions || null,
+            detail: 'Domain registered — add the DNS records below, then click Verify.' };
+        });
+      },
+      // verify → manageDomain 'verify'. 3-rung ladder → engine state + detail.
+      verify: function (ctx) {
+        return _manageDomain('verify', ctx && ctx.domain).then(function (data) {
+          if (data.sslActive) {
+            return { ok: true, state: 'connected', detail: '✓ SSL active — your storefront is live on this domain.' };
+          }
+          if (data.dnsVerified) {
+            // DNS done, SSL still provisioning — no records to re-show.
+            return { ok: true, state: 'pending', detail: 'DNS verified — SSL is being provisioned. Check back in a few minutes.' };
+          }
+          return { ok: true, state: 'pending', instructions: data.dnsInstructions || null,
+            detail: 'DNS not yet propagated — this can take up to 48 hours. Verify again later.' };
+        });
+      },
+      // healthCheck → manageDomain 'list'; find the tenant's custom domain (common
+      // case: one). The list carries NO records, so a pending domain shows a "click
+      // Verify" hint and the records reappear from the verify response.
+      healthCheck: function () {
+        return _manageDomain('list').then(function (data) {
+          var domains = (data && data.domains) || [];
+          var custom = null;
+          for (var i = 0; i < domains.length; i++) { if (domains[i].type === 'custom') { custom = domains[i]; break; } }
+          if (!custom) return { state: 'not-collected' };
+          if (custom.hostingStatus === 'CONNECTED') {
+            return { state: 'connected', domain: custom.domain, detail: '✓ SSL active — your storefront is live on this domain.' };
+          }
+          if (custom.dnsVerified) {
+            return { state: 'pending', domain: custom.domain, detail: 'DNS verified — SSL is being provisioned. Check back shortly, or click Verify.' };
+          }
+          return { state: 'pending', domain: custom.domain, detail: 'Pending DNS — click Verify to see the records to add and re-check.' };
+        });
+      },
+      // remove → manageDomain 'remove' (disconnects from the storefront).
+      remove: function (ctx) {
+        return _manageDomain('remove', ctx && ctx.domain).then(function () {
+          if (typeof writeAudit === 'function') writeAudit('delete', 'settings', 'customDomain', { domain: (ctx && ctx.domain) || '' });
+          return { ok: true, status: 'not-collected' };
+        });
+      }
+    }
+  };
+
   // Register with the engine (primary), and publish a plain-global catalog as a
   // load-order fallback the engine can read if it hydrates before register runs.
   window.ConnectionsProviders = window.ConnectionsProviders || {};
   window.ConnectionsProviders.github = github;
   window.ConnectionsProviders['email-domain'] = emailDomain;
+  window.ConnectionsProviders['custom-domain'] = customDomain;
   if (window.MastIntake && typeof window.MastIntake.register === 'function') {
     window.MastIntake.register(github);
     window.MastIntake.register(emailDomain);
+    window.MastIntake.register(customDomain);
   }
 
   // Catalog module: no routes (not a routable view) and no MastDB writes.
