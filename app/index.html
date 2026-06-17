@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-155941-13702d31"></script>
+  <script src="../shared/mastdb.js?v=20260617-161022-51603970"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-155941-13702d31"></script>
-  <script src="../shared/brand-sync.js?v=20260617-155941-13702d31"></script>
+  <script src="../shared/customer-filters.js?v=20260617-161022-51603970"></script>
+  <script src="../shared/brand-sync.js?v=20260617-161022-51603970"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-155941-13702d31"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-161022-51603970"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-155941-13702d31"></script>
-  <script src="../shared/mast-io.js?v=20260617-155941-13702d31"></script>
-  <script src="../shared/mast-entity.js?v=20260617-155941-13702d31"></script>
+  <script src="../shared/mast-ui.js?v=20260617-161022-51603970"></script>
+  <script src="../shared/mast-io.js?v=20260617-161022-51603970"></script>
+  <script src="../shared/mast-entity.js?v=20260617-161022-51603970"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-155941-13702d31"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-161022-51603970"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-155941-13702d31"></script>
+  <script src="../shared/mast-intake.js?v=20260617-161022-51603970"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -20977,6 +20977,12 @@ var SECTION_ROUTES = {
                         'membership', 'promotions'],
   'events':            ['show-find', 'show-apply', 'show-prep',
                         'show-execute', 'show-history',
+                        // shows-v2 twin lens routes (cutover PR7) — keep the V2
+                        // routes in the same section so canViewSection() resolves
+                        // them through the events permission defaults, not the
+                        // catch-all allow path.
+                        'shows-v2', 'show-find-v2', 'show-apply-v2',
+                        'show-prep-v2', 'show-execute-v2', 'show-history-v2',
                         'events-shows', 'events-settings'],
   'classes':           ['book', 'instructors', 'resources', 'passes',
                         'enrollments', 'calendar', 'students',
@@ -21140,6 +21146,14 @@ var MAST_V2_ROUTE_MAP = {
   // suppressions → the audit queue's Muted-rules lens (audit-suppressions-v2
   // was retired into audit-v2 — one audit pipeline, admin-v2-build-plan.md Q1).
   campaigns: 'campaigns-v2', 'email-log': 'email-log-v2', 'marketing-calendar': 'marketing-calendar-v2', channels: 'channels-v2', suppressions: 'audit-muted-v2',
+  // Shows lifecycle → the shows-v2 twin (Find/Apply/Prep/Execute/History lenses).
+  // Each legacy route maps 1:1 to its lens twin so the sidebar items
+  // (data-route="show-find"/"show-apply"/…) reverse-lookup + highlight correctly.
+  // `show` (the bare hub route) lands on shows-v2's default Apply lens — same as
+  // the legacy `show` redirect to `show-apply`. navigateToClassic() still bypasses
+  // via _skipV2RemapOnce so an explicit-legacy user reaches V1 shows.js.
+  show: 'shows-v2', 'show-find': 'show-find-v2', 'show-apply': 'show-apply-v2',
+  'show-prep': 'show-prep-v2', 'show-execute': 'show-execute-v2', 'show-history': 'show-history-v2',
   pack: 'pack-v2', ship: 'ship-v2', rma: 'rma-v2',
   pos: 'pos-v2', 'commission-terms': 'commission-terms-v2',
   receipts: 'receipts-v2', lookbooks: 'lookbooks-v2',
@@ -22421,7 +22435,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-155941-13702d31';
+var MAST_MODULES_V = '20260617-161022-51603970';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -22441,7 +22455,7 @@ var MODULE_MANIFEST = {
   // loaded on demand by settings areas via MastAdmin.loadModule('connections-providers').
   'connections-providers': { src: 'modules/connections-providers.js', routes: [] },
   shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
-  'shows-v2': { src: 'modules/shows-v2.js', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2'] }, // UI-redesign conversion: shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — read-only twin shell, NOT in MAST_V2_ROUTE_MAP yet (direct-hash QA; cutover later PR)
+  'shows-v2': { src: 'modules/shows-v2.js', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2'] }, // UI-redesign conversion: shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin; #show* CUT OVER to this twin via MAST_V2_ROUTE_MAP (PR7). Legacy shows.js still loadable for navigateToClassic; darked in PR8.
   production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', routes: ['procurement'] },
   contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
