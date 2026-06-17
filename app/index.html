@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-115529-958a7a0"></script>
+  <script src="../shared/mastdb.js?v=20260617-120034-b8db1cf"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-115529-958a7a0"></script>
-  <script src="../shared/brand-sync.js?v=20260617-115529-958a7a0"></script>
+  <script src="../shared/customer-filters.js?v=20260617-120034-b8db1cf"></script>
+  <script src="../shared/brand-sync.js?v=20260617-120034-b8db1cf"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-115529-958a7a0"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-120034-b8db1cf"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-115529-958a7a0"></script>
-  <script src="../shared/mast-io.js?v=20260617-115529-958a7a0"></script>
-  <script src="../shared/mast-entity.js?v=20260617-115529-958a7a0"></script>
+  <script src="../shared/mast-ui.js?v=20260617-120034-b8db1cf"></script>
+  <script src="../shared/mast-io.js?v=20260617-120034-b8db1cf"></script>
+  <script src="../shared/mast-entity.js?v=20260617-120034-b8db1cf"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-115529-958a7a0"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-120034-b8db1cf"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-115529-958a7a0"></script>
+  <script src="../shared/mast-intake.js?v=20260617-120034-b8db1cf"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22439,7 +22439,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-115529-958a7a0';
+var MAST_MODULES_V = '20260617-120034-b8db1cf';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -23178,7 +23178,8 @@ var CHANNEL_PLATFORMS = [
   { id: 'etsy', label: 'Etsy', icon: '\uD83C\uDF3F', note: 'Per-tenant developer app — enter your Etsy API keystring first.' },
   { id: 'square', label: 'Square', icon: '\u25A1', note: 'Per-tenant developer app — enter sandbox or production credentials first.' },
   { id: 'wix', label: 'Wix', icon: '◆', note: 'Platform-wide Mast app — approve on Wix’s consent page (no keys to paste).' },
-  { id: 'woocommerce', label: 'WooCommerce', icon: '🪵', note: 'One-click authorize — enter your store URL; WooCommerce sends the API key to Mast.' }
+  { id: 'woocommerce', label: 'WooCommerce', icon: '🪵', note: 'One-click authorize — enter your store URL; WooCommerce sends the API key to Mast.' },
+  { id: 'squarespace', label: 'Squarespace', icon: '⬛', note: 'Per-tenant developer app — enter your Squarespace OAuth client id + secret first.' }
 ];
 
 var EU_COUNTRY_CODES = new Set(['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','GB','IS','NO','LI','CH']);
@@ -23542,6 +23543,7 @@ async function connectChannel(platform) {
   if (platform === 'square') return _connectSquareFlow();
   if (platform === 'wix') return _connectWixFlow();
   if (platform === 'woocommerce') return _connectWooCommerceFlow();
+  if (platform === 'squarespace') return _connectSquarespaceFlow();
 }
 
 async function reconnectChannel(platform) {
@@ -23627,6 +23629,34 @@ async function _connectEtsyFlow() {
     _setChannelNote('etsy', 'Approve the connection in the new tab, then reload this page.');
   } catch (err) {
     _setChannelNote('etsy', 'Connect failed: ' + (err.message || err), 'error');
+  }
+}
+
+// Squarespace — C→A hybrid (like Etsy/Square): the maker first supplies their
+// Squarespace Developer-app OAuth credentials (client id + secret, stored
+// server-side as the per-tenant squarespace-client-id/-client-secret the
+// squarespaceTokenRefresh cron reads), then we kick off the OAuth dance.
+async function _connectSquarespaceFlow() {
+  var clientId = prompt('Enter your Squarespace Developer-app Client ID:\n\n(Create an OAuth app at https://developers.squarespace.com/ — paste its Client ID below.)');
+  if (!clientId) return;
+  clientId = clientId.trim();
+  if (clientId.length < 6) { alert('Client ID looks too short. Double-check and try again.'); return; }
+  var clientSecret = prompt('Enter your Squarespace app Client Secret:\n\n(Listed with the Client ID in your OAuth app. Required to connect.)');
+  if (!clientSecret) return;
+  clientSecret = clientSecret.trim();
+  if (clientSecret.length < 6) { alert('Client secret looks too short. Double-check and try again.'); return; }
+  try {
+    _setChannelNote('squarespace', 'Storing credentials…');
+    var setFn = firebase.functions().httpsCallable('setChannelCredentialsCallable');
+    await setFn({ tenantId: MastDB.tenantId(), platform: 'squarespace', credentials: { clientId: clientId, clientSecret: clientSecret } });
+    var startFn = firebase.functions().httpsCallable('squarespaceOAuthStart');
+    var result = await startFn({ tenantId: MastDB.tenantId() });
+    var data = (result && result.data) || {};
+    if (!data.authUrl) throw new Error('squarespaceOAuthStart returned no authUrl');
+    window.open(data.authUrl, '_blank', 'noopener');
+    _setChannelNote('squarespace', 'Approve the connection in the new tab, then reload this page.');
+  } catch (err) {
+    _setChannelNote('squarespace', 'Connect failed: ' + (err.message || err), 'error');
   }
 }
 
