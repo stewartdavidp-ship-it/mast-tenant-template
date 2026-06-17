@@ -21,7 +21,15 @@
  * pane-tabs WRITEABLE too — in-pane sub-editors (staffing / inventory + packed /
  * logistics; multi-day day-picked sales / reconciliation steppers / notes;
  * expenses / post-show review) all delegating to the SAME ShowsBridge methods.
- * The Find lens /showFinder (PR5/PR7) and the AI builder (PR6/PR8) stay read-only.
+ * PR5 wires the FIND lens: the /showFinder AI-discovery search (a CF READ, in the
+ * twin like the /showDeepDive enrich) → ranked result cards → "+ Add to pipeline"
+ * via ShowsBridge.addFromFinder (the WRITE), with dedupe vs the current pipeline.
+ * The AI application builder (PR6/PR8) stays for a later PR.
+ *
+ * Find-lens surface (PR5):
+ *   Search        → /showFinder CF read (bearer + X-Tenant-ID), body = the search form
+ *   Add result    → ShowsBridge.addFromFinder(show) (aiGenerated:true; gate: can('show-prep','edit'))
+ *                   deduped vs V2.rows; an already-pipelined result is disabled.
  *
  * Apply-lens write surface (all → window.ShowsBridge):
  *   + New show / Edit  → ShowsBridge.create(data) / .update(id,data)  (gate: can('show-prep','edit'))
@@ -859,7 +867,13 @@
   // (per-record; reset when a record opens). team / products feed the staffing +
   // linked-product editors (loaded lazily on first detail open).
   var V2 = { rows: [], byId: {}, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', lens: 'apply', loaded: false, current: null,
-             execDate: null, team: null, products: null };
+             execDate: null, team: null, products: null,
+             // Find lens (PR5): the live /showFinder result set + per-card UI state.
+             // finderResults = the raw show objects from the CF; finderState[idx] =
+             // 'added' once a card's "Add to pipeline" has written, so the re-render
+             // can show an Added badge instead of the button. finderBusy guards a
+             // double-submit while the CF is in flight.
+             finderResults: [], finderState: {}, finderBusy: false, finderError: null, finderSearched: false };
 
   // Lazily load the assignable team members (admin users, non-guest) the way the
   // legacy openShowStaffingModal does — MastDB.adminUsers.get() → { uid: {name,
@@ -978,6 +992,187 @@
     });
   }
 
+  // ── Find lens (PR5) — /showFinder AI discovery → add-to-pipeline ────
+  // Mirrors the legacy runShowFinder / renderShowFinderResults / addShowToPipeline
+  // (shows.js). The /showFinder CF call is a READ and stays here in the twin (like
+  // the /showDeepDive enrich in PR3); the WRITE (add to pipeline) goes through
+  // window.ShowsBridge.addFromFinder. The legacy did NOT dedupe — this twin DOES:
+  // a result whose name+location+startDate already exists in the pipeline is marked
+  // "Already in pipeline" with the Add button disabled.
+
+  // Normalize for dedupe matching (case/space-insensitive name + state + start day).
+  function finderKey(name, state, startDate) {
+    return [String(name || '').trim().toLowerCase(), String(state || '').trim().toLowerCase(), String(startDate || '').trim()].join('|');
+  }
+  // True if a /showFinder result is already in the pipeline (V2.rows). Matches on
+  // name + state + startDate (the fields a finder result carries); name-only match
+  // counts too when neither has a startDate, to catch obvious dupes.
+  function isInPipeline(result) {
+    var rn = String((result && result.name) || '').trim().toLowerCase();
+    if (!rn) return false;
+    var rState = String((result && result.locationState) || '').trim().toLowerCase();
+    var rStart = String((result && result.startDate) || '').trim();
+    return V2.rows.some(function (s) {
+      var sn = String((s && s.name) || '').trim().toLowerCase();
+      if (sn !== rn) return false;
+      var sState = String((s && s.locationState) || '').trim().toLowerCase();
+      var sStart = String((s && s.startDate) || '').trim();
+      // Same name + (same start date) OR (no start dates to compare) OR (same state).
+      if (rStart && sStart) return rStart === sStart;
+      if (!rStart && !sStart) return true;
+      return rState && sState ? rState === sState : true;
+    });
+  }
+
+  // Result-card fee/type/dates text (mirrors renderShowFinderResults — finder
+  // results carry fees in CENTS, plus entryType / format / audienceProfile extras).
+  function finderTypeLabel(r) {
+    var entryLabel = r.entryType === 'juried' ? 'Juried' : r.entryType === 'open' ? 'Open' : '';
+    var formatLabels = { market: 'Market', festival: 'Festival', 'pop-up': 'Pop-Up', trade: 'Trade Show', recurring: 'Recurring', other: 'Other' };
+    var formatLabel = formatLabels[r.format] || r.format || '';
+    return [entryLabel, formatLabel].filter(Boolean).join(' · ') || SHOW_TYPE_LABELS[r.type] || r.type || 'Other';
+  }
+  function finderFeesText(r) {
+    var parts = [];
+    if (r.boothFee) parts.push('Booth ' + (N.money(N.moneyVal({ c: r.boothFee }, 'c', null)) || ''));
+    if (r.juryFee) parts.push('Jury ' + (N.money(N.moneyVal({ c: r.juryFee }, 'c', null)) || ''));
+    return parts.join(' · ');
+  }
+
+  // The search criteria form (mirrors the legacy #showFindView field set).
+  function finderForm() {
+    function inp(id, label, attrs, placeholder) {
+      return '<div style="flex:1;min-width:150px;"><label class="form-label">' + label + '</label>' +
+        '<input class="form-input" id="' + id + '"' + (attrs || '') + ' style="width:100%;"' +
+        (placeholder ? ' placeholder="' + esc(placeholder) + '"' : '') + '></div>';
+    }
+    function sel(id, label, optsHtml) {
+      return '<div style="flex:1;min-width:150px;"><label class="form-label">' + label + '</label>' +
+        '<select class="form-input" id="' + id + '" style="width:100%;">' + optsHtml + '</select></div>';
+    }
+    function row(inner) { return '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;">' + inner + '</div>'; }
+    var entryOpts = '<option value="" selected>Any</option><option value="juried">Juried</option><option value="open">Open (no jury)</option>';
+    var formatOpts = '<option value="" selected>Any</option>' +
+      ['market', 'festival', 'pop-up', 'trade', 'recurring'].map(function (f) {
+        var lbl = { market: 'Market', festival: 'Festival', 'pop-up': 'Pop-Up', trade: 'Trade Show', recurring: 'Recurring' }[f];
+        return '<option value="' + f + '">' + lbl + '</option>';
+      }).join('');
+    var inner =
+      '<div class="mu-sub" style="margin-bottom:12px;">AI-powered search for upcoming art &amp; craft shows. Search by name, location, or both.</div>' +
+      row('<div style="flex:1;min-width:100%;"><label class="form-label">Show name</label>' +
+        '<input class="form-input" id="showV2FinderName" style="width:100%;" placeholder="e.g. Paradise City Arts Festival"></div>') +
+      row(
+        inp('showV2FinderCity', 'City', '', 'e.g. Pittsburgh') +
+        inp('showV2FinderState', 'State', ' maxlength="2"', 'e.g. PA') +
+        inp('showV2FinderRadius', 'Search radius (miles)', ' type="number" min="1" max="500"', '50')
+      ) +
+      row(
+        inp('showV2FinderMaxFee', 'Max booth fee ($)', ' type="number" min="0"', '500') +
+        inp('showV2FinderDateStart', 'Shows after', ' type="date"', '') +
+        inp('showV2FinderDateEnd', 'Shows before', ' type="date"', '')
+      ) +
+      row(
+        sel('showV2FinderEntry', 'Entry type', entryOpts) +
+        sel('showV2FinderFormat', 'Show format', formatOpts)
+      ) +
+      '<div style="margin-top:6px;">' +
+        '<button class="btn btn-primary" id="showV2FinderBtn"' + (V2.finderBusy ? ' disabled' : '') +
+          ' onclick="ShowsV2.findRun()">' + (V2.finderBusy ? 'Searching…' : 'Find shows') + '</button>' +
+        (V2.finderResults.length || V2.finderSearched ? ' <button class="btn btn-secondary" onclick="ShowsV2.findClear()">Clear results</button>' : '') +
+      '</div>';
+    return U.card('Find shows', inner);
+  }
+
+  // Loading / error / results region (re-rendered in place on each finder action).
+  function finderResultsRegion() {
+    if (V2.finderBusy) {
+      return U.card('Searching',
+        '<div style="text-align:center;padding:30px 0;">' +
+          '<div class="loading-spinner" style="margin:0 auto 12px;width:32px;height:32px;border:3px solid var(--cream-dark,rgba(127,127,127,.25));border-top-color:var(--teal);border-radius:50%;animation:spin 0.8s linear infinite;"></div>' +
+          '<div class="mu-sub">Searching for shows… this may take a moment.</div>' +
+        '</div>');
+    }
+    if (V2.finderError) {
+      return U.card('Search', '<div class="mu-sub" style="color:var(--danger);">' + esc(V2.finderError) + '</div>');
+    }
+    if (!V2.finderResults.length) {
+      if (V2.finderSearched) {
+        return U.card('Results', '<span class="mu-sub">No shows found matching your criteria. Try broadening your search.</span>');
+      }
+      return '';
+    }
+    var n = V2.finderResults.length;
+    var cards = V2.finderResults.map(function (r, idx) {
+      return finderResultCard(r, idx);
+    }).join('');
+    return U.card(N.count(n) + ' show' + (n !== 1 ? 's' : '') + ' found', cards);
+  }
+
+  // A single ranked result card (name / location / dates / fees / fit-why + links +
+  // Add-to-pipeline). Add gates on can('show-prep','edit'); dedupe disables it when
+  // the show is already in the pipeline; once added, an Added badge replaces it.
+  function finderResultCard(r, idx) {
+    var loc = [r.locationCity, r.locationState].filter(Boolean).join(', ');
+    var dates = '';
+    if (r.startDate) { dates = fmtDate(r.startDate); if (r.endDate && r.endDate !== r.startDate) dates += ' – ' + fmtDate(r.endDate); }
+    var fees = finderFeesText(r);
+    var deadline = r.applicationDeadline ? 'Deadline ' + fmtDate(r.applicationDeadline) : '';
+    var meta = [esc(finderTypeLabel(r))];
+    if (loc) meta.push(esc(loc));
+    if (dates) meta.push(esc(dates));
+    if (fees) meta.push(fees);
+    if (deadline) meta.push('<span class="mu-sub">' + esc(deadline) + '</span>');
+
+    var body =
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">' +
+        '<div style="font-weight:600;font-size:0.9rem;">' + esc(r.name || 'Unnamed Show') + '</div>' +
+        U.badge('AI Found', 'teal') +
+      '</div>' +
+      '<div class="mu-sub" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 10px;">' + meta.join('<span>·</span>') + '</div>';
+
+    // Fit / why this show (audienceProfile + notes from the CF) — mirrors the
+    // legacy extra-details block.
+    if (r.audienceProfile) body += '<div class="mu-sub" style="margin-top:8px;">' + esc(r.audienceProfile) + '</div>';
+    if (r.notes) body += '<div class="mu-sub" style="margin-top:4px;font-style:italic;">' + esc(r.notes) + '</div>';
+
+    // Links
+    var links = [];
+    if (r.websiteUrl) links.push(linkOut(r.websiteUrl, 'Website'));
+    if (r.applicationUrl) links.push(linkOut(r.applicationUrl, 'Apply'));
+    if (links.length) body += '<div style="margin-top:8px;font-size:0.78rem;">' + links.join(' · ') + '</div>';
+
+    // Action row: Add to pipeline (gated + deduped) / Dismiss.
+    var added = V2.finderState[idx] === 'added';
+    var dupe = !added && isInPipeline(r);
+    var actions = '';
+    if (added) {
+      actions = U.badge('Added to pipeline', 'success');
+    } else if (dupe) {
+      actions = '<button class="btn btn-small btn-secondary" disabled>Already in pipeline</button>';
+    } else if (canEdit()) {
+      actions = '<button class="btn btn-primary btn-small" onclick="ShowsV2.findAdd(' + idx + ')">+ Add to pipeline</button>';
+    }
+    actions += (added || actions ? ' ' : '') + '<button class="btn btn-secondary btn-small" onclick="ShowsV2.findDismiss(' + idx + ')">Dismiss</button>';
+
+    body += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' + actions + '</div>';
+    return '<div style="padding:14px 0;border-top:1px solid var(--cream-dark,rgba(127,127,127,.18));">' + body + '</div>';
+  }
+
+  // Render the whole Find lens into the tab (form + results region).
+  function renderFindLens(tab, headerHtml, lensPills) {
+    tab.innerHTML = headerHtml + lensPills +
+      '<div id="showsV2FinderForm">' + finderForm() + '</div>' +
+      '<div id="showsV2FinderResults">' + finderResultsRegion() + '</div>';
+  }
+  // Re-render only the form (to reflect the busy/clear button state) + results
+  // region in place, without rebuilding the whole tab (keeps the form field values).
+  function rerenderFinderResults() {
+    var el = document.getElementById('showsV2FinderResults');
+    if (el) el.innerHTML = finderResultsRegion();
+    var formBtn = document.getElementById('showV2FinderBtn');
+    if (formBtn) { formBtn.disabled = !!V2.finderBusy; formBtn.textContent = V2.finderBusy ? 'Searching…' : 'Find shows'; }
+  }
+
   function ensureTab() {
     var el = document.getElementById('showsV2Tab');
     if (el) return el;
@@ -998,10 +1193,10 @@
     // maker can start an application from anywhere; opens the create form.
     var newShowBtn = canEdit() ? '<button class="btn btn-primary" onclick="ShowsV2.create()">+ New show</button>' : '';
 
-    // Find lens — placeholder this PR (the /showFinder AI form + results land later).
+    // Find lens (PR5) — /showFinder AI discovery → add-to-pipeline. The CF call is
+    // a READ (stays in the twin); the add WRITE routes through ShowsBridge.addFromFinder.
     if (V2.lens === 'find') {
-      tab.innerHTML = U.pageHeader({ title: 'Shows', count: 'find new shows', actionsHtml: newShowBtn }) + lensPills +
-        U.card('Find shows', '<span class="mu-sub">AI show discovery lands in a later PR. For now, add a show with <strong>+ New show</strong>.</span>');
+      renderFindLens(tab, U.pageHeader({ title: 'Shows', count: 'find new shows', actionsHtml: newShowBtn }), lensPills);
       return;
     }
 
@@ -1119,6 +1314,100 @@
       if (typeof window.mastConfirm === 'function') {
         Promise.resolve(window.mastConfirm('Delete this show? This cannot be undone.', { title: 'Delete Show', danger: true })).then(function (ok) { if (ok) go(); });
       } else { go(); }
+    },
+
+    // ════════════════════════════════════════════════════════════════════
+    // PR5 — Find lens (/showFinder AI discovery → add-to-pipeline). The CF call
+    // (a READ) stays here in the twin; only the WRITE (add to pipeline) routes
+    // through window.ShowsBridge.addFromFinder, gated can('show-prep','edit').
+    // Mirrors the legacy runShowFinder / addShowToPipeline split.
+    // ════════════════════════════════════════════════════════════════════
+
+    // findRun() — read the search form, POST /showFinder (bearer + the global
+    // callCF's auto X-Tenant-ID; same envelope as the legacy runShowFinder and the
+    // PR3 enrich), stash the results, re-render the results region. Handles a CF
+    // failure (e.g. no Anthropic key → 500) gracefully via finderError.
+    findRun: function () {
+      var name = ((document.getElementById('showV2FinderName') || {}).value || '').trim();
+      var city = ((document.getElementById('showV2FinderCity') || {}).value || '').trim();
+      var state = ((document.getElementById('showV2FinderState') || {}).value || '').trim().toUpperCase();
+      if (!name && !city && !state) { toast('Enter a show name or location to search.', true); return; }
+      function num(id) { var v = parseInt(((document.getElementById(id) || {}).value || ''), 10); return isNaN(v) ? undefined : v; }
+      function strOpt(id) { var v = ((document.getElementById(id) || {}).value || '').trim(); return v || undefined; }
+      var body = {
+        showName: name || undefined,
+        locationCity: city || undefined,
+        locationState: state || undefined,
+        radius: num('showV2FinderRadius'),
+        entryType: strOpt('showV2FinderEntry'),
+        showFormat: strOpt('showV2FinderFormat'),
+        dateRangeStart: strOpt('showV2FinderDateStart'),
+        dateRangeEnd: strOpt('showV2FinderDateEnd'),
+        maxFee: num('showV2FinderMaxFee'),
+        count: 10
+      };
+      V2.finderBusy = true; V2.finderError = null; V2.finderResults = []; V2.finderState = {}; V2.finderSearched = false;
+      rerenderFinderResults();
+      var done = function () { V2.finderBusy = false; V2.finderSearched = true; rerenderFinderResults(); };
+      var run = function (token) {
+        return callCF('/showFinder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify(body)
+        }).then(function (resp) {
+          return resp.json().catch(function () { return {}; }).then(function (data) {
+            if (!resp.ok) throw new Error((data && data.error) || ('Search failed (' + resp.status + ')'));
+            V2.finderResults = (data && data.shows) || [];
+            done();
+          });
+        });
+      };
+      try {
+        window.auth.currentUser.getIdToken().then(run).catch(function (e) {
+          V2.finderError = 'Search failed: ' + ((e && e.message) || e); done();
+        });
+      } catch (e) {
+        V2.finderError = 'Search failed: ' + ((e && e.message) || e); done();
+      }
+    },
+    // findAdd(idx) — add a finder result to the pipeline via ShowsBridge.addFromFinder
+    // (the ONLY write path; aiGenerated:true). Gated + deduped (the button is already
+    // disabled when isInPipeline, but re-check here). On success mark the card Added
+    // and refresh the pipeline cache so the Apply lens + dedupe reflect the new show.
+    findAdd: function (idx) {
+      if (!canEdit()) return notPermitted();
+      if (!bridge() || !bridge().addFromFinder) return bridgeLoading();
+      var r = V2.finderResults[idx];
+      if (!r) return;
+      if (V2.finderState[idx] === 'added') return;
+      if (isInPipeline(r)) { toast('That show is already in your pipeline.', true); rerenderFinderResults(); return; }
+      Promise.resolve(bridge().addFromFinder(r)).then(function () {
+        V2.finderState[idx] = 'added';
+        toast((r.name || 'Show') + ' added to pipeline.');
+        // Refresh the pipeline cache so the Apply lens shows it + dedupe catches
+        // any later duplicate results (don't disturb the finder result list).
+        V2.loaded = false;
+        loadData().then(function () { rerenderFinderResults(); });
+      }).catch(actionErr);
+    },
+    // findDismiss(idx) — drop a result from the local set (no write).
+    findDismiss: function (idx) {
+      if (!V2.finderResults[idx]) return;
+      V2.finderResults.splice(idx, 1);
+      // Re-index finderState (indices shifted by the splice).
+      var next = {};
+      Object.keys(V2.finderState).forEach(function (k) {
+        var ki = parseInt(k, 10);
+        if (ki < idx) next[ki] = V2.finderState[ki];
+        else if (ki > idx) next[ki - 1] = V2.finderState[ki];
+      });
+      V2.finderState = next;
+      rerenderFinderResults();
+    },
+    // findClear() — clear the result set + error (no write).
+    findClear: function () {
+      V2.finderResults = []; V2.finderState = {}; V2.finderError = null; V2.finderSearched = false;
+      render();
     },
 
     // ════════════════════════════════════════════════════════════════════
