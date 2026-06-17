@@ -869,7 +869,7 @@
   }
 
   // ── State + data (same source as legacy: admin/jobs) ────────────────
-  var V2 = { rows: [], byId: {}, sortKey: 'createdAt', sortDir: 'desc', status: 'active', purpose: 'all', off: null };
+  var V2 = { rows: [], byId: {}, sortKey: 'createdAt', sortDir: 'desc', status: 'active', purpose: 'all', off: null, requests: [], requestsExpanded: true, requestsLoaded: false };
 
   function toRows(tree) {
     var out = []; tree = tree || {};
@@ -932,6 +932,75 @@
     return opts.map(function (o) { return pill(o.label, V2.purpose === o.key, "JobsV2.setPurpose('" + o.key + "')"); }).join('');
   }
 
+  // ── Build-requests queue (order → production pipeline) ──────────────
+  // orders-v2 triage seeds pending build requests under admin/buildJobs; this is
+  // where jobs-v2 CONSUMES them. All reads + writes single-source through
+  // window.ProductionBridge (listRequests / convertRequestToJob /
+  // assignRequestToExistingJob) — no raw buildJobs or job writes in this twin.
+  function loadRequests() {
+    if (!(window.ProductionBridge && window.ProductionBridge.listRequests)) {
+      // Production module not loaded yet — pull it in, then retry once.
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
+    }
+    if (!(window.ProductionBridge && window.ProductionBridge.listRequests)) return;
+    Promise.resolve(window.ProductionBridge.listRequests({ status: 'pending' })).then(function (reqs) {
+      V2.requests = Array.isArray(reqs) ? reqs : [];
+      V2.requestsLoaded = true;
+      render();
+    }).catch(function (e) { console.error('[jobs-v2] listRequests', e); });
+  }
+
+  // Active jobs (definition / in-progress) for the assign-to-existing picker.
+  function assignableJobs() {
+    return V2.rows.filter(function (j) {
+      var s = String(j.status || '').toLowerCase();
+      return s === 'definition' || s === 'in-progress';
+    });
+  }
+
+  function requestsQueueCard() {
+    var pending = V2.requests || [];
+    // Hide the whole section when there's nothing pending (keeps the list clean).
+    if (!pending.length) return '';
+    var canEdit = canEditJobs();
+    var headerRight = '<button class="btn btn-secondary btn-small" onclick="JobsV2.toggleRequests()">' +
+      (V2.requestsExpanded ? 'Hide' : 'Show') + '</button>';
+    if (!V2.requestsExpanded) {
+      return U.card('Build requests', '<p style="color:var(--warm-gray);margin:0;">' +
+        esc(U.Num.count(pending.length)) + ' pending build request' + (pending.length === 1 ? '' : 's') +
+        ' from orders awaiting a production job.</p>', { headerRight: headerRight });
+    }
+    var jobs = assignableJobs();
+    var jobOpts = jobs.map(function (j) {
+      return '<option value="' + esc(j._key) + '">' + esc(j.name || 'Untitled') + ' (' + esc(statusLabel(j.status)) + ')</option>';
+    }).join('');
+    var cols = [
+      { label: 'Order', render: function (pr) { return esc(pr.orderNumber || pr.orderId || '—'); } },
+      { label: 'Product', render: function (pr) {
+        var opts = (pr.options && typeof pr.options === 'object') ? Object.values(pr.options).filter(Boolean).join(' / ') : '';
+        return esc(pr.productName || pr.productId || '—') + (opts ? ' <span class="mu-sub">(' + esc(opts) + ')</span>' : '');
+      } },
+      { label: 'Qty', align: 'right', render: function (pr) { return String(pr.qty || 1); } },
+      { label: '', align: 'right', render: function (pr) {
+        if (!canEdit) return '<span class="mu-sub">view only</span>';
+        var rid = esc(pr._key);
+        var convert = '<button class="btn btn-primary btn-small" onclick="JobsV2.queueConvert(\'' + rid + '\')">Convert to new job</button>';
+        var assign = jobs.length
+          ? ' <button class="btn btn-secondary btn-small" onclick="JobsV2.queueToggleAssign(\'' + rid + '\')">Assign to existing…</button>'
+          : '';
+        var assignForm = (jobs.length ? '<div id="jobReqAssign_' + rid + '" hidden style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;align-items:center;">' +
+            '<select id="jobReqAssignSel_' + rid + '" class="form-input" style="width:auto;max-width:220px;">' + jobOpts + '</select>' +
+            '<button class="btn btn-primary btn-small" onclick="JobsV2.queueAssign(\'' + rid + '\')">Assign</button>' +
+          '</div>' : '');
+        return convert + assign + assignForm;
+      } }
+    ];
+    var hint = canEdit
+      ? '<p style="color:var(--warm-gray);margin-top:8px;font-size:0.78rem;">Convert routes an order\'s build item into a production job with a frozen bill-of-materials. Assigned requests leave this queue.</p>'
+      : '<p style="color:var(--warm-gray);margin-top:8px;font-size:0.78rem;">You don’t have permission to edit jobs.</p>';
+    return U.card('Build requests', U.relatedTable(cols, pending) + hint, { headerRight: headerRight });
+  }
+
   function render() {
     var tab = ensureTab();
     tab.innerHTML =
@@ -941,6 +1010,7 @@
         actionsHtml: (canEditJobs() ? '<button class="btn btn-primary" onclick="JobsV2.newJob()">+ New job</button> ' : '') +
           '<button class="btn btn-secondary" onclick="JobsV2.exportCsv()">&darr; Export</button>'
       }) +
+      requestsQueueCard() +
       '<div style="margin:12px 0 6px;">' + statusPills() + '</div>' +
       '<div style="margin:0 0 14px;">' + purposePills() + '</div>' +
       window.MastEntity.renderList('jobs-v2', {
@@ -961,6 +1031,53 @@
     setPurpose: function (p) { V2.purpose = p; render(); },
     open: function (id) { var rec = V2.byId[id]; if (rec) window.MastEntity.openRecord('jobs-v2', rec, 'read'); },
     exportCsv: function () { return window.MastEntity.exportRows('jobs-v2', visibleRows(), V2.status); },
+    // ── Build-requests queue (order → production pipeline) ──────────────
+    toggleRequests: function () { V2.requestsExpanded = !V2.requestsExpanded; render(); },
+    // Show/hide the inline existing-job picker for one request row.
+    queueToggleAssign: function (rid) {
+      var el = document.getElementById('jobReqAssign_' + rid);
+      if (el) el.hidden = !el.hidden;
+    },
+    // Convert a pending request into a NEW job (delegates to ProductionBridge).
+    queueConvert: function (rid) {
+      if (!_guardEdit()) return;
+      if (!window.ProductionBridge || !window.ProductionBridge.convertRequestToJob) {
+        if (window.MastAdmin) MastAdmin.showToast('Production engine still loading — try again', true);
+        if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
+        return;
+      }
+      Promise.resolve(window.ProductionBridge.convertRequestToJob(rid)).then(function (res) {
+        if (window.MastAdmin) MastAdmin.showToast('New job created from build request');
+        loadRequests();
+        if (res && res.jobId) {
+          return Promise.resolve(MastDB.productionJobs.get(res.jobId)).then(function (fresh) {
+            if (fresh) { fresh._key = res.jobId; fresh.id = res.jobId; window.MastEntity.openRecord('jobs-v2', fresh, 'read'); }
+          });
+        }
+      }).catch(function (e) {
+        console.error('[jobs-v2] queueConvert', e);
+        if (window.MastAdmin) MastAdmin.showToast('Could not convert: ' + (e && e.message || e), true);
+      });
+    },
+    // Assign a pending request to the existing job chosen in its row picker.
+    queueAssign: function (rid) {
+      if (!_guardEdit()) return;
+      var sel = document.getElementById('jobReqAssignSel_' + rid);
+      var jobId = sel ? sel.value : '';
+      if (!jobId) { if (window.MastAdmin) MastAdmin.showToast('Pick a job to assign to', true); return; }
+      if (!window.ProductionBridge || !window.ProductionBridge.assignRequestToExistingJob) {
+        if (window.MastAdmin) MastAdmin.showToast('Production engine still loading — try again', true);
+        if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
+        return;
+      }
+      Promise.resolve(window.ProductionBridge.assignRequestToExistingJob(rid, jobId)).then(function () {
+        if (window.MastAdmin) MastAdmin.showToast('Build request assigned to job');
+        loadRequests();
+      }).catch(function (e) {
+        console.error('[jobs-v2] queueAssign', e);
+        if (window.MastAdmin) MastAdmin.showToast('Could not assign: ' + (e && e.message || e), true);
+      });
+    },
     // Native "+ New job" — opens the create-only intake entity (name + purpose),
     // persisted through ProductionBridge.createJob. Closes the V1-only gap.
     newJob: function () {
@@ -1177,6 +1294,6 @@
 
   // ── Register the side-by-side route ─────────────────────────────────
   MastAdmin.registerModule('jobs-v2', {
-    routes: { 'jobs-v2': { tab: 'jobsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'jobs-v2': { tab: 'jobsV2Tab', setup: function () { ensureTab(); render(); load(); loadRequests(); } } }
   });
 })();

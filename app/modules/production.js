@@ -3488,6 +3488,119 @@ async function linkProductToBuild(jobId, lineItemId) {
       });
       try { await writeAudit('update', 'jobs', jobId); } catch (e) {}
       return { lineItemId: lineItemId, bomForecast: bomForecast };
+    },
+    // ── Order → production pipeline (closes the loop orders-v2 triage opens) ──
+    // orders-v2 triage SEEDS pending build requests under admin/buildJobs
+    // (MastDB.productionRequests). These three delegators give jobs-v2 the
+    // CONSUME side — the queue + request→job conversion — that previously lived
+    // only in the legacy production.js modals (doAssignNewJob/doAssignExistingJob,
+    // both DOM-bound + dependent on the in-memory productionRequests cache).
+    // All three are DOM-free, fetch the request FRESH (MastDB.productionRequests.get),
+    // and reuse the same snapshotBomForecast + resolveVariantFromOptions cores the
+    // legacy modals use, so V1 and V2 stay byte-identical on the persisted shape.
+
+    // Read the pending build-request queue. filter defaults to { status: 'pending' }.
+    // Returns an array of request docs (each with _key) sorted newest-first; pass
+    // filter:{} (or status:'all') for every request. No in-memory cache dependency.
+    listRequests: async function (filter) {
+      filter = filter || {};
+      var wantStatus = ('status' in filter) ? filter.status : 'pending';
+      var raw = await MastDB.productionRequests.list();
+      raw = raw || {};
+      var out = [];
+      Object.keys(raw).forEach(function (k) {
+        var pr = raw[k];
+        if (!pr || typeof pr !== 'object') return;
+        if (wantStatus && wantStatus !== 'all' && (pr.status || 'pending') !== wantStatus) return;
+        out.push(Object.assign({ _key: k }, pr));
+      });
+      out.sort(function (a, b) {
+        var pa = a.priority === 'urgent' ? 0 : 1;
+        var pb = b.priority === 'urgent' ? 0 : 1;
+        if (pa !== pb) return pa - pb;
+        return (b.createdAt || '').localeCompare(a.createdAt || '');
+      });
+      return out;
+    },
+    // Convert a pending request into a NEW production job. Wraps doAssignNewJob's
+    // core: mint a fulfillment-purpose job skeleton + one line item with a FROZEN
+    // BOM forecast (snapshotBomForecast at variant resolved from the request's
+    // options), then flip the request to status:'assigned' with jobId/lineItemId
+    // (the canonical assignRequestToJob write). Returns { jobId, lineItemId }.
+    convertRequestToJob: async function (requestId, opts) {
+      opts = opts || {};
+      if (!requestId) throw new Error('request id required');
+      var pr = await MastDB.productionRequests.get(requestId);
+      if (!pr) throw new Error('Build request not found');
+      var jobId = MastDB.productionJobs.newKey();
+      var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
+      await MastDB.productionJobs.set(jobId, {
+        name: 'Order ' + (pr.orderNumber || '') + ' - ' + (pr.productName || 'Fulfillment'),
+        description: '',
+        purpose: opts.purpose || 'fulfillment',
+        workType: 'flameshop',
+        priority: pr.priority === 'urgent' ? 'high' : 'medium',
+        status: 'definition',
+        deadline: null,
+        eventName: null,
+        orderId: pr.orderId || null,
+        customerId: null,
+        createdAt: new Date().toISOString(),
+        startedAt: null,
+        completedAt: null
+      });
+      var resolved = resolveVariantFromOptions(pr.productId, pr.options);
+      var bom = await snapshotBomForecast(pr.productId, resolved.variantId);
+      await MastDB.productionJobs.setLineItem(jobId, lineItemId, {
+        productId: pr.productId || null,
+        productName: pr.productName || '',
+        variantId: resolved.variantId,
+        variantLabel: resolved.variantLabel,
+        targetQuantity: pr.qty || 1,
+        completedQuantity: 0,
+        lossQuantity: 0,
+        specifications: pr.options ? Object.values(pr.options).join(', ') : '',
+        productionRequestId: requestId,
+        bomForecast: bom,
+        actualMaterialCostCents: null,
+        actualLaborCostCents: null
+      });
+      try { await writeAudit('create', 'jobs', jobId); } catch (e) {}
+      await MastDB.productionRequests.update(requestId, { status: 'assigned', jobId: jobId, lineItemId: lineItemId });
+      try { await writeAudit('update', 'buildJobs', requestId); } catch (e) {}
+      return { jobId: jobId, lineItemId: lineItemId, bomForecast: bom };
+    },
+    // Assign a pending request to an EXISTING job. Wraps doAssignExistingJob's
+    // core: append one line item (frozen BOM) to the chosen job, then flip the
+    // request to status:'assigned' with jobId/lineItemId. Returns { jobId, lineItemId }.
+    assignRequestToExistingJob: async function (requestId, jobId) {
+      if (!requestId) throw new Error('request id required');
+      if (!jobId) throw new Error('job id required');
+      var pr = await MastDB.productionRequests.get(requestId);
+      if (!pr) throw new Error('Build request not found');
+      var job = await MastDB.productionJobs.get(jobId);
+      if (!job) throw new Error('Job not found');
+      var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
+      var resolved = resolveVariantFromOptions(pr.productId, pr.options);
+      var bom = await snapshotBomForecast(pr.productId, resolved.variantId);
+      await MastDB.productionJobs.setLineItem(jobId, lineItemId, {
+        productId: pr.productId || null,
+        productName: pr.productName || '',
+        variantId: resolved.variantId,
+        variantLabel: resolved.variantLabel,
+        targetQuantity: pr.qty || 1,
+        completedQuantity: 0,
+        lossQuantity: 0,
+        specifications: pr.options ? Object.values(pr.options).join(', ') : '',
+        productionRequestId: requestId,
+        bomForecast: bom,
+        actualMaterialCostCents: null,
+        actualLaborCostCents: null
+      });
+      try { await writeAudit('update', 'jobs', jobId); } catch (e) {}
+      await MastDB.productionRequests.update(requestId, { status: 'assigned', jobId: jobId, lineItemId: lineItemId });
+      try { await writeAudit('update', 'buildJobs', requestId); } catch (e) {}
+      return { jobId: jobId, lineItemId: lineItemId, bomForecast: bom };
     }
   };
 
