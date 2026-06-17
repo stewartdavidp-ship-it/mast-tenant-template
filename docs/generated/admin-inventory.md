@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **60,707** lines
-- **Feature modules:** **119** files in `app/modules/` (**109** routed), **140,808** lines combined
+- **Core shell:** `app/index.html` — **60,792** lines
+- **Feature modules:** **119** files in `app/modules/` (**109** routed), **140,898** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -33,7 +33,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/commissions-v2.js` | 632 | commissions-v2 |
 | `modules/composer-v2.js` | 403 | composer-v2 |
 | `modules/composer.js` | 479 | composer |
-| `modules/connections-providers.js` | 560 | — |
+| `modules/connections-providers.js` | 575 | — |
 | `modules/consignment.js` | 2,338 | galleries |
 | `modules/consignments-v2.js` | 496 | consignments-v2 |
 | `modules/contacts-v2.js` | 545 | contacts-v2 |
@@ -61,7 +61,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance-openitems-v2.js` | 545 | finance-ar-v2, finance-ap-v2 |
 | `modules/finance-reports-v2.js` | 258 | finance-reports-v2 |
 | `modules/finance-statements-v2.js` | 466 | financials-v2, finance-revenue-v2, finance-pl-v2, finance-cash-flow-v2, finance-tax-v2 |
-| `modules/finance.js` | 8,548 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
+| `modules/finance.js` | 8,581 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/fulfillment-v2.js` | 614 | pack-v2, ship-v2 |
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 657 | galleries-v2 |
@@ -88,7 +88,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/passes-v2.js` | 547 | passes-v2 |
 | `modules/pos-v2.js` | 182 | pos-v2 |
 | `modules/procurement-v2.js` | 882 | procurement-v2 |
-| `modules/procurement.js` | 2,378 | procurement |
+| `modules/procurement.js` | 2,404 | procurement |
 | `modules/production.js` | 3,715 | jobs, production, stories, forecast |
 | `modules/products-v2.js` | 3,877 | products-v2 |
 | `modules/promotions-v2.js` | 389 | promotions-v2 |
@@ -115,7 +115,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/terms-v2.js` | 300 | terms-v2 |
 | `modules/trips-v2.js` | 357 | trips-v2 |
 | `modules/trips.js` | 2,162 | trips |
-| `modules/vendors-v2.js` | 587 | vendors-v2 |
+| `modules/vendors-v2.js` | 603 | vendors-v2 |
 | `modules/wallet-v2.js` | 237 | wallet-v2 |
 | `modules/website-v2.js` | 2,076 | website-v2 |
 | `modules/website.js` | 3,444 | website |

@@ -529,6 +529,17 @@
   var insurancePolicy = _identityDef('insurance-policy', 'Insurance policy number', 'insurance-policy', '•••• 1234', 3);
   var taxRegistrationId = _identityDef('tax-registration-id', 'Tax registration ID', 'tax-registration-id', '•••• 1234', 4);
 
+  // Vendor/contractor identity-data fields (2nd identity-data surface, breadth
+  // follow-up to the compliance IDs). The vendor record (admin/vendors/{id}) carries
+  // a payee Tax ID (EIN/SSN) and a bank account number that round-trip as PLAINTEXT
+  // today behind plain text inputs across three vendor editors (finance AP modal,
+  // procurement vendor editor, vendors-v2). Both are structured PII → envelope-
+  // encrypted at rest by the same field-encryption CF. `kind` MUST match the CF
+  // fail-closed allowlist (IDENTITY_KINDS): ein-ssn / bank-account. (routing-number
+  // is in the CF allowlist too, but the vendor data model has no routing field yet.)
+  var einSsn = _identityDef('ein-ssn', 'Tax ID (EIN/SSN)', 'ein-ssn', '•••• 6789', 9);
+  var bankAccount = _identityDef('bank-account', 'Bank account number', 'bank-account', '•••• 6789', 4);
+
   // Register with the engine (primary), and publish a plain-global catalog as a
   // load-order fallback the engine can read if it hydrates before register runs.
   window.ConnectionsProviders = window.ConnectionsProviders || {};
@@ -541,6 +552,8 @@
   window.ConnectionsProviders['license-number'] = licenseNumber;
   window.ConnectionsProviders['insurance-policy'] = insurancePolicy;
   window.ConnectionsProviders['tax-registration-id'] = taxRegistrationId;
+  window.ConnectionsProviders['ein-ssn'] = einSsn;
+  window.ConnectionsProviders['bank-account'] = bankAccount;
   if (window.MastIntake && typeof window.MastIntake.register === 'function') {
     window.MastIntake.register(github);
     window.MastIntake.register(sendgrid);
@@ -551,6 +564,8 @@
     window.MastIntake.register(licenseNumber);
     window.MastIntake.register(insurancePolicy);
     window.MastIntake.register(taxRegistrationId);
+    window.MastIntake.register(einSsn);
+    window.MastIntake.register(bankAccount);
   }
 
   // Catalog module: no routes (not a routable view) and no MastDB writes.

@@ -171,6 +171,12 @@
   function loadAll() {
     if (loadInFlight) return Promise.resolve();
     loadInFlight = true;
+    // Load the MastIntake provider catalog so the vendor editor's secure Tax ID /
+    // bank account fields (identity-data) render + hydrate inline. Fire-and-forget,
+    // fail-closed: if it can't load the secure field shows disabled.
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      try { MastAdmin.loadModule('connections-providers'); } catch (e) { /* fail-closed */ }
+    }
     return Promise.all([
       MastDB.get('admin/vendors').then(function(v) { vendorsData = v || {}; }),
       MastDB.get('admin/productSuppliers').then(function(v) { productSuppliersData = v || {}; }),
@@ -206,7 +212,14 @@
       tab.innerHTML = '<div class="loading" style="padding:40px;text-align:center;">Loading procurement…</div>';
       return;
     }
-    if (currentView === 'vendor-detail') { tab.innerHTML = renderVendorDetail(); return; }
+    if (currentView === 'vendor-detail') {
+      tab.innerHTML = renderVendorDetail();
+      // Bind/hydrate the secure Tax ID / bank account fields embedded in the edit form.
+      if (vendorEditMode && window.MastIntake && typeof MastIntake.hydrate === 'function') {
+        try { MastIntake.hydrate(tab); } catch (e) { /* fail-closed */ }
+      }
+      return;
+    }
     if (currentView === 'lot-detail')    { tab.innerHTML = renderLotDetail();    return; }
     var html = '';
     html += renderHeader();
@@ -697,8 +710,10 @@
     if (v.defaultPaymentTerms)     html += row('Payment terms', esc(v.defaultPaymentTerms));
     if (v.defaultLeadTimeDays != null) html += row('Lead time', v.defaultLeadTimeDays + ' days');
     if (v.defaultShipMethod)       html += row('Ship method', esc(v.defaultShipMethod));
-    if (v.taxId)        html += row('Tax ID', esc(v.taxId));
-    if (v.accountNumber) html += row('Account #', esc(v.accountNumber));
+    // PII (identity-data): render the masked last-4 only, never the raw value — a
+    // not-yet-migrated legacy plaintext is masked on the fly by VendorSecureId.masked.
+    if (window.VendorSecureId && VendorSecureId.has(v, 'taxId'))         html += row('Tax ID', esc(VendorSecureId.masked(v, 'taxId')));
+    if (window.VendorSecureId && VendorSecureId.has(v, 'accountNumber')) html += row('Account #', esc(VendorSecureId.masked(v, 'accountNumber')));
     if (v.notes)         html += row('Notes', esc(v.notes));
     html += '</dl></div>';
     return html;
@@ -723,9 +738,15 @@
     html += field('vendTerms',        'Payment terms',         v.defaultPaymentTerms);
     html += field('vendLeadTime',     'Default lead time (days)', v.defaultLeadTimeDays, 'number');
     html += field('vendShipMethod',   'Ship method',           v.defaultShipMethod);
-    html += field('vendTaxId',        'Tax ID',                v.taxId);
-    html += field('vendAcctNumber',   'Account number',        v.accountNumber);
     html += '</div>';
+    // Tax ID (EIN/SSN) + bank account number are PII, encrypted at rest via MastIntake
+    // (identity-data). The secure host replaces the legacy plaintext inputs — it owns
+    // its label + counsel + masked/reveal grammar, so it sits full-width below the grid
+    // (not in the 1fr 1fr grid, never beside a plaintext twin). Hydrated after render().
+    if (window.VendorSecureId) {
+      html += '<div style="margin-top:14px;">' + window.VendorSecureId.host(selectedVendorId, 'taxId', v) + '</div>';
+      html += '<div style="margin-top:14px;">' + window.VendorSecureId.host(selectedVendorId, 'accountNumber', v) + '</div>';
+    }
     html += '<div class="form-group" style="margin-top:14px;"><label for="vendNotes">Notes</label><textarea id="vendNotes" rows="2">' + esc(v.notes || '') + '</textarea></div>';
     html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">';
     html += '<button class="btn btn-secondary" onclick="window.procurementCancelVendorEdit()">Cancel</button>';
@@ -963,7 +984,9 @@
   }
 
   function _vendorEditSnapshotState() {
-    var ids = ['vendName','vendCode','vendContactName','vendEmail','vendPhone','vendWebsite','vendCurrency','vendTerms','vendLeadTime','vendShipMethod','vendTaxId','vendAcctNumber','vendNotes'];
+    // vendTaxId / vendAcctNumber are intentionally absent — they are now MastIntake
+    // secure fields (identity-data) that persist on their own, not plaintext inputs.
+    var ids = ['vendName','vendCode','vendContactName','vendEmail','vendPhone','vendWebsite','vendCurrency','vendTerms','vendLeadTime','vendShipMethod','vendNotes'];
     var snap = {};
     ids.forEach(function(id) { var el = document.getElementById(id); if (el) snap[id] = el.value || ''; });
     return snap;
@@ -1008,8 +1031,8 @@
       defaultPaymentTerms: (document.getElementById('vendTerms').value || '').trim() || null,
       defaultLeadTimeDays: leadStr === '' ? null : parseInt(leadStr, 10),
       defaultShipMethod: (document.getElementById('vendShipMethod').value || '').trim() || null,
-      taxId: (document.getElementById('vendTaxId').value || '').trim() || null,
-      accountNumber: (document.getElementById('vendAcctNumber').value || '').trim() || null,
+      // taxId / accountNumber are no longer written here — they are encrypted at rest
+      // via the MastIntake secure fields, which persist their own Ref/Masked pointers.
       notes: (document.getElementById('vendNotes').value || '').trim() || null,
       updatedAt: new Date().toISOString()
     };
@@ -1764,8 +1787,10 @@
         defaultPaymentTerms: data.defaultPaymentTerms || null,
         defaultLeadTimeDays: lead === '' ? null : parseInt(lead, 10),
         defaultShipMethod: data.defaultShipMethod || null,
-        taxId: data.taxId || null,
-        accountNumber: data.accountNumber || null,
+        // taxId / accountNumber are PII encrypted at rest via MastIntake — the V2
+        // editor's secure fields persist taxIdRef/accountNumberRef on their own; the
+        // create path never seeds plaintext here (a new vendor saves first, then the
+        // secure field attaches to its stable id).
         website: data.website || null,
         notes: data.notes || null,
         roleFlags: { isSupplier: true, isCustomer: false },
@@ -1792,8 +1817,9 @@
         defaultPaymentTerms: data.defaultPaymentTerms || null,
         defaultLeadTimeDays: lead === '' ? null : parseInt(lead, 10),
         defaultShipMethod: data.defaultShipMethod || null,
-        taxId: data.taxId || null,
-        accountNumber: data.accountNumber || null,
+        // taxId / accountNumber omitted — encrypted at rest via MastIntake (the V2
+        // editor's secure fields persist their own Ref/Masked pointers). A partial
+        // update never overwrites those refs with stale plaintext.
         notes: data.notes || null,
         updatedAt: new Date().toISOString()
       };
