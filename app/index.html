@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-003847-51620af"></script>
+  <script src="../shared/mastdb.js?v=20260617-004343-6c93ae4"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-003847-51620af"></script>
-  <script src="../shared/brand-sync.js?v=20260617-003847-51620af"></script>
+  <script src="../shared/customer-filters.js?v=20260617-004343-6c93ae4"></script>
+  <script src="../shared/brand-sync.js?v=20260617-004343-6c93ae4"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-003847-51620af"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-004343-6c93ae4"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-003847-51620af"></script>
-  <script src="../shared/mast-io.js?v=20260617-003847-51620af"></script>
-  <script src="../shared/mast-entity.js?v=20260617-003847-51620af"></script>
+  <script src="../shared/mast-ui.js?v=20260617-004343-6c93ae4"></script>
+  <script src="../shared/mast-io.js?v=20260617-004343-6c93ae4"></script>
+  <script src="../shared/mast-entity.js?v=20260617-004343-6c93ae4"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-003847-51620af"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-004343-6c93ae4"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-003847-51620af"></script>
+  <script src="../shared/mast-intake.js?v=20260617-004343-6c93ae4"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -9433,17 +9433,21 @@
           </div>
 
           <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
-            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Secret Key <span id="stripeSecretKeyBadge"></span></label>
-            <div style="display:flex;gap:6px;margin-bottom:8px;">
-              <input type="password" id="stripeSecretKey" placeholder="sk_live_... or sk_test_..."
-                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;"
-                oninput="onStripeKeyInput()">
-              <button type="button" onclick="toggleReveal('stripeSecretKey',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
-            </div>
-            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Publishable Key</label>
+            <!-- Stripe SECRET key — migrated to the MastIntake secure vault. The key
+                 now persists ONLY through the server vault (GCP Secret Manager via
+                 mastIntakeVaultPut); there is no client-side write path and it is never
+                 read back into the browser. MastIntake renders the input/Save/Revoke +
+                 guided steps into this host; loadStripeSecureField() populates + hydrates
+                 it. The server consumer (payment-abstraction.js) reads it vault-first via
+                 getTenantHeldSecret, falling back to the legacy {prefix}-stripe-secret-key.
+                 The PUBLISHABLE key below is client-side (Stripe.js) and stays plain. -->
+            <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:block;">Secret Key</label>
+            <div id="stripeSecretKeySecureFieldHost"></div>
+            <label style="font-size:0.85rem;font-weight:600;margin:12px 0 4px;display:block;">Publishable Key</label>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
               <input type="text" id="stripePublishableKey" placeholder="pk_live_... or pk_test_..."
-                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
+                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;"
+                oninput="onStripeKeyInput()">
             </div>
           </div>
 
@@ -22402,7 +22406,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-003847-51620af';
+var MAST_MODULES_V = '20260617-004343-6c93ae4';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -29323,12 +29327,17 @@ function switchPaymentProcessor(newProcessor) {
 }
 
 function onStripeKeyInput() {
-  var val = document.getElementById('stripeSecretKey').value || '';
+  // The secret key now lives in the MastIntake vault (never in a bound input), so
+  // the test-mode banner is driven off the publishable key prefix (pk_test_), which
+  // always matches the secret key's mode and is client-readable.
+  var val = (document.getElementById('stripePublishableKey') || {}).value || '';
   var banner = document.getElementById('stripeTestBanner');
-  if (banner) banner.style.display = val.startsWith('sk_test_') ? 'block' : 'none';
+  if (banner) banner.style.display = val.startsWith('pk_test_') ? 'block' : 'none';
 }
 
 function loadStripeConfig() {
+  // The secret key is rendered + hydrated by the vault-backed secure field.
+  loadStripeSecureField();
   var statusEl = document.getElementById('stripeConfigStatus');
   firebase.functions().httpsCallable('secretsManager')({
     action: 'read',
@@ -29340,8 +29349,7 @@ function loadStripeConfig() {
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">No Stripe config set. Payment checkout will not work until configured.</span>';
       return;
     }
-    setMaskedField('stripeSecretKey', config.secretKey);
-    if (config.secretKey) setFieldBadge('stripeSecretKeyBadge', 'valid', 'Saved');
+    // Secret key is NOT read back (vault-held); only the publishable key + env metadata.
     var pkEl = document.getElementById('stripePublishableKey');
     if (pkEl && config.publishableKey) { pkEl.value = config.publishableKey; }
     // Show test banner if test environment
@@ -29354,23 +29362,47 @@ function loadStripeConfig() {
   });
 }
 
+// Stripe SECRET key — migrated to the MastIntake secure vault. The key used to be
+// written to GCP Secret Manager via secretsManager (plaintext through the browser);
+// it is now collected via MastIntake.secureField('stripe') and persisted ONLY
+// through the server vault (mastIntakeVaultPut) — no client write path, never read
+// back. The server consumer (payment-abstraction.js) reads it vault-first via
+// getTenantHeldSecret, so existing tenants keep working via the legacy
+// {prefix}-stripe-secret-key fallback. Mirrors loadShippoSecureField(): renders +
+// hydrates the secure field and caches the vault state for the payments-tab status.
+var _stripeVaultCollected = false;
+
+async function loadStripeSecureField() {
+  var host = document.getElementById('stripeSecretKeySecureFieldHost');
+  if (!host || !window.MastIntake) return;
+  try {
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      await MastAdmin.loadModule('connections-providers');
+    }
+    if (!host.getAttribute('data-rendered')) {
+      host.innerHTML = MastIntake.secureField({ provider: 'stripe' });
+      host.setAttribute('data-rendered', '1'); // render guard (a flag, never a secret)
+    }
+    MastIntake.hydrate(host);
+    var st = await MastIntake.status('stripe');
+    _stripeVaultCollected = !!(st && st.state === 'collected');
+  } catch (e) {
+    // Fail-closed: leave the field disabled; never fall back to a plaintext path.
+    _stripeVaultCollected = false;
+  }
+  if (typeof refreshPaymentsTabStatus === 'function') refreshPaymentsTabStatus();
+}
+
 async function saveStripeConfig() {
   if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
 
-  var secretKey = getFieldValue('stripeSecretKey');
   var publishableKey = (document.getElementById('stripePublishableKey') || {}).value || '';
 
-  if (!secretKey) {
-    showToast('Secret Key is required.', true);
-    return;
-  }
-
-  // Auto-detect environment from key prefix
-  var env = secretKey.startsWith('sk_test_') ? 'test' : 'production';
-
-  var secrets = {};
-  var sp = MastDB.tenantId();
-  if (secretKey && !secretKey.includes('••••')) secrets[sp + '-stripe-secret-key'] = secretKey;
+  // The SECRET key is held in the MastIntake vault (its own Save/Revoke controls)
+  // and never flows through this path. This save only persists the non-secret
+  // publishable key + env metadata. Environment is auto-detected from the publishable
+  // key prefix (pk_test_ / pk_live_), which always matches the secret key's mode.
+  var env = publishableKey.startsWith('pk_test_') ? 'test' : 'production';
 
   var metadata = {
     publishableKey: publishableKey,
@@ -29383,7 +29415,7 @@ async function saveStripeConfig() {
       action: 'write',
       service: 'stripe',
       tenantId: MastDB.tenantId(),
-      secrets: secrets,
+      secrets: {},
       metadata: metadata
     });
     // Ensure paymentProcessor is set to stripe
@@ -44903,8 +44935,8 @@ function refreshPaymentsTabStatus() {
   var sqSandTok = document.getElementById('sqSandboxToken');
   var hasSquare = !!((sqTok && sqTok.value) || (sqSandTok && sqSandTok.value));
   setPill('paymentsStatusSquare', hasSquare ? 'ok' : 'missing', hasSquare ? 'Configured' : 'Not configured');
-  var stTok = document.getElementById('stripeSecretKey');
-  var hasStripe = !!(stTok && stTok.value);
+  // Stripe secret key lives in the vault now — read its cached collected state.
+  var hasStripe = !!_stripeVaultCollected;
   setPill('paymentsStatusStripe', hasStripe ? 'ok' : 'missing', hasStripe ? 'Configured' : 'Not configured');
 }
 window.refreshPaymentsTabStatus = refreshPaymentsTabStatus;
