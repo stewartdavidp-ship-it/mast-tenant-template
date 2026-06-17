@@ -89,12 +89,116 @@
     }
   };
 
+  // ── Email sending domain — family: domain-control, archetype D (DNS verify) ──
+  //
+  // Proof-of-ownership via DNS — collects NO secret, so there is NO vault path.
+  // "Persistence" is the server-written status doc config/email/domain that the
+  // existing Resend CFs maintain; the adapter wraps those CFs + the doc read, so
+  // the engine never learns Resend. This is the framework's 2nd-family proof
+  // (Step 3): the engine reuses its guided grammar (records table, Verify, status
+  // badge, trust copy, delegated listeners) with zero secret handling.
+  //
+  // The adapter owns the RBAC gate + audit (keeping the engine provider-agnostic):
+  // the live email-domain flow gated every mutation on can('settings','edit') and
+  // emitted writeAudit rows — preserved here for parity.
+  var emailDomain = {
+    id: 'email-domain',
+    label: 'Email sending domain',
+    icon: '✉',
+    family: 'domain-control',
+    category: 'messaging',
+    authType: 'D',                 // DNS / domain-ownership proof
+    credentialOwner: 'customer',   // the maker's own domain
+    gate: 'skippable',             // Mast-managed mail.mastplatform.com works without it
+    conciergeEligible: false,      // engine forces false anyway (not delegated-auth A)
+    rbac: { route: 'settings', axis: 'edit' },  // engine pre-checks; adapter re-gates
+
+    guide: {
+      // No single deepLink — registrar links differ per record; the DNS table the
+      // engine renders is where the user copies each value.
+      steps: [
+        'Pick the domain you send email from (e.g. mail.yourshop.com).',
+        'Add the DNS records shown below at your registrar (SPF, DKIM, DMARC).',
+        'Click Verify — DNS can take up to 48 hours to propagate.'
+      ],
+      estSeconds: 600
+    },
+
+    fields: [
+      {
+        key: 'domain',
+        label: 'Sending domain',
+        mask: false,
+        // Hostname shape — same regex the custom-domain sibling uses.
+        validate: /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/,
+        example: 'mail.yourshop.com'
+      }
+    ],
+
+    // NO `vault` block — domain-control collects no secret.
+
+    adapter: {
+      // setup → existing setupBYOResendDomain CF. The DNS records are written
+      // server-side to config/email/domain; we read them back via healthCheck
+      // (NOT from this return, which only carries path + status).
+      setup: function (ctx) {
+        if (typeof can === 'function' && !can('settings', 'edit')) {
+          return Promise.resolve({ ok: false, error: 'You do not have permission to update settings.' });
+        }
+        var fn = window.firebase.functions().httpsCallable('setupBYOResendDomain');
+        return fn({ domain: ctx.domain }).then(function (res) {
+          var d = (res && res.data) || {};
+          if (typeof writeAudit === 'function') writeAudit('create', 'settings', 'emailDomain', { domain: ctx.domain });
+          var verified = d.path === 'A' && d.status === 'verified';
+          return { ok: true, state: verified ? 'connected' : 'pending', path: d.path || null, status: d.status || 'pending' };
+        });
+      },
+      // verify → existing checkEmailDomainStatus CF (EMPTY payload — the CF
+      // resolves the tenant's domain server-side). Returns a coarse status string.
+      verify: function () {
+        var fn = window.firebase.functions().httpsCallable('checkEmailDomainStatus');
+        return fn({}).then(function (res) {
+          var s = ((res && res.data) || {}).status;
+          var map = { verified: 'connected', failed: 'needs-reauth' };
+          return { ok: true, state: map[s] || 'pending' };
+        });
+      },
+      // healthCheck → read the persisted doc config/email/domain (the status
+      // source of truth; the live loadEmailDomainSection read). NO catch — a read
+      // failure propagates so the engine maps it to ERROR (fail-closed status-only),
+      // distinct from a genuinely-absent doc (not-collected → the add box).
+      healthCheck: function () {
+        return window.MastDB.get('config/email/domain').then(function (dom) {
+          if (!dom || !dom.resendDomainId) return { state: 'not-collected' };
+          var map = { verified: 'connected', failed: 'needs-reauth' };
+          return { state: map[dom.status] || 'pending', domain: dom.domain || null, records: dom.dnsRecords || [] };
+        });
+      },
+      // remove → local-only config clear. There is NO Resend delete CF (the live
+      // gotcha); provider-side cleanup is handled out-of-band. Idempotent.
+      remove: function () {
+        if (typeof can === 'function' && !can('settings', 'edit')) {
+          return Promise.resolve({ ok: false, error: 'You do not have permission to update settings.' });
+        }
+        return window.MastDB.get('config/email/domain').then(function (dom) {
+          if (!dom) return { ok: true, status: 'not-collected' };
+          return window.MastDB.remove('config/email/domain').then(function () {
+            if (typeof writeAudit === 'function') writeAudit('delete', 'settings', 'emailDomain');
+            return { ok: true, status: 'not-collected' };
+          });
+        });
+      }
+    }
+  };
+
   // Register with the engine (primary), and publish a plain-global catalog as a
   // load-order fallback the engine can read if it hydrates before register runs.
   window.ConnectionsProviders = window.ConnectionsProviders || {};
   window.ConnectionsProviders.github = github;
+  window.ConnectionsProviders['email-domain'] = emailDomain;
   if (window.MastIntake && typeof window.MastIntake.register === 'function') {
     window.MastIntake.register(github);
+    window.MastIntake.register(emailDomain);
   }
 
   // Catalog module: no routes (not a routable view) and no MastDB writes.

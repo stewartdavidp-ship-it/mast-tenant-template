@@ -228,6 +228,9 @@
         '<p class="mastintake-note mastintake-error">Secure intake is unavailable: ' +
         esc('unknown provider “' + (providerId || '') + '”') + '.</p></div>';
     }
+    // Family fork: domain-control collects NO secret — render the DNS/verify
+    // grammar instead of a secret-paste field (no password input, no vault probe).
+    if (def.family === 'domain-control') return domainField(desc, def);
     var field = fieldOf(def);
     var domId = 'mastintake-' + providerId + '-' + (++_idSeq);
     var label = esc(desc.label || (field && field.label) || def.label || 'Credential');
@@ -403,6 +406,198 @@
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // domain-control family (archetype D) — proof-of-ownership via DNS. Collects NO
+  // secret: there is no vault Put, no probe-gated input. "Persistence" is the
+  // server-written status doc the adapter reads; the engine renders DNS records +
+  // a Verify action and maps a tri-state ladder. domain-control is deliberately
+  // ABSENT from FAIL_CLOSED_FAMILIES — there is no plaintext write path to guard.
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  function domainField(desc, def) {
+    var providerId = def.id;
+    var field = fieldOf(def);
+    var domId = 'mastintake-' + providerId + '-' + (++_idSeq);
+    var label = esc(desc.label || (field && field.label) || def.label || 'Domain');
+    var trust = deriveTrustCopy(def).map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('');
+    // Initial fail-closed shell: a "checking…" line; the add box stays hidden until
+    // status() resolves (so a transient read failure can't present an add box over
+    // a domain that already exists). hydrate() drives the real state.
+    return '' +
+      '<div class="' + FIELD_CLASS + '" id="' + domId + '" data-provider="' + esc(providerId) + '"' +
+      ' data-family="domain-control" data-field="' + esc(field ? field.key : '') + '" data-state="pending">' +
+      '  <label class="mastintake-label">' + label + '</label>' +
+      '  <div class="mastintake-domain-add" style="display:none;">' +
+      '    <div class="mastintake-row">' +
+      '      <input type="text" class="mastintake-domain-input" placeholder="' + esc((field && field.example) || '') + '"' +
+      '        autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">' +
+      '      <button type="button" class="btn btn-primary mastintake-add" data-mastintake-action="domain-add">Add domain</button>' +
+      '    </div>' +
+      '  </div>' +
+      '  <p class="mastintake-feedback" aria-live="polite"></p>' +
+      '  <p class="mastintake-status mastintake-note">Checking domain status…</p>' +
+      '  <div class="mastintake-records"></div>' +
+      '  <div class="mastintake-domain-actions"></div>' +
+      '  <ul class="mastintake-trust">' + trust + '</ul>' +
+      '</div>';
+  }
+
+  function removeBtnHtml() {
+    return '<button type="button" class="btn btn-secondary mastintake-remove" data-mastintake-action="domain-remove">Remove</button>';
+  }
+
+  // Tri-state ladder: verified→connected (no records/verify, Remove only),
+  // failed→needs-reauth (records+Verify+Remove), else→pending (records+Verify+
+  // Remove). not-collected → the add box. A genuine read failure (status ERROR)
+  // is fail-closed: status-only, NO add box.
+  function applyDomainState(wrap, def, result) {
+    var addBox = wrap.querySelector('.mastintake-domain-add');
+    var recordsEl = wrap.querySelector('.mastintake-records');
+    var actionsEl = wrap.querySelector('.mastintake-domain-actions');
+    function showAdd(v) { if (addBox) addBox.style.display = v ? '' : 'none'; }
+    if (recordsEl) recordsEl.innerHTML = '';
+    if (actionsEl) actionsEl.innerHTML = '';
+    ensureGuide(wrap, def);
+
+    var s = (result && result.status) || {};
+    var state = (result && result.available === false) ? STATE.ERROR : (s.state || STATE.NOT_COLLECTED);
+
+    if (state === STATE.ERROR) {
+      // Fail-closed: never show an add box over a possibly-existing domain.
+      wrap.setAttribute('data-state', 'disabled');
+      showAdd(false);
+      setStatusLine(wrap, 'Domain status isn’t available right now — please try again shortly.', 'error');
+      return;
+    }
+    if (state === STATE.NOT_COLLECTED) {
+      wrap.setAttribute('data-state', 'ready');
+      showAdd(true);
+      setStatusLine(wrap, 'No sending domain set up yet. Add the domain you send email from.', '');
+      return;
+    }
+    // A domain exists.
+    showAdd(false);
+    var dom = s.domain ? esc(s.domain) : 'your domain';
+    if (state === STATE.CONNECTED) {
+      wrap.setAttribute('data-state', 'connected');
+      setStatusLine(wrap, '✓ Verified — ' + dom + ' is ready to send.', 'ok');
+      if (actionsEl) actionsEl.innerHTML = removeBtnHtml();
+      return;
+    }
+    // pending or needs-reauth (failed): show records + Verify + Remove.
+    wrap.setAttribute('data-state', state === STATE.NEEDS_REAUTH ? 'error' : 'pending');
+    if (state === STATE.NEEDS_REAUTH) {
+      setStatusLine(wrap, '✗ Verification failed for ' + dom + '. Check the DNS records below, then verify again.', 'error');
+    } else {
+      setStatusLine(wrap, '⏳ Pending — add the DNS records below at your registrar, then verify. DNS can take up to 48 hours.', '');
+    }
+    renderRecords(recordsEl, s.records || []);
+    if (actionsEl) {
+      actionsEl.innerHTML =
+        '<button type="button" class="btn btn-primary mastintake-verify" data-mastintake-action="domain-verify">Verify</button> ' +
+        removeBtnHtml();
+    }
+  }
+
+  // DNS records table. Tolerates BOTH Resend snake_case (record_type/content) and
+  // normalized (type/value) shapes. Copy uses a data-attr + delegated click — never
+  // an inline-onclick string (a record value must not be injected into a handler).
+  function renderRecords(el, records) {
+    if (!el) return;
+    if (!records || !records.length) { el.innerHTML = ''; return; }
+    var rows = records.map(function (rec) {
+      var type = esc(rec.type || rec.record_type || '');
+      var name = esc(rec.name || '');
+      var value = String(rec.value || rec.content || '');
+      return '<tr>' +
+        '<td class="mastintake-rec-type">' + type + '</td>' +
+        '<td class="mastintake-rec-name">' + name + '</td>' +
+        '<td class="mastintake-rec-value">' + esc(value) +
+        ' <button type="button" class="mastintake-copy" data-mastintake-action="domain-copy"' +
+        ' data-copy="' + esc(value) + '" title="Copy value">⧉</button></td>' +
+        '</tr>';
+    }).join('');
+    el.innerHTML = '<table class="mastintake-records-table"><thead><tr>' +
+      '<th>Type</th><th>Name</th><th>Value</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  // Generic RBAC pre-check driven by def.rbac (the adapter also enforces server-
+  // side). Avoids a confirm-then-deny on destructive actions.
+  function canMutate(def) {
+    if (def && def.rbac && typeof window.can === 'function') {
+      return window.can(def.rbac.route, def.rbac.axis || 'edit');
+    }
+    return true;
+  }
+
+  function handleDomainAdd(wrap) {
+    var def = getDef(wrap.getAttribute('data-provider'));
+    if (!def) return;
+    if (!canMutate(def)) { toast('You don’t have permission to change this.', true); return; }
+    if (!def.adapter || typeof def.adapter.setup !== 'function') { toast('This domain provider isn’t set up.', true); return; }
+    var input = wrap.querySelector('.mastintake-domain-input');
+    var field = fieldOf(def);
+    var domain = String((input && input.value) || '').trim().toLowerCase();
+    if (!domain) { setFeedback(wrap, 'Enter a domain first.', 'error'); return; }
+    if (field && field.validate instanceof RegExp && !field.validate.test(domain)) {
+      setFeedback(wrap, 'That doesn’t look like a domain' + (field.example ? ' (e.g. ' + field.example + ')' : '') + '.', 'error');
+      return;
+    }
+    var btn = wrap.querySelector('.mastintake-add');
+    if (btn) { btn.disabled = true; btn.textContent = 'Adding…'; }
+    setFeedback(wrap, '', '');
+    setStatusLine(wrap, 'Adding ' + esc(domain) + '…', '');
+    Promise.resolve(def.adapter.setup({ domain: domain })).then(function (r) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Add domain'; }
+      if (r && r.ok === false) { setFeedback(wrap, r.error || 'Could not add the domain.', 'error'); return; }
+      return refresh(def.id, wrap); // re-read the persisted doc → records + status
+    }).catch(function (err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Add domain'; }
+      setFeedback(wrap, (err && err.message) || 'Could not add the domain.', 'error');
+    });
+  }
+
+  function handleDomainVerify(wrap) {
+    var def = getDef(wrap.getAttribute('data-provider'));
+    if (!def || !def.adapter || typeof def.adapter.verify !== 'function') return;
+    if (!canMutate(def)) { toast('You don’t have permission to change this.', true); return; }
+    var btn = wrap.querySelector('.mastintake-verify');
+    if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+    setStatusLine(wrap, 'Checking verification status…', '');
+    Promise.resolve(def.adapter.verify()).then(function () {
+      return refresh(def.id, wrap);
+    }).catch(function (err) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Verify'; }
+      setFeedback(wrap, (err && err.message) || 'Could not verify right now.', 'error');
+    });
+  }
+
+  function handleDomainRemove(wrap) {
+    var def = getDef(wrap.getAttribute('data-provider'));
+    if (!def || !def.adapter || typeof def.adapter.remove !== 'function') return;
+    if (!canMutate(def)) { toast('You don’t have permission to change this.', true); return; }
+    function doRemove() {
+      Promise.resolve(def.adapter.remove()).then(function () {
+        return refresh(def.id, wrap);
+      }).catch(function (err) {
+        setFeedback(wrap, (err && err.message) || 'Could not remove the domain.', 'error');
+      });
+    }
+    // Honest copy — NO false "deletes from your email provider" claim (the live
+    // remove is a local config clear; provider-side cleanup is handled separately).
+    if (typeof window.mastConfirm === 'function') {
+      window.mastConfirm('Remove this sending domain from Mast? Cleanup in your email provider is handled separately.',
+        { title: 'Remove sending domain', danger: true }).then(function (ok) { if (ok) doRemove(); });
+    } else { doRemove(); }
+  }
+
+  function handleDomainCopy(btn) {
+    var val = btn.getAttribute('data-copy') || '';
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(val).then(function () { toast('Copied.'); }, function () { /* clipboard denied */ });
+    }
+  }
+
   // Single delegated listener set — paste/input feedback + Save/Revoke clicks.
   function bindDelegation() {
     if (_delegationBound || typeof document === 'undefined') return;
@@ -411,7 +606,8 @@
     function wrapOf(node) {
       return node && node.closest ? node.closest('.' + FIELD_CLASS) : null;
     }
-    // Validate-on-paste / on-input (inline, recoverable).
+    // Validate-on-paste / on-input (inline, recoverable). Secret fields only —
+    // domain-control has no secret-paste validation here (it validates on add).
     document.addEventListener('input', function (e) {
       var wrap = wrapOf(e.target);
       if (!wrap || !e.target.classList.contains('mastintake-input')) return;
@@ -427,6 +623,10 @@
       var action = btn.getAttribute('data-mastintake-action');
       if (action === 'save') { e.preventDefault(); handleSave(wrap); }
       else if (action === 'revoke') { e.preventDefault(); handleRevoke(wrap); }
+      else if (action === 'domain-add') { e.preventDefault(); handleDomainAdd(wrap); }
+      else if (action === 'domain-verify') { e.preventDefault(); handleDomainVerify(wrap); }
+      else if (action === 'domain-remove') { e.preventDefault(); handleDomainRemove(wrap); }
+      else if (action === 'domain-copy') { e.preventDefault(); handleDomainCopy(btn); }
     });
   }
 
@@ -444,18 +644,29 @@
       var providerId = wrap.getAttribute('data-provider');
       var def = getDef(providerId);
       if (!def) return;
-      var st = wrap.getAttribute('data-state');
-      if (st === 'collected' || st === 'ready' || st === 'disabled') {
-        // already hydrated for this render; refresh() forces a re-probe
+      // domain-control reads status via the adapter (no vault probe).
+      if (def.family === 'domain-control') {
+        status(providerId).then(function (s) { applyDomainState(wrap, def, { available: true, status: s }); });
+        return;
       }
       probe(providerId).then(function (result) { applyState(wrap, def, result); });
     });
   }
 
-  // Force a re-probe and re-apply (after save/revoke, or explicit refresh).
+  // Force a re-probe and re-apply (after save/revoke/add/verify/remove).
   function refresh(providerId, wrap) {
-    invalidateProbe(providerId);
     var def = getDef(providerId);
+    // domain-control re-reads status via the adapter (no vault probe to bust).
+    if (def && def.family === 'domain-control') {
+      return status(providerId).then(function (s) {
+        var result = { available: true, status: s };
+        if (wrap) { applyDomainState(wrap, def, result); return result; }
+        var dnodes = document.querySelectorAll('.' + FIELD_CLASS + '[data-provider="' + providerId + '"]');
+        Array.prototype.forEach.call(dnodes, function (w) { applyDomainState(w, def, result); });
+        return result;
+      });
+    }
+    invalidateProbe(providerId);
     return probe(providerId, true).then(function (result) {
       if (wrap) { applyState(wrap, def, result); return result; }
       // No wrapper given → re-hydrate any matching fields on the page.
@@ -503,16 +714,22 @@
         resolve(result);
       }
       if (root) {
+        var DONE_STATES = def.family === 'domain-control'
+          ? { connected: STATE.CONNECTED, pending: STATE.PENDING, error: STATE.NEEDS_REAUTH }
+          : { collected: STATE.COLLECTED };
         root.addEventListener('click', function (e) {
-          var btn = e.target && e.target.closest ? e.target.closest('[data-mastintake-action="save"]') : null;
+          var btn = e.target && e.target.closest ? e.target.closest('[data-mastintake-action]') : null;
           if (!btn) return;
-          // After a successful save the wrapper flips to data-state="collected".
-          setTimeout(function () {
+          var action = btn.getAttribute('data-mastintake-action');
+          if (action !== 'save' && action !== 'domain-add') return;
+          // The write is async (CF + status re-read); poll for the state flip.
+          var tries = 0;
+          (function poll() {
             var wrap = root.querySelector('.' + FIELD_CLASS);
-            if (wrap && wrap.getAttribute('data-state') === 'collected') {
-              finish({ ok: true, status: STATE.COLLECTED, provider: providerId });
-            }
-          }, 50);
+            var ds = wrap && wrap.getAttribute('data-state');
+            if (ds && DONE_STATES[ds]) { finish({ ok: true, status: DONE_STATES[ds], provider: providerId }); return; }
+            if (++tries < 25) setTimeout(poll, 300);
+          })();
         });
       }
     });
@@ -544,6 +761,25 @@
       }).catch(function (err) {
         // Fail-closed: a throw is NEVER an assumed-good state.
         return { id: providerId, family: family, state: STATE.ERROR, lastError: (err && err.message) || 'status-failed' };
+      });
+    }
+    if (family === 'domain-control') {
+      // No vault, no ChannelConnection — delegate to the def's adapter.healthCheck
+      // (wraps the existing status doc/CF). Returns records[]+domain so the field
+      // renders from one read. Fail-closed: a throw maps to ERROR (status-only,
+      // never an add box over a possibly-existing domain), NOT not-collected.
+      if (!def || !def.adapter || typeof def.adapter.healthCheck !== 'function') {
+        return Promise.resolve({ id: providerId, family: family, state: STATE.NOT_COLLECTED });
+      }
+      return Promise.resolve(def.adapter.healthCheck()).then(function (d) {
+        d = d || {};
+        return {
+          id: providerId, family: 'domain-control', category: def.category,
+          state: d.state || STATE.NOT_COLLECTED, records: d.records || [],
+          domain: d.domain || null, detail: d.detail || '', connectedAt: d.connectedAt || null
+        };
+      }).catch(function (err) {
+        return { id: providerId, family: 'domain-control', state: STATE.ERROR, records: [], lastError: (err && err.message) || 'status-failed' };
       });
     }
     // Channel branch: vocab-map ChannelConnection with a fail-closed default.
@@ -578,6 +814,18 @@
         return { ok: !!(d.success || d.ok), status: d.state || STATE.NOT_COLLECTED };
       }).catch(function (err) {
         return { ok: false, status: STATE.ERROR, error: (err && err.message) || 'Could not revoke.' };
+      });
+    }
+    if (family === 'domain-control') {
+      // Domain "revoke" = remove the domain via the adapter (idempotent).
+      if (!def.adapter || typeof def.adapter.remove !== 'function') {
+        return Promise.resolve({ ok: false, status: STATE.ERROR, error: 'remove not wired' });
+      }
+      return Promise.resolve(def.adapter.remove(ctx)).then(function (r) {
+        r = r || {};
+        return { ok: r.ok !== false, status: r.status || STATE.NOT_COLLECTED };
+      }).catch(function (err) {
+        return { ok: false, status: STATE.ERROR, error: (err && err.message) || 'Could not remove.' };
       });
     }
     // Channel revoke would dispatch to the provider's adapter.revoke — out of
