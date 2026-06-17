@@ -2256,16 +2256,38 @@
     }
   }
 
-  async function reserveInventory(pid, qty, ck, orderId) {
+  // Atomically bump a product's per-bucket stock counters. Each name in `fields`
+  // (e.g. 'committed', 'onHand') is incremented by the signed `delta` on the
+  // `_default` bucket, and — when `ck` names a real variant bucket — on that
+  // bucket too. Returns false (no write) when the product has no stock record.
+  //
+  // These writes go through MastDB.multiUpdate, NOT MastDB.update with
+  // '_default/committed'-style keys. MastDB.update would prefix each key with the
+  // 'stock.' fieldPath and hand Firestore the field path 'stock._default/committed';
+  // Firestore forbids '/' in field paths, so the call threw and the surrounding
+  // try/catch swallowed it — inventory silently never moved. multiUpdate takes a
+  // full slash path per leaf and translates each into a slash-free nested field
+  // update (dot-joined fieldPath via mergeFields), preserving the atomic increment.
+  async function _bumpStock(pid, delta, ck, fields) {
     var inv = inventory[pid];
-    if (!inv || !inv.stock || !inv.stock._default) return;
+    if (!inv || !inv.stock || !inv.stock._default) return false;
+    var base = 'admin/inventory/' + pid + '/stock/';
+    var updates = {};
+    fields.forEach(function (f) {
+      updates[base + '_default/' + f] = MastDB.serverIncrement(delta);
+    });
+    if (ck && ck !== '_default' && inv.stock[ck]) {
+      fields.forEach(function (f) {
+        updates[base + ck + '/' + f] = MastDB.serverIncrement(delta);
+      });
+    }
+    await MastDB.multiUpdate(updates);
+    return true;
+  }
+
+  async function reserveInventory(pid, qty, ck, orderId) {
     try {
-      var updates = {};
-      updates['_default/committed'] = MastDB.serverIncrement(qty);
-      if (ck && ck !== '_default' && inv.stock[ck]) {
-        updates[ck + '/committed'] = MastDB.serverIncrement(qty);
-      }
-      await MastDB.update('admin/inventory/' + pid + '/stock', updates);
+      if (!(await _bumpStock(pid, qty, ck, ['committed']))) return;
       await writeAudit('update', 'inventory', pid);
       await MastDB.push('admin/inventory/' + pid + '/history', {
         action: 'committed', reason: 'order_placed', qty: qty, comboKey: ck || '_default',
@@ -2278,15 +2300,8 @@
   }
 
   async function releaseInventory(pid, qty, ck, orderId) {
-    var inv = inventory[pid];
-    if (!inv || !inv.stock || !inv.stock._default) return;
     try {
-      var updates = {};
-      updates['_default/committed'] = MastDB.serverIncrement(-qty);
-      if (ck && ck !== '_default' && inv.stock[ck]) {
-        updates[ck + '/committed'] = MastDB.serverIncrement(-qty);
-      }
-      await MastDB.update('admin/inventory/' + pid + '/stock', updates);
+      if (!(await _bumpStock(pid, -qty, ck, ['committed']))) return;
       await writeAudit('update', 'inventory', pid);
       await MastDB.push('admin/inventory/' + pid + '/history', {
         action: 'released', reason: 'order_cancelled', qty: qty, comboKey: ck || '_default',
@@ -2299,17 +2314,8 @@
   }
 
   async function pullFromStock(pid, qty, ck, orderId) {
-    var inv = inventory[pid];
-    if (!inv || !inv.stock || !inv.stock._default) return;
     try {
-      var updates = {};
-      updates['_default/committed'] = MastDB.serverIncrement(-qty);
-      updates['_default/onHand'] = MastDB.serverIncrement(-qty);
-      if (ck && ck !== '_default' && inv.stock[ck]) {
-        updates[ck + '/committed'] = MastDB.serverIncrement(-qty);
-        updates[ck + '/onHand'] = MastDB.serverIncrement(-qty);
-      }
-      await MastDB.update('admin/inventory/' + pid + '/stock', updates);
+      if (!(await _bumpStock(pid, -qty, ck, ['committed', 'onHand']))) return;
       await writeAudit('update', 'inventory', pid);
       await MastDB.push('admin/inventory/' + pid + '/history', {
         action: 'shipped', reason: 'order_shipped', qty: -qty, comboKey: ck || '_default',
