@@ -6,6 +6,33 @@
   // into Settings → Integrations → QuickBooks tab. Renderer is now
   // window.renderQboPanel(subView), targeting #qboPanelBody. Outer tab strip lives
   // in index.html (switchQboInnerTab).
+  //
+  // ⚠️ QBO-3 CUTOVER (2026-06-17): accounting-v2.js (renderQboPanelV2) is now the
+  // DEFAULT QuickBooks settings surface — switchQboInnerTab routes the panel to V2
+  // unconditionally, and the Connections board owns connect/disconnect. The V1
+  // read-only VIEW RENDERERS below are therefore DEAD as a display path
+  // (renderQboPanel + renderConnectView / renderCoaMapView+renderCoaMapTable /
+  // renderSyncLogView+renderSyncLogTable / renderConflictsView+_renderConflictsTable
+  // and their helpers _renderCollisionBanner / _renderReconnectCountdownChip /
+  // _renderWebhookSection / _renderBackfillRow / reflectStatusChip / the COA fuzzy-
+  // suggest engine). They are RETAINED ON PURPOSE, not removed: every one of them is
+  // ENTANGLED with a KEPT function or the FROZEN finance.js contract that the V2 twin
+  // (and finance.js AR/AP/Day-Close) delegate to —
+  //   • renderConnectView   ← _qboAckCollision, _qboCheckBankFeedCollisions
+  //   • renderCoaMapView     ← _qboSaveMapping, _qboPickDefaultSalesItem
+  //   • renderConflictsView  ← openQboConflictModal (FROZEN — finance.js chips call it)
+  //   • renderQboPanel       ← connectQbo, disconnectQbo
+  //   • loadSyncLogPage/_syncLogState/renderSyncLogTable ← _qboRetrySync
+  // and each top-level renderer's helpers are reachable only THROUGH that renderer.
+  // Severing those calls would mean editing the kept action functions on a financial
+  // surface, so per the QBO-3 brief we LEAVE the renderers as dead code. When a kept
+  // action re-renders the V1 panel, the V2 delegation harmlessly repaints the V2 view
+  // over it (the contract that has shipped under ?ui=1 since QBO-1). The KEPT action
+  // backend (single write paths) + FROZEN globals are at the bottom of this file:
+  //   _qboStartBackfill/openQboBackfillModal, _qboRetrySync (+ PENDING_ITEM_CONFIRM),
+  //   _qboAckCollision, _qboCheckBankFeedCollisions, _qboSaveMapping,
+  //   _qboPickDefaultSalesItem, _qboCopyWebhookUrl, connectQbo, disconnectQbo, and the
+  //   FROZEN __qboConflicts / _qboFindConflict / _qboPreloadConflicts / openQboConflictModal.
 
   var QBO_CF_ORIGIN = 'https://us-central1-mast-platform-prod.cloudfunctions.net';
   // W2b.1 — webhook URL is one-per-Intuit-App (NOT per-tenant). Intuit routes
