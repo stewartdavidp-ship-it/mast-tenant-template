@@ -1173,9 +1173,9 @@
     return '<div class="wv2-importdoor">' +
       '<div class="wv2-importdoor-main">' +
         '<div class="wv2-sub-h">Bring in my whole catalog</div>' +
-        '<div class="mu-sub">Have an existing store on Shopify, Etsy, Square, or your own site? Import your full product catalog in the advanced tools.</div>' +
+        '<div class="mu-sub">Have an existing store on Shopify, Etsy, Square, or your own site? Import your full product catalog — we will crawl it and let you cherry-pick what to bring in.</div>' +
       '</div>' +
-      '<button type="button" class="btn btn-secondary" onclick="WebsiteV2.openImport()">Advanced (classic) →</button>' +
+      '<button type="button" class="btn btn-secondary" onclick="WebsiteV2.openImport()">Import →</button>' +
     '</div>';
   }
 
@@ -1859,9 +1859,11 @@
     // website route to its Import tab (the async catalog-import subsystem is NOT
     // rebuilt natively — it lives behind this single door). navigateToClassic
     // bypasses the V2 remap so it lands on the legacy Import surface, not the twin.
+    // `importOnly:1` tells website.js to strip the other five (now-native) tabs and
+    // render JUST the Import surface + a "← Back to Your Website" link to the builder.
     openImport: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('website', { tab: 'import' });
-      else if (typeof navigateTo === 'function') navigateTo('website', { tab: 'import' });
+      if (typeof navigateToClassic === 'function') navigateToClassic('website', { tab: 'import', importOnly: 1 });
+      else if (typeof navigateTo === 'function') navigateTo('website', { tab: 'import', importOnly: 1 });
     },
 
     // Card 4 · viewport toggle — resize the existing frame in place (no reload,
