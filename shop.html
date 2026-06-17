@@ -752,6 +752,12 @@ window.TENANT_READY.then(function() {
     var gcConfigPromise = MastDB.get('public/config/walletConfig').catch(function() { return null; });
 
     MastDB.get('public/config/categories').catch(function() { return null; }).then(function(catData) {
+      // The registry may arrive as a numeric-keyed map (the import writes indexed
+      // entries via set('.../categories/{idx}')) rather than an array — normalize
+      // first, else SHOP_IDS stays empty and the category-driven shop renders zero
+      // products and no pills despite a fully populated registry. Mirrors the admin
+      // loadTenantCategories normalization.
+      if (catData && !Array.isArray(catData) && typeof catData === 'object') catData = Object.values(catData).filter(Boolean);
       if (catData && Array.isArray(catData)) {
         SHOP_CATS = catData.filter(function(c) { return c && c.id && c.id !== 'shop' && c.label; });
       }
