@@ -938,16 +938,32 @@
   // window.ProductionBridge (listRequests / convertRequestToJob /
   // assignRequestToExistingJob) — no raw buildJobs or job writes in this twin.
   function loadRequests() {
-    if (!(window.ProductionBridge && window.ProductionBridge.listRequests)) {
-      // Production module not loaded yet — pull it in, then retry once.
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('production'); } catch (e) {} }
-    }
-    if (!(window.ProductionBridge && window.ProductionBridge.listRequests)) return;
-    Promise.resolve(window.ProductionBridge.listRequests({ status: 'pending' })).then(function (reqs) {
-      V2.requests = Array.isArray(reqs) ? reqs : [];
-      V2.requestsLoaded = true;
-      render();
+    // On a COLD load the production module (which defines window.ProductionBridge)
+    // hasn't been pulled in yet, so listRequests isn't available synchronously.
+    // AWAIT the host-module load before reading the queue — fire-and-forget left
+    // V2.requests empty forever, so the Build-requests card never rendered on a
+    // fresh URL (only after warm in-app nav). This loads async and re-renders just
+    // the card once requests arrive; it does NOT gate the main jobs list (load()).
+    ensureProductionBridge().then(function () {
+      if (!(window.ProductionBridge && window.ProductionBridge.listRequests)) return;
+      return Promise.resolve(window.ProductionBridge.listRequests({ status: 'pending' })).then(function (reqs) {
+        V2.requests = Array.isArray(reqs) ? reqs : [];
+        V2.requestsLoaded = true;
+        render();
+      });
     }).catch(function (e) { console.error('[jobs-v2] listRequests', e); });
+  }
+
+  // Resolve once window.ProductionBridge is available (loading the legacy
+  // production.js host module on demand). loadModule returns a promise that
+  // settles on the module script's onload, and ProductionBridge is assigned at
+  // that script's top level, so it exists by the time this resolves.
+  function ensureProductionBridge() {
+    if (window.ProductionBridge && window.ProductionBridge.listRequests) return Promise.resolve();
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      return Promise.resolve(MastAdmin.loadModule('production')).catch(function () {});
+    }
+    return Promise.resolve();
   }
 
   // Active jobs (definition / in-progress) for the assign-to-existing picker.
