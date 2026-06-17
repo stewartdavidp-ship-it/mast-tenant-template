@@ -482,9 +482,29 @@ var MastDB = (function() {
       },
       push: function(path, value) {
         var parsed = _translateTenantPath(path);
-        var ref = _collRef(parsed).doc();
-        var key = ref.id;
-        return ref.set(_translateFs(value)).then(function() { return { key: key }; });
+        // Collection-level push (no doc targeted): mint a fresh auto-id doc, the
+        // analog of RTDB push() under a collection node (e.g. push('admin/jobs', job)).
+        if (!parsed.docId) {
+          var ref = _collRef(parsed).doc();
+          var collKey = ref.id;
+          return ref.set(_translateFs(value)).then(function() { return { key: collKey }; });
+        }
+        // Doc-scoped push: in RTDB, push() under a doc-level node (e.g.
+        // admin/inventory/{pid}/history/{pushId}) appended an auto-keyed child to
+        // that node. The flat Firestore model stores the node as a (possibly
+        // nested) map FIELD on the doc, so append the value as a new auto-keyed
+        // entry in that map. This is exactly the canonical newKey()+set('parent/
+        // {key}', value) pattern used elsewhere in the app, expressed in one call.
+        // mergeFields scopes the write to just the new leaf (sibling entries and
+        // other doc fields preserved), and each push targets a distinct key, so
+        // concurrent pushes never clobber. Previously this ignored docId/fieldPath
+        // and wrote a stray sibling doc in the collection — the value black-holed.
+        var childKey = _collRef(parsed).doc().id;
+        var leaf = parsed.fieldPath ? (parsed.fieldPath + '.' + childKey) : childKey;
+        return _docRef(parsed).set(
+          _buildNestedSet(leaf, _translateFs(value)),
+          { mergeFields: [leaf] }
+        ).then(function() { return { key: childKey }; });
       },
       newKey: function(path) {
         var parsed = _translateTenantPath(path);
