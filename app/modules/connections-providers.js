@@ -1100,6 +1100,131 @@
     comingSoon: 'Read-only Stripe Connect (payouts & balance) is planned for a later phase.'
   });
 
+  // ── QuickBooks Online — family: delegated-auth, archetype A (Intuit OAuth) ──
+  //
+  // LIVE. The accounting (QBO-1) module already owns the full connect/disconnect
+  // dance + the deep sync/mapping UI (COA Map / Sync Log / Conflicts / Backfill).
+  // This def FOLDS that live plumbing into the MastIntake grammar so QBO sits on
+  // the Connections board alongside Shopify/Etsy/Square/Plaid — REUSE, not rebuild.
+  //
+  // UNLIKE the channel OAuth providers above, QBO is NOT a channels record: its
+  // connection lives in the BESPOKE doc admin/integrations/qbo (realmId, status,
+  // env, connectedAt, lastUsedAt, disconnectedAt), NOT channels/{id}. So this def
+  // is EXCLUDED from CHANNEL_PLATFORMS and from the board's channel health-summary
+  // aggregate, and its healthCheck reads that doc directly — never channels.list.
+  // The engine's delegated-auth path is adapter-driven (it prefers def.adapter.
+  // healthCheck and only consumes the returned IntakeStatus object), so it carries
+  // this non-channel status doc with zero board surgery.
+  //
+  // credentialOwner:'customer' — the maker's own QuickBooks company (realm). NO
+  // `vault` block: the OAuth token is minted + refreshed SERVER-side by the Intuit
+  // callback CF, never client-held. tokenLifetime 'short-refreshable' drives the
+  // ~100-day idle-reconnect copy (QBO refresh-on-use rotates the token on every
+  // sync; it only force-expires after ~100 days of zero use — C-ACC-1, Intuit
+  // Nov-2025 policy). refreshAheadDays 30 / criticalDays 7 mirror the accounting-v2
+  // countdown chip tiers.
+  var QBO_IDLE_DAYS = 100;          // QBO refresh token force-expires after ~100 idle days (C-ACC-1)
+  // healthCheck → read admin/integrations/qbo and map to the IntakeStatus enum.
+  // "Connected" = realmId && !disconnectedAt && status!=='disconnected' (QBO-1's
+  // canonical predicate). If the connection is past its idle window (no sync in
+  // ~100 days), surface needs-reauth so the card prompts a reconnect (the token is
+  // force-expired server-side). NO catch — a read failure propagates so the engine
+  // maps it to ERROR (a reconnectable problem), never a silent not-collected.
+  function _qboHealthCheck() {
+    if (!window.MastDB || typeof window.MastDB.get !== 'function') {
+      return Promise.resolve({ state: 'not-collected' });
+    }
+    return window.MastDB.get('admin/integrations/qbo').then(function (doc) {
+      var connected = doc && doc.realmId && !doc.disconnectedAt && (doc.status !== 'disconnected');
+      if (!connected) return { state: 'not-collected' };
+      var env = doc.env || 'sandbox';
+      var realmShort = String(doc.realmId).slice(0, 8) + '…';
+      var bits = [env, 'realm ' + realmShort];
+      if (doc.connectedAt) bits.push('since ' + new Date(doc.connectedAt).toLocaleDateString());
+      // Idle-expiry: lastUsedAt/refreshedAt drives the ~100-day force-expiry clock.
+      var lastUsedAt = doc.lastUsedAt || doc.refreshedAt || doc.connectedAt;
+      var lastMs = (typeof lastUsedAt === 'number') ? lastUsedAt : Date.parse(lastUsedAt);
+      if (isFinite(lastMs)) {
+        var idleDays = (Date.now() - lastMs) / 86400000;
+        if (idleDays >= QBO_IDLE_DAYS) {
+          return {
+            state: 'needs-reauth',
+            detail: bits.join(' • '),
+            store: 'QuickBooks (' + env + ')',
+            connectedAt: doc.connectedAt || null,
+            lastError: 'The QuickBooks connection has been idle ~100 days — reconnect to refresh access.'
+          };
+        }
+      }
+      return {
+        state: 'connected',
+        detail: bits.join(' • '),
+        store: 'QuickBooks (' + env + ')',
+        connectedAt: doc.connectedAt || null
+      };
+    });
+  }
+  // connect → the LIVE global connectQbo (mintQboAuthState → Intuit consent popup
+  // → strict CF-origin postMessage auto-complete). The engine shows pending after
+  // launch; the popup's own handler refreshes the accounting panel on success and
+  // the board re-reads status on Refresh.
+  function _qboConnect() {
+    if (typeof window.connectQbo === 'function') {
+      return Promise.resolve(window.connectQbo()).then(function () { return { ok: true }; });
+    }
+    return Promise.resolve({ ok: false, error: 'quickbooks-connect-unavailable' });
+  }
+  // disconnect → the disconnectQbo CF DIRECTLY (not the live disconnectQbo global,
+  // which shows its OWN mastConfirm + re-renders the legacy accounting panel — the
+  // engine already owns the confirm + the board refresh). Idempotent server-side.
+  function _qboDisconnect() {
+    if (typeof window.firebase === 'undefined' || !window.firebase.functions) {
+      return Promise.resolve({ ok: false, error: 'functions-unavailable' });
+    }
+    var tid = (window.MastDB && typeof window.MastDB.tenantId === 'function') ? window.MastDB.tenantId() : null;
+    var fn = window.firebase.functions().httpsCallable('disconnectQbo');
+    return fn({ tenantId: tid }).then(function () {
+      return { ok: true, status: 'not-collected' };
+    });
+  }
+  var qboConnection = {
+    id: 'qbo',
+    label: 'QuickBooks Online',
+    icon: '📒',
+    family: 'delegated-auth',
+    category: 'accounting',
+    authType: 'A',                   // pure OAuth — the maker authorizes on Intuit's page
+    credentialOwner: 'customer',
+    gate: 'skippable',               // accounting works without a QBO sync
+    conciergeEligible: false,        // no concierge desk staffed for accounting-sync yet
+    available: true,
+    refreshable: true,
+    tokenLifetime: 'short-refreshable',   // QBO: refresh-on-use; force-expires after ~100 idle days
+    rbac: { route: 'integrations', axis: 'edit' },  // engine pre-checks; the QBO CFs re-gate server-side
+    guide: {
+      steps: [
+        'Click Connect — QuickBooks opens in a new window.',
+        'Sign in and approve access to your QuickBooks company on Intuit’s own page.',
+        'Return here and click Refresh status.'
+      ],
+      estSeconds: 120
+    },
+    copy: {
+      connectLabel: 'Connect QuickBooks',
+      connectPrompt: 'Connect QuickBooks Online to sync day closes, invoices, bills, and reviewed expenses to your books. You authorize once on Intuit — Mast never asks you to copy a key. You can skip this and add it later.',
+      pendingDetail: 'Approve access in the QuickBooks window that just opened, then click Refresh status.',
+      needsReauth: 'The QuickBooks connection has been idle ~100 days and the refresh token expired — reconnect to resume syncing.',
+      disconnectConfirm: 'Disconnect QuickBooks? Syncing stops and Mast’s stored access is revoked. Entries already pushed to QuickBooks stay; you can reconnect anytime.',
+      disconnectTitle: 'Disconnect QuickBooks'
+    },
+    // NO `vault` block — the OAuth token is minted + refreshed server-side.
+    adapter: {
+      connect: function () { return _qboConnect(); },
+      healthCheck: function () { return _qboHealthCheck(); },
+      disconnect: function () { return _qboDisconnect(); }
+    }
+  };
+
   // Register with the engine (primary), and publish a plain-global catalog as a
   // load-order fallback the engine can read if it hydrates before register runs.
   window.ConnectionsProviders = window.ConnectionsProviders || {};
@@ -1128,6 +1253,7 @@
   window.ConnectionsProviders.squarespace = squarespaceChannel;
   window.ConnectionsProviders.woocommerce = wooChannel;
   window.ConnectionsProviders.plaid = plaidConnection;
+  window.ConnectionsProviders.qbo = qboConnection;
   window.ConnectionsProviders['stripe-connect'] = stripeConnect;
   if (window.MastIntake && typeof window.MastIntake.register === 'function') {
     window.MastIntake.register(github);
@@ -1155,6 +1281,7 @@
     window.MastIntake.register(squarespaceChannel);
     window.MastIntake.register(wooChannel);
     window.MastIntake.register(plaidConnection);
+    window.MastIntake.register(qboConnection);
     window.MastIntake.register(stripeConnect);
   }
 
