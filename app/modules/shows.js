@@ -3718,11 +3718,19 @@ async function _showApplyDeepDiveCore(showId, details) {
     return Promise.all(writes).then(function () {});
   }
 
-  // _showSaveProfileCore(profileData) → void. Merge-update the singleton studio
-  // profile (showLight/profile) used to fill applications. Mirrors the legacy
-  // show-light profile write (MastDB.showLight.profile.update).
+  // _showSaveProfileCore(profileData) → void. Create-or-merge the singleton studio
+  // profile (showLight/profile) used to fill applications. The legacy show-light
+  // editor full-saves with .set() and field-patches with .update(); this core is a
+  // partial-merge backfill (don't clobber the rest of the profile), so it tries
+  // .update() and falls back to .set() when the singleton doc doesn't exist yet —
+  // matching the create-or-merge pattern for singleton config docs.
   function _showSaveProfileCore(profileData) {
-    return Promise.resolve(MastDB.showLight.profile.update(Object.assign({}, profileData)));
+    var data = Object.assign({}, profileData);
+    return Promise.resolve(MastDB.showLight.profile.update(data)).catch(function (err) {
+      var msg = (err && (err.code || err.message)) || '';
+      if (String(msg).indexOf('not-found') >= 0) return MastDB.showLight.profile.set(data);
+      throw err;
+    });
   }
 
   // ============================================================
