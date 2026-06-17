@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-084519-fb930fb"></script>
+  <script src="../shared/mastdb.js?v=20260617-094613-1829060"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-084519-fb930fb"></script>
-  <script src="../shared/brand-sync.js?v=20260617-084519-fb930fb"></script>
+  <script src="../shared/customer-filters.js?v=20260617-094613-1829060"></script>
+  <script src="../shared/brand-sync.js?v=20260617-094613-1829060"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-084519-fb930fb"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-094613-1829060"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-084519-fb930fb"></script>
-  <script src="../shared/mast-io.js?v=20260617-084519-fb930fb"></script>
-  <script src="../shared/mast-entity.js?v=20260617-084519-fb930fb"></script>
+  <script src="../shared/mast-ui.js?v=20260617-094613-1829060"></script>
+  <script src="../shared/mast-io.js?v=20260617-094613-1829060"></script>
+  <script src="../shared/mast-entity.js?v=20260617-094613-1829060"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-084519-fb930fb"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-094613-1829060"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-084519-fb930fb"></script>
+  <script src="../shared/mast-intake.js?v=20260617-094613-1829060"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -9386,11 +9386,14 @@
           <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
             <div style="font-size:0.9rem;font-weight:700;margin-bottom:12px;color:var(--warm-gray,#6b6359);">Sandbox Credentials</div>
             <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Access Token <span id="sqSandboxTokenBadge"></span></label>
-            <div style="display:flex;gap:6px;margin-bottom:8px;">
-              <input type="password" id="sqSandboxToken" placeholder="EAAAl..."
-                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-              <button type="button" onclick="toggleReveal('sqSandboxToken',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
-            </div>
+            <!-- Square sandbox access token — migrated to the MastIntake secure vault.
+                 Persists ONLY through the server vault (mastIntakeVaultPut); no client
+                 write path, never read back. MastIntake renders input/Save/Revoke into
+                 this host; loadSquareSecureFields() populates + hydrates it. Server
+                 consumers read it vault-first (getSquareTokens, arch #297) with a legacy
+                 {prefix}-square-sandbox-access-token fallback. Location ID below is
+                 non-secret config and stays a plain field. -->
+            <div id="sqSandboxTokenSecureFieldHost" style="margin-bottom:8px;"></div>
             <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Location ID <span id="sqSandboxLocationBadge"></span></label>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
               <input type="password" id="sqSandboxLocation" placeholder="L..."
@@ -9403,11 +9406,10 @@
           <div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:16px;margin-bottom:12px;">
             <div style="font-size:0.9rem;font-weight:700;margin-bottom:12px;color:var(--warm-gray,#6b6359);">Production Credentials</div>
             <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Access Token <span id="sqProdTokenBadge"></span></label>
-            <div style="display:flex;gap:6px;margin-bottom:8px;">
-              <input type="password" id="sqProdToken" placeholder="EAAAl..."
-                style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-              <button type="button" onclick="toggleReveal('sqProdToken',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
-            </div>
+            <!-- Square production access token — MastIntake secure vault (see sandbox note).
+                 Server consumers read vault-first (getSquareTokens, arch #297) with a legacy
+                 {prefix}-square-production-access-token fallback. -->
+            <div id="sqProdTokenSecureFieldHost" style="margin-bottom:8px;"></div>
             <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Location ID <span id="sqProdLocationBadge"></span></label>
             <div style="display:flex;gap:6px;margin-bottom:8px;">
               <input type="password" id="sqProdLocation" placeholder="L..."
@@ -22412,7 +22414,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-084519-fb930fb';
+var MAST_MODULES_V = '20260617-094613-1829060';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -29247,27 +29249,28 @@ async function saveSquareConfig() {
   if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var env = document.getElementById('squareEnvironment').value;
 
-  var sandboxToken = getFieldValue('sqSandboxToken');
   var sandboxLocation = getFieldValue('sqSandboxLocation');
-  var prodToken = getFieldValue('sqProdToken');
   var prodLocation = getFieldValue('sqProdLocation');
   var siteUrl = window.location.origin;
 
-  // Validate active environment has required fields
-  if (env === 'sandbox' && (!sandboxToken || !sandboxLocation)) {
-    showToast('Sandbox Access Token and Location ID are required.', true);
+  // The access tokens are held in the MastIntake vault — each via its own
+  // secureField Save (loadSquareSecureFields) — and never flow through this path.
+  // This save persists ONLY the non-secret Location IDs + active environment.
+  // Validate the active env's Location ID; the access token is collected by its
+  // secureField above, and the server-side verify (which reads the token
+  // vault-first, arch #299) reports if it's missing.
+  if (env === 'sandbox' && !sandboxLocation) {
+    showToast('Sandbox Location ID is required.', true);
     return;
   }
-  if (env === 'production' && (!prodToken || !prodLocation)) {
-    showToast('Production Access Token and Location ID are required.', true);
+  if (env === 'production' && !prodLocation) {
+    showToast('Production Location ID is required.', true);
     return;
   }
 
-  // Build secrets object (only include non-masked values)
+  // No secrets in this payload — tokens live in the vault. The server verify
+  // reads the active-env token vault-first and provisions the webhook (arch #299).
   var secrets = {};
-  var sp = MastDB.tenantId();
-  if (sandboxToken && !sandboxToken.includes('••••')) secrets[sp + '-square-sandbox-access-token'] = sandboxToken;
-  if (prodToken && !prodToken.includes('••••')) secrets[sp + '-square-production-access-token'] = prodToken;
 
   // Non-secret metadata for RTDB — only include environments with data
   var metadata = {
@@ -29520,8 +29523,51 @@ async function saveStripeConfig() {
   }
 }
 
+// Render + hydrate the Square sandbox + production access-token secureField hosts
+// (vault-backed replacements for the legacy plaintext token inputs). Mirrors
+// loadStripeSecureField(): load the provider catalog, render once (guarded),
+// hydrate to run the vault-CF availability probe. Fail-closed — on any error the
+// fields stay disabled; never falls back to a plaintext path.
+var _squareVaultCollected = false; // either-env token collected in the vault (for the payments-tab pill)
+
+async function loadSquareSecureFields() {
+  if (!window.MastIntake) return;
+  try {
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      await MastAdmin.loadModule('connections-providers');
+    }
+    var hosts = [
+      { id: 'sqSandboxTokenSecureFieldHost', provider: 'square-sandbox-access-token' },
+      { id: 'sqProdTokenSecureFieldHost', provider: 'square-production-access-token' }
+    ];
+    hosts.forEach(function (h) {
+      var host = document.getElementById(h.id);
+      if (!host) return;
+      if (!host.getAttribute('data-rendered')) {
+        host.innerHTML = MastIntake.secureField({ provider: h.provider });
+        host.setAttribute('data-rendered', '1'); // render guard (a flag, never a secret)
+      }
+      MastIntake.hydrate(host);
+    });
+    // Cache whether EITHER env token is collected, for the payments-tab status pill
+    // (mirrors _stripeVaultCollected). The token value is never read back.
+    try {
+      var ss = await MastIntake.status('square-sandbox-access-token');
+      var ps = await MastIntake.status('square-production-access-token');
+      _squareVaultCollected = !!((ss && ss.state === 'collected') || (ps && ps.state === 'collected'));
+    } catch (e) { _squareVaultCollected = false; }
+    if (typeof refreshPaymentsTabStatus === 'function') refreshPaymentsTabStatus();
+  } catch (e) {
+    // Fail-closed: leave the fields disabled; never fall back to a plaintext path.
+  }
+}
+
 function loadSquareConfig() {
   var statusEl = document.getElementById('squareConfigStatus');
+  // Always render + hydrate the vault-backed access-token fields (even when no
+  // config exists yet, so a maker can enter tokens). The secureField shows its
+  // own collected/not-collected state independent of the metadata read below.
+  loadSquareSecureFields();
   firebase.functions().httpsCallable('secretsManager')({
     action: 'read',
     service: 'square',
@@ -29537,22 +29583,20 @@ function loadSquareConfig() {
     var envEl = document.getElementById('squareEnvironment');
     if (envEl && config.environment) envEl.value = config.environment;
 
-    // Server returns masked secrets — display them as placeholders + show saved badges
+    // Server returns masked secrets — display them as placeholders + show saved badges.
+    // The access tokens now live in the vault (rendered by the secureField hosts), so
+    // only the non-secret Location IDs are populated into plain fields here.
     var sb = config.sandbox || {};
     var pr = config.production || {};
-    setMaskedField('sqSandboxToken', sb.accessToken);
     setMaskedField('sqSandboxLocation', sb.locationId);
-    setMaskedField('sqProdToken', pr.accessToken);
     setMaskedField('sqProdLocation', pr.locationId);
 
     // Show "Saved" badges for fields that have values
-    if (sb.accessToken) setFieldBadge('sqSandboxTokenBadge', 'valid', 'Saved');
     if (sb.locationId) setFieldBadge('sqSandboxLocationBadge', 'valid', 'Saved');
     if (sb.webhookSignatureKey) {
       var whEl = document.getElementById('sqSandboxWebhookBadge');
       if (whEl) whEl.innerHTML = '<span style="background:#059669;color:#fff;font-size:0.72rem;padding:2px 6px;border-radius:4px;font-weight:600;">Webhook Saved</span>';
     }
-    if (pr.accessToken) setFieldBadge('sqProdTokenBadge', 'valid', 'Saved');
     if (pr.locationId) setFieldBadge('sqProdLocationBadge', 'valid', 'Saved');
     if (pr.webhookSignatureKey) {
       var whElProd = document.getElementById('sqProdWebhookBadge');
@@ -29579,9 +29623,7 @@ function loadSquareConfig() {
       if (!config.sandbox && config.accessToken) {
         pr = { accessToken: config.accessToken, locationId: config.locationId, webhookSignatureKey: config.webhookSignatureKey };
       }
-      setMaskedField('sqSandboxToken', sb.accessToken);
       setMaskedField('sqSandboxLocation', sb.locationId);
-      setMaskedField('sqProdToken', pr.accessToken);
       setMaskedField('sqProdLocation', pr.locationId);
       onSquareEnvToggle();
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ')</span>';
@@ -45048,9 +45090,9 @@ function refreshPaymentsTabStatus() {
     el.setAttribute('data-state', state);
     el.textContent = label;
   }
-  var sqTok = document.getElementById('sqProdToken');
-  var sqSandTok = document.getElementById('sqSandboxToken');
-  var hasSquare = !!((sqTok && sqTok.value) || (sqSandTok && sqSandTok.value));
+  // Square access tokens live in the vault now — read the cached collected state
+  // (either env), mirroring the Stripe secret-key pill below.
+  var hasSquare = !!_squareVaultCollected;
   setPill('paymentsStatusSquare', hasSquare ? 'ok' : 'missing', hasSquare ? 'Configured' : 'Not configured');
   // Stripe secret key lives in the vault now — read its cached collected state.
   var hasStripe = !!_stripeVaultCollected;
