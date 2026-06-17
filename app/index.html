@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-104232-78273b9"></script>
+  <script src="../shared/mastdb.js?v=20260617-105417-470529e"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-104232-78273b9"></script>
-  <script src="../shared/brand-sync.js?v=20260617-104232-78273b9"></script>
+  <script src="../shared/customer-filters.js?v=20260617-105417-470529e"></script>
+  <script src="../shared/brand-sync.js?v=20260617-105417-470529e"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-104232-78273b9"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-105417-470529e"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-104232-78273b9"></script>
-  <script src="../shared/mast-io.js?v=20260617-104232-78273b9"></script>
-  <script src="../shared/mast-entity.js?v=20260617-104232-78273b9"></script>
+  <script src="../shared/mast-ui.js?v=20260617-105417-470529e"></script>
+  <script src="../shared/mast-io.js?v=20260617-105417-470529e"></script>
+  <script src="../shared/mast-entity.js?v=20260617-105417-470529e"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-104232-78273b9"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-105417-470529e"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-104232-78273b9"></script>
+  <script src="../shared/mast-intake.js?v=20260617-105417-470529e"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -1451,6 +1451,33 @@
     .mastintake-id-masked { font-size: 0.85rem; color: var(--text-primary); margin: 2px 0 6px; }
     .mastintake-id-last4 { font-family: monospace; color: var(--teal); }
     .mastintake-id-actions { margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap; }
+    /* delegated-auth (channels-OAuth): one-click connect cards */
+    .mastintake-da { background: var(--bg-secondary, #232323); border-radius: 10px; padding: 16px; margin-bottom: 12px; }
+    .mastintake-da-head { display: flex; align-items: center; gap: 12px; }
+    .mastintake-da-icon { font-size: 1.6rem; line-height: 1; }
+    .mastintake-da-headtext { flex: 1; min-width: 0; }
+    .mastintake-da-label { font-weight: 600; color: var(--text-primary); }
+    .mastintake-da-status { font-size: 0.85rem; color: var(--warm-gray); margin: 2px 0 0; }
+    .mastintake-da-status.mastintake-ok { color: var(--teal); }
+    .mastintake-da-status.mastintake-error { color: var(--amber); }
+    .mastintake-da-detail { font-size: 0.78rem; color: var(--warm-gray-light); margin: 8px 0 0; }
+    .mastintake-da-actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .mastintake-da-badge { font-size: 0.72rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; white-space: nowrap; border: 1px solid transparent; }
+    .mastintake-da-badge[data-badge="connected"] { color: var(--teal); border-color: var(--teal); background: rgba(42,124,111,0.08); }
+    .mastintake-da-badge[data-badge="warn"] { color: var(--amber); border-color: var(--amber); background: rgba(245,158,11,0.08); }
+    .mastintake-da-badge[data-badge="error"] { color: var(--danger); border-color: var(--danger); background: rgba(239,68,68,0.08); }
+    .mastintake-da-badge[data-badge="pending"], .mastintake-da-badge[data-badge="idle"] { color: var(--warm-gray); border-color: var(--warm-gray-light); }
+    .mastintake-da-badge[data-badge="soon"] { color: var(--warm-gray-light); border-style: dashed; border-color: var(--warm-gray-light); }
+    .mastintake-da[data-state="coming-soon"] { opacity: 0.72; }
+    /* unified connections board: section headers + cross-family overview rows */
+    .mastintake-board-section { margin: 0 0 18px; }
+    .mastintake-board-title { font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin: 0 0 4px; }
+    .mastintake-board-sub { font-size: 0.78rem; color: var(--warm-gray); margin: 0 0 12px; }
+    .mastintake-conn-row { display: flex; align-items: center; gap: 12px; background: var(--bg-secondary, #232323); border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; }
+    .mastintake-conn-label { flex: 1; min-width: 0; font-size: 0.85rem; color: var(--text-primary); }
+    .mastintake-conn-sub { font-size: 0.72rem; color: var(--warm-gray); margin-top: 2px; }
+    .mastintake-conn-note { font-size: 0.78rem; color: var(--warm-gray); margin: 4px 0 8px; }
+    .mastintake-channel-extra { margin: -4px 0 12px; padding: 0 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.78rem; color: var(--warm-gray); }
 
     /* ========== BUTTONS ========== */
     .btn {
@@ -22412,7 +22439,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-104232-78273b9';
+var MAST_MODULES_V = '20260617-105417-470529e';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -23165,7 +23192,194 @@ async function _isEuTenant() {
   }
 }
 
+// ── Unified connections board (MastIntake) ─────────────────────────────────────
+// Renders EVERY MastIntake family in one surface: the channels-OAuth (delegated-auth)
+// family as one-click connect cards (FOLDING the shipped channel-connect plumbing —
+// connectChannel / disconnectChannelCallable / channels.list), the new OAuth providers
+// as honest "coming soon" cards, plus a read-only cross-family overview of held-secret
+// + domain-control credentials (with a Manage action) and an informational line for the
+// per-field identity-data PII. The connect CARD, trust copy, status vocabulary, and
+// skippable re-entry come from the engine (shared/mast-intake.js). Preserves the EU
+// residency gate + the aggregate health card. Falls back to the legacy per-platform
+// renderer if the MastIntake engine/catalog is unavailable (never a blank tab).
 async function loadChannelsConnectCards() {
+  return renderConnectionsBoard();
+}
+
+async function renderConnectionsBoard() {
+  var groupEl = document.getElementById('channelsCardGroup');
+  var healthCardEl = document.getElementById('channelsHealthCard');
+  var healthSummaryEl = document.getElementById('channelsHealthSummary');
+  var euGateEl = document.getElementById('channelsEuGate');
+  if (!groupEl) return;
+
+  // EU residency placeholder gate (unchanged from the legacy board).
+  var euBlocked = await _isEuTenant();
+  if (euBlocked) {
+    if (euGateEl) euGateEl.style.display = '';
+    if (healthCardEl) healthCardEl.style.display = 'none';
+    groupEl.innerHTML = '';
+    return;
+  }
+  if (euGateEl) euGateEl.style.display = 'none';
+
+  // The MastIntake catalog is a lazy module — load it before rendering.
+  if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+    try { await MastAdmin.loadModule('connections-providers'); } catch (e) { /* fail-closed */ }
+  }
+  if (!(window.MastIntake && typeof MastIntake.secureField === 'function' && typeof MastIntake.list === 'function')) {
+    return loadChannelsConnectCardsLegacy();   // engine unavailable → legacy cards
+  }
+  var providers = [];
+  try { providers = await MastIntake.list(); } catch (e) { return loadChannelsConnectCardsLegacy(); }
+  var getDef = (MastIntake._internals && MastIntake._internals.getDef) || function () { return null; };
+
+  // Partition: delegated-auth = channels-OAuth family; everything else = overview.
+  var channelDefs = [], otherDefs = [];
+  providers.forEach(function (p) {
+    var def = getDef(p.id);
+    if (!def) return;
+    if (def.family === 'delegated-auth') channelDefs.push(def);
+    else otherDefs.push(def);
+  });
+  // Order: live channels first, then coming-soon, then research-deferred (stripe-connect).
+  channelDefs.sort(function (a, b) {
+    function rank(d) { return d.available === false ? (d.deferred ? 2 : 1) : 0; }
+    return rank(a) - rank(b);
+  });
+
+  // Channel statuses (health summary + the connected-channel sync extras).
+  var chStatus = {};
+  await Promise.all(channelDefs.map(function (def) {
+    if (def.available === false) { chStatus[def.id] = { state: 'coming-soon' }; return Promise.resolve(); }
+    return MastIntake.status(def.id).then(function (s) { chStatus[def.id] = s || {}; }).catch(function () { chStatus[def.id] = {}; });
+  }));
+  // Live channel records (cadence for the connected-channel sync extras; best-effort).
+  var chRecords = {};
+  try {
+    var recList = await MastDB.businessEntity.channels.list();
+    (recList || []).forEach(function (r) { if (r && r.channelId) chRecords[r.channelId] = r; });
+  } catch (e) { /* extras are best-effort */ }
+
+  // Aggregate health summary across the channels-OAuth family.
+  if (healthCardEl && healthSummaryEl) {
+    var counts = { connected: 0, reauth: 0, error: 0, pending: 0, idle: 0, soon: 0 };
+    channelDefs.forEach(function (def) {
+      if (def.available === false) { counts.soon++; return; }
+      var st = (chStatus[def.id] && chStatus[def.id].state) || 'not-collected';
+      if (st === 'connected') counts.connected++;
+      else if (st === 'needs-reauth') counts.reauth++;
+      else if (st === 'error') counts.error++;
+      else if (st === 'pending') counts.pending++;
+      else counts.idle++;
+    });
+    healthCardEl.style.display = '';
+    var chips = [counts.connected + ' connected'];
+    if (counts.reauth) chips.push(counts.reauth + ' need reconnect');
+    if (counts.error) chips.push(counts.error + ' error');
+    if (counts.pending) chips.push(counts.pending + ' pending');
+    if (counts.idle) chips.push(counts.idle + ' not connected');
+    if (counts.soon) chips.push(counts.soon + ' coming soon');
+    healthSummaryEl.textContent = chips.join(' • ');
+  }
+
+  // ── Build the board ──
+  var SYNCABLE = (typeof CHANNEL_PLATFORMS !== 'undefined') ? CHANNEL_PLATFORMS.map(function (p) { return p.id; }) : ['shopify', 'etsy', 'square'];
+  var html = '';
+
+  // Section 1 — sales channels & connections (the channels-OAuth family).
+  html += '<div class="mastintake-board-section">';
+  html += '<div class="mastintake-board-title">Connect your tools</div>';
+  html += '<div class="mastintake-board-sub">One-click connections — you authorize on the provider’s own site, so Mast never sees your password. Connecting is optional; you can skip and add it later.</div>';
+  channelDefs.forEach(function (def) {
+    html += '<div class="mastintake-conn-slot" data-conn-slot="' + _escHtml(def.id) + '">';
+    html += MastIntake.secureField({ provider: def.id });
+    if (def.available !== false && SYNCABLE.indexOf(def.id) !== -1 && chStatus[def.id] && chStatus[def.id].state === 'connected') {
+      html += _channelSyncExtraHtml(def.id, chRecords[def.id] || null);
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Section 2 — cross-family overview (held-secret + domain-control + identity-data).
+  var heldAndDomain = otherDefs.filter(function (d) { return d.family === 'held-secret' || d.family === 'domain-control'; });
+  var identityCount = otherDefs.filter(function (d) { return d.family === 'identity-data'; }).length;
+  if (heldAndDomain.length || identityCount) {
+    var otherStatus = {};
+    await Promise.all(heldAndDomain.map(function (def) {
+      return MastIntake.status(def.id).then(function (s) { otherStatus[def.id] = s || {}; }).catch(function () { otherStatus[def.id] = {}; });
+    }));
+    html += '<div class="mastintake-board-section">';
+    html += '<div class="mastintake-board-title">Other connections</div>';
+    html += '<div class="mastintake-board-sub">Keys, domains, and sensitive details you’ve stored. Managed securely — nothing is shown in your browser.</div>';
+    heldAndDomain.forEach(function (def) { html += _connOverviewRowHtml(def, otherStatus[def.id] || {}); });
+    if (identityCount) {
+      html += '<div class="mastintake-conn-note">🔐 ' + identityCount + ' sensitive ID field' + (identityCount === 1 ? '' : 's') +
+        ' (license, insurance, tax, EIN/SSN, bank) are encrypted per-field and managed in Compliance &amp; Vendor settings.</div>';
+    }
+    html += '</div>';
+  }
+
+  groupEl.innerHTML = html;
+  if (typeof MastIntake.hydrate === 'function') {
+    try { MastIntake.hydrate(groupEl); } catch (e) { /* fail-closed: cards stay in the pending shell */ }
+  }
+}
+
+// Channel-specific sync controls for a CONNECTED live channel (Sync now + cadence) —
+// not part of the generic delegated-auth grammar, so rendered as a sibling block that
+// reuses the existing syncChannelNow / updateChannelCadence / _setChannelNote globals.
+function _channelSyncExtraHtml(platform, rec) {
+  var cadence = (rec && rec.syncConfig && rec.syncConfig.cadence) || 'realtime';
+  return '<div class="mastintake-channel-extra">' +
+    '<button class="btn btn-secondary btn-small" onclick="syncChannelNow(\'' + platform + '\')">Sync now</button>' +
+    '<label for="channelCadence_' + platform + '">Sync cadence:</label>' +
+    '<select id="channelCadence_' + platform + '" onchange="updateChannelCadence(\'' + platform + '\', this.value)" style="padding:4px 8px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.78rem;">' +
+      '<option value="realtime"' + (cadence === 'realtime' ? ' selected' : '') + '>Realtime (webhook-driven)</option>' +
+      '<option value="daily"' + (cadence === 'daily' ? ' selected' : '') + '>Daily</option>' +
+      '<option value="manual-only"' + (cadence === 'manual-only' ? ' selected' : '') + '>Manual only</option>' +
+    '</select>' +
+    '<span id="channelNote_' + platform + '" style="display:none;"></span>' +
+  '</div>';
+}
+
+// A read-only cross-family overview row (held-secret / domain-control) — status badge +
+// a Manage action that opens the family's own secure grammar via MastIntake.collect.
+function _connOverviewRowHtml(def, s) {
+  var state = s.state || 'not-collected';
+  var badge, badgeKind;
+  if (def.family === 'domain-control') {
+    if (state === 'connected') { badge = 'Connected'; badgeKind = 'connected'; }
+    else if (state === 'pending') { badge = 'Pending'; badgeKind = 'pending'; }
+    else if (state === 'needs-reauth') { badge = 'Action needed'; badgeKind = 'warn'; }
+    else if (state === 'error') { badge = 'Error'; badgeKind = 'error'; }
+    else { badge = 'Not set up'; badgeKind = 'idle'; }
+  } else { // held-secret
+    if (state === 'collected') { badge = 'Stored'; badgeKind = 'connected'; }
+    else if (state === 'error') { badge = 'Needs attention'; badgeKind = 'error'; }
+    else { badge = 'Not set'; badgeKind = 'idle'; }
+  }
+  return '<div class="mastintake-conn-row">' +
+    '<span class="mastintake-da-icon" style="font-size:1.15rem;">' + _escHtml(def.icon || '🔌') + '</span>' +
+    '<div class="mastintake-conn-label">' + _escHtml(def.label || def.id) +
+      (s.detail ? '<div class="mastintake-conn-sub">' + _escHtml(s.detail) + '</div>' : '') +
+    '</div>' +
+    '<span class="mastintake-da-badge" data-badge="' + badgeKind + '">' + badge + '</span>' +
+    '<button class="btn btn-secondary btn-small" onclick="mastManageConnection(\'' + _escHtml(def.id) + '\')">Manage</button>' +
+  '</div>';
+}
+
+// Manage a stored credential/domain from the overview — opens the family's own secure
+// grammar (held-secret paste modal / domain DNS modal) via the engine, then refreshes.
+window.mastManageConnection = function (id) {
+  if (window.MastIntake && typeof MastIntake.collect === 'function') {
+    Promise.resolve(MastIntake.collect(id)).then(function () { renderConnectionsBoard(); }, function () { /* cancelled */ });
+  }
+};
+
+// Legacy per-platform channel cards — fallback when the MastIntake engine/catalog is
+// unavailable (kept intact; the unified board above is the primary surface).
+async function loadChannelsConnectCardsLegacy() {
   var groupEl = document.getElementById('channelsCardGroup');
   var healthCardEl = document.getElementById('channelsHealthCard');
   var healthSummaryEl = document.getElementById('channelsHealthSummary');

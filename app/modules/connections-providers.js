@@ -671,6 +671,213 @@
   var einSsn = _identityDef('ein-ssn', 'Tax ID (EIN/SSN)', 'ein-ssn', '•••• 6789', 9);
   var bankAccount = _identityDef('bank-account', 'Bank account number', 'bank-account', '•••• 6789', 4);
 
+  // ── Sales-channel OAuth — family: delegated-auth (archetype A / C→A hybrid) ──
+  //
+  // The one-click "Connect with X" delegated-auth flow — the maker authorizes on the
+  // PROVIDER's own page so they never paste a key. These three FOLD the already-live
+  // channel-connect plumbing (window.connectChannel / disconnectChannel + the live
+  // *OAuthStart / disconnectChannelCallable CFs + MastDB.businessEntity.channels.list)
+  // into the MastIntake grammar — REUSE, not rebuild. No cross-repo CF work: the
+  // OAuth dance and any credential pre-leg (the C→A hybrids Etsy/Square paste their
+  // developer-app keys first) stay in the live flow; MastIntake supplies the connect
+  // CARD, derived trust copy, status vocabulary, positive confirmation, and skippable
+  // re-entry. Token refresh is a SERVER concern (the sync engine + Squarespace refresh
+  // cron); `refreshable`/`tokenLifetime` here drive status copy only. credentialOwner:
+  // 'customer'. NO `vault` block — the secret is minted server-side, never client-held.
+  function _channelHealthCheck(platform) {
+    return function () {
+      if (!window.MastDB || !window.MastDB.businessEntity || !window.MastDB.businessEntity.channels ||
+          typeof window.MastDB.businessEntity.channels.list !== 'function') {
+        return Promise.resolve({ state: 'not-collected' });
+      }
+      return window.MastDB.businessEntity.channels.list().then(function (list) {
+        var rec = null;
+        (list || []).forEach(function (r) { if (r && r.channelId === platform) rec = r; });
+        if (!rec) return { state: 'not-collected' };
+        // Channel-record status → IntakeStatus enum (the engine's connect-card vocab).
+        var map = { connected: 'connected', expired: 'needs-reauth', revoked: 'needs-reauth', error: 'error', pending: 'pending' };
+        var bits = [];
+        if (rec.env) bits.push(rec.env);
+        if (rec.connectedAt) bits.push('connected ' + new Date(rec.connectedAt).toLocaleDateString());
+        if (rec.lastSyncAt) bits.push('last sync ' + new Date(rec.lastSyncAt).toLocaleDateString());
+        else if (rec.status === 'connected') bits.push('no manual sync yet');
+        return {
+          state: map[rec.status] || 'not-collected',
+          detail: bits.join(' • '),
+          store: rec.shopDomain || null,
+          connectedAt: rec.connectedAt || null,
+          lastError: rec.lastErrorMessage || null
+        };
+      }).catch(function () { return { state: 'not-collected' }; });
+    };
+  }
+  // connect → delegate to the LIVE global connectChannel(platform) (the existing
+  // OAuth-start flow, incl. its credential pre-leg for the C→A hybrids). The engine
+  // shows the pending-approval state after launch; the maker returns + refreshes.
+  function _channelConnect(platform) {
+    return function () {
+      if (typeof window.connectChannel === 'function') {
+        return Promise.resolve(window.connectChannel(platform)).then(function () { return { ok: true }; });
+      }
+      return Promise.resolve({ ok: false, error: 'channel-connect-unavailable' });
+    };
+  }
+  // disconnect → the disconnectChannelCallable CF DIRECTLY (not the live
+  // disconnectChannel global, which shows its own confirm + reloads the legacy
+  // board — the engine already owns the confirm and the refresh). Idempotent.
+  function _channelDisconnect(platform) {
+    return function () {
+      if (typeof window.firebase === 'undefined' || !window.firebase.functions) {
+        return Promise.resolve({ ok: false, error: 'functions-unavailable' });
+      }
+      var fn = window.firebase.functions().httpsCallable('disconnectChannelCallable');
+      return fn({ tenantId: window.MastDB.tenantId(), platform: platform }).then(function () {
+        return { ok: true, status: 'not-collected' };
+      });
+    };
+  }
+  function _channelDef(spec) {
+    return {
+      id: spec.id, label: spec.label, icon: spec.icon,
+      family: 'delegated-auth', category: 'channel',
+      authType: spec.authType,                 // 'A' = pure OAuth; non-'A' = C→A hybrid (paste app creds, then OAuth)
+      credentialOwner: 'customer',
+      gate: 'skippable',                        // the storefront works without any channel connected
+      conciergeEligible: false,                 // engine forces false for non-(A) anyway; left off until a concierge desk is staffed
+      available: true,
+      refreshable: !!spec.refreshable,
+      tokenLifetime: spec.tokenLifetime || null,
+      rbac: { route: 'channels', axis: 'edit' },  // engine pre-checks; the live CFs re-gate server-side
+      guide: spec.guide || null,
+      copy: spec.copy,
+      adapter: {
+        connect: _channelConnect(spec.id),
+        healthCheck: _channelHealthCheck(spec.id),
+        disconnect: _channelDisconnect(spec.id)
+      }
+    };
+  }
+
+  var shopifyChannel = _channelDef({
+    id: 'shopify', label: 'Shopify', icon: '🛒', authType: 'A',
+    refreshable: false, tokenLifetime: 'long-lived',
+    guide: {
+      steps: [
+        'Click Connect and enter your Shopify store sub-domain.',
+        'Approve the install on Shopify’s own page (opens in a new tab).',
+        'Return here and click Refresh status.'
+      ],
+      estSeconds: 120
+    },
+    copy: {
+      connectLabel: 'Connect Shopify',
+      connectPrompt: 'Connect your Shopify store to sync products and inventory. You can skip this and add it later.',
+      pendingDetail: 'Approve the install in the Shopify tab that just opened, then click Refresh status.',
+      disconnectConfirm: 'Disconnect Shopify? Tokens are revoked, stored credentials deleted, and webhook subscriptions removed. You can reconnect later.',
+      disconnectTitle: 'Disconnect Shopify'
+    }
+  });
+  var etsyChannel = _channelDef({
+    id: 'etsy', label: 'Etsy', icon: '🌿', authType: 'C',  // C→A hybrid: paste the developer-app keystring + shared secret, then OAuth
+    refreshable: true, tokenLifetime: 'short-refreshable',
+    guide: {
+      steps: [
+        'Enter your Etsy developer-app keystring + shared secret (the held-secret fields above), then click Connect.',
+        'Approve the connection on Etsy’s own page (opens in a new tab).',
+        'Return here and click Refresh status.'
+      ],
+      estSeconds: 180
+    },
+    copy: {
+      connectLabel: 'Connect Etsy',
+      connectPrompt: 'Connect your Etsy shop to sync listings and orders. You can skip this and add it later.',
+      pendingDetail: 'Approve the connection in the Etsy tab that just opened, then click Refresh status.',
+      disconnectConfirm: 'Disconnect Etsy? Tokens are revoked and stored credentials deleted. You can reconnect later.',
+      disconnectTitle: 'Disconnect Etsy'
+    }
+  });
+  var squareChannel = _channelDef({
+    id: 'square', label: 'Square', icon: '◻', authType: 'C',  // C→A hybrid: paste the developer-app client id + secret, then OAuth
+    refreshable: true, tokenLifetime: 'short-refreshable',
+    guide: {
+      steps: [
+        'Click Connect, pick Sandbox or Production, and paste your Square developer-app client id + secret.',
+        'Approve the connection on Square’s own page (opens in a new tab).',
+        'Return here and click Refresh status.'
+      ],
+      estSeconds: 180
+    },
+    copy: {
+      connectLabel: 'Connect Square',
+      connectPrompt: 'Connect your Square account to sync sales and inventory. You can skip this and add it later.',
+      pendingDetail: 'Approve the connection in the Square tab that just opened, then click Refresh status.',
+      disconnectConfirm: 'Disconnect Square? Tokens are revoked and stored credentials deleted. You can reconnect later.',
+      disconnectTitle: 'Disconnect Square'
+    }
+  });
+
+  // ── New OAuth providers — family: delegated-auth, COMING SOON (available:false) ──
+  //
+  // Each needs a per-provider OAuth-start + callback Cloud Function in
+  // mast-architecture (carved out to its own session). Until that ships, the def
+  // declares `available:false` so the engine renders an honest "coming soon" card
+  // (a disabled CTA, never a Connect button that 404s) — the framework's "don't make
+  // connect a cold wall" rule. When a provider's CF lands, flip `available` to true
+  // and wire its adapter.{connect,healthCheck,disconnect} (mirroring the live channels
+  // above). `tokenLifetime`/`refreshable` capture the per-provider refresh reality the
+  // server-side cron must honor (research: Wix ~5-min access, Squarespace 30-min/7-day,
+  // Plaid permanent access token, Stripe-Connect no refresh).
+  function _comingSoonDef(spec) {
+    return {
+      id: spec.id, label: spec.label, icon: spec.icon,
+      family: 'delegated-auth', category: spec.category || 'channel',
+      authType: spec.authType || 'A',
+      credentialOwner: 'customer',
+      gate: 'skippable',
+      conciergeEligible: false,
+      available: false,                         // OAuth-start CF not shipped yet
+      refreshable: !!spec.refreshable,
+      tokenLifetime: spec.tokenLifetime || null,
+      deferred: !!spec.deferred,                // research-deferred (Stripe Connect) vs merely pending a CF
+      guide: spec.guide || null,
+      copy: {
+        connectLabel: 'Connect ' + spec.label,
+        comingSoon: spec.comingSoon || ('One-click ' + spec.label + ' connect is coming soon.')
+      },
+      // No working adapter — the engine renders coming-soon and never calls connect.
+      adapter: {
+        connect: function () { return Promise.resolve({ ok: false, error: 'not-available-yet' }); },
+        healthCheck: function () { return Promise.resolve({ state: 'not-collected' }); },
+        disconnect: function () { return Promise.resolve({ ok: false }); }
+      }
+    };
+  }
+  var wixChannel = _comingSoonDef({
+    id: 'wix', label: 'Wix', icon: '◆', authType: 'A', category: 'channel',
+    refreshable: true, tokenLifetime: 'short-refreshable',   // Wix access tokens ~5 min; server refreshes
+    comingSoon: 'One-click Wix connect is coming soon — store sync via Wix OAuth.'
+  });
+  var squarespaceChannel = _comingSoonDef({
+    id: 'squarespace', label: 'Squarespace', icon: '⬛', authType: 'A', category: 'channel',
+    refreshable: true, tokenLifetime: 'short-refreshable',   // Squarespace: 30-min access / 7-day refresh
+    comingSoon: 'One-click Squarespace connect is coming soon — store sync via Squarespace OAuth.'
+  });
+  var wooChannel = _comingSoonDef({
+    id: 'woocommerce', label: 'WooCommerce', icon: '🪵', authType: 'B', category: 'channel',
+    refreshable: false, tokenLifetime: 'permanent',          // wc-auth one-click authorize → server callback auto-provisions a permanent key
+    comingSoon: 'One-click WooCommerce connect is coming soon — authorize once and Mast receives the API key automatically.'
+  });
+  var plaidConnection = _comingSoonDef({
+    id: 'plaid', label: 'Plaid (bank link)', icon: '🏦', authType: 'A', category: 'banking',
+    refreshable: false, tokenLifetime: 'permanent',          // Plaid access token is permanent (no refresh)
+    comingSoon: 'One-click bank linking via Plaid is coming soon — connect your bank for reconciliation.'
+  });
+  var stripeConnect = _comingSoonDef({
+    id: 'stripe-connect', label: 'Stripe Connect', icon: '💳', authType: 'A', category: 'payments',
+    refreshable: false, tokenLifetime: 'no-refresh', deferred: true,  // DEFERRED per research (read_only scope); catalog stub captures the design
+    comingSoon: 'Read-only Stripe Connect (payouts & balance) is planned for a later phase.'
+  });
+
   // Register with the engine (primary), and publish a plain-global catalog as a
   // load-order fallback the engine can read if it hydrates before register runs.
   window.ConnectionsProviders = window.ConnectionsProviders || {};
@@ -692,6 +899,14 @@
   window.ConnectionsProviders['tax-registration-id'] = taxRegistrationId;
   window.ConnectionsProviders['ein-ssn'] = einSsn;
   window.ConnectionsProviders['bank-account'] = bankAccount;
+  window.ConnectionsProviders.shopify = shopifyChannel;
+  window.ConnectionsProviders.etsy = etsyChannel;
+  window.ConnectionsProviders.square = squareChannel;
+  window.ConnectionsProviders.wix = wixChannel;
+  window.ConnectionsProviders.squarespace = squarespaceChannel;
+  window.ConnectionsProviders.woocommerce = wooChannel;
+  window.ConnectionsProviders.plaid = plaidConnection;
+  window.ConnectionsProviders['stripe-connect'] = stripeConnect;
   if (window.MastIntake && typeof window.MastIntake.register === 'function') {
     window.MastIntake.register(github);
     window.MastIntake.register(sendgrid);
@@ -711,6 +926,14 @@
     window.MastIntake.register(taxRegistrationId);
     window.MastIntake.register(einSsn);
     window.MastIntake.register(bankAccount);
+    window.MastIntake.register(shopifyChannel);
+    window.MastIntake.register(etsyChannel);
+    window.MastIntake.register(squareChannel);
+    window.MastIntake.register(wixChannel);
+    window.MastIntake.register(squarespaceChannel);
+    window.MastIntake.register(wooChannel);
+    window.MastIntake.register(plaidConnection);
+    window.MastIntake.register(stripeConnect);
   }
 
   // Catalog module: no routes (not a routable view) and no MastDB writes.

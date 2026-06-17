@@ -264,6 +264,10 @@
     // identity-data: structured PII, encrypted at rest. Ref/kind-keyed CF, a forced
     // counsel rail, and a masked + reveal-to-edit grammar (not a write-once paste).
     if (def.family === 'identity-data') return identityField(desc, def);
+    // delegated-auth: the one-click "Connect with X" flow — render a connect CARD
+    // (status badge + action button + trust copy), never a secret-paste input. The
+    // secret never reaches the client; it is minted by the provider's callback CF.
+    if (def.family === 'delegated-auth') return delegatedField(desc, def);
     var field = fieldOf(def);
     var domId = 'mastintake-' + providerId + '-' + (++_idSeq);
     var label = esc(desc.label || (field && field.label) || def.label || 'Credential');
@@ -970,6 +974,171 @@
     } else { doClear(); }
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // delegated-auth family (archetype A / B / C→A) — the one-click "Connect with X"
+  // flow that lets the maker AVOID pasting a key. The maker authorizes on the
+  // PROVIDER's own page (OAuth), so Mast never sees a password; the upstream token
+  // is minted, vaulted, and refreshed SERVER-side (lifetimes vary per provider —
+  // Wix ~5min, Squarespace 30min/7-day, Plaid permanent, Shopify long-lived — but
+  // refresh is a server cron concern, not the client's). Like domain-control, this
+  // family is ADAPTER-DRIVEN: the def carries adapter.connect / healthCheck /
+  // disconnect and the engine renders a provider-agnostic connect CARD that drives
+  // them. delegated-auth is ABSENT from FAIL_CLOSED_FAMILIES — there is no
+  // client-side plaintext write path to guard (the secret is minted by the
+  // provider's callback CF, never by the browser). A provider whose OAuth-start CF
+  // is not yet shipped declares `available:false` and renders an honest "coming
+  // soon" card (never a Connect button that 404s) — the framework's "don't make
+  // connect a cold wall" rule (skippable + re-entry).
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  function delegatedField(desc, def) {
+    var providerId = def.id;
+    var domId = 'mastintake-' + providerId + '-' + (++_idSeq);
+    var label = esc(desc.label || def.label || 'Connection');
+    var trust = deriveTrustCopy(def).map(function (l) { return '<li>' + esc(l) + '</li>'; }).join('');
+    // Initial fail-closed shell: a "checking…" line. hydrate() reads status (via the
+    // adapter / ChannelConnection) and drives the real state.
+    return '' +
+      '<div class="' + FIELD_CLASS + ' mastintake-da" id="' + domId + '" data-provider="' + esc(providerId) + '"' +
+      ' data-family="delegated-auth" data-state="pending">' +
+      '  <div class="mastintake-da-head">' +
+      '    <span class="mastintake-da-icon">' + esc(def.icon || '🔌') + '</span>' +
+      '    <div class="mastintake-da-headtext">' +
+      '      <div class="mastintake-da-label">' + label + '</div>' +
+      '      <div class="mastintake-da-status mastintake-note">Checking connection…</div>' +
+      '    </div>' +
+      '    <span class="mastintake-da-badge" data-badge="pending">…</span>' +
+      '  </div>' +
+      '  <div class="mastintake-da-detail mastintake-note"></div>' +
+      '  <p class="mastintake-feedback" aria-live="polite"></p>' +
+      '  <div class="mastintake-da-actions"></div>' +
+      '  <ul class="mastintake-trust">' + trust + '</ul>' +
+      '</div>';
+  }
+
+  function daSetBadge(wrap, kind, text) {
+    var b = wrap.querySelector('.mastintake-da-badge');
+    if (b) { b.setAttribute('data-badge', kind); b.textContent = text; }
+  }
+  function daSetStatus(wrap, msg, kind) {
+    var el = wrap.querySelector('.mastintake-da-status');
+    if (el) { el.textContent = msg || ''; el.className = 'mastintake-da-status mastintake-note' + (kind ? ' mastintake-' + kind : ''); }
+  }
+
+  // Map the IntakeStatus enum → connect-card UI. `available:false` short-circuits to
+  // a "coming soon" card. The detail string (store name, "N products", connectedAt)
+  // comes from the adapter.healthCheck via status(), so the engine never names a
+  // provider field. `s` is the IntakeStatus object (state/detail/store/lastError).
+  function applyDelegatedState(wrap, def, s) {
+    var detailEl = wrap.querySelector('.mastintake-da-detail');
+    var actionsEl = wrap.querySelector('.mastintake-da-actions');
+    if (detailEl) detailEl.textContent = '';
+    if (actionsEl) actionsEl.innerHTML = '';
+    ensureGuide(wrap, def);                 // reuse the deep-link/steps guide renderer
+    var connectLabel = (def.copy && def.copy.connectLabel) || ('Connect ' + (def.label || ''));
+    var disconnectBtn = '<button type="button" class="btn btn-secondary mastintake-da-disconnect" data-mastintake-action="da-disconnect">Disconnect</button>';
+
+    // Coming-soon: provider declared but its OAuth-start CF isn't live yet. Honest
+    // muted card with a disabled CTA — never a Connect button that errors.
+    if (def.available === false) {
+      wrap.setAttribute('data-state', 'coming-soon');
+      daSetBadge(wrap, 'soon', 'Coming soon');
+      daSetStatus(wrap, (def.copy && def.copy.comingSoon) || ('One-click ' + (def.label || '') + ' connect is coming soon.'), '');
+      if (actionsEl) actionsEl.innerHTML = '<button type="button" class="btn btn-secondary mastintake-da-cta" disabled>' + esc(connectLabel) + '</button>';
+      return;
+    }
+
+    s = s || {};
+    var state = s.state || STATE.NOT_COLLECTED;
+    if (state === STATE.CONNECTED) {
+      wrap.setAttribute('data-state', 'connected');
+      daSetBadge(wrap, 'connected', 'Connected');
+      // Specific positive confirmation: "✓ Connected to <store>" (design's connect-UX).
+      daSetStatus(wrap, '✓ ' + (s.store ? ('Connected to ' + s.store) : 'Connected'), 'ok');
+      if (detailEl && s.detail) detailEl.textContent = s.detail;
+      if (actionsEl) actionsEl.innerHTML =
+        '<button type="button" class="btn btn-secondary mastintake-da-reconnect" data-mastintake-action="da-connect">Reconnect</button> ' + disconnectBtn;
+      return;
+    }
+    if (state === STATE.NEEDS_REAUTH) {
+      wrap.setAttribute('data-state', 'needs-reauth');
+      daSetBadge(wrap, 'warn', 'Reconnect needed');
+      daSetStatus(wrap, s.detail || (def.refreshable ? 'The connection expired — reconnect to refresh access.' : 'The connection needs to be re-authorized.'), 'error');
+      if (actionsEl) actionsEl.innerHTML =
+        '<button type="button" class="btn btn-primary mastintake-da-cta" data-mastintake-action="da-connect">Reconnect</button> ' + disconnectBtn;
+      return;
+    }
+    if (state === STATE.ERROR) {
+      wrap.setAttribute('data-state', 'error');
+      daSetBadge(wrap, 'error', 'Error');
+      daSetStatus(wrap, s.lastError ? ('Connection error: ' + s.lastError) : 'There was a problem with this connection. Try reconnecting.', 'error');
+      if (actionsEl) actionsEl.innerHTML =
+        '<button type="button" class="btn btn-primary mastintake-da-cta" data-mastintake-action="da-connect">Reconnect</button> ' + disconnectBtn;
+      return;
+    }
+    if (state === STATE.PENDING) {
+      wrap.setAttribute('data-state', 'pending');
+      daSetBadge(wrap, 'pending', 'Pending');
+      daSetStatus(wrap, s.detail || 'Approve the connection in the tab that opened, then click Refresh status.', '');
+      if (actionsEl) actionsEl.innerHTML = '<button type="button" class="btn btn-secondary mastintake-da-refresh" data-mastintake-action="da-refresh">Refresh status</button>';
+      return;
+    }
+    // not-collected — the connect CTA + a skippable nudge (never a cold wall).
+    wrap.setAttribute('data-state', 'ready');
+    daSetBadge(wrap, 'idle', 'Not connected');
+    daSetStatus(wrap, (def.copy && def.copy.connectPrompt) || 'Connect to sync automatically. You can skip this and add it later.', '');
+    if (actionsEl) actionsEl.innerHTML =
+      '<button type="button" class="btn btn-primary mastintake-da-cta" data-mastintake-action="da-connect">' + esc(connectLabel) + '</button>';
+  }
+
+  function delegatedRefresh(wrap, def) {
+    return status(def.id).then(function (s) { applyDelegatedState(wrap, def, s); return s; });
+  }
+
+  function handleDelegatedConnect(wrap) {
+    var def = getDef(wrap.getAttribute('data-provider'));
+    if (!def || def.available === false) return;
+    if (!canMutate(def)) { toast('You don’t have permission to change this.', true); return; }
+    if (!def.adapter || typeof def.adapter.connect !== 'function') { toast('Connecting isn’t available for this provider yet.', true); return; }
+    var btn = wrap.querySelector('.mastintake-da-cta') || wrap.querySelector('.mastintake-da-reconnect');
+    if (btn) btn.disabled = true;
+    setFeedback(wrap, '', '');
+    Promise.resolve(def.adapter.connect({})).then(function (r) {
+      if (btn) btn.disabled = false;
+      if (r && r.ok === false) {
+        setFeedback(wrap, r.error || 'Could not start the connection.', 'error');
+        return;
+      }
+      // The OAuth handshake completes in a NEW TAB; the maker returns and refreshes.
+      // Render the pending-approval state directly (status is still not-collected
+      // until they finish on the provider's page) so the click never looks like a no-op.
+      applyDelegatedState(wrap, def, { state: STATE.PENDING, detail: (def.copy && def.copy.pendingDetail) || null });
+    }).catch(function (err) {
+      if (btn) btn.disabled = false;
+      setFeedback(wrap, (err && err.message) || 'Could not start the connection.', 'error');
+    });
+  }
+
+  function handleDelegatedDisconnect(wrap) {
+    var def = getDef(wrap.getAttribute('data-provider'));
+    if (!def || !def.adapter || typeof def.adapter.disconnect !== 'function') return;
+    if (!canMutate(def)) { toast('You don’t have permission to change this.', true); return; }
+    function doDisconnect() {
+      Promise.resolve(def.adapter.disconnect({})).then(function () { return delegatedRefresh(wrap, def); })
+        .catch(function (err) { setFeedback(wrap, (err && err.message) || 'Could not disconnect.', 'error'); });
+    }
+    var copy = (def.copy && def.copy.disconnectConfirm) || ('Disconnect ' + (def.label || 'this connection') + '? You can reconnect later.');
+    var title = (def.copy && def.copy.disconnectTitle) || ('Disconnect ' + (def.label || ''));
+    if (typeof window.mastConfirm === 'function') {
+      window.mastConfirm(copy, { title: title, danger: true }).then(function (ok) { if (ok) doDisconnect(); });
+    } else { doDisconnect(); }
+  }
+
+  function handleDelegatedRefresh(wrap) {
+    var def = getDef(wrap.getAttribute('data-provider'));
+    if (def) delegatedRefresh(wrap, def);
+  }
+
   // Single delegated listener set — paste/input feedback + Save/Revoke clicks.
   function bindDelegation() {
     if (_delegationBound || typeof document === 'undefined') return;
@@ -1003,6 +1172,9 @@
       else if (action === 'domain-verify') { e.preventDefault(); handleDomainVerify(wrap); }
       else if (action === 'domain-remove') { e.preventDefault(); handleDomainRemove(wrap); }
       else if (action === 'domain-copy') { e.preventDefault(); handleDomainCopy(btn); }
+      else if (action === 'da-connect') { e.preventDefault(); handleDelegatedConnect(wrap); }
+      else if (action === 'da-disconnect') { e.preventDefault(); handleDelegatedDisconnect(wrap); }
+      else if (action === 'da-refresh') { e.preventDefault(); handleDelegatedRefresh(wrap); }
     });
   }
 
@@ -1032,6 +1204,12 @@
         identityRefresh(wrap, def);
         return;
       }
+      // delegated-auth reads connection status via the adapter / ChannelConnection
+      // (no vault probe — the secret never reaches the client).
+      if (def.family === 'delegated-auth') {
+        delegatedRefresh(wrap, def);
+        return;
+      }
       probe(providerId).then(function (result) { applyState(wrap, def, result); });
     });
   }
@@ -1057,6 +1235,15 @@
         return result;
       });
     }
+    // delegated-auth re-reads connection status via the adapter (no vault probe).
+    if (def && def.family === 'delegated-auth') {
+      return status(providerId).then(function (s) {
+        if (wrap) { applyDelegatedState(wrap, def, s); return s; }
+        var anodes = document.querySelectorAll('.' + FIELD_CLASS + '[data-provider="' + providerId + '"]');
+        Array.prototype.forEach.call(anodes, function (w) { applyDelegatedState(w, def, s); });
+        return s;
+      });
+    }
     invalidateProbe(providerId);
     return probe(providerId, true).then(function (result) {
       if (wrap) { applyState(wrap, def, result); return result; }
@@ -1077,6 +1264,18 @@
     if (!def) {
       toast('Unknown provider: ' + providerId, true);
       return Promise.resolve({ ok: false, status: STATE.ERROR, error: 'unknown-provider' });
+    }
+    // delegated-auth: "collect" = launch the provider's own consent flow (the OAuth
+    // dance opens in a new tab). There is no modal paste to host — the adapter owns
+    // the launch. Resolves best-effort to pending; the inline card re-reads status.
+    if (def.family === 'delegated-auth') {
+      if (def.available === false) { toast('One-click ' + (def.label || '') + ' connect is coming soon.'); return Promise.resolve({ ok: false, status: STATE.PENDING, provider: providerId, error: 'not-available-yet' }); }
+      if (!def.adapter || typeof def.adapter.connect !== 'function') { return Promise.resolve({ ok: false, status: STATE.ERROR, error: 'connect-unavailable' }); }
+      return Promise.resolve(def.adapter.connect(ctx)).then(function (r) {
+        return { ok: !(r && r.ok === false), status: STATE.PENDING, provider: providerId };
+      }).catch(function (err) {
+        return { ok: false, status: STATE.ERROR, error: (err && err.message) || 'connect-failed', provider: providerId };
+      });
     }
     if (typeof window.openModal !== 'function') {
       toast('Cannot open the secure entry dialog here.', true);
@@ -1178,20 +1377,41 @@
         return { id: providerId, family: 'domain-control', state: STATE.ERROR, records: [], lastError: (err && err.message) || 'status-failed' };
       });
     }
-    // Channel branch: vocab-map ChannelConnection with a fail-closed default.
-    var CC = window.ChannelConnection;
-    if (!CC || typeof CC.getChannelTokenStatus !== 'function') {
-      return Promise.resolve({ id: providerId, family: family, state: STATE.NOT_COLLECTED });
+    // delegated-auth (channels-OAuth) branch: prefer the def's adapter.healthCheck —
+    // it returns the RICH record (store name, detail, connectedAt, lastError) the
+    // connect card shows ("✓ Connected to <store>"), sourced from the live channel
+    // record. Fall back to the coarse ChannelConnection token-status vocab map.
+    if (family === 'delegated-auth') {
+      if (def.adapter && typeof def.adapter.healthCheck === 'function') {
+        return Promise.resolve(def.adapter.healthCheck()).then(function (d) {
+          d = d || {};
+          return {
+            id: providerId, family: family, category: def.category,
+            state: d.state || STATE.NOT_COLLECTED, detail: d.detail || '',
+            store: d.store || null, connectedAt: d.connectedAt || null, lastError: d.lastError || null
+          };
+        }).catch(function (err) {
+          // A read failure surfaces as ERROR (a reconnectable problem), not a silent
+          // not-collected — but never blocks (delegated-auth has no plaintext to guard).
+          return { id: providerId, family: family, state: STATE.ERROR, lastError: (err && err.message) || 'status-failed' };
+        });
+      }
+      var CC = window.ChannelConnection;
+      if (!CC || typeof CC.getChannelTokenStatus !== 'function') {
+        return Promise.resolve({ id: providerId, family: family, state: STATE.NOT_COLLECTED });
+      }
+      return CC.getChannelTokenStatus(providerId).then(function (raw) {
+        // raw ∈ ok | expired | revoked. NB: ChannelConnection collapses an absent
+        // doc to 'ok' (fail-OPEN); the fail-closed correction (treat genuinely
+        // absent as not-collected) needs the second-store merge — carved out.
+        var map = { ok: STATE.CONNECTED, expired: STATE.NEEDS_REAUTH, revoked: STATE.NEEDS_REAUTH };
+        return { id: providerId, family: family, category: def && def.category, state: map[raw] || STATE.NOT_COLLECTED };
+      }).catch(function () {
+        return { id: providerId, family: family, state: STATE.NOT_COLLECTED };
+      });
     }
-    return CC.getChannelTokenStatus(providerId).then(function (raw) {
-      // raw ∈ ok | expired | revoked. NB: ChannelConnection collapses an absent
-      // doc to 'ok' (fail-OPEN); the fail-closed correction (treat genuinely
-      // absent as not-collected) needs the second-store merge — carved out.
-      var map = { ok: STATE.CONNECTED, expired: STATE.NEEDS_REAUTH, revoked: STATE.NEEDS_REAUTH };
-      return { id: providerId, family: family, category: def && def.category, state: map[raw] || STATE.NOT_COLLECTED };
-    }).catch(function () {
-      return { id: providerId, family: family, state: STATE.NOT_COLLECTED };
-    });
+    // Unknown family — fail-closed to not-collected.
+    return Promise.resolve({ id: providerId, family: family, state: STATE.NOT_COLLECTED });
   }
 
   // ── revoke() — destroy + wipe + audit (server CF). Idempotent. ──────────────
@@ -1230,9 +1450,20 @@
         return { ok: false, status: STATE.ERROR, error: (err && err.message) || 'Could not remove.' };
       });
     }
-    // Channel revoke would dispatch to the provider's adapter.revoke — out of
-    // this slice (no channel provider is registered here).
-    return Promise.resolve({ ok: false, status: STATE.ERROR, error: 'revoke not wired for this family in this slice' });
+    // delegated-auth revoke → the def's adapter.disconnect (revokes the upstream
+    // token + clears the channel record server-side). Idempotent.
+    if (family === 'delegated-auth') {
+      if (!def.adapter || typeof def.adapter.disconnect !== 'function') {
+        return Promise.resolve({ ok: false, status: STATE.ERROR, error: 'disconnect-unavailable' });
+      }
+      return Promise.resolve(def.adapter.disconnect(ctx)).then(function (r) {
+        r = r || {};
+        return { ok: r.ok !== false, status: r.status || STATE.NOT_COLLECTED };
+      }).catch(function (err) {
+        return { ok: false, status: STATE.ERROR, error: (err && err.message) || 'Could not disconnect.' };
+      });
+    }
+    return Promise.resolve({ ok: false, status: STATE.ERROR, error: 'revoke not wired for this family' });
   }
 
   // ── Thin contract-stubs (built out when a real consumer needs them) ─────────
