@@ -90,6 +90,19 @@
     body: 'Mast does not need SSN. For W-9 forms, redact the SSN before uploading. For photo ID (driver\u2019s license), only upload if the state ID serves as a compliance requirement; otherwise, skip.'
   };
 
+  // DRAFT \u2014 PENDING COUNSEL APPROVAL. Replace with counsel-approved identity-field copy.
+  // Forced counsel rail for TYPED encrypted identity fields (license #, insurance
+  // policy #, tax registration id, etc.) \u2014 distinct from DOCUMENT_UPLOAD_SSN_WARNING,
+  // which governs file uploads. This copy describes the field-encryption posture
+  // (mast-intake-identity.js: envelope-encrypted at rest, access logged, masked
+  // last-4 only) rather than upload redaction. The "documents" headline above was
+  // off-context for a single typed value. Same \u00A76.3 WISP-avoidance intent; the
+  // wording here is a placeholder until counsel signs off on identity-field language.
+  var IDENTITY_FIELD_COUNSEL_WARNING = {
+    headline: '\uD83D\uDD12 This identity number is encrypted before it\u2019s stored.',
+    body: 'Mast encrypts this value at rest, logs every access, and only ever displays the last few characters. Enter only the number this field asks for \u2014 do not include your Social Security Number.'
+  };
+
   // Revenue bracket options (spec §8.1 calibration).
   var REVENUE_BRACKETS = [
     { value: 'under-10k', label: 'Under $10K / year' },
@@ -1746,6 +1759,7 @@
     NOTICE_AT_COLLECTION_COPY: NOTICE_AT_COLLECTION_COPY,
     WISH_STATEMENT_PLACEHOLDER: WISH_STATEMENT_PLACEHOLDER,
     DOCUMENT_UPLOAD_SSN_WARNING: DOCUMENT_UPLOAD_SSN_WARNING,
+    IDENTITY_FIELD_COUNSEL_WARNING: IDENTITY_FIELD_COUNSEL_WARNING,
     REVENUE_BRACKETS: REVENUE_BRACKETS,
     PRIMARY_CONTACT_ROLES: PRIMARY_CONTACT_ROLES,
     TEAM_SIZE_BANDS: TEAM_SIZE_BANDS,
