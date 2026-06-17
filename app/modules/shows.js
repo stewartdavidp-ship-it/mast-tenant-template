@@ -2047,7 +2047,7 @@ async function _showSetStatusCore(showId, newStatus) {
   await MastDB.shows.update(showId, updates);
 
   // Log to applicationHistory
-  var historyRef = MastDB.shows.applicationHistory(showId).push();
+  var historyRef = MastDB.shows.subRef(showId, 'applicationHistory').push();
   await historyRef.set({
     oldStatus: oldStatus,
     newStatus: newStatus,
