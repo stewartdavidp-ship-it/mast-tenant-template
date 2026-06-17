@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-142749-5e894a5b"></script>
+  <script src="../shared/mastdb.js?v=20260617-143119-ee2269f0"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-142749-5e894a5b"></script>
-  <script src="../shared/brand-sync.js?v=20260617-142749-5e894a5b"></script>
+  <script src="../shared/customer-filters.js?v=20260617-143119-ee2269f0"></script>
+  <script src="../shared/brand-sync.js?v=20260617-143119-ee2269f0"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-142749-5e894a5b"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-143119-ee2269f0"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-142749-5e894a5b"></script>
-  <script src="../shared/mast-io.js?v=20260617-142749-5e894a5b"></script>
-  <script src="../shared/mast-entity.js?v=20260617-142749-5e894a5b"></script>
+  <script src="../shared/mast-ui.js?v=20260617-143119-ee2269f0"></script>
+  <script src="../shared/mast-io.js?v=20260617-143119-ee2269f0"></script>
+  <script src="../shared/mast-entity.js?v=20260617-143119-ee2269f0"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-142749-5e894a5b"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-143119-ee2269f0"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-142749-5e894a5b"></script>
+  <script src="../shared/mast-intake.js?v=20260617-143119-ee2269f0"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -11301,40 +11301,9 @@
       </div><!-- end settings flex wrapper -->
     </div>
 
-    <!-- Square credentials modal (PB-6) -->
-    <div id="squareCredsModal" class="modal" style="display:none;">
-      <div class="modal-content" style="max-width:480px;">
-        <div class="modal-header">
-          <h3>Connect Square</h3>
-          <button class="modal-close" onclick="closeSquareCredsModal()">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">
-            Register a Square Developer app, then paste the Application ID + Secret below. Mast stores them in encrypted secret storage and never shows them again.
-          </p>
-          <div class="form-group">
-            <label style="font-weight:600;font-size:0.85rem;">Environment</label>
-            <div style="display:flex;gap:8px;margin-top:4px;">
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="squareEnv" value="sandbox" checked> Sandbox</label>
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="squareEnv" value="production"> Production</label>
-            </div>
-          </div>
-          <div class="form-group">
-            <label style="font-weight:600;font-size:0.85rem;">Application ID (client_id)</label>
-            <input type="text" id="squareClientIdInput" placeholder="sq0idp-..." style="width:100%;padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-family:monospace;font-size:0.85rem;">
-          </div>
-          <div class="form-group">
-            <label style="font-weight:600;font-size:0.85rem;">Application Secret (client_secret)</label>
-            <input type="password" id="squareClientSecretInput" placeholder="sq0csp-..." style="width:100%;padding:7px 10px;border:1px solid var(--cream-dark);border-radius:6px;font-family:monospace;font-size:0.85rem;">
-          </div>
-          <div id="squareCredsStatus" style="margin-top:8px;font-size:0.78rem;color:var(--warm-gray);"></div>
-        </div>
-        <div class="modal-footer" style="display:flex;gap:8px;justify-content:flex-end;">
-          <button class="btn btn-secondary" onclick="closeSquareCredsModal()">Cancel</button>
-          <button class="btn btn-primary" onclick="saveSquareCredsAndConnect()">Save &amp; Continue</button>
-        </div>
-      </div>
-    </div>
+    <!-- Square credentials modal removed: Square is now pure-A (the "Wix method") —
+         a single platform-wide Mast OAuth app, so there is no per-tenant credential
+         paste. _connectSquareFlow() goes straight to squareOAuthStart. -->
 
     <!-- Admin: Subscription Tab (standalone) -->
     <div id="subscriptionTab" style="display:none;">
@@ -22452,7 +22421,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-142749-5e894a5b';
+var MAST_MODULES_V = '20260617-143119-ee2269f0';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -23664,47 +23633,22 @@ async function _connectSquarespaceFlow() {
   }
 }
 
-function _connectSquareFlow() {
-  var modal = document.getElementById('squareCredsModal');
-  if (!modal) return;
-  var idEl = document.getElementById('squareClientIdInput');
-  var secEl = document.getElementById('squareClientSecretInput');
-  var statusEl = document.getElementById('squareCredsStatus');
-  if (idEl) idEl.value = '';
-  if (secEl) secEl.value = '';
-  if (statusEl) statusEl.textContent = '';
-  modal.style.display = '';
-}
-
-function closeSquareCredsModal() {
-  var modal = document.getElementById('squareCredsModal');
-  if (modal) modal.style.display = 'none';
-}
-
-async function saveSquareCredsAndConnect() {
-  var envEl = document.querySelector('input[name="squareEnv"]:checked');
-  var env = envEl ? envEl.value : 'sandbox';
-  var clientId = (document.getElementById('squareClientIdInput') || {}).value;
-  var clientSecret = (document.getElementById('squareClientSecretInput') || {}).value;
-  var statusEl = document.getElementById('squareCredsStatus');
-  if (!clientId || !clientSecret) {
-    if (statusEl) { statusEl.textContent = 'Both Application ID and Secret are required.'; statusEl.style.color = 'var(--danger,#ef4444)'; }
-    return;
-  }
+// Square \u2014 authType 'A' (pure-A, the "Wix method"). ONE platform-wide Mast Square
+// OAuth app, so there is NO credential pre-leg: just start OAuth and open Square's
+// consent page. Mirrors _connectWixFlow / _connectSquarespaceFlow (converged from
+// the original C\u2192A hybrid; mast-architecture PR 317). Connects the maker's live
+// (production) Square account \u2014 sandbox is a dev-tooling concern (call
+// squareOAuthStart with environment:'sandbox' directly), not exposed in the maker UI.
+async function _connectSquareFlow() {
   try {
-    if (statusEl) { statusEl.textContent = 'Storing credentials\u2026'; statusEl.style.color = 'var(--warm-gray)'; }
-    var setFn = firebase.functions().httpsCallable('setChannelCredentialsCallable');
-    await setFn({ tenantId: MastDB.tenantId(), platform: 'square', env: env, credentials: { clientId: clientId.trim(), clientSecret: clientSecret.trim() } });
-    if (statusEl) statusEl.textContent = 'Starting OAuth\u2026';
-    var startFn = firebase.functions().httpsCallable('squareOAuthStart');
-    var result = await startFn({ tenantId: MastDB.tenantId(), environment: env });
+    var fn = firebase.functions().httpsCallable('squareOAuthStart');
+    var result = await fn({ tenantId: MastDB.tenantId(), environment: 'production' });
     var data = (result && result.data) || {};
     if (!data.authUrl) throw new Error('squareOAuthStart returned no authUrl');
-    closeSquareCredsModal();
     window.open(data.authUrl, '_blank', 'noopener');
-    _setChannelNote('square', 'Approve the connection in the new tab, then reload this page.');
+    _setChannelNote('square', 'Approve the Mast app in the new tab, then reload this page to see the updated status.');
   } catch (err) {
-    if (statusEl) { statusEl.textContent = 'Connect failed: ' + (err.message || err); statusEl.style.color = 'var(--danger,#ef4444)'; }
+    _setChannelNote('square', 'Connect failed: ' + (err.message || err), 'error');
   }
 }
 
