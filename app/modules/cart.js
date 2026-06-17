@@ -1198,6 +1198,68 @@
     }
   };
 
+  // ---- Loyalty bridge (thin shim for loyalty-v2.js) ----
+  // Re-hosts the exact CLIENT loyalty-config read + write the legacy #loyalty
+  // handlers make (loadLoyaltyAdmin's read + window._loyaltySaveConfig's write),
+  // parameterized by a data object so the V2 twin can drive them without
+  // reimplementing the build/validation/write/audit. Neither is Cloud-Function-
+  // backed — the write is a plain MastDB.walletConfig.update + writeAudit, and the
+  // public storefront reads admin/walletConfig directly, so the config IS the
+  // single source (no public mirror, no side effects to fire). Mirrors
+  // window.MembershipBridge / GiftCardsBridge (its siblings in this module).
+  window.LoyaltyBridge = {
+    // Latest program config (read context for the V2 page + the edit form).
+    // Mirrors loadLoyaltyAdmin's `MastDB.get('admin/walletConfig')`.
+    getProgramConfig: function() { return Promise.resolve(MastDB.get('admin/walletConfig')); },
+
+    // Mirrors _loyaltySaveConfig EXACTLY: same defaults (Points / 1 / 50 / 365),
+    // same `loyaltyPointName || 'Points'`, same `redeemRate < 1` guard, same
+    // exclusions split, same updatedAt, then MastDB.walletConfig.update(data) +
+    // writeAudit('update','wallet-config','loyalty'). walletConfig.update is a
+    // shallow merge so the gift-card slice of the same record survives untouched.
+    // data: { enabled, pointName, earnRate, redeemRate, expiryDays, exclusions }
+    // (exclusions may be a comma-separated string OR an array). Returns the
+    // persisted config object, or null on a validation failure (already toasted).
+    saveProgramConfig: async function(d) {
+      d = d || {};
+      var enabled = !!d.enabled;
+      var pointName = ((d.pointName || '') + '').trim() || 'Points';
+      var earnRate = parseFloat(d.earnRate) || 1;
+      var redeemRate = parseInt(d.redeemRate, 10) || 50;
+      var expiryDays = parseInt(d.expiryDays, 10) || 365;
+      var exclusions = Array.isArray(d.exclusions)
+        ? d.exclusions.map(function(s) { return ('' + s).trim(); }).filter(function(s) { return s; })
+        : (('' + (d.exclusions || '')).split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s; }));
+
+      if (redeemRate < 1) {
+        showToast('Redemption rate must be at least 1 point per $1.', true);
+        return null;
+      }
+
+      var data = {
+        loyaltyEnabled: enabled,
+        loyaltyPointName: pointName,
+        loyaltyEarnRate: earnRate,
+        loyaltyRedemptionRate: redeemRate,
+        loyaltyExpiryDays: expiryDays,
+        loyaltyExclusions: exclusions,
+        updatedAt: new Date().toISOString()
+      };
+      var tenantId = MastDB.tenantId();
+      if (!db || !tenantId) { showToast('Not connected.', true); return null; }
+      try {
+        await MastDB.walletConfig.update(data);
+        writeAudit('update', 'wallet-config', 'loyalty');
+        loyaltyConfig = Object.assign(loyaltyConfig || {}, data);
+        showToast('Loyalty settings saved');
+        return data;
+      } catch (err) {
+        showToast('Failed to save: ' + err.message, true);
+        return null;
+      }
+    }
+  };
+
   // ============================================================
   // MEMBERSHIP ADMIN
   // ============================================================
