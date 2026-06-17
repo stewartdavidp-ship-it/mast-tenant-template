@@ -3970,9 +3970,29 @@
                   (sessionDate ? ' on ' + sessionDate : '') +
                   '. Please reply to this message or re-book directly within 24 hours to claim your spot.';
 
-    var config = await MastDB.get('cs_config/ticketing');
-    var prefix = (config && config.prefix) || 'T';
-    var nextNum = (config && typeof config.nextNumber === 'number') ? config.nextNumber : 1;
+    // Allocate the human-facing ticket number ATOMICALLY. The old
+    // get→compute→write-back raced under concurrent ticket creation: two
+    // simultaneous waitlist offers both read the same nextNumber and minted
+    // the same T-#### number, then both wrote nextNumber+1 (advancing by one,
+    // not two). A Firestore transaction read-modify-writes the counter in one
+    // atomic step (server read, retried on contention), so each concurrent
+    // ticket gets a distinct number and the counter advances once per ticket.
+    // The closure replaces the whole doc, so copy existing fields forward;
+    // read the allocated number back from the committed value.
+    var prefix = 'T';
+    var nextNum = 1;
+    var txRes = await MastDB.transaction('cs_config/ticketing', function(cur) {
+      var doc = (cur && typeof cur === 'object') ? cur : {};
+      var next = {};
+      for (var f in doc) next[f] = doc[f];
+      next.prefix = doc.prefix || 'T';
+      next.nextNumber = (typeof doc.nextNumber === 'number' ? doc.nextNumber : 1) + 1;
+      return next;
+    });
+    if (txRes && txRes.value && typeof txRes.value.nextNumber === 'number') {
+      prefix = txRes.value.prefix || 'T';
+      nextNum = txRes.value.nextNumber - 1;
+    }
     var ticketNumber = prefix + '-' + String(nextNum).padStart(4, '0');
     var ticketId = 'ticket_' + Date.now().toString(36);
     var msgId = 'msg_' + Date.now().toString(36);
@@ -4002,11 +4022,7 @@
       createdAt: now
     });
 
-    if (!config) {
-      await MastDB.set('cs_config/ticketing', { prefix: prefix, nextNumber: nextNum + 1 });
-    } else {
-      await MastDB.update('cs_config/ticketing', { nextNumber: nextNum + 1 });
-    }
+    // Counter already advanced atomically above — no write-back needed here.
 
     console.log('[book] Waitlist ticket created:', ticketNumber, 'for', contactEmail);
   }
