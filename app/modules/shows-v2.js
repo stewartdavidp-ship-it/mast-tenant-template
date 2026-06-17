@@ -17,8 +17,11 @@
  * PR3 makes the APPLY lens + record detail WRITEABLE — native create / edit /
  * status-machine / deep-dive-enrich / delete — all SINGLE-SOURCED through
  * window.ShowsBridge (shipped in PR1), never reimplementing the nested
- * admin/shows/{id} write paths. The prep/execute/history sub-editors (PR4-6), the
- * Find lens /showFinder (PR7) and the AI builder (PR8) remain read-only for now.
+ * admin/shows/{id} write paths. PR4 makes the Prep / Execute / History detail
+ * pane-tabs WRITEABLE too — in-pane sub-editors (staffing / inventory + packed /
+ * logistics; multi-day day-picked sales / reconciliation steppers / notes;
+ * expenses / post-show review) all delegating to the SAME ShowsBridge methods.
+ * The Find lens /showFinder (PR5/PR7) and the AI builder (PR6/PR8) stay read-only.
  *
  * Apply-lens write surface (all → window.ShowsBridge):
  *   + New show / Edit  → ShowsBridge.create(data) / .update(id,data)  (gate: can('show-prep','edit'))
@@ -169,10 +172,12 @@
       return ensureLoaded().then(function () { return V2.byId[id] || null; });
     },
     detail: {
-      // Read-only interior (classes-v2 / orders-v2 custom-render pattern): the four
-      // legacy renderShowDetail* sections (Info / Prep / Execute / History) mapped
-      // 1:1 to read-only pane-tabs. NO write actions (later PRs wire those through
-      // ShowsBridge).
+      // Faceted-record interior (classes-v2 / orders-v2 custom-render pattern):
+      // the four legacy renderShowDetail* sections (Info / Prep / Execute /
+      // History) mapped 1:1 to pane-tabs. Info hosts the status-machine + enrich
+      // + delete actions (PR3); Prep / Execute / History are WRITEABLE in-pane
+      // sub-editors (PR4) — every write routes through ShowsBridge, re-rendering
+      // the affected pane in place (refreshThenRerender).
       render: function (UI, s) {
         var status = statusOf(s);
         var bf = boothFeeVal(s), jf = juryFeeVal(s);
@@ -400,53 +405,92 @@
     return out;
   }
 
-  // Prep — staffing + inventory pull list + logistics (read-only).
+  // Prep — staffing + inventory pull list + logistics (writeable, PR4). All
+  // edits delegate to ShowsBridge (setStaffing/removeStaffing, upsertInventory/
+  // setPacked/removeInventory, setLogistics); gated can('show-prep','edit'); the
+  // pane re-renders in place after each write (refreshThenRerender). Mirrors the
+  // legacy openShowStaffingModal / openShowInventoryModal / editShowLogistics.
   function renderPrepPane(UI, s) {
+    var id = s._key || s.id, jid = "'" + id + "'";
     var prep = s.prep || {};
+    var ed = canEdit();
     var out = '';
 
-    // Staffing
+    // ── Staffing ──
     var staffing = prep.staffing || {};
     var staffKeys = Object.keys(staffing);
     var staffBody;
     if (!staffKeys.length) {
       staffBody = '<span class="mu-sub">No staff assigned yet.</span>';
     } else {
-      staffBody = UI.relatedTable([
+      var staffCols = [
         { label: 'Name', render: function (r) { return esc(r.name || 'Unknown'); } },
         { label: 'Role', render: function (r) {
             var role = (r.showRole || 'support');
             var tone = role === 'lead' ? 'teal' : role === 'driver' ? 'info' : 'neutral';
             return UI.badge(role.charAt(0).toUpperCase() + role.slice(1), tone);
         } }
-      ], staffKeys.map(function (uid) { return Object.assign({ _uid: uid }, staffing[uid]); }));
+      ];
+      if (ed) staffCols.push({ label: '', align: 'right', render: function (r) {
+        return '<button class="btn btn-small btn-secondary" onclick="ShowsV2.staffRemove(' + jid + ',\'' + esc(r._uid) + '\')">Remove</button>';
+      } });
+      staffBody = UI.relatedTable(staffCols, staffKeys.map(function (uid) { return Object.assign({ _uid: uid }, staffing[uid]); }));
+    }
+    // Assign-staff inline form (only members not already assigned + non-guest).
+    if (ed) {
+      var avail = Object.keys(teamMembers()).filter(function (uid) {
+        return !staffing[uid] && teamMembers()[uid] && teamMembers()[uid].role !== 'guest';
+      }).map(function (uid) { var u = teamMembers()[uid]; return { uid: uid, name: u.name || u.email || uid }; })
+        .sort(function (a, b) { return a.name.localeCompare(b.name); });
+      if (avail.length) {
+        var memberOpts = avail.map(function (u) { return '<option value="' + esc(u.uid) + '">' + esc(u.name) + '</option>'; }).join('');
+        staffBody += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark,rgba(127,127,127,.18));">' +
+          '<div style="flex:1;min-width:150px;"><label class="form-label">Team member</label><select class="form-input" id="showV2StaffUid" style="width:100%;">' + memberOpts + '</select></div>' +
+          '<div style="flex:1;min-width:130px;"><label class="form-label">Role at show</label><select class="form-input" id="showV2StaffRole" style="width:100%;">' +
+            '<option value="lead">Lead (runs the booth)</option><option value="support" selected>Support (assists)</option><option value="driver">Driver (logistics)</option>' +
+          '</select></div>' +
+          '<button class="btn btn-primary btn-small" onclick="ShowsV2.staffAdd(' + jid + ')">Assign</button>' +
+        '</div>';
+      } else if (Object.keys(teamMembers()).length) {
+        staffBody += '<div class="mu-sub" style="margin-top:10px;">All eligible team members are already assigned.</div>';
+      }
     }
     out += UI.cardTable('Staffing', staffBody);
 
-    // Inventory pull list
+    // ── Inventory pull list ──
     var inventory = prep.inventory || {};
     var invKeys = Object.keys(inventory);
-    var invBody;
-    if (!invKeys.length) {
-      invBody = '<span class="mu-sub">No items in pull list yet.</span>';
-    } else {
+    var invBody = '';
+    if (invKeys.length) {
       var packedCount = invKeys.filter(function (k) { return inventory[k].packed; }).length;
-      invBody = UI.relatedTable([
+      var invCols = [
         { label: 'Item', render: function (r) {
             var meta = [];
             if (r.notes) meta.push(esc(r.notes));
-            if (r.linkedMakeJob) meta.push('🔗 Linked to Make');
+            if (r.linkedMakeJob) meta.push('🔗 ' + esc(r.linkedMakeJob));
             return '<div style="font-weight:500;">' + esc(r.name || 'Unnamed Item') + '</div>' +
               (meta.length ? '<div class="mu-sub">' + meta.join(' · ') + '</div>' : '');
         } },
         { label: 'Qty', align: 'right', render: function (r) { return r.quantity != null ? esc(r.quantity) : '—'; } },
-        { label: 'Packed', render: function (r) { return r.packed ? UI.badge('Packed', 'success') : UI.badge('Not packed', 'neutral'); } }
-      ], invKeys.map(function (k) { return Object.assign({ _itemId: k }, inventory[k]); }));
-      invBody = '<div class="mu-sub" style="margin-bottom:6px;">' + N.count(packedCount) + ' of ' + N.count(invKeys.length) + ' items packed</div>' + invBody;
+        { label: 'Packed', render: function (r) {
+            if (!ed) return r.packed ? UI.badge('Packed', 'success') : UI.badge('Not packed', 'neutral');
+            return '<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem;">' +
+              '<input type="checkbox"' + (r.packed ? ' checked' : '') + ' onchange="ShowsV2.invPacked(' + jid + ',\'' + esc(r._itemId) + '\',this.checked)"> Packed</label>';
+        } }
+      ];
+      if (ed) invCols.push({ label: '', align: 'right', render: function (r) {
+        return '<button class="btn btn-small btn-secondary" onclick="ShowsV2.invEdit(' + jid + ',\'' + esc(r._itemId) + '\')">Edit</button> ' +
+          '<button class="btn btn-small btn-secondary" onclick="ShowsV2.invRemove(' + jid + ',\'' + esc(r._itemId) + '\')">Remove</button>';
+      } });
+      invBody = '<div class="mu-sub" style="margin-bottom:6px;">' + N.count(packedCount) + ' of ' + N.count(invKeys.length) + ' items packed</div>' +
+        UI.relatedTable(invCols, invKeys.map(function (k) { return Object.assign({ _itemId: k }, inventory[k]); }));
+    } else {
+      invBody = '<span class="mu-sub">No items in pull list yet.</span>';
     }
-    out += UI.cardTable('Inventory pull list', invBody);
+    var invAdd = ed ? '<button class="btn btn-small btn-secondary" onclick="ShowsV2.invAdd(' + jid + ')">+ Add item</button>' : '';
+    out += UI.card('Inventory pull list', invBody, { headerRight: invAdd });
 
-    // Logistics
+    // ── Logistics ──
     var logistics = prep.logistics || {};
     var logPairs = [];
     if (logistics.boothSize) logPairs.push({ k: 'Booth size', v: esc(logistics.boothSize) });
@@ -462,45 +506,102 @@
       logBody = (logPairs.length ? UI.kv(logPairs) : '') +
         (logistics.notes ? '<div style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(logistics.notes) + '</div>' : '');
     }
-    out += UI.card('Logistics', logBody);
+    var logEdit = ed ? '<button class="btn btn-small btn-secondary" onclick="ShowsV2.logEdit(' + jid + ')">Edit</button>' : '';
+    out += UI.card('Logistics', logBody, { headerRight: logEdit });
     return out;
   }
 
-  // Execute — sales log (whole show), inventory reconciliation, show notes.
-  // (The detail SO is read-only and date-agnostic; it tallies ALL sales across
-  // the show rather than the day-picker the legacy execute view uses.)
+  // Inline inventory-item editor (add or edit) — mirrors openShowInventoryModal.
+  function inventoryForm(s, itemId) {
+    var id = s._key || s.id, jid = "'" + id + "'";
+    var item = (itemId && s.prep && s.prep.inventory && s.prep.inventory[itemId]) || {};
+    var inner =
+      fgRow('Item name *', '<input class="form-input" id="showV2InvName" value="' + esc(item.name || '') + '" style="width:100%;" placeholder="e.g. Blue Hollow Bird">') +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+        '<div style="flex:1;min-width:120px;">' + fgRow('Quantity', '<input class="form-input" type="number" min="1" id="showV2InvQty" value="' + esc(item.quantity != null ? item.quantity : '') + '" style="width:100%;">') + '</div>' +
+        '<div style="flex:1;min-width:120px;">' + fgRow('Link to Make job', '<input class="form-input" id="showV2InvJob" value="' + esc(item.linkedMakeJob || '') + '" style="width:100%;" placeholder="Job name or ID">') + '</div>' +
+      '</div>' +
+      fgRow('Notes', '<textarea class="form-input" id="showV2InvNotes" rows="2" style="width:100%;resize:vertical;">' + esc(item.notes || '') + '</textarea>') +
+      formButtons('ShowsV2.invSave(' + jid + ',' + (itemId ? '\'' + esc(itemId) + '\'' : 'null') + ')', 'ShowsV2.prepCancel(' + jid + ')', itemId ? 'Save item' : 'Add item');
+    return U.card(itemId ? 'Edit inventory item' : 'New inventory item', inner);
+  }
+
+  // Inline logistics editor — mirrors editShowLogistics (singleton full replace).
+  function logisticsForm(s) {
+    var id = s._key || s.id, jid = "'" + id + "'";
+    var lg = (s.prep && s.prep.logistics) || {};
+    var inner =
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+        '<div style="flex:1;min-width:130px;">' + fgRow('Booth size', '<input class="form-input" id="showV2LogBooth" value="' + esc(lg.boothSize || '') + '" style="width:100%;" placeholder="e.g. 10x10">') + '</div>' +
+        '<div style="flex:1;min-width:130px;">' + fgRow('Setup time', '<input class="form-input" id="showV2LogSetup" value="' + esc(lg.setupTime || '') + '" style="width:100%;" placeholder="e.g. 7:00 AM">') + '</div>' +
+        '<div style="flex:1;min-width:130px;">' + fgRow('Teardown time', '<input class="form-input" id="showV2LogTeardown" value="' + esc(lg.teardownTime || '') + '" style="width:100%;" placeholder="e.g. 6:00 PM">') + '</div>' +
+      '</div>' +
+      fgRow('Parking / load-in notes', '<textarea class="form-input" id="showV2LogParking" rows="2" style="width:100%;resize:vertical;">' + esc(lg.parkingNotes || '') + '</textarea>') +
+      fgRow('Hotel / accommodation', '<textarea class="form-input" id="showV2LogHotel" rows="2" style="width:100%;resize:vertical;">' + esc(lg.hotelNotes || '') + '</textarea>') +
+      fgRow('Travel notes', '<textarea class="form-input" id="showV2LogTravel" rows="2" style="width:100%;resize:vertical;">' + esc(lg.travelNotes || '') + '</textarea>') +
+      fgRow('General notes', '<textarea class="form-input" id="showV2LogNotes" rows="3" style="width:100%;resize:vertical;">' + esc(lg.notes || '') + '</textarea>') +
+      formButtons('ShowsV2.logSave(' + jid + ')', 'ShowsV2.prepCancel(' + jid + ')', 'Save logistics');
+    return U.card('Show logistics', inner);
+  }
+
+  // Execute — day-of sales log, inventory reconciliation, show notes (writeable,
+  // PR4). For a MULTI-day show (startDate≠endDate) a day-picker scopes the sales
+  // + notes to the selected date (V2.execDate), exactly like the legacy execute
+  // view's data-selected-date; sales/notes write that date through the bridge.
+  // Single-day shows write the bridge's no-date/_default path. Tallies recompute
+  // in-pane (the SO total is whole-show; the picked day's total shows per-day).
   function renderExecutePane(UI, s) {
+    var id = s._key || s.id, jid = "'" + id + "'";
     var exec = s.execute || {};
     var multiDay = isMultiDay(s);
+    var ed = canEdit();
+    var sales = exec.sales || {};
     var out = '';
 
-    // Flatten sales across all days (multi-day = sales[date][saleId]; single-day =
-    // sales[saleId], excluding any stray YYYY-MM-DD date sub-keys).
-    var allSales = [];
-    var sales = exec.sales || {};
+    // Resolve the active day for multi-day shows (default = today if in-range,
+    // else the first show day). Persisted on V2.execDate across pane re-renders.
+    var dates = getShowDates(s);
+    var activeDate = null;
     if (multiDay) {
-      getShowDates(s).forEach(function (dt) {
-        var ds = sales[dt] || {};
-        Object.keys(ds).forEach(function (k) { allSales.push(Object.assign({ _key: k, _date: dt }, ds[k])); });
-      });
+      if (V2.execDate && dates.indexOf(V2.execDate) >= 0) activeDate = V2.execDate;
+      else { activeDate = dates.indexOf(V2.today) >= 0 ? V2.today : (dates[0] || null); V2.execDate = activeDate; }
+    }
+
+    // Day-picker bar (multi-day only).
+    if (multiDay && dates.length) {
+      var pills = dates.map(function (dt) {
+        var on = dt === activeDate;
+        var lbl = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+        var dayCount = Object.keys(sales[dt] || {}).length;
+        return '<button class="btn btn-small ' + (on ? 'btn-primary' : 'btn-secondary') + '" onclick="ShowsV2.execDay(' + jid + ',\'' + dt + '\')">' +
+          esc(lbl) + (dayCount ? ' <span class="mu-sub">(' + dayCount + ')</span>' : '') + '</button>';
+      }).join(' ');
+      out += UI.card('Show day', '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + pills + '</div>');
+    }
+
+    // Sales for the active day (multi) or the flat single-day set.
+    var daySales = [];
+    if (multiDay) {
+      var ds = (activeDate && sales[activeDate]) || {};
+      Object.keys(ds).forEach(function (k) { daySales.push(Object.assign({ _key: k }, ds[k])); });
     } else {
       Object.keys(sales).forEach(function (k) {
-        if (/^\d{4}-\d{2}-\d{2}$/.test(k)) return;
-        allSales.push(Object.assign({ _key: k }, sales[k]));
+        if (/^\d{4}-\d{2}-\d{2}$/.test(k)) return; // skip stray date sub-keys
+        daySales.push(Object.assign({ _key: k }, sales[k]));
       });
     }
-    allSales.sort(function (a, b) { return String(b.timestamp || '').localeCompare(String(a.timestamp || '')); });
+    daySales.sort(function (a, b) { return String(b.timestamp || '').localeCompare(String(a.timestamp || '')); });
 
     var salesBody;
-    if (!allSales.length) {
-      salesBody = '<span class="mu-sub">No sales recorded yet.</span>';
+    if (!daySales.length) {
+      salesBody = '<span class="mu-sub">No sales recorded' + (multiDay ? ' for this day' : '') + ' yet.</span>';
     } else {
-      var totalCents = allSales.reduce(function (sum, sl) { return sum + (sl.priceCents || 0); }, 0);
+      var dayCents = daySales.reduce(function (sum, sl) { return sum + (sl.priceCents || 0); }, 0);
       var stat = UI.tiles([
-        { k: 'Revenue', v: N.money(N.moneyVal({ totalCents: totalCents }, 'totalCents', null)) || '—', hero: true },
-        { k: 'Sales', v: N.count(allSales.length) }
+        { k: multiDay ? 'Day revenue' : 'Revenue', v: N.money(N.moneyVal({ totalCents: dayCents }, 'totalCents', null)) || '—', hero: true },
+        { k: 'Sales', v: N.count(daySales.length) }
       ]);
-      var table = UI.relatedTable([
+      var salesCols = [
         { label: 'Item', render: function (sl) {
             var time = sl.timestamp ? new Date(sl.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
             return '<div style="font-weight:500;">' + esc(sl.description || 'Sale') + '</div>' +
@@ -512,12 +613,17 @@
             return UI.badge(sl.paymentMethod.charAt(0).toUpperCase() + sl.paymentMethod.slice(1), tone);
         } },
         { label: 'Amount', align: 'right', render: function (sl) { return N.money(N.moneyVal(sl, 'priceCents', null)) || '—'; } }
-      ], allSales);
-      salesBody = stat + table;
+      ];
+      if (ed) salesCols.push({ label: '', align: 'right', render: function (sl) {
+        return '<button class="btn btn-small btn-secondary" onclick="ShowsV2.saleEdit(' + jid + ',\'' + esc(sl._key) + '\')">Edit</button> ' +
+          '<button class="btn btn-small btn-secondary" onclick="ShowsV2.saleRemove(' + jid + ',\'' + esc(sl._key) + '\')">Remove</button>';
+      } });
+      salesBody = stat + UI.relatedTable(salesCols, daySales);
     }
-    out += UI.cardTable('Sales log', salesBody);
+    var saleAdd = ed ? '<button class="btn btn-small btn-secondary" onclick="ShowsV2.saleAdd(' + jid + ')">+ Record sale</button>' : '';
+    out += UI.card('Sales log' + (multiDay && activeDate ? ' — ' + esc(new Date(activeDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })) : ''), salesBody, { headerRight: saleAdd });
 
-    // Inventory reconciliation (per packed prep item: sold/returned/damaged/gifted).
+    // ── Inventory reconciliation (per packed prep item: sold/returned/damaged/gifted) ──
     var prepInventory = (s.prep && s.prep.inventory) || {};
     var reconciliation = exec.reconciliation || {};
     var prepKeys = Object.keys(prepInventory).filter(function (k) { return prepInventory[k].packed; });
@@ -527,38 +633,66 @@
     } else if (!prepKeys.length) {
       reconBody = '<span class="mu-sub">No packed items to reconcile yet.</span>';
     } else {
+      function reconCell(itemId, field, count) {
+        if (!ed) return N.count(count || 0);
+        return '<div style="display:inline-flex;align-items:center;gap:5px;">' +
+          '<button class="btn btn-small btn-secondary" onclick="ShowsV2.recon(' + jid + ',\'' + esc(itemId) + '\',\'' + field + '\',-1)" aria-label="decrease">−</button>' +
+          '<span style="min-width:18px;text-align:center;display:inline-block;">' + N.count(count || 0) + '</span>' +
+          '<button class="btn btn-small btn-secondary" onclick="ShowsV2.recon(' + jid + ',\'' + esc(itemId) + '\',\'' + field + '\',1)" aria-label="increase">+</button></div>';
+      }
       reconBody = UI.relatedTable([
         { label: 'Item', render: function (r) { return esc(r.name || 'Item'); } },
         { label: 'Brought', align: 'right', render: function (r) { return N.count(r.quantity || 1); } },
-        { label: 'Sold', align: 'right', render: function (r) { return N.count((r._recon.sold) || 0); } },
-        { label: 'Returned', align: 'right', render: function (r) { return N.count((r._recon.returned) || 0); } },
-        { label: 'Damaged', align: 'right', render: function (r) { return N.count((r._recon.damaged) || 0); } },
-        { label: 'Gifted', align: 'right', render: function (r) { return N.count((r._recon.gifted) || 0); } }
+        { label: 'Sold', align: 'right', render: function (r) { return reconCell(r._itemId, 'sold', r._recon.sold); } },
+        { label: 'Returned', align: 'right', render: function (r) { return reconCell(r._itemId, 'returned', r._recon.returned); } },
+        { label: 'Damaged', align: 'right', render: function (r) { return reconCell(r._itemId, 'damaged', r._recon.damaged); } },
+        { label: 'Gifted', align: 'right', render: function (r) { return reconCell(r._itemId, 'gifted', r._recon.gifted); } }
       ], prepKeys.map(function (k) { return Object.assign({ _itemId: k, _recon: reconciliation[k] || {} }, prepInventory[k]); }));
     }
     out += UI.cardTable('Inventory reconciliation', reconBody);
 
-    // Show notes (single-day: notes._default or string; multi-day: per-date blocks).
+    // ── Show notes (single-day: notes._default/string; multi-day: per active day) ──
     var notes = exec.notes || {};
+    var curNotes = multiDay ? (notes[activeDate] || '') : (typeof notes === 'string' ? notes : (notes._default || ''));
     var notesBody;
-    if (multiDay) {
-      var blocks = '';
-      getShowDates(s).forEach(function (dt) {
-        var txt = notes[dt];
-        if (!txt) return;
-        var dayLabel = new Date(dt + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-        blocks += '<div style="margin-bottom:8px;"><div class="mu-sub" style="margin-bottom:4px;">' + esc(dayLabel) + '</div>' +
-          '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(txt) + '</div></div>';
-      });
-      notesBody = blocks || '<span class="mu-sub">No notes yet.</span>';
+    if (ed) {
+      notesBody = '<textarea class="form-input" id="showV2Notes" rows="5" style="width:100%;resize:vertical;" placeholder="Weather, foot traffic, booth neighbors, lessons learned…">' + esc(curNotes) + '</textarea>' +
+        '<div style="margin-top:8px;"><button class="btn btn-primary btn-small" onclick="ShowsV2.notesSave(' + jid + ')">Save notes</button></div>';
     } else {
-      var single = typeof notes === 'string' ? notes : (notes._default || '');
-      notesBody = single
-        ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(single) + '</div>'
+      notesBody = curNotes
+        ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;white-space:pre-wrap;">' + esc(curNotes) + '</div>'
         : '<span class="mu-sub">No notes yet.</span>';
     }
-    out += UI.card('Show notes', notesBody);
+    out += UI.card('Show notes' + (multiDay && activeDate ? ' — ' + esc(new Date(activeDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })) : ''), notesBody);
     return out;
+  }
+
+  // Inline sale editor (add or edit) — mirrors openShowSaleModal. Writes the
+  // active day (multi) or the no-date path (single) via ShowsBridge.upsertSale.
+  function saleForm(s, saleId) {
+    var id = s._key || s.id, jid = "'" + id + "'";
+    var multiDay = isMultiDay(s);
+    var sales = (s.execute && s.execute.sales) || {};
+    var existing = null;
+    if (saleId) existing = multiDay ? (V2.execDate && sales[V2.execDate] && sales[V2.execDate][saleId]) : sales[saleId];
+    var sale = existing || {};
+    var methodOpts = ['cash', 'card', 'square'].map(function (m) {
+      return '<option value="' + m + '"' + (sale.paymentMethod === m ? ' selected' : '') + '>' + m.charAt(0).toUpperCase() + m.slice(1) + '</option>';
+    }).join('');
+    var prodOpts = '<option value="">— None —</option>' + productList().filter(function (p) { return p && p.name; }).map(function (p) {
+      return '<option value="' + esc(p.pid || '') + '"' + (sale.linkedProductId === p.pid ? ' selected' : '') + '>' + esc(p.name || p.pid) + '</option>';
+    }).join('');
+    var defaultTime = sale.timestamp ? new Date(sale.timestamp).toTimeString().slice(0, 5) : new Date().toTimeString().slice(0, 5);
+    var inner =
+      fgRow('Item description *', '<input class="form-input" id="showV2SaleDesc" value="' + esc(sale.description || '') + '" style="width:100%;" placeholder="e.g. Blue Hollow Bird, Cup set of 4">') +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
+        '<div style="flex:1;min-width:120px;">' + fgRow('Sale price ($) *', '<input class="form-input" type="number" step="0.01" min="0" id="showV2SalePrice" value="' + (sale.priceCents ? (sale.priceCents / 100).toFixed(2) : '') + '" style="width:100%;" placeholder="25.00">') + '</div>' +
+        '<div style="flex:1;min-width:120px;">' + fgRow('Payment method', '<select class="form-input" id="showV2SaleMethod" style="width:100%;">' + methodOpts + '</select>') + '</div>' +
+        '<div style="flex:1;min-width:110px;">' + fgRow('Time', '<input class="form-input" type="time" id="showV2SaleTime" value="' + esc(defaultTime) + '" style="width:100%;">') + '</div>' +
+      '</div>' +
+      fgRow('Link to product (optional)', '<select class="form-input" id="showV2SaleProduct" style="width:100%;">' + prodOpts + '</select>') +
+      formButtons('ShowsV2.saleSave(' + jid + ',' + (saleId ? '\'' + esc(saleId) + '\'' : 'null') + ')', 'ShowsV2.execCancel(' + jid + ')', saleId ? 'Save sale' : 'Record sale');
+    return U.card(saleId ? 'Edit sale' : 'Record sale', inner);
   }
 
   // History — post-show summary + P&L (booth/jury fees + expenses vs revenue) + review.
@@ -636,17 +770,63 @@
     '</div>';
     out += UI.card('Profit & loss', plBody);
 
-    // Show review
+    // ── Expenses ledger (writeable, PR4) — add/remove additional show expenses
+    // (amountCents) via ShowsBridge.upsertExpense/removeExpense. Booth/jury fees
+    // are NOT here (they're show-level fields) — only "additional" expenses.
+    var id = s._key || s.id, jid = "'" + id + "'";
+    var ed = canEdit();
+    var expBody;
+    if (!expenseKeys.length) {
+      expBody = '<span class="mu-sub">No additional expenses recorded.</span>';
+    } else {
+      var expCols = [
+        { label: 'Description', render: function (e) { return esc(e.description || 'Expense'); } },
+        { label: 'Amount', align: 'right', render: function (e) { return N.money(N.moneyVal(e, 'amountCents', null)) || '—'; } }
+      ];
+      if (ed) expCols.push({ label: '', align: 'right', render: function (e) {
+        return '<button class="btn btn-small btn-secondary" onclick="ShowsV2.expRemove(' + jid + ',\'' + esc(e._key) + '\')">Remove</button>';
+      } });
+      expBody = UI.relatedTable(expCols, expenseKeys.map(function (k) { return Object.assign({ _key: k }, expenses[k]); }));
+    }
+    if (ed) {
+      expBody += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:12px;padding-top:12px;border-top:1px solid var(--cream-dark,rgba(127,127,127,.18));">' +
+        '<div style="flex:2;min-width:160px;"><label class="form-label">Description</label><input class="form-input" id="showV2ExpDesc" style="width:100%;" placeholder="e.g. Gas, Parking, Supplies"></div>' +
+        '<div style="flex:1;min-width:110px;"><label class="form-label">Amount ($)</label><input class="form-input" type="number" step="0.01" min="0" id="showV2ExpAmt" style="width:100%;" placeholder="25.00"></div>' +
+        '<button class="btn btn-primary btn-small" onclick="ShowsV2.expAdd(' + jid + ')">Add expense</button>' +
+      '</div>';
+    }
+    out += UI.card('Additional expenses', expBody);
+
+    // ── Show review (writeable, PR4) — rating / would-attend-again / best
+    // sellers / lessons learned via ShowsBridge.setReview (singleton, full replace).
     var review = historyData.review || {};
     var reviewBody;
-    if (!review.rating && !review.wouldAttendAgain && !review.bestSellers && !review.lessonsLearned) {
+    if (ed) {
+      var rating = review.rating || 0;
+      var stars = '';
+      for (var i = 1; i <= 5; i++) {
+        stars += '<button type="button" class="showV2-star" data-value="' + i + '" onclick="ShowsV2.reviewStar(' + i + ')" ' +
+          'style="font-size:1.6rem;cursor:pointer;background:none;border:none;padding:0 2px;color:' + (i <= rating ? 'var(--amber)' : 'var(--warm-gray)') + ';">★</button>';
+      }
+      var attendBtns = ['yes', 'maybe', 'no'].map(function (val) {
+        var lbl = val.charAt(0).toUpperCase() + val.slice(1);
+        var on = review.wouldAttendAgain === val;
+        return '<button type="button" class="btn btn-small showV2-attend ' + (on ? 'btn-primary' : 'btn-secondary') + '" data-value="' + val + '" onclick="ShowsV2.reviewAttend(\'' + val + '\')">' + lbl + '</button>';
+      }).join(' ');
+      reviewBody =
+        fgRow('Rating', '<div id="showV2ReviewStars" style="display:flex;gap:2px;">' + stars + '</div><input type="hidden" id="showV2ReviewRating" value="' + rating + '">') +
+        fgRow('Would attend again', '<div id="showV2ReviewAttend" style="display:flex;gap:6px;">' + attendBtns + '</div><input type="hidden" id="showV2ReviewAttendVal" value="' + esc(review.wouldAttendAgain || '') + '">') +
+        fgRow('Best sellers', '<textarea class="form-input" id="showV2ReviewBest" rows="3" style="width:100%;resize:vertical;" placeholder="What sold best? What got the most attention?">' + esc(review.bestSellers || '') + '</textarea>') +
+        fgRow('Lessons learned', '<textarea class="form-input" id="showV2ReviewLessons" rows="3" style="width:100%;resize:vertical;" placeholder="What would you do differently? Any surprises?">' + esc(review.lessonsLearned || '') + '</textarea>') +
+        '<div style="margin-top:8px;"><button class="btn btn-primary btn-small" onclick="ShowsV2.reviewSave(' + jid + ')">Save review</button></div>';
+    } else if (!review.rating && !review.wouldAttendAgain && !review.bestSellers && !review.lessonsLearned) {
       reviewBody = '<span class="mu-sub">No review yet.</span>';
     } else {
       var rPairs = [];
       if (review.rating) {
-        var stars = '';
-        for (var i = 1; i <= 5; i++) stars += (i <= review.rating ? '★' : '☆');
-        rPairs.push({ k: 'Rating', v: '<span style="color:var(--amber);">' + stars + '</span>' });
+        var st = '';
+        for (var j = 1; j <= 5; j++) st += (j <= review.rating ? '★' : '☆');
+        rPairs.push({ k: 'Rating', v: '<span style="color:var(--amber);">' + st + '</span>' });
       }
       if (review.wouldAttendAgain) {
         var attendLabels = { yes: 'Yes', maybe: 'Maybe', no: 'No' };
@@ -666,8 +846,77 @@
     return '<a href="' + esc(href) + '" target="_blank" rel="noopener" style="color:var(--teal);">' + esc(label) + '</a>';
   }
 
+  // Small form-control helpers for the in-pane sub-editors (mirror students-v2).
+  function fgRow(label, inner) { return '<div class="form-group" style="margin-bottom:10px;"><label class="form-label">' + label + '</label>' + inner + '</div>'; }
+  function formButtons(saveCall, cancelCall, saveLabel) {
+    return '<div style="display:flex;gap:8px;margin-top:14px;"><button class="btn btn-primary btn-small" onclick="' + saveCall + '">' + esc(saveLabel || 'Save') + '</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="' + cancelCall + '">Cancel</button></div>';
+  }
+  function dollarsToCents(v) { var f = parseFloat(v); return (isNaN(f) || f < 0) ? null : Math.round(f * 100); }
+
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', lens: 'apply', loaded: false, current: null };
+  // execDate = the day-picker selection for a MULTI-day show's Execute pane
+  // (per-record; reset when a record opens). team / products feed the staffing +
+  // linked-product editors (loaded lazily on first detail open).
+  var V2 = { rows: [], byId: {}, today: todayStr(), sortKey: 'name', sortDir: 'asc', q: '', lens: 'apply', loaded: false, current: null,
+             execDate: null, team: null, products: null };
+
+  // Lazily load the assignable team members (admin users, non-guest) the way the
+  // legacy openShowStaffingModal does — MastDB.adminUsers.get() → { uid: {name,
+  // email, role} }. Cached on V2.team. Products feed the optional linked-product
+  // picker in the sale editor (window.productsData is populated once the legacy
+  // shows module's products listener fires; fall back to a direct read).
+  function ensureTeam() {
+    if (V2.team) return Promise.resolve(V2.team);
+    return Promise.resolve(MastDB.adminUsers.get()).then(function (m) { V2.team = m || {}; return V2.team; })
+      .catch(function () { V2.team = {}; return V2.team; });
+  }
+  function teamMembers() { return V2.team || {}; }
+  function ensureProducts() {
+    if (Array.isArray(window.productsData) && window.productsData.length) { V2.products = window.productsData; return Promise.resolve(V2.products); }
+    if (V2.products) return Promise.resolve(V2.products);
+    return Promise.resolve(MastDB.products.list()).then(function (map) {
+      map = map || {};
+      V2.products = Object.keys(map).map(function (pid) { return Object.assign({ pid: pid }, map[pid]); });
+      return V2.products;
+    }).catch(function () { V2.products = []; return V2.products; });
+  }
+  function productList() { return (Array.isArray(window.productsData) && window.productsData.length) ? window.productsData : (V2.products || []); }
+
+  // Re-fetch a single show record after a ShowsBridge sub-write (the bridge
+  // writes to Firestore directly and returns an id/void — it does NOT hand back
+  // the mutated subtree), patch the live cache, then re-render the affected
+  // pane(s) in place. Lighter than reloadThenOpen (no slide-out re-open) so the
+  // pane-tab + scroll position survive a staffing/inventory/sale edit.
+  function refreshThenRerender(id, panes) {
+    return Promise.resolve(MastDB.shows.get(id)).then(function (s) {
+      if (s && typeof s === 'object') {
+        var rec = Object.assign(V2.byId[id] || { _key: id }, s, { _key: id });
+        rec.applicationStatus = rec.applicationStatus || 'considering';
+        V2.byId[id] = rec;
+      }
+      (panes || []).forEach(function (key) { rerenderPaneFor(id, key); });
+      return V2.byId[id];
+    }).catch(function (e) { actionErr(e); });
+  }
+  function rerenderPaneFor(id, key) {
+    var s = V2.byId[id]; if (!s) return;
+    var inner = key === 'prep' ? renderPrepPane(U, s)
+      : key === 'execute' ? renderExecutePane(U, s)
+      : key === 'history' ? renderHistoryPane(U, s)
+      : key === 'info' ? renderInfoPane(U, s) : '';
+    rerenderPane(key, inner);
+  }
+  function rerenderPane(key, inner) {
+    var body = document.getElementById('mastSlideOutBody');
+    var el = body && body.querySelector('.mu-pane[data-pane="' + key + '"]');
+    if (el) el.innerHTML = inner;
+  }
+  function curBridge() {
+    var b = bridge();
+    if (!b || !b.setStaffing) { bridgeLoading(); return null; }
+    return b;
+  }
 
   // Re-open the slide-out on the same record after a write (so the refreshed
   // status badge + action set + enriched fields render). Lets the legacy write
@@ -790,6 +1039,10 @@
     sort: function (key, dir) { V2.sortKey = key; V2.sortDir = dir; render(); },
     open: function (id) {
       V2.current = id;
+      V2.execDate = null; // reset the Execute day-picker per record
+      // Pre-load the staffing roster + product list so the Prep / Execute
+      // editors render with data on first paint (both are cheap + cached).
+      ensureTeam(); ensureProducts();
       MastEntity.get('shows-v2').fetch(id).then(function (rec) {
         if (rec) MastEntity.openRecord('shows-v2', rec, 'read');
       });
@@ -867,8 +1120,220 @@
         Promise.resolve(window.mastConfirm('Delete this show? This cannot be undone.', { title: 'Delete Show', danger: true })).then(function (ok) { if (ok) go(); });
       } else { go(); }
     },
+
+    // ════════════════════════════════════════════════════════════════════
+    // PR4 — Prep / Execute / History detail sub-editors. Every WRITE goes
+    // through window.ShowsBridge (the same DOM-free cores the legacy handlers
+    // call); gated can('show-prep','edit'); after each write we re-fetch the
+    // record + re-render the affected pane in place (refreshThenRerender). NO
+    // raw MastDB writes here.
+    // ════════════════════════════════════════════════════════════════════
+
+    // ── Prep: staffing ──
+    staffAdd: function (id) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var uid = (document.getElementById('showV2StaffUid') || {}).value || '';
+      var role = (document.getElementById('showV2StaffRole') || {}).value || 'support';
+      if (!uid) { toast('Pick a team member.', true); return; }
+      var u = teamMembers()[uid] || {};
+      var name = u.name || u.email || uid;
+      Promise.resolve(b.setStaffing(id, uid, { name: name, showRole: role })).then(function () {
+        toast(name + ' assigned as ' + role + '.');
+        refreshThenRerender(id, ['prep']);
+      }).catch(actionErr);
+    },
+    staffRemove: function (id, uid) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var go = function () {
+        Promise.resolve(b.removeStaffing(id, uid)).then(function () { toast('Staff removed.'); refreshThenRerender(id, ['prep']); }).catch(actionErr);
+      };
+      mastConfirmThen('Remove this staff member from the show?', { title: 'Remove Staff' }, go);
+    },
+
+    // ── Prep: inventory ──
+    invAdd: function (id) { var s = V2.byId[id]; if (s) rerenderPane('prep', inventoryForm(s, null)); },
+    invEdit: function (id, itemId) { var s = V2.byId[id]; if (s) rerenderPane('prep', inventoryForm(s, itemId)); },
+    prepCancel: function (id) { rerenderPaneFor(id, 'prep'); },
+    invSave: function (id, itemId) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var name = ((document.getElementById('showV2InvName') || {}).value || '').trim();
+      if (!name) { toast('Item name is required.', true); return; }
+      var qty = parseInt((document.getElementById('showV2InvQty') || {}).value, 10);
+      var item = {
+        itemId: itemId || null,
+        name: name,
+        quantity: isNaN(qty) ? null : qty,
+        linkedMakeJob: ((document.getElementById('showV2InvJob') || {}).value || '').trim() || null,
+        notes: ((document.getElementById('showV2InvNotes') || {}).value || '').trim() || null
+      };
+      Promise.resolve(b.upsertInventory(id, item, V2.byId[id])).then(function () {
+        toast(itemId ? 'Item updated.' : 'Item added.');
+        refreshThenRerender(id, ['prep', 'execute']); // recon table reads packed prep items
+      }).catch(actionErr);
+    },
+    invPacked: function (id, itemId, checked) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      Promise.resolve(b.setPacked(id, itemId, !!checked)).then(function () {
+        refreshThenRerender(id, ['prep', 'execute']); // packed flag gates the recon list
+      }).catch(actionErr);
+    },
+    invRemove: function (id, itemId) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var go = function () {
+        Promise.resolve(b.removeInventory(id, itemId)).then(function () { toast('Item removed.'); refreshThenRerender(id, ['prep', 'execute']); }).catch(actionErr);
+      };
+      mastConfirmThen('Remove this item from the pull list?', { title: 'Remove Item' }, go);
+    },
+
+    // ── Prep: logistics ──
+    logEdit: function (id) { var s = V2.byId[id]; if (s) rerenderPane('prep', logisticsForm(s)); },
+    logSave: function (id) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var data = {
+        boothSize: ((document.getElementById('showV2LogBooth') || {}).value || '').trim() || null,
+        setupTime: ((document.getElementById('showV2LogSetup') || {}).value || '').trim() || null,
+        teardownTime: ((document.getElementById('showV2LogTeardown') || {}).value || '').trim() || null,
+        parkingNotes: ((document.getElementById('showV2LogParking') || {}).value || '').trim() || null,
+        hotelNotes: ((document.getElementById('showV2LogHotel') || {}).value || '').trim() || null,
+        travelNotes: ((document.getElementById('showV2LogTravel') || {}).value || '').trim() || null,
+        notes: ((document.getElementById('showV2LogNotes') || {}).value || '').trim() || null
+      };
+      Promise.resolve(b.setLogistics(id, data)).then(function () { toast('Logistics saved.'); refreshThenRerender(id, ['prep']); }).catch(actionErr);
+    },
+
+    // ── Execute: day-picker (multi-day) ──
+    execDay: function (id, date) { V2.execDate = date; rerenderPaneFor(id, 'execute'); },
+
+    // ── Execute: sales ──
+    saleAdd: function (id) { var s = V2.byId[id]; if (s) rerenderPane('execute', saleForm(s, null)); },
+    saleEdit: function (id, saleId) { var s = V2.byId[id]; if (s) rerenderPane('execute', saleForm(s, saleId)); },
+    execCancel: function (id) { rerenderPaneFor(id, 'execute'); },
+    saleSave: function (id, saleId) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var desc = ((document.getElementById('showV2SaleDesc') || {}).value || '').trim();
+      if (!desc) { toast('Item description is required.', true); return; }
+      var priceCents = dollarsToCents((document.getElementById('showV2SalePrice') || {}).value);
+      if (priceCents == null) { toast('Valid sale price is required.', true); return; }
+      var s = V2.byId[id];
+      var multiDay = isMultiDay(s);
+      var date = multiDay ? (V2.execDate || V2.today) : null;
+      var timeVal = (document.getElementById('showV2SaleTime') || {}).value || '12:00';
+      var ts = new Date((date || V2.today) + 'T' + timeVal + ':00').toISOString();
+      var sale = {
+        saleId: saleId || null,
+        description: desc,
+        priceCents: priceCents,
+        paymentMethod: (document.getElementById('showV2SaleMethod') || {}).value || 'cash',
+        linkedProductId: (document.getElementById('showV2SaleProduct') || {}).value || null,
+        timestamp: ts
+      };
+      Promise.resolve(b.upsertSale(id, date, sale, s)).then(function () {
+        toast(saleId ? 'Sale updated.' : 'Sale recorded.');
+        refreshThenRerender(id, ['execute', 'history']); // P&L revenue recomputes
+      }).catch(actionErr);
+    },
+    saleRemove: function (id, saleId) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var s = V2.byId[id];
+      var date = isMultiDay(s) ? (V2.execDate || V2.today) : null;
+      var go = function () {
+        Promise.resolve(b.removeSale(id, date, saleId, s)).then(function () { toast('Sale deleted.'); refreshThenRerender(id, ['execute', 'history']); }).catch(actionErr);
+      };
+      mastConfirmThen('Delete this sale record?', { title: 'Delete Sale', danger: true }, go);
+    },
+
+    // ── Execute: reconciliation (delta stepper → absolute count) ──
+    recon: function (id, itemId, field, delta) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var s = V2.byId[id];
+      var cur = (s && s.execute && s.execute.reconciliation && s.execute.reconciliation[itemId] && s.execute.reconciliation[itemId][field]) || 0;
+      var next = Math.max(0, cur + Number(delta));
+      Promise.resolve(b.setReconCount(id, itemId, field, next)).then(function () {
+        refreshThenRerender(id, ['execute', 'history']); // items-sold tally on summary
+      }).catch(actionErr);
+    },
+
+    // ── Execute: per-day notes ──
+    notesSave: function (id) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var s = V2.byId[id];
+      var date = isMultiDay(s) ? (V2.execDate || V2.today) : null;
+      var text = ((document.getElementById('showV2Notes') || {}).value || '').trim();
+      Promise.resolve(b.setNotes(id, date, text, s)).then(function () { toast('Notes saved.'); refreshThenRerender(id, ['execute']); }).catch(actionErr);
+    },
+
+    // ── History: expenses ──
+    expAdd: function (id) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var desc = ((document.getElementById('showV2ExpDesc') || {}).value || '').trim();
+      if (!desc) { toast('Expense description is required.', true); return; }
+      var amountCents = dollarsToCents((document.getElementById('showV2ExpAmt') || {}).value);
+      if (amountCents == null) { toast('Valid expense amount is required.', true); return; }
+      Promise.resolve(b.upsertExpense(id, { description: desc, amountCents: amountCents })).then(function () {
+        toast('Expense added.');
+        refreshThenRerender(id, ['history']); // P&L costs recompute
+      }).catch(actionErr);
+    },
+    expRemove: function (id, expId) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var go = function () {
+        Promise.resolve(b.removeExpense(id, expId)).then(function () { toast('Expense deleted.'); refreshThenRerender(id, ['history']); }).catch(actionErr);
+      };
+      mastConfirmThen('Delete this expense?', { title: 'Delete Expense', danger: true }, go);
+    },
+
+    // ── History: review (rating picker + attend toggle held in hidden inputs) ──
+    reviewStar: function (val) {
+      var hidden = document.getElementById('showV2ReviewRating'); if (hidden) hidden.value = val;
+      var stars = document.querySelectorAll('#showV2ReviewStars .showV2-star');
+      stars.forEach(function (st) {
+        var sv = parseInt(st.getAttribute('data-value'), 10);
+        st.style.color = sv <= val ? 'var(--amber)' : 'var(--warm-gray)';
+      });
+    },
+    reviewAttend: function (val) {
+      var hidden = document.getElementById('showV2ReviewAttendVal'); if (hidden) hidden.value = val;
+      var btns = document.querySelectorAll('#showV2ReviewAttend .showV2-attend');
+      btns.forEach(function (btn) {
+        var on = btn.getAttribute('data-value') === val;
+        btn.classList.toggle('btn-primary', on);
+        btn.classList.toggle('btn-secondary', !on);
+      });
+    },
+    reviewSave: function (id) {
+      if (!canEdit()) return notPermitted();
+      var b = curBridge(); if (!b) return;
+      var rating = parseInt((document.getElementById('showV2ReviewRating') || {}).value, 10) || null;
+      var review = {
+        rating: rating,
+        wouldAttendAgain: (document.getElementById('showV2ReviewAttendVal') || {}).value || null,
+        bestSellers: ((document.getElementById('showV2ReviewBest') || {}).value || '').trim() || null,
+        lessonsLearned: ((document.getElementById('showV2ReviewLessons') || {}).value || '').trim() || null
+      };
+      Promise.resolve(b.setReview(id, review)).then(function () { toast('Review saved.'); refreshThenRerender(id, ['history']); }).catch(actionErr);
+    },
+
     exportCsv: function () { return MastEntity.exportRows('shows-v2', visibleRows(), V2.lens); }
   };
+
+  // Small confirm helper — uses mastConfirm when available, else proceeds.
+  function mastConfirmThen(msg, opts, onYes) {
+    if (typeof window.mastConfirm === 'function') {
+      Promise.resolve(window.mastConfirm(msg, opts)).then(function (ok) { if (ok) onYes(); });
+    } else { onYes(); }
+  }
 
   // ── Routes ──────────────────────────────────────────────────────────
   // Each lifecycle route enters the matching lens. REGISTERED here, but
