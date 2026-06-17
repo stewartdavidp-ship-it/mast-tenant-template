@@ -24,12 +24,29 @@
  * PR5 wires the FIND lens: the /showFinder AI-discovery search (a CF READ, in the
  * twin like the /showDeepDive enrich) → ranked result cards → "+ Add to pipeline"
  * via ShowsBridge.addFromFinder (the WRITE), with dedupe vs the current pipeline.
- * The AI application builder (PR6/PR8) stays for a later PR.
+ * PR6 ports the AI APPLICATION BUILDER: a native 6-step wizard (launched from the
+ * Apply lens) that drafts a craft-show application — (1) fetch+parse the show's
+ * application URL via /studioAssistant, (2) assign gallery images to photo slots +
+ * tag them, (3) auto-map the studio profile onto the parsed fields, (4) gap
+ * analysis, (5) AI-draft copy via /studioAssistant, (6) preview + save. The
+ * /studioAssistant CF call (token-metered, 402 → coin purchase) is a READ and
+ * stays in the twin; the three WRITES single-source through ShowsBridge:
+ * saveApplication (showLight/applications/{key}), setImageAppMeta (images/{id}
+ * applicationDescription / applicationPhoto / productId), saveProfile
+ * (showLight/profile). All gate on can('show-prep','edit').
  *
  * Find-lens surface (PR5):
  *   Search        → /showFinder CF read (bearer + X-Tenant-ID), body = the search form
  *   Add result    → ShowsBridge.addFromFinder(show) (aiGenerated:true; gate: can('show-prep','edit'))
  *                   deduped vs V2.rows; an already-pipelined result is disabled.
+ *
+ * AI-builder surface (PR6):
+ *   Step 1 parse   → /studioAssistant CF read (token-metered; 402 → openCoinPurchaseModal)
+ *   Step 2 images  → ShowsBridge.setImageAppMeta(imageId, patch) (image-tagging WRITE)
+ *   Step 3 map     → in-memory profile→field mapping (no write)
+ *   Step 4 gaps    → gap analysis (read); inline profile backfill → ShowsBridge.saveProfile
+ *   Step 5 draft   → /studioAssistant CF read (token-metered; 402 → openCoinPurchaseModal)
+ *   Step 6 save    → ShowsBridge.saveApplication(appData) (draft WRITE; gate: can('show-prep','edit'))
  *
  * Apply-lens write surface (all → window.ShowsBridge):
  *   + New show / Edit  → ShowsBridge.create(data) / .update(id,data)  (gate: can('show-prep','edit'))
@@ -873,7 +890,18 @@
              // 'added' once a card's "Add to pipeline" has written, so the re-render
              // can show an Added badge instead of the button. finderBusy guards a
              // double-submit while the CF is in flight.
-             finderResults: [], finderState: {}, finderBusy: false, finderError: null, finderSearched: false };
+             finderResults: [], finderState: {}, finderBusy: false, finderError: null, finderSearched: false,
+             // AI Application Builder (PR6): a native 6-step wizard launched from the
+             // Apply lens. ai.active flips the Apply lens from the pipeline list to the
+             // builder; ai.step 0 = select-show, 1..5 = the wizard steps. The state
+             // mirrors the legacy showsAI* module vars 1:1 (parsed requirements /
+             // profile→field mapping / gap list / slotIdx→imageId assignments /
+             // resumed-draft record / sequential copy cursor). aiBusy guards the
+             // in-flight /studioAssistant CF; aiProfile + aiApplications are loaded
+             // once from showLight/* on first entry.
+             ai: { active: false, step: 0, showId: null, parsed: null, mapping: null, gaps: null,
+                   images: {}, currentApp: null, copyIdx: -1, busy: false,
+                   profile: null, applications: null, loaded: false, loading: false } };
 
   // Lazily load the assignable team members (admin users, non-guest) the way the
   // legacy openShowStaffingModal does — MastDB.adminUsers.get() → { uid: {name,
@@ -1173,6 +1201,515 @@
     if (formBtn) { formBtn.disabled = !!V2.finderBusy; formBtn.textContent = V2.finderBusy ? 'Searching…' : 'Find shows'; }
   }
 
+  // ════════════════════════════════════════════════════════════════════
+  // AI Application Builder (PR6) — native 6-step wizard, launched from the
+  // Apply lens. Ports the legacy #show-apply AI mode (shows.js renderShowsAI*).
+  // The /studioAssistant CF call (token-metered; 402 → coin purchase) stays in the
+  // twin (a READ, like /showFinder + /showDeepDive); the three WRITES route through
+  // window.ShowsBridge: setImageAppMeta (image tagging), saveProfile (gap backfill),
+  // saveApplication (final draft save). All gate on can('show-prep','edit').
+  // ════════════════════════════════════════════════════════════════════
+
+  function imageLib() { return (typeof window !== 'undefined' && window.imageLibrary) || {}; }
+  function productData() { return (Array.isArray(window.productsData) ? window.productsData : (V2.products || [])); }
+
+  // Lazily load the studio profile + saved application drafts (showLight/profile +
+  // showLight/applications) the way the legacy loadShowsAIProfile does. Cached on
+  // V2.ai; reads only (no write). Resolves to the loaded state.
+  function ensureAiData() {
+    if (V2.ai.loaded) return Promise.resolve();
+    if (V2.ai.loading) {
+      return new Promise(function (resolve) {
+        var iv = setInterval(function () { if (V2.ai.loaded) { clearInterval(iv); resolve(); } }, 100);
+      });
+    }
+    V2.ai.loading = true;
+    return Promise.all([
+      Promise.resolve(MastDB.showLight.profile.get()).catch(function () { return {}; }),
+      Promise.resolve(MastDB.showLight.applications.get()).catch(function () { return {}; })
+    ]).then(function (res) {
+      V2.ai.profile = res[0] || {};
+      V2.ai.applications = res[1] || {};
+      V2.ai.loaded = true; V2.ai.loading = false;
+    }).catch(function () {
+      V2.ai.profile = V2.ai.profile || {}; V2.ai.applications = V2.ai.applications || {};
+      V2.ai.loaded = true; V2.ai.loading = false;
+    });
+  }
+  function aiProfile() { return V2.ai.profile || {}; }
+  function aiShow() { return V2.byId[V2.ai.showId] || {}; }
+
+  // Token-wallet cost hint / suspended state (mirrors the legacy getTokenWallet read).
+  function aiWallet() { return (typeof window.getTokenWallet === 'function') ? window.getTokenWallet() : { status: 'unknown' }; }
+  function aiBuyCoins() { if (typeof window.openCoinPurchaseModal === 'function') window.openCoinPurchaseModal(); }
+
+  // Render the whole builder into the Apply-lens tab (header + step body). Called
+  // from render() when V2.ai.active. Step 0 = select-show; 1..5 = wizard steps.
+  function renderAiBuilder(tab, headerHtml, lensPills) {
+    tab.innerHTML = headerHtml + lensPills + '<div id="showsV2AiBody">' + aiBodyHtml() + '</div>';
+  }
+  // Re-render only the builder body in place (keeps the lens pills + header).
+  function rerenderAiBody() {
+    var el = document.getElementById('showsV2AiBody');
+    if (el) el.innerHTML = aiBodyHtml();
+  }
+  function aiBodyHtml() {
+    return V2.ai.step === 0 ? aiSelectShowHtml() : aiStepContainerHtml();
+  }
+
+  // Step 0 — pick an applyable show (application URL + non-terminal status) or
+  // resume a saved draft. Mirrors renderShowsAISelectShow.
+  function aiSelectShowHtml() {
+    var applyable = V2.rows.filter(function (s) {
+      var st = statusOf(s);
+      return s.applicationUrl && (st === 'considering' || st === 'applied' || !s.applicationStatus);
+    });
+    var apps = V2.ai.applications || {};
+    var appEntries = Object.keys(apps).map(function (k) { return [k, apps[k]]; });
+
+    var body = '<div class="mu-sub" style="margin-bottom:14px;">AI Assist parses a show\'s application form, maps your vendor profile to the fields, assigns gallery images, and builds a ready-to-submit package.</div>';
+
+    var showsCard;
+    if (!applyable.length) {
+      showsCard = '<span class="mu-sub">No shows with an application URL in Considering or Applied status. Add an application URL on a show, then come back.</span>' +
+        '<div style="margin-top:10px;"><button class="btn btn-secondary btn-small" onclick="ShowsV2.aiExit()">Back to shows</button></div>';
+    } else {
+      showsCard = applyable.map(function (s) {
+        var id = s._key || s.id;
+        var deadline = '';
+        if (s.applicationDeadline) {
+          var daysUntil = Math.ceil((new Date(s.applicationDeadline + 'T00:00:00') - new Date()) / 86400000);
+          if (daysUntil < 0) deadline = U.badge('Past due', 'danger');
+          else if (daysUntil <= 14) deadline = U.badge(daysUntil + 'd left', 'warning');
+          else deadline = '<span class="mu-sub">Due ' + esc(fmtDate(s.applicationDeadline)) + '</span>';
+        }
+        return '<div onclick="ShowsV2.aiStart(\'' + esc(id) + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--cream-dark,rgba(127,127,127,.18));">' +
+          '<div><div style="font-weight:600;">' + esc(showName(s)) + '</div>' + (deadline ? '<div style="margin-top:2px;">' + deadline + '</div>' : '') + '</div>' +
+          '<span style="color:var(--teal);">→</span></div>';
+      }).join('');
+    }
+    var out = body + U.card('Build application package', showsCard);
+
+    if (appEntries.length) {
+      var saved = appEntries.map(function (entry) {
+        var id = entry[0], app = entry[1];
+        var show = V2.byId[app.showId] || {};
+        return '<div onclick="ShowsV2.aiResume(\'' + esc(id) + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--cream-dark,rgba(127,127,127,.18));">' +
+          '<div><div style="font-weight:600;">' + esc(showName(show) !== 'Unnamed Show' ? showName(show) : (app.showName || 'Unknown Show')) + '</div>' +
+          '<div class="mu-sub">Saved ' + esc(app.updatedAt ? new Date(app.updatedAt).toLocaleDateString() : '') + '</div></div>' +
+          U.badge(app.status || 'draft', 'neutral') + '</div>';
+      }).join('');
+      out += U.card('Saved packages', saved);
+    }
+    return out;
+  }
+
+  // The step container — back-to-list + progress bar + the active step body.
+  // Mirrors renderShowsAIStepContainer (5 progress segments).
+  var AI_STEPS = ['Fetch & Parse', 'Images', 'Auto-Map', 'Gap Analysis', 'Preview'];
+  function aiStepContainerHtml() {
+    var s = aiShow();
+    var head = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">' +
+      '<button class="btn btn-secondary btn-small" onclick="ShowsV2.aiBackToSelect()" title="Back to show list">←</button>' +
+      '<div><span style="font-weight:600;font-size:1.15rem;">' + esc(showName(s)) + '</span>' +
+      (s.applicationDeadline ? ' <span class="mu-sub">Deadline: ' + esc(fmtDate(s.applicationDeadline)) + '</span>' : '') +
+      '</div></div>';
+
+    var segs = AI_STEPS.map(function (label, i) {
+      var stepNum = i + 1;
+      var on = stepNum <= V2.ai.step;
+      return '<div title="' + esc(label) + '" style="flex:1;height:4px;border-radius:2px;background:' + (on ? 'var(--teal)' : 'var(--cream-dark,rgba(127,127,127,.25))') + ';opacity:' + (on ? '1' : '0.5') + ';"></div>';
+    }).join('');
+    var bar = '<div style="display:flex;gap:4px;margin-bottom:18px;">' + segs + '</div>';
+
+    var stepBody = '';
+    switch (V2.ai.step) {
+      case 1: stepBody = aiFetchHtml(s); break;
+      case 2: stepBody = aiImagesHtml(s); break;
+      case 3: stepBody = aiMapHtml(s); break;
+      case 4: stepBody = aiGapsHtml(s); break;
+      case 5: stepBody = aiPreviewHtml(s); break;
+    }
+    return head + bar + '<div id="showsV2AiStep">' + stepBody + '</div>';
+  }
+  // Re-render only the active step body (keeps the progress bar + header).
+  function rerenderAiStep() {
+    var el = document.getElementById('showsV2AiStep');
+    if (!el) { rerenderAiBody(); return; }
+    var s = aiShow();
+    switch (V2.ai.step) {
+      case 1: el.innerHTML = aiFetchHtml(s); break;
+      case 2: el.innerHTML = aiImagesHtml(s); break;
+      case 3: el.innerHTML = aiMapHtml(s); break;
+      case 4: el.innerHTML = aiGapsHtml(s); break;
+      case 5: el.innerHTML = aiPreviewHtml(s); break;
+    }
+  }
+
+  // ── Step 1: Fetch & Parse ──────────────────────────────────────────
+  function aiFetchHtml(s) {
+    var w = aiWallet();
+    var cost = w.status === 'suspended'
+      ? '<span class="mu-sub" style="color:var(--danger);">⏸ AI suspended — <a onclick="ShowsV2.aiBuyCoins()" style="cursor:pointer;text-decoration:underline;">buy coins</a></span>'
+      : '<span class="mu-sub">~15 tokens</span>';
+    var header = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+      '<div style="font-weight:600;">Step 1: Fetch &amp; parse application</div>' + cost + '</div>';
+
+    if (!s.applicationUrl) {
+      return U.card('Fetch & parse', header +
+        '<div class="mu-sub">No application URL set. Edit this show to add one, then return.</div>');
+    }
+
+    var inner = header +
+      fgRow('Application URL', '<input class="form-input" id="showV2AiUrl" value="' + esc(s.applicationUrl) + '" style="width:100%;">');
+
+    if (V2.ai.parsed) {
+      var reqs = V2.ai.parsed;
+      var fields = (reqs.fields || []).map(function (f, idx) {
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--cream-dark,rgba(127,127,127,.12));font-size:0.85rem;">' +
+          '<span>' + esc(f.name) + (f.required ? ' ' + U.badge('required', 'danger') : '') + '</span>' +
+          '<button class="btn btn-small btn-secondary" onclick="ShowsV2.aiRemoveField(' + idx + ')">×</button></div>';
+      }).join('');
+      var photos = (reqs.photos || []).map(function (p, idx) {
+        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid var(--cream-dark,rgba(127,127,127,.12));font-size:0.85rem;">' +
+          '<span>' + esc(p.slot) + (p.dimensions ? ' <span class="mu-sub">' + esc(p.dimensions) + '</span>' : '') + '</span>' +
+          '<button class="btn btn-small btn-secondary" onclick="ShowsV2.aiRemovePhoto(' + idx + ')">×</button></div>';
+      }).join('');
+      var meta = '';
+      if (reqs.fees) meta += '<div style="font-size:0.85rem;margin-top:6px;"><strong>Fees:</strong> ' + esc(reqs.fees) + '</div>';
+      if (reqs.deadline) meta += '<div style="font-size:0.85rem;"><strong>Deadline:</strong> ' + esc(reqs.deadline) + '</div>';
+      if (reqs.specialRequirements && reqs.specialRequirements.length) {
+        meta += '<div style="font-size:0.85rem;"><strong>Special:</strong> ' + reqs.specialRequirements.map(function (r) { return esc(r); }).join('; ') + '</div>';
+      }
+      var parsedBlock =
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin:14px 0 8px;">' +
+          '<div style="font-weight:600;color:var(--teal);">Parsed requirements ' + U.badge('AI Parsed', 'teal') + '</div>' +
+          '<div style="display:flex;gap:8px;align-items:center;">' +
+            linkOut(s.applicationUrl, 'View source') +
+            '<button class="btn btn-small btn-secondary" onclick="ShowsV2.aiReparse()">Re-parse</button></div>' +
+        '</div>' +
+        '<div class="mu-sub" style="margin-bottom:4px;">Fields (' + (reqs.fields || []).length + ')</div>' + fields +
+        '<button class="btn btn-small btn-secondary" style="margin-top:6px;" onclick="ShowsV2.aiAddField()">+ Add field</button>' +
+        '<div class="mu-sub" style="margin:12px 0 4px;">Photo slots (' + (reqs.photos || []).length + ')</div>' + photos +
+        '<button class="btn btn-small btn-secondary" style="margin-top:6px;" onclick="ShowsV2.aiAddPhoto()">+ Add photo slot</button>' +
+        meta +
+        '<div class="mu-sub" style="font-style:italic;margin:12px 0;">Review above. Remove or add items before continuing.</div>' +
+        '<button class="btn btn-primary" onclick="ShowsV2.aiGoToStep(2)">Continue to images →</button>';
+      inner += parsedBlock;
+    } else {
+      inner += '<div style="display:flex;gap:8px;align-items:center;margin-top:6px;">' +
+        '<button class="btn btn-primary" id="showV2AiFetchBtn"' + (V2.ai.busy ? ' disabled' : '') + ' onclick="ShowsV2.aiFetch()">' + (V2.ai.busy ? 'Fetching…' : 'Fetch & parse with AI') + '</button>' +
+        '<span class="mu-sub" id="showV2AiFetchStatus">' + (V2.ai.busy ? 'Parsing the application page…' : '') + '</span></div>';
+    }
+    return U.card('Fetch & parse', inner);
+  }
+
+  // ── Step 2: Assign Images ──────────────────────────────────────────
+  function aiImagesHtml(s) {
+    var reqs = V2.ai.parsed || {};
+    var photos = reqs.photos || [];
+    var profile = aiProfile();
+
+    // Auto-assign a booth photo from the profile default (mirrors the legacy).
+    photos.forEach(function (p, idx) {
+      if (!V2.ai.images[idx] && (p.slot || '').toLowerCase().indexOf('booth') >= 0 && profile.boothPhotoUrl) {
+        V2.ai.images[idx] = '__profile_booth__';
+      }
+    });
+
+    var slots = '';
+    if (!photos.length) {
+      slots = '<span class="mu-sub">No photo requirements detected. Continue to auto-map.</span>';
+    } else {
+      slots = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;">' +
+        photos.map(function (p, idx) {
+          var assigned = V2.ai.images[idx];
+          var img = null, isProfileBooth = false;
+          if (assigned === '__profile_booth__') { img = { url: profile.boothPhotoUrl }; isProfileBooth = true; }
+          else if (assigned) img = imageLib()[assigned];
+          var filled = !!(img && img.url);
+          var tileInner = filled
+            ? '<img src="' + esc(img.url) + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;margin-bottom:6px;">' +
+              '<div style="font-size:0.78rem;color:var(--teal);">✓ ' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>' +
+              (isProfileBooth ? '<div class="mu-sub">From profile default</div>' : '')
+            : '<div style="font-size:1.6rem;color:var(--warm-gray);margin-bottom:4px;">+</div>' +
+              '<div class="mu-sub">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>' +
+              (p.dimensions ? '<div class="mu-sub" style="color:var(--amber);">' + esc(p.dimensions) + '</div>' : '');
+          return '<div onclick="ShowsV2.aiPickImage(' + idx + ')" style="border:2px dashed ' + (filled ? 'var(--teal)' : 'var(--cream-dark,rgba(127,127,127,.35))') + ';border-radius:8px;padding:10px;text-align:center;cursor:pointer;">' + tileInner + '</div>';
+        }).join('') + '</div>';
+    }
+
+    // Per-assigned-image product link + application-description editors.
+    var editors = '';
+    photos.forEach(function (p, idx) {
+      var assigned = V2.ai.images[idx];
+      if (!assigned || assigned === '__profile_booth__') return;
+      var img = imageLib()[assigned];
+      if (!img) return;
+      var prodOpts = '<option value="">— Select a product —</option>' +
+        productData().filter(function (pr) { return pr && pr.name; }).slice().sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); })
+          .map(function (pr) { return '<option value="' + esc(pr.pid || '') + '"' + (pr.pid === img.productId ? ' selected' : '') + '>' + esc(pr.name) + '</option>'; }).join('');
+      editors += '<div style="margin-top:12px;padding:14px;border:1px solid var(--cream-dark,rgba(127,127,127,.25));border-radius:8px;position:relative;">' +
+        '<button class="btn btn-small btn-secondary" style="position:absolute;top:8px;right:8px;" title="Remove image" onclick="ShowsV2.aiAssignImage(' + idx + ',null)">×</button>' +
+        '<div style="display:flex;gap:12px;align-items:flex-start;">' +
+          '<img src="' + esc(img.thumbnailUrl || img.url || '') + '" style="width:72px;height:72px;object-fit:cover;border-radius:6px;flex-shrink:0;">' +
+          '<div style="flex:1;">' +
+            '<div style="font-size:0.85rem;font-weight:600;margin-bottom:8px;">' + esc(p.slot || 'Product photo') + '</div>' +
+            '<label class="form-label">Link to product</label>' +
+            '<select class="form-input" id="showV2AiProd_' + idx + '" onchange="ShowsV2.aiLinkProduct(' + idx + ',this.value)" style="width:100%;margin-bottom:10px;">' + prodOpts + '</select>' +
+            '<label class="form-label">Application description</label>' +
+            '<textarea class="form-input" id="showV2AiDesc_' + idx + '" rows="3" style="width:100%;resize:vertical;" placeholder="Describe this product for show applications…" onblur="ShowsV2.aiSaveSlotDesc(' + idx + ',this.value)">' + esc(img.applicationDescription || '') + '</textarea>' +
+          '</div>' +
+        '</div></div>';
+    });
+
+    var nav = '<div style="display:flex;gap:8px;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="ShowsV2.aiGoToStep(1)">← Back</button>' +
+      '<button class="btn btn-primary" onclick="ShowsV2.aiGoToStep(3)">Continue to auto-map →</button></div>';
+    return U.card('Step 2: Assign images',
+      '<div class="mu-sub" style="margin-bottom:14px;">Click each slot to assign an image from your gallery.</div>' + slots + editors + nav);
+  }
+
+  // ── Step 3: Auto-Map Fields ────────────────────────────────────────
+  function aiBuildMapping() {
+    var reqs = V2.ai.parsed || {};
+    var fields = reqs.fields || [];
+    var profile = aiProfile();
+    var mapping = {};
+
+    // Aggregate a product description from the assigned images' tags (or linked
+    // products). Mirrors the legacy productDesc assembly.
+    var lib = imageLib();
+    var productDesc = '';
+    Object.keys(V2.ai.images).forEach(function (k) {
+      var imgId = V2.ai.images[k];
+      if (imgId === '__profile_booth__') return;
+      var img = lib[imgId];
+      if (img && img.applicationDescription && productDesc.indexOf(img.applicationDescription) < 0) productDesc += img.applicationDescription + '\n';
+    });
+    if (!productDesc) {
+      var prods = productData();
+      Object.keys(V2.ai.images).forEach(function (k) {
+        var imgId = V2.ai.images[k];
+        if (imgId === '__profile_booth__') return;
+        var img = lib[imgId];
+        if (!img || !img.productId) return;
+        var pr = prods.filter(function (x) { return x.pid === img.productId; })[0];
+        if (pr && pr.description && productDesc.indexOf(pr.description) < 0) productDesc += (pr.name ? pr.name + ': ' : '') + (pr.shortDescription || pr.description) + '\n';
+      });
+    }
+    productDesc = productDesc.trim();
+
+    fields.forEach(function (f) {
+      var n = (f.name || '').toLowerCase();
+      var m;
+      if (n.indexOf('business') >= 0 || n.indexOf('artist name') >= 0 || n.indexOf('company') >= 0)
+        m = { source: 'profile.name', value: profile.name || '', confidence: profile.name ? 'high' : 'none' };
+      else if (n.indexOf('bio') >= 0 || n.indexOf('statement') >= 0 || n.indexOf('about') >= 0)
+        m = { source: 'profile.bio', value: profile.bio || '', confidence: profile.bio ? 'high' : 'none' };
+      else if (n.indexOf('product') >= 0 || n.indexOf('description') >= 0 || n.indexOf('what you') >= 0)
+        m = { source: 'gallery images', value: productDesc, confidence: productDesc ? 'medium' : 'none' };
+      else if (n.indexOf('material') >= 0)
+        m = { source: 'profile.materials', value: profile.materials || '', confidence: profile.materials ? 'high' : 'none' };
+      else if (n.indexOf('process') >= 0 || n.indexOf('technique') >= 0)
+        m = { source: 'profile.processDescription', value: profile.processDescription || '', confidence: profile.processDescription ? 'high' : 'none' };
+      else if (n.indexOf('categor') >= 0 || n.indexOf('medium') >= 0 || n.indexOf('craft') >= 0) {
+        var cv = profile.category || ''; if (profile.category2) cv += ', ' + profile.category2;
+        m = { source: 'profile.category', value: cv, confidence: cv ? 'high' : 'none' };
+      } else if (n.indexOf('price') >= 0 || n.indexOf('range') >= 0)
+        m = { source: 'profile.priceRange', value: profile.priceRange || '', confidence: profile.priceRange ? 'high' : 'none' };
+      else if (n.indexOf('website') >= 0 || n.indexOf('url') >= 0)
+        m = { source: 'profile.website', value: profile.website || '', confidence: profile.website ? 'high' : 'none' };
+      else if (n.indexOf('instagram') >= 0 || n.indexOf('social') >= 0)
+        m = { source: 'profile.instagram', value: profile.instagram || '', confidence: profile.instagram ? 'high' : 'none' };
+      else if (n.indexOf('email') >= 0)
+        m = { source: 'profile.email', value: profile.email || '', confidence: profile.email ? 'high' : 'none' };
+      else if (n.indexOf('phone') >= 0)
+        m = { source: 'profile.phone', value: profile.phone || '', confidence: profile.phone ? 'high' : 'none' };
+      else if (n.indexOf('location') >= 0 || n.indexOf('city') >= 0 || n.indexOf('address') >= 0)
+        m = { source: 'profile.location', value: profile.location || '', confidence: profile.location ? 'medium' : 'none' };
+      else if (n.indexOf('year') >= 0 || n.indexOf('experience') >= 0)
+        m = { source: 'profile.yearsInBusiness', value: profile.yearsInBusiness ? profile.yearsInBusiness + ' years' : '', confidence: profile.yearsInBusiness ? 'high' : 'none' };
+      else if (n.indexOf('tax') >= 0 || n.indexOf('ein') >= 0)
+        m = { source: 'profile.taxId', value: profile.taxId || '', confidence: profile.taxId ? 'high' : 'none' };
+      else if (n.indexOf('booth') >= 0 && n.indexOf('size') >= 0)
+        m = { source: 'profile.defaultBoothSize', value: profile.defaultBoothSize || '', confidence: profile.defaultBoothSize ? 'high' : 'none' };
+      else if (n.indexOf('license') >= 0)
+        m = { source: 'profile.businessLicense', value: profile.businessLicense || '', confidence: profile.businessLicense ? 'high' : 'none' };
+      else
+        m = { source: 'manual', value: '', confidence: 'none' };
+      mapping[f.name] = m;
+    });
+    return mapping;
+  }
+  function aiMapHtml(s) {
+    var reqs = V2.ai.parsed || {};
+    var fields = reqs.fields || [];
+    if (!V2.ai.mapping) V2.ai.mapping = aiBuildMapping();
+
+    var rows = fields.map(function (f) {
+      var m = V2.ai.mapping[f.name] || { source: 'manual', value: '', confidence: 'none' };
+      var confTone = m.confidence === 'high' ? 'success' : m.confidence === 'medium' ? 'warning' : 'danger';
+      var confLabel = m.confidence === 'high' ? '✓ Auto-matched' : m.confidence === 'medium' ? '~ Partial match' : '✗ Not matched';
+      if (m.source === 'gallery images') confLabel = '~ From gallery images';
+      return '<div style="margin-bottom:14px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+          '<label class="form-label" style="text-transform:uppercase;">' + esc(f.name) + (f.required ? ' <span style="color:var(--danger);">*</span>' : '') + '</label>' +
+          U.badge(confLabel, confTone) + '</div>' +
+        (f.description ? '<div class="mu-sub" style="margin-bottom:4px;">' + esc(f.description) + '</div>' : '') +
+        '<textarea class="form-input" id="showV2AiMap_' + esc(String(f.name).replace(/\s+/g, '_')) + '" rows="2" style="width:100%;resize:vertical;" placeholder="Enter value…">' + esc(m.value) + '</textarea>' +
+      '</div>';
+    }).join('');
+
+    var nav = '<div style="display:flex;gap:8px;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="ShowsV2.aiGoToStep(2)">← Back</button>' +
+      '<button class="btn btn-primary" onclick="ShowsV2.aiSaveMappingAndStep(4)">Continue to gap analysis →</button></div>';
+    return U.card('Step 3: Auto-map fields',
+      '<div class="mu-sub" style="margin-bottom:14px;">Review how your vendor profile maps to the application fields. Edit values as needed.</div>' +
+      (rows || '<span class="mu-sub">No fields to map.</span>') + nav);
+  }
+
+  // ── Step 4: Gap Analysis ───────────────────────────────────────────
+  function aiComputeGaps() {
+    var reqs = V2.ai.parsed || {};
+    var fields = reqs.fields || [];
+    var photos = reqs.photos || [];
+    var profile = aiProfile();
+    var gaps = [];
+    fields.forEach(function (f) {
+      var m = V2.ai.mapping[f.name] || {};
+      if (f.required && !m.value) gaps.push({ type: 'field', name: f.name, description: f.description || '' });
+    });
+    var byCategory = {};
+    Object.keys(imageLib()).forEach(function (k) { var img = imageLib()[k]; if (img && img.category) byCategory[img.category] = (byCategory[img.category] || 0) + 1; });
+    var hasBoothPhoto = !!profile.boothPhotoUrl || !!byCategory.booth;
+    photos.forEach(function (p, idx) {
+      if (V2.ai.images[idx]) return;
+      var slotLower = (p.slot || '').toLowerCase();
+      if (slotLower.indexOf('booth') >= 0 && hasBoothPhoto) return;
+      if (slotLower.indexOf('product') >= 0 && byCategory.product) return;
+      if (slotLower.indexOf('process') >= 0 && byCategory.process) return;
+      gaps.push({ type: 'photo', name: p.slot, description: p.description || '' });
+    });
+    V2.ai.gaps = gaps;
+    return gaps;
+  }
+  function aiGapsHtml(s) {
+    var gaps = aiComputeGaps();
+    var body;
+    if (!gaps.length) {
+      body = '<div style="text-align:center;padding:18px 0;">' +
+        '<div style="font-size:1.6rem;color:var(--success, var(--teal));margin-bottom:6px;">✓</div>' +
+        '<div style="font-weight:600;color:var(--success, var(--teal));">All requirements met!</div>' +
+        '<div class="mu-sub" style="margin-top:4px;">Your profile and gallery cover everything this show needs.</div></div>';
+    } else {
+      body = '<div class="mu-sub" style="margin-bottom:12px;">These items are required but missing:</div>' +
+        gaps.map(function (g) {
+          var fix = g.type === 'photo'
+            ? '<button class="btn btn-small btn-secondary" onclick="ShowsV2.aiGoToStep(2)">Fix →</button>'
+            : '<button class="btn btn-small btn-secondary" onclick="ShowsV2.aiFixProfileGap()">Fix profile →</button>';
+          return '<div style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--cream-dark,rgba(127,127,127,.25));border-radius:6px;margin-bottom:8px;">' +
+            '<span style="font-size:1.0rem;">' + (g.type === 'photo' ? '📷' : '📝') + '</span>' +
+            '<div style="flex:1;"><div style="font-weight:500;font-size:0.9rem;">' + esc(g.name) + '</div>' +
+            (g.description ? '<div class="mu-sub">' + esc(g.description) + '</div>' : '') + '</div>' + fix + '</div>';
+        }).join('');
+    }
+    var nav = '<div style="display:flex;gap:8px;margin-top:16px;">' +
+      '<button class="btn btn-secondary" onclick="ShowsV2.aiGoToStep(3)">← Back</button>' +
+      '<button class="btn btn-primary" onclick="ShowsV2.aiGoToStep(5)">Preview package →</button></div>';
+    return U.card('Step 4: Gap analysis', body + nav);
+  }
+
+  // ── Step 5: Preview & Save (Application Assistant) ─────────────────
+  function aiPreviewHtml(s) {
+    var reqs = V2.ai.parsed || {};
+    var fields = reqs.fields || [];
+    var photos = reqs.photos || [];
+    var profile = aiProfile();
+    var appUrl = s.applicationUrl || '';
+    if (V2.ai.copyIdx < 0) V2.ai.copyIdx = 0;
+
+    var headRow = '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px;border:1px solid var(--cream-dark,rgba(127,127,127,.25));border-radius:8px;margin-bottom:14px;">' +
+      '<div><div style="font-weight:600;">' + esc(showName(s)) + '</div>' +
+      (s.applicationDeadline ? '<div class="mu-sub">Deadline: ' + esc(fmtDate(s.applicationDeadline)) + '</div>' : '') + '</div>' +
+      (appUrl ? '<button class="btn btn-primary btn-small" onclick="ShowsV2.aiLaunchApp()">Launch application</button>' : '') + '</div>';
+
+    // AI-draft control row (Step 5 AI call). Token-metered; surfaces the wallet
+    // cost / suspended state inline; on click runs /studioAssistant via aiDraft().
+    var w = aiWallet();
+    var draftCost = w.status === 'suspended'
+      ? '<span class="mu-sub" style="color:var(--danger);">⏸ AI suspended — <a onclick="ShowsV2.aiBuyCoins()" style="cursor:pointer;text-decoration:underline;">buy coins</a></span>'
+      : '<span class="mu-sub">~30 tokens</span>';
+    var draftRow = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
+      '<button class="btn btn-secondary btn-small" id="showV2AiDraftBtn"' + (V2.ai.busy ? ' disabled' : '') + ' onclick="ShowsV2.aiDraft()">' + (V2.ai.busy ? 'Drafting…' : '✨ AI-draft missing copy') + '</button>' +
+      draftCost +
+      '<span class="mu-sub" id="showV2AiDraftStatus">' + (V2.ai.busy ? 'Asking the assistant to draft your answers…' : '') + '</span></div>';
+
+    var fieldsBody = fields.map(function (f, idx) {
+      var m = V2.ai.mapping[f.name] || {};
+      var val = m.value || '';
+      var isCurrent = idx === V2.ai.copyIdx;
+      var isCopied = idx < V2.ai.copyIdx;
+      var border = isCurrent ? 'var(--amber)' : isCopied ? 'var(--success, var(--teal))' : 'var(--cream-dark,rgba(127,127,127,.25))';
+      var stepMark = isCopied ? '<span style="color:var(--success, var(--teal));font-size:0.78rem;">✓</span>' : '<span class="mu-sub" style="font-weight:600;">' + (idx + 1) + '</span>';
+      return '<div id="showV2AiField_' + idx + '" style="padding:12px;border:1px solid ' + border + ';border-radius:8px;margin-bottom:8px;">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">' +
+          '<div style="display:flex;align-items:center;gap:8px;">' + stepMark +
+            '<span class="mu-sub" style="text-transform:uppercase;font-weight:500;">' + esc(f.name) + '</span>' +
+            (f.required ? ' ' + U.badge('required', 'danger') : '') + '</div>' +
+          (val ? '<button class="btn btn-small ' + (isCurrent ? 'btn-primary' : 'btn-secondary') + '" onclick="ShowsV2.aiCopyField(' + idx + ')">' + (isCopied ? 'Copied' : 'Copy') + '</button>' : '') +
+        '</div>' +
+        (val ? '<div style="font-size:0.9rem;white-space:pre-wrap;line-height:1.4;">' + esc(val) + '</div>'
+             : '<div style="font-size:0.85rem;color:var(--danger);font-style:italic;">No value — fill in manually or AI-draft.</div>') +
+      '</div>';
+    }).join('');
+
+    var photosBody = '';
+    if (photos.length) {
+      photosBody = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">' +
+        photos.map(function (p, idx) {
+          var assigned = V2.ai.images[idx];
+          var img = null;
+          if (assigned === '__profile_booth__') img = { url: profile.boothPhotoUrl };
+          else if (assigned) img = imageLib()[assigned];
+          if (img && img.url) {
+            return '<div style="text-align:center;padding:10px;border:1px solid var(--cream-dark,rgba(127,127,127,.25));border-radius:8px;">' +
+              '<img src="' + esc(img.url) + '" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;margin-bottom:6px;">' +
+              '<div class="mu-sub" style="margin-bottom:6px;">' + esc(p.slot || 'Photo ' + (idx + 1)) + '</div>' +
+              '<button class="btn btn-small btn-secondary" onclick="ShowsV2.aiDownloadPhoto(\'' + esc(img.url) + '\',\'' + esc(p.slot || 'photo') + '\')">Download</button></div>';
+          }
+          return '<div style="text-align:center;padding:10px;border:1px solid var(--cream-dark,rgba(127,127,127,.25));border-radius:8px;">' +
+            '<div style="aspect-ratio:1;background:var(--cream-dark,rgba(127,127,127,.12));border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--warm-gray);margin-bottom:6px;">—</div>' +
+            '<div style="font-size:0.78rem;color:var(--danger);">' + esc(p.slot || 'Photo') + ' — not assigned</div></div>';
+        }).join('') + '</div>';
+    }
+
+    var extras = '';
+    if (reqs.specialRequirements && reqs.specialRequirements.length) {
+      extras += '<div style="padding:12px;border:1px solid var(--amber);border-radius:8px;margin-bottom:14px;">' +
+        '<div style="font-size:0.85rem;font-weight:600;margin-bottom:6px;color:var(--amber);">Special requirements</div>' +
+        reqs.specialRequirements.map(function (r) { return '<div style="font-size:0.85rem;padding:2px 0;">• ' + esc(r) + '</div>'; }).join('') + '</div>';
+    }
+    if (reqs.fees || reqs.deadline) {
+      extras += '<div style="display:flex;gap:16px;margin-bottom:14px;font-size:0.85rem;flex-wrap:wrap;">' +
+        (reqs.fees ? '<div><span class="mu-sub">Fees:</span> ' + esc(reqs.fees) + '</div>' : '') +
+        (reqs.deadline ? '<div><span class="mu-sub">Deadline:</span> ' + esc(reqs.deadline) + '</div>' : '') + '</div>';
+    }
+
+    var nav = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">' +
+      '<button class="btn btn-secondary" onclick="ShowsV2.aiGoToStep(4)">← Back</button>' +
+      (canEdit() ? '<button class="btn btn-primary" onclick="ShowsV2.aiSaveApp()">Save package</button>' : '') +
+      (appUrl ? '<button class="btn btn-secondary" onclick="ShowsV2.aiLaunchApp()">Launch application</button>' : '') + '</div>';
+
+    var inner = headRow + draftRow +
+      (appUrl ? '<div class="mu-sub" style="margin-bottom:12px;">Copy each value below and paste it into the application form.</div>' : '') +
+      '<div style="font-weight:600;font-size:0.85rem;margin-bottom:10px;">Application fields</div>' + (fieldsBody || '<span class="mu-sub">No fields.</span>') +
+      (photosBody ? '<div style="font-weight:600;font-size:0.85rem;margin:18px 0 10px;">Photos to upload</div>' + photosBody : '') +
+      (extras ? '<div style="margin-top:14px;">' + extras + '</div>' : '') +
+      nav;
+    return U.card('Step 5: Application assistant', inner);
+  }
+
   function ensureTab() {
     var el = document.getElementById('showsV2Tab');
     if (el) return el;
@@ -1193,11 +1730,24 @@
     // maker can start an application from anywhere; opens the create form.
     var newShowBtn = canEdit() ? '<button class="btn btn-primary" onclick="ShowsV2.create()">+ New show</button>' : '';
 
+    // AI Application Builder (PR6) — active on the Apply lens. The builder takes over
+    // the tab body (select-show → 6 steps); a "Back to applications" button exits.
+    if (V2.lens === 'apply' && V2.ai.active) {
+      var exitBtn = '<button class="btn btn-secondary" onclick="ShowsV2.aiExit()">← Back to applications</button>';
+      renderAiBuilder(tab, U.pageHeader({ title: 'Shows', count: 'AI application builder', actionsHtml: exitBtn }), lensPills);
+      return;
+    }
+
     // Find lens (PR5) — /showFinder AI discovery → add-to-pipeline. The CF call is
     // a READ (stays in the twin); the add WRITE routes through ShowsBridge.addFromFinder.
     if (V2.lens === 'find') {
       renderFindLens(tab, U.pageHeader({ title: 'Shows', count: 'find new shows', actionsHtml: newShowBtn }), lensPills);
       return;
+    }
+
+    // Apply lens gets an extra "AI Application Builder" launcher next to "+ New show".
+    if (V2.lens === 'apply' && canEdit()) {
+      newShowBtn = '<button class="btn btn-secondary" onclick="ShowsV2.aiLaunch()">✨ AI Application Builder</button> ' + newShowBtn;
     }
 
     var lensTitle = { apply: 'apply to shows', prep: 'show prep', execute: 'active shows', history: 'show history' }[V2.lens] || '';
@@ -1229,7 +1779,9 @@
   }
 
   window.ShowsV2 = {
-    lens: function (lens) { V2.lens = lens; render(); },
+    // Switching lenses (or re-clicking Apply) drops out of the AI builder so the
+    // list reappears — the builder is a modal-ish takeover of the Apply lens.
+    lens: function (lens) { V2.ai.active = false; V2.lens = lens; render(); },
     search: function (v) { V2.q = v; render(); },
     sort: function (key, dir) { V2.sortKey = key; V2.sortDir = dir; render(); },
     open: function (id) {
@@ -1408,6 +1960,374 @@
     findClear: function () {
       V2.finderResults = []; V2.finderState = {}; V2.finderError = null; V2.finderSearched = false;
       render();
+    },
+
+    // ════════════════════════════════════════════════════════════════════
+    // PR6 — AI Application Builder (native 6-step wizard). Launched from the Apply
+    // lens. The /studioAssistant CF call (Step 1 parse + Step 5 draft) is a READ
+    // (token-metered; 402 → openCoinPurchaseModal) and stays here in the twin; the
+    // three WRITES route through window.ShowsBridge (setImageAppMeta / saveProfile /
+    // saveApplication). All gate on can('show-prep','edit'). Mirrors the legacy
+    // shows.js showsAI* handlers.
+    // ════════════════════════════════════════════════════════════════════
+
+    // aiLaunch() — enter the builder at the select-show screen (loads profile +
+    // saved drafts first). aiStart(showId) — deep-enter directly on a show.
+    aiLaunch: function () {
+      if (!canEdit()) return notPermitted();
+      ensureEngine();
+      V2.ai.active = true; V2.lens = 'apply'; V2.ai.step = 0; V2.ai.showId = null;
+      render();
+      ensureAiData().then(function () { if (V2.ai.active && V2.ai.step === 0) rerenderAiBody(); });
+    },
+    aiStart: function (showId) {
+      if (!canEdit()) return notPermitted();
+      ensureEngine(); ensureProducts();
+      V2.ai.active = true; V2.lens = 'apply';
+      V2.ai.showId = showId; V2.ai.step = 1;
+      V2.ai.parsed = null; V2.ai.mapping = null; V2.ai.gaps = null;
+      V2.ai.images = {}; V2.ai.currentApp = null; V2.ai.copyIdx = -1;
+      ensureAiData().then(function () { render(); });
+      render();
+    },
+    aiResume: function (appId) {
+      var app = (V2.ai.applications || {})[appId];
+      if (!app) return;
+      ensureEngine(); ensureProducts();
+      V2.ai.active = true; V2.lens = 'apply';
+      V2.ai.showId = app.showId;
+      V2.ai.currentApp = Object.assign({ id: appId }, app);
+      V2.ai.parsed = app.parsedRequirements || null;
+      V2.ai.mapping = app.fieldMapping || null;
+      V2.ai.gaps = app.gapAnalysis || null;
+      V2.ai.images = app.imageAssignments || {};
+      V2.ai.copyIdx = -1;
+      // Resume to the furthest-completed step (mirrors the legacy showsAIResumeApp).
+      V2.ai.step = V2.ai.parsed ? (Object.keys(V2.ai.images).length > 0 ? (V2.ai.mapping ? 4 : 3) : 2) : 1;
+      render();
+    },
+    aiExit: function () { V2.ai.active = false; V2.ai.step = 0; V2.ai.showId = null; render(); },
+    aiBackToSelect: function () { V2.ai.step = 0; V2.ai.showId = null; rerenderAiBody(); },
+    aiGoToStep: function (step) { V2.ai.step = step; rerenderAiBody(); },
+    aiBuyCoins: function () { aiBuyCoins(); },
+
+    // ── Step 1: Fetch & Parse — /studioAssistant CF read (token-metered; 402 →
+    // coin purchase). On a parse failure / non-JSON answer, fall back to a sensible
+    // default field set (mirrors the legacy showsAIFetchAndParse). On sgtest15 the
+    // CF may 500 (no Anthropic key) — surfaced as a graceful toast, builder stays.
+    aiFetch: function () {
+      var url = ((document.getElementById('showV2AiUrl') || {}).value || '').trim();
+      if (!url) { toast('Enter an application URL.', true); return; }
+      var w = aiWallet();
+      if (w.status === 'suspended') { toast('AI suspended. Purchase coins to continue.', true); aiBuyCoins(); return; }
+      V2.ai.busy = true; rerenderAiStep();
+      var done = function () { V2.ai.busy = false; rerenderAiStep(); };
+      var run = function (token) {
+        return callCF('/studioAssistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({
+            question: 'Parse the following show application URL and extract the jury/application requirements. URL: ' + url + '\n\nReturn a JSON object with these fields:\n- fields: array of {name, description, required: boolean} for each required field\n- photos: array of {slot, description, dimensions} for each required photo\n- fees: string describing application/booth fees\n- deadline: string with application deadline\n- specialRequirements: array of strings for any special requirements\n- rawNotes: string with any other relevant info\n\nRespond ONLY with valid JSON, no markdown.',
+            assistantContext: 'show-apply-parse-application'
+          })
+        }).then(function (resp) {
+          if (resp.status === 402) {
+            toast('Token balance exhausted. Purchase coins to continue.', true);
+            aiBuyCoins(); done(); return;
+          }
+          return resp.json().catch(function () { return {}; }).then(function (data) {
+            if (!resp.ok) throw new Error((data && data.error) || ('Parse failed (' + resp.status + ')'));
+            var answer = (data && data.answer) || '';
+            try {
+              var jsonStr = answer.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+              V2.ai.parsed = JSON.parse(jsonStr);
+            } catch (e) {
+              V2.ai.parsed = {
+                fields: [
+                  { name: 'Business Name', description: '', required: true },
+                  { name: 'Artist Statement', description: '', required: true },
+                  { name: 'Product Description', description: '', required: true }
+                ],
+                photos: [{ slot: 'Product Photo', description: '' }, { slot: 'Booth Photo', description: '' }],
+                fees: '', deadline: '', specialRequirements: [], rawNotes: answer
+              };
+            }
+            done();
+          });
+        });
+      };
+      try {
+        window.auth.currentUser.getIdToken().then(run).catch(function (e) { toast('Fetch failed: ' + ((e && e.message) || e), true); done(); });
+      } catch (e) { toast('Fetch failed: ' + ((e && e.message) || e), true); done(); }
+    },
+    aiReparse: function () { V2.ai.parsed = null; rerenderAiStep(); },
+    aiRemoveField: function (idx) { if (V2.ai.parsed && V2.ai.parsed.fields) V2.ai.parsed.fields.splice(idx, 1); rerenderAiStep(); },
+    aiAddField: function () {
+      Promise.resolve(window.mastPrompt ? window.mastPrompt('Field name (e.g. "Product Description"):', { title: 'Add Field' }) : null).then(function (name) {
+        if (!name) return;
+        if (!V2.ai.parsed) V2.ai.parsed = { fields: [], photos: [] };
+        if (!V2.ai.parsed.fields) V2.ai.parsed.fields = [];
+        V2.ai.parsed.fields.push({ name: String(name).trim(), description: '', required: true });
+        rerenderAiStep();
+      });
+    },
+    aiRemovePhoto: function (idx) { if (V2.ai.parsed && V2.ai.parsed.photos) V2.ai.parsed.photos.splice(idx, 1); rerenderAiStep(); },
+    aiAddPhoto: function () {
+      Promise.resolve(window.mastPrompt ? window.mastPrompt('Photo slot name (e.g. "Process Photo 1"):', { title: 'Add Photo Slot' }) : null).then(function (slot) {
+        if (!slot) return;
+        if (!V2.ai.parsed) V2.ai.parsed = { fields: [], photos: [] };
+        if (!V2.ai.parsed.photos) V2.ai.parsed.photos = [];
+        V2.ai.parsed.photos.push({ slot: String(slot).trim(), description: '' });
+        rerenderAiStep();
+      });
+    },
+
+    // ── Step 2: Assign Images — image picker + per-slot product link + app
+    // description. The image-tagging WRITES route through ShowsBridge.setImageAppMeta.
+    aiPickImage: function (slotIdx) {
+      var lib = imageLib();
+      var allIds = Object.keys(lib);
+      if (!allIds.length) { toast('No images in gallery. Upload some first.', true); return; }
+      var appIds = allIds.filter(function (id) { return lib[id].applicationPhoto; });
+      var ids = appIds.length ? appIds : allIds;
+      var showingAll = !appIds.length;
+      var grid = ids.map(function (id) {
+        var img = lib[id];
+        return '<div onclick="ShowsV2.aiAssignImage(' + slotIdx + ',\'' + esc(id) + '\');ShowsV2.aiClosePicker();" style="cursor:pointer;position:relative;border-radius:6px;overflow:hidden;">' +
+          '<img src="' + esc(img.url || img.thumbnailUrl || '') + '" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">' +
+          (img.productName ? '<div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.6);color:white;font-size:0.72rem;padding:2px 4px;">' + esc(img.productName) + '</div>' : '') +
+          '</div>';
+      }).join('');
+      var hint = showingAll
+        ? '<div class="mu-sub" style="margin-bottom:8px;">No application photos marked — showing all gallery images.</div>'
+        : '<div class="mu-sub" style="margin-bottom:8px;color:var(--amber);">⭐ ' + appIds.length + ' application photo' + (appIds.length !== 1 ? 's' : '') + '</div>';
+      var removeBtn = V2.ai.images[slotIdx]
+        ? '<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="ShowsV2.aiAssignImage(' + slotIdx + ',null);ShowsV2.aiClosePicker();">Remove</button>' : '';
+      var inner = hint + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;">' + grid + '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:14px;"><button class="btn btn-secondary btn-small" onclick="ShowsV2.aiClosePicker()">Cancel</button>' + removeBtn + '</div>';
+      // Render the picker inline (replaces the step body) — no separate modal needed.
+      var el = document.getElementById('showsV2AiStep');
+      if (el) el.innerHTML = U.card('Select image', inner);
+    },
+    aiClosePicker: function () { rerenderAiStep(); },
+    aiAssignImage: function (slotIdx, imageId) {
+      if (imageId) {
+        V2.ai.images[slotIdx] = imageId;
+        // Seed an application description from the linked/named product, if empty
+        // (mirrors the legacy auto-seed). Persist via the bridge (NO raw write).
+        var img = imageLib()[imageId];
+        if (img && !img.applicationDescription) {
+          var prods = productData();
+          var desc = '';
+          if (img.productId) { var p = prods.filter(function (x) { return x.pid === img.productId; })[0]; if (p) desc = p.shortDescription || p.description || ''; }
+          if (!desc && img.productName) { var p2 = prods.filter(function (x) { return x.name === img.productName; })[0]; if (p2) desc = p2.shortDescription || p2.description || ''; }
+          if (desc && bridge() && bridge().setImageAppMeta) {
+            img.applicationDescription = desc;
+            Promise.resolve(bridge().setImageAppMeta(imageId, { applicationDescription: desc })).catch(function () {});
+          }
+        }
+      } else {
+        delete V2.ai.images[slotIdx];
+      }
+      rerenderAiStep();
+    },
+    aiSaveSlotDesc: function (slotIdx, value) {
+      if (!canEdit()) return notPermitted();
+      var b = bridge(); if (!b || !b.setImageAppMeta) return bridgeLoading();
+      var imgId = V2.ai.images[slotIdx];
+      if (!imgId || imgId === '__profile_booth__') return;
+      var img = imageLib()[imgId];
+      if (!img) return;
+      value = (value || '').trim();
+      var patch = { applicationDescription: value || null };
+      if (value && !img.applicationPhoto) patch.applicationPhoto = true;
+      Promise.resolve(b.setImageAppMeta(imgId, patch)).then(function () {
+        img.applicationDescription = value || '';
+        if (value && !img.applicationPhoto) img.applicationPhoto = true;
+      }).catch(function (e) { toast('Failed to save description: ' + ((e && e.message) || e), true); });
+    },
+    aiLinkProduct: function (slotIdx, pid) {
+      if (!canEdit()) return notPermitted();
+      var b = bridge(); if (!b || !b.setImageAppMeta) return bridgeLoading();
+      var imgId = V2.ai.images[slotIdx];
+      if (!imgId || imgId === '__profile_booth__') return;
+      var img = imageLib()[imgId];
+      if (!img) return;
+      var product = pid ? productData().filter(function (x) { return x.pid === pid; })[0] : null;
+      if (pid && product) {
+        Promise.resolve(b.setImageAppMeta(imgId, { productId: pid, productName: product.name || '' })).then(function () {
+          img.productId = pid; img.productName = product.name || '';
+          var ta = document.getElementById('showV2AiDesc_' + slotIdx);
+          if (ta && !ta.value.trim()) {
+            var desc = product.shortDescription || product.description || '';
+            if (desc) {
+              ta.value = desc; img.applicationDescription = desc;
+              Promise.resolve(b.setImageAppMeta(imgId, { applicationDescription: desc })).catch(function () {});
+            }
+          }
+          toast('Linked to ' + product.name);
+        }).catch(actionErr);
+      } else {
+        Promise.resolve(b.setImageAppMeta(imgId, { productId: null, productName: null })).then(function () {
+          delete img.productId; delete img.productName;
+        }).catch(actionErr);
+      }
+    },
+
+    // ── Step 3: Auto-Map — capture the (possibly edited) field values into the
+    // mapping before advancing (mirrors the legacy showsAISaveMapping). No write.
+    aiSaveMappingAndStep: function (step) {
+      var fields = (V2.ai.parsed || {}).fields || [];
+      fields.forEach(function (f) {
+        var ta = document.getElementById('showV2AiMap_' + String(f.name).replace(/\s+/g, '_'));
+        if (ta && V2.ai.mapping && V2.ai.mapping[f.name]) V2.ai.mapping[f.name].value = ta.value;
+      });
+      V2.ai.step = step; rerenderAiBody();
+    },
+
+    // ── Step 4: Gap Analysis — inline profile backfill. Lets the maker patch a
+    // missing profile field without leaving the builder; the WRITE goes through
+    // ShowsBridge.saveProfile, then the mapping is rebuilt and gaps recomputed.
+    aiFixProfileGap: function () {
+      if (!canEdit()) return notPermitted();
+      var b = bridge(); if (!b || !b.saveProfile) return bridgeLoading();
+      Promise.resolve(window.mastPrompt ? window.mastPrompt('Your artist bio / statement (used to fill applications):', { title: 'Studio Profile', defaultValue: aiProfile().bio || '' }) : null).then(function (bio) {
+        if (bio == null) return;
+        bio = String(bio).trim();
+        Promise.resolve(b.saveProfile({ bio: bio })).then(function () {
+          V2.ai.profile = Object.assign({}, V2.ai.profile, { bio: bio });
+          // Rebuild the mapping with the fresh profile then recompute gaps.
+          V2.ai.mapping = aiBuildMapping();
+          toast('Profile updated.');
+          rerenderAiStep();
+        }).catch(actionErr);
+      });
+    },
+
+    // ── Step 5: Preview — sequential copy + AI-draft + launch + photo download.
+    aiCopyField: function (idx) {
+      var fields = (V2.ai.parsed || {}).fields || [];
+      var f = fields[idx];
+      if (!f) return;
+      var val = (V2.ai.mapping[f.name] || {}).value || '';
+      if (!val) return;
+      navigator.clipboard.writeText(val).then(function () {
+        V2.ai.copyIdx = idx + 1;
+        toast('Copied: ' + f.name);
+        rerenderAiStep();
+        var next = document.getElementById('showV2AiField_' + (idx + 1));
+        if (next) next.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }).catch(function () { toast('Copy failed — select manually', true); });
+    },
+    aiLaunchApp: function () {
+      var s = aiShow();
+      var url = s.applicationUrl || '';
+      if (!url) { toast('No application URL set.', true); return; }
+      var fields = (V2.ai.parsed || {}).fields || [];
+      var f = fields[Math.max(0, V2.ai.copyIdx)];
+      if (f) {
+        var val = (V2.ai.mapping[f.name] || {}).value || '';
+        if (val) {
+          navigator.clipboard.writeText(val).then(function () {
+            V2.ai.copyIdx = Math.max(0, V2.ai.copyIdx) + 1;
+            toast('Copied "' + f.name + '" — paste it in the form');
+            rerenderAiStep();
+          }).catch(function () {});
+        }
+      }
+      window.open(url, '_blank');
+    },
+    aiDownloadPhoto: function (url, slotName) {
+      toast('Downloading…');
+      fetch(url).then(function (resp) { return resp.blob(); }).then(function (blob) {
+        var ext = blob.type.indexOf('png') >= 0 ? '.png' : '.jpg';
+        var filename = String(slotName || 'photo').toLowerCase().replace(/[^a-z0-9]+/g, '-') + ext;
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        toast('Downloaded: ' + filename);
+      }).catch(function () { window.open(url, '_blank'); toast('Opened in new tab — right-click to save'); });
+    },
+    // aiDraft() — Step 5 AI-draft: ask /studioAssistant to fill the still-empty
+    // required fields. Token-metered (402 → coin purchase); a 500 (no Anthropic key
+    // on sgtest15) surfaces gracefully. The answer JSON patches V2.ai.mapping in
+    // place (no write — the draft is persisted only when the maker hits Save).
+    aiDraft: function () {
+      var w = aiWallet();
+      if (w.status === 'suspended') { toast('AI suspended. Purchase coins to continue.', true); aiBuyCoins(); return; }
+      var s = aiShow();
+      var fields = (V2.ai.parsed || {}).fields || [];
+      var profile = aiProfile();
+      var missing = fields.filter(function (f) { return !((V2.ai.mapping[f.name] || {}).value || '').trim(); });
+      if (!missing.length) { toast('All fields already have values.'); return; }
+      V2.ai.busy = true; rerenderAiStep();
+      var done = function () { V2.ai.busy = false; rerenderAiStep(); };
+      var prompt = 'You are helping a maker draft answers for a craft-show application to "' + (s.name || 'a show') + '".\n' +
+        'Studio profile: ' + JSON.stringify({ name: profile.name, bio: profile.bio, materials: profile.materials, processDescription: profile.processDescription, category: profile.category, priceRange: profile.priceRange }) + '\n' +
+        'Draft a concise, authentic answer for each of these application fields:\n' +
+        missing.map(function (f) { return '- ' + f.name + (f.description ? ' (' + f.description + ')' : ''); }).join('\n') +
+        '\n\nReturn ONLY a JSON object mapping each exact field name to its drafted string answer. No markdown.';
+      var run = function (token) {
+        return callCF('/studioAssistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ question: prompt, assistantContext: 'show-apply-draft-application' })
+        }).then(function (resp) {
+          if (resp.status === 402) { toast('Token balance exhausted. Purchase coins to continue.', true); aiBuyCoins(); done(); return; }
+          return resp.json().catch(function () { return {}; }).then(function (data) {
+            if (!resp.ok) throw new Error((data && data.error) || ('Draft failed (' + resp.status + ')'));
+            var answer = (data && data.answer) || '';
+            var drafted = null;
+            try { drafted = JSON.parse(answer.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim()); } catch (e) { drafted = null; }
+            if (drafted && typeof drafted === 'object') {
+              var n = 0;
+              missing.forEach(function (f) {
+                if (drafted[f.name] && V2.ai.mapping[f.name]) { V2.ai.mapping[f.name].value = String(drafted[f.name]); n++; }
+              });
+              toast(n ? ('Drafted ' + n + ' field' + (n !== 1 ? 's' : '') + '.') : 'No draftable fields returned.');
+            } else {
+              toast('AI returned an unparseable draft — fill in manually.', true);
+            }
+            done();
+          });
+        });
+      };
+      try {
+        window.auth.currentUser.getIdToken().then(run).catch(function (e) { toast('Draft failed: ' + ((e && e.message) || e), true); done(); });
+      } catch (e) { toast('Draft failed: ' + ((e && e.message) || e), true); done(); }
+    },
+
+    // ── Step 6: Save — persist the draft via ShowsBridge.saveApplication (the
+    // ONLY draft write path). Captures the assembled blob (parsed reqs + mapping +
+    // gaps + image assignments) like the legacy showsAISaveApp, updates an existing
+    // draft when resuming, then returns to the select-show screen.
+    aiSaveApp: function () {
+      if (!canEdit()) return notPermitted();
+      var b = bridge(); if (!b || !b.saveApplication) return bridgeLoading();
+      var s = aiShow();
+      var appData = {
+        showId: V2.ai.showId,
+        showName: s.name || '',
+        parsedRequirements: V2.ai.parsed,
+        fieldMapping: V2.ai.mapping,
+        gapAnalysis: V2.ai.gaps,
+        imageAssignments: V2.ai.images,
+        status: 'draft',
+        createdAt: (V2.ai.currentApp && V2.ai.currentApp.createdAt) || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      if (V2.ai.currentApp && V2.ai.currentApp.id) appData.id = V2.ai.currentApp.id;
+      Promise.resolve(b.saveApplication(appData)).then(function (key) {
+        // Patch the local cache so the select-show screen's "Saved packages" reflects it.
+        V2.ai.applications = V2.ai.applications || {};
+        var stored = Object.assign({}, appData); delete stored.id;
+        V2.ai.applications[key] = stored;
+        V2.ai.currentApp = Object.assign({ id: key }, stored);
+        toast('Application package saved.');
+        V2.ai.step = 0; V2.ai.showId = null;
+        rerenderAiBody();
+      }).catch(actionErr);
     },
 
     // ════════════════════════════════════════════════════════════════════

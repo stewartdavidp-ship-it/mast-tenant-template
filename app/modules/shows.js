@@ -3200,7 +3200,7 @@ async function _showApplyDeepDiveCore(showId, details) {
         var desc = '';
         if (img.productId) { var p = prodsArr.find(function(x) { return x.pid === img.productId; }); if (p) desc = p.shortDescription || p.description || ''; }
         if (!desc && img.productName) { var p2 = prodsArr.find(function(x) { return x.name === img.productName; }); if (p2) desc = p2.shortDescription || p2.description || ''; }
-        if (desc) { img.applicationDescription = desc; MastDB.set('images/' + imageId + '/applicationDescription', desc).catch(function() {}); }
+        if (desc) { img.applicationDescription = desc; _showSetImageAppMetaCore(imageId, { applicationDescription: desc }).catch(function() {}); }
       }
     } else {
       delete showsAIImages[slotIdx];
@@ -3215,9 +3215,11 @@ async function _showApplyDeepDiveCore(showId, details) {
     if (!img) return;
     value = (value || '').trim();
     try {
-      await MastDB.set('images/' + imgId + '/applicationDescription', value || null);
+      var patch = { applicationDescription: value || null };
+      if (value && !img.applicationPhoto) patch.applicationPhoto = true;
+      await _showSetImageAppMetaCore(imgId, patch);
       img.applicationDescription = value || '';
-      if (value && !img.applicationPhoto) { await MastDB.set('images/' + imgId + '/applicationPhoto', true); img.applicationPhoto = true; }
+      if (value && !img.applicationPhoto) img.applicationPhoto = true;
     } catch (err) { showToast('Failed to save description: ' + err.message, true); }
   }
 
@@ -3229,17 +3231,16 @@ async function _showApplyDeepDiveCore(showId, details) {
     var product = pid ? (window.productsData || []).find(function(x) { return x.pid === pid; }) : null;
     try {
       if (pid && product) {
-        await MastDB.update('images/' + imgId, { productId: pid, productName: product.name || '' });
+        await _showSetImageAppMetaCore(imgId, { productId: pid, productName: product.name || '' });
         img.productId = pid; img.productName = product.name || '';
         var textarea = document.getElementById('showAIAppDesc_' + slotIdx);
         if (textarea && !textarea.value.trim()) {
           var desc = product.shortDescription || product.description || '';
-          if (desc) { textarea.value = desc; img.applicationDescription = desc; await MastDB.set('images/' + imgId + '/applicationDescription', desc); }
+          if (desc) { textarea.value = desc; img.applicationDescription = desc; await _showSetImageAppMetaCore(imgId, { applicationDescription: desc }); }
         }
         showToast('Linked to ' + product.name);
       } else {
-        await MastDB.set('images/' + imgId + '/productId', null);
-        await MastDB.set('images/' + imgId + '/productName', null);
+        await _showSetImageAppMetaCore(imgId, { productId: null, productName: null });
         delete img.productId; delete img.productName;
       }
     } catch (err) { showToast('Failed to link product: ' + err.message, true); }
@@ -3569,14 +3570,10 @@ async function _showApplyDeepDiveCore(showId, details) {
       updatedAt: new Date().toISOString()
     };
     try {
-      var key;
-      if (showsAICurrentApp && showsAICurrentApp.id) {
-        key = showsAICurrentApp.id;
-        await MastDB.update('showLight/applications/' + key, appData);
-      } else {
-        key = MastDB.showLight.applications.newKey();
-        await MastDB.set('showLight/applications/' + key, appData);
-      }
+      // Single-source the draft write through the DOM-free core (V1 + V2 share it).
+      var key = await _showSaveApplicationCore(
+        (showsAICurrentApp && showsAICurrentApp.id) ? Object.assign({ id: showsAICurrentApp.id }, appData) : appData
+      );
       showsAIApplications[key] = appData;
       showsAICurrentApp = Object.assign({ id: key }, appData);
       showToast('Application package saved.');
@@ -3674,6 +3671,59 @@ async function _showApplyDeepDiveCore(showId, details) {
   window.showsAILaunchApp = showsAILaunchApp;
   window.showsAIDownloadPhoto = showsAIDownloadPhoto;
   window.showsAISaveApp = showsAISaveApp;
+
+  // ============================================================
+  // AI Application Builder — DOM-free WRITE cores (PR6)
+  // ============================================================
+  //
+  // The 6-step AI Application Builder (Fetch & Parse → Images → Auto-Map → Gap
+  // Analysis → Preview → Save) lives in BOTH the legacy #show-apply AI mode (above)
+  // and the shows-v2 twin. Like the lifecycle writes, its three persisted writes —
+  // the application draft (showLight/applications/{key}), the per-image application
+  // metadata (images/{id} applicationDescription / applicationPhoto / productId),
+  // and the studio profile (showLight/profile) — must be SINGLE-SOURCED so V1 and
+  // V2 share one byte-identical Firestore path. The /studioAssistant CF *call* is a
+  // read (token-metered AI) and stays in each surface's handler; only these WRITES
+  // route through the cores below (and the ShowsBridge wrappers further down).
+
+  // _showSaveApplicationCore(appData) → application key. Mints a push key for a new
+  // draft (or reuses appData.id for an existing one), strips the transient `id`
+  // before persisting, and writes showLight/applications/{key}. Mirrors the legacy
+  // showsAISaveApp write matrix (update existing vs set new). Returns the key.
+  function _showSaveApplicationCore(appData) {
+    appData = Object.assign({}, appData);
+    var key = appData.id || null;
+    delete appData.id;
+    if (key) {
+      return Promise.resolve(MastDB.update('showLight/applications/' + key, appData)).then(function () { return key; });
+    }
+    key = MastDB.showLight.applications.newKey();
+    return Promise.resolve(MastDB.set('showLight/applications/' + key, appData)).then(function () { return key; });
+  }
+
+  // _showSetImageAppMetaCore(imageId, patch) → void. Partial write of the
+  // application-tagging leaves on images/{imageId}: applicationDescription /
+  // applicationPhoto / productId / productName. Only the keys present in `patch`
+  // are written (each via MastDB.set on the leaf, matching the legacy per-leaf
+  // writes in showsAIAssignImage / showsAISaveSlotDesc / showsAILinkProduct so the
+  // null-clear semantics are preserved). Returns when all leaves have settled.
+  function _showSetImageAppMetaCore(imageId, patch) {
+    patch = patch || {};
+    var writes = [];
+    ['applicationDescription', 'applicationPhoto', 'productId', 'productName'].forEach(function (k) {
+      if (Object.prototype.hasOwnProperty.call(patch, k)) {
+        writes.push(Promise.resolve(MastDB.set('images/' + imageId + '/' + k, patch[k] == null ? null : patch[k])));
+      }
+    });
+    return Promise.all(writes).then(function () {});
+  }
+
+  // _showSaveProfileCore(profileData) → void. Merge-update the singleton studio
+  // profile (showLight/profile) used to fill applications. Mirrors the legacy
+  // show-light profile write (MastDB.showLight.profile.update).
+  function _showSaveProfileCore(profileData) {
+    return Promise.resolve(MastDB.showLight.profile.update(Object.assign({}, profileData)));
+  }
 
   // ============================================================
   // ShowsBridge — data-object entry to the SAME show write cores
@@ -3882,6 +3932,35 @@ async function _showApplyDeepDiveCore(showId, details) {
         updatedAt: new Date().toISOString()
       };
       return _showSetReviewCore(id, data).then(function () { return _showsBridgeAudit('update', id); });
+    },
+
+    // ── AI Application Builder (WRITE side of the 6-step wizard) ───────
+    // The /studioAssistant CF *call* (Step 5 AI draft) is a token-metered READ and
+    // stays in the twin (like /showFinder + /showDeepDive); only the resulting
+    // WRITES route through these three methods so V1 + V2 share one path.
+    //
+    // saveApplication(appData) → application key. appData = the draft blob
+    // (showId / showName / parsedRequirements / fieldMapping / gapAnalysis /
+    // imageAssignments / status / createdAt / updatedAt) plus an optional `id` to
+    // update an existing draft. Mints a push key on create. Writes
+    // showLight/applications/{key}.
+    saveApplication: function (appData) {
+      return _showSaveApplicationCore(Object.assign({}, appData)).then(function (key) {
+        return Promise.resolve(_showsBridgeAudit('update', key)).then(function () { return key; });
+      });
+    },
+    // setImageAppMeta(imageId, patch) → void. Partial write of the image-tagging
+    // leaves used by the builder: applicationDescription / applicationPhoto /
+    // productId / productName (only the keys present in `patch` are written; null
+    // clears a leaf, matching the legacy per-leaf writes). Writes images/{imageId}.
+    setImageAppMeta: function (imageId, patch) {
+      return _showSetImageAppMetaCore(imageId, patch).then(function () { return _showsBridgeAudit('update', imageId); });
+    },
+    // saveProfile(profileData) → void. Merge-update the singleton studio profile
+    // (showLight/profile) the builder fills applications from. Used by the gap-fill
+    // step to backfill missing profile fields inline.
+    saveProfile: function (profileData) {
+      return _showSaveProfileCore(profileData).then(function () { return _showsBridgeAudit('update', 'profile'); });
     }
   };
 
