@@ -886,11 +886,163 @@
     refreshable: false, tokenLifetime: 'permanent',          // wc-auth one-click authorize → server callback auto-provisions a permanent key
     comingSoon: 'One-click WooCommerce connect is coming soon — authorize once and Mast receives the API key automatically.'
   });
-  var plaidConnection = _comingSoonDef({
-    id: 'plaid', label: 'Plaid (bank link)', icon: '🏦', authType: 'A', category: 'banking',
-    refreshable: false, tokenLifetime: 'permanent',          // Plaid access token is permanent (no refresh)
-    comingSoon: 'One-click bank linking via Plaid is coming soon — connect your bank for reconciliation.'
-  });
+  // ── Plaid (bank link) — family: delegated-auth, archetype A (hosted Link) ──
+  //
+  // LIVE. Unlike the redirect-OAuth channels above, Plaid is a CLIENT-SDK flow:
+  // the maker authenticates with their bank INSIDE Plaid's hosted Link widget (an
+  // in-page overlay — they never paste a key), and Link hands back a short-lived
+  // public_token in onSuccess. We REUSE the already-live reconciliation CFs the
+  // Finance module uses — createPlaidLinkToken (mint a link_token) +
+  // exchangePlaidToken (swap public_token for a PERMANENT access_token, vaulted
+  // server-side). exchangePlaidToken also projects status onto
+  // admin/businessEntity/channels/plaid, which this card reads. Multi-bank
+  // management stays in Finance; the card shows one honest "is a bank linked?".
+  var PLAID_LINK_SDK = 'https://cdn.plaid.com/link/v2/stable/link-initialize.js';
+  function _loadPlaidLink() {
+    if (window.Plaid && typeof window.Plaid.create === 'function') return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+      var existing = document.querySelector('script[data-plaid-link]');
+      if (existing) {
+        existing.addEventListener('load', function () { resolve(); });
+        existing.addEventListener('error', function () { reject(new Error('plaid-sdk-load-failed')); });
+        if (window.Plaid && typeof window.Plaid.create === 'function') resolve();
+        return;
+      }
+      var s = document.createElement('script');
+      s.src = PLAID_LINK_SDK; s.async = true; s.setAttribute('data-plaid-link', '1');
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error('plaid-sdk-load-failed')); };
+      document.head.appendChild(s);
+    });
+  }
+  function _plaidCallable(name) {
+    if (typeof window.firebase === 'undefined' || !window.firebase.functions) return null;
+    return window.firebase.functions().httpsCallable(name);
+  }
+  function _plaidTenantId() {
+    return (window.MastDB && typeof window.MastDB.tenantId === 'function') ? window.MastDB.tenantId() : null;
+  }
+  // connect → mint a link_token, open hosted Link, and on the maker's success
+  // exchange the public_token (server vaults the permanent access_token + projects
+  // the channel record). Resolves {ok:true} after a successful exchange; {ok:false}
+  // on cancel/error. The engine then shows pending until the maker clicks Refresh.
+  function _plaidConnect() {
+    return function () {
+      var createLink = _plaidCallable('createPlaidLinkToken');
+      var exchange = _plaidCallable('exchangePlaidToken');
+      if (!createLink || !exchange) return Promise.resolve({ ok: false, error: 'functions-unavailable' });
+      var tenantId = _plaidTenantId();
+      return _loadPlaidLink()
+        .then(function () { return createLink({ tenantId: tenantId }); })
+        .then(function (res) {
+          var linkToken = res && res.data && res.data.link_token;
+          if (!linkToken) throw new Error('no-link-token');
+          return new Promise(function (resolve) {
+            var handler = window.Plaid.create({
+              token: linkToken,
+              onSuccess: function (publicToken) {
+                exchange({ tenantId: tenantId, public_token: publicToken })
+                  .then(function (xr) {
+                    var d = (xr && xr.data) || {};
+                    resolve({ ok: true, status: 'connected', detail: d.institutionName || null });
+                  })
+                  .catch(function (e) { resolve({ ok: false, error: (e && e.message) || 'exchange-failed' }); });
+              },
+              onExit: function (err) {
+                // Maker closed Link without finishing (or Link errored). Not a card
+                // failure — just no connection made this time. Surface a friendly,
+                // human message (Plaid provides error_message/display_message).
+                if (!err) { resolve({ ok: false, error: 'Bank linking was cancelled — no changes made.' }); return; }
+                resolve({ ok: false, error: err.display_message || err.error_message || 'Bank linking didn’t complete. You can try again.' });
+              }
+            });
+            handler.open();
+          });
+        })
+        .catch(function (e) { return { ok: false, error: (e && e.message) || 'plaid-connect-failed' }; });
+    };
+  }
+  // healthCheck → read the projected channel record (channelId === 'plaid').
+  function _plaidHealthCheck() {
+    return function () {
+      if (!window.MastDB || !window.MastDB.businessEntity || !window.MastDB.businessEntity.channels ||
+          typeof window.MastDB.businessEntity.channels.list !== 'function') {
+        return Promise.resolve({ state: 'not-collected' });
+      }
+      return window.MastDB.businessEntity.channels.list().then(function (list) {
+        var rec = null;
+        (list || []).forEach(function (r) { if (r && r.channelId === 'plaid') rec = r; });
+        if (!rec) return { state: 'not-collected' };
+        var map = { connected: 'connected', expired: 'needs-reauth', revoked: 'needs-reauth', error: 'error', pending: 'pending' };
+        var bits = [];
+        if (rec.institutionName) bits.push(rec.institutionName);
+        if (rec.itemCount && rec.itemCount > 1) bits.push('+' + (rec.itemCount - 1) + ' more');
+        if (rec.connectedAt) bits.push('connected ' + new Date(rec.connectedAt).toLocaleDateString());
+        return {
+          state: map[rec.status] || 'not-collected',
+          detail: bits.join(' • '),
+          store: rec.institutionName || null,
+          connectedAt: rec.connectedAt || null,
+          lastError: rec.lastErrorMessage || null
+        };
+      }).catch(function () { return { state: 'not-collected' }; });
+    };
+  }
+  // disconnect → remove EVERY linked bank (card-level disconnect = full
+  // disconnect; per-bank management lives in Finance). Reuses the live
+  // disconnectPlaidItem CF per item (Plaid item/remove + secret delete + channel
+  // re-projection). disconnectChannelCallable is NOT usable here — its server
+  // allowlist rejects 'plaid' and it wouldn't call Plaid item/remove.
+  function _plaidDisconnect() {
+    return function () {
+      var disconnectItem = _plaidCallable('disconnectPlaidItem');
+      if (!disconnectItem) return Promise.resolve({ ok: false, error: 'functions-unavailable' });
+      if (!window.MastDB || !window.MastDB.plaidItems || typeof window.MastDB.plaidItems.list !== 'function') {
+        return Promise.resolve({ ok: false, error: 'Open the Finance module to manage bank connections.' });
+      }
+      var tenantId = _plaidTenantId();
+      return Promise.resolve(window.MastDB.plaidItems.list()).then(function (items) {
+        var ids = Object.keys(items || {}).filter(function (id) {
+          return items[id] && items[id].status === 'active';
+        });
+        if (!ids.length) return { ok: true, status: 'not-collected' };
+        return ids.reduce(function (p, id) {
+          return p.then(function () { return disconnectItem({ tenantId: tenantId, itemId: id }); });
+        }, Promise.resolve()).then(function () { return { ok: true, status: 'not-collected' }; });
+      }).catch(function (e) { return { ok: false, error: (e && e.message) || 'disconnect-failed' }; });
+    };
+  }
+  var plaidConnection = {
+    id: 'plaid', label: 'Plaid (bank link)', icon: '🏦',
+    family: 'delegated-auth', category: 'banking',
+    authType: 'A',
+    credentialOwner: 'customer',
+    gate: 'skippable',
+    conciergeEligible: false,                 // no concierge desk staffed for bank-linking yet
+    available: true,
+    refreshable: false, tokenLifetime: 'permanent',   // Plaid access token is permanent (no refresh)
+    rbac: { route: 'channels', axis: 'edit' },         // engine pre-checks; the live CFs re-gate server-side (verifyTenantAdmin)
+    guide: {
+      steps: [
+        'Click Connect, then pick your bank in the Plaid window.',
+        'Sign in to your bank inside Plaid’s secure window — Mast never sees your bank password.',
+        'Choose the account(s) to link, then click Refresh status.'
+      ],
+      estSeconds: 120
+    },
+    copy: {
+      connectLabel: 'Connect bank (Plaid)',
+      connectPrompt: 'Link your bank via Plaid to auto-import transactions for reconciliation. You can skip this and add it later.',
+      pendingDetail: 'Finish linking in the Plaid window, then click Refresh status.',
+      disconnectConfirm: 'Disconnect all linked banks? Stored access is revoked and removed. Imported transactions stay; you can reconnect later.',
+      disconnectTitle: 'Disconnect Plaid'
+    },
+    adapter: {
+      connect: _plaidConnect(),
+      healthCheck: _plaidHealthCheck(),
+      disconnect: _plaidDisconnect()
+    }
+  };
   var stripeConnect = _comingSoonDef({
     id: 'stripe-connect', label: 'Stripe Connect', icon: '💳', authType: 'A', category: 'payments',
     refreshable: false, tokenLifetime: 'no-refresh', deferred: true,  // DEFERRED per research (read_only scope); catalog stub captures the design
