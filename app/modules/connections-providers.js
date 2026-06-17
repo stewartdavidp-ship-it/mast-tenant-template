@@ -852,10 +852,29 @@
       }
     };
   }
-  var wixChannel = _comingSoonDef({
-    id: 'wix', label: 'Wix', icon: '◆', authType: 'A', category: 'channel',
-    refreshable: true, tokenLifetime: 'short-refreshable',   // Wix access tokens ~5 min; server refreshes
-    comingSoon: 'One-click Wix connect is coming soon — store sync via Wix OAuth.'
+  // Wix is LIVE — the wixOAuthStart/wixOAuthCallback + wixTokenRefresh CFs
+  // shipped in mast-architecture. authType 'A' (pure OAuth, like Shopify's
+  // custom distribution): ONE platform-wide Mast Wix app, so the maker pastes
+  // no developer keys — they just approve on Wix's consent page. _channelDef
+  // wires adapter.{connect,healthCheck,disconnect} to the live channel plumbing.
+  var wixChannel = _channelDef({
+    id: 'wix', label: 'Wix', icon: '◆', authType: 'A',
+    refreshable: true, tokenLifetime: 'short-refreshable',   // Wix access tokens ~5 min; server refreshes on demand
+    guide: {
+      steps: [
+        'Click Connect — your Wix site opens in a new tab.',
+        'Approve the Mast app on Wix’s own consent page.',
+        'Return here and click Refresh status.'
+      ],
+      estSeconds: 120
+    },
+    copy: {
+      connectLabel: 'Connect Wix',
+      connectPrompt: 'Connect your Wix site to sync products and inventory. You can skip this and add it later.',
+      pendingDetail: 'Approve the Mast app in the Wix tab that just opened, then click Refresh status.',
+      disconnectConfirm: 'Disconnect Wix? Mast’s stored access is deleted. The Mast app may still appear in your Wix dashboard until you remove it there. You can reconnect later.',
+      disconnectTitle: 'Disconnect Wix'
+    }
   });
   var squarespaceChannel = _comingSoonDef({
     id: 'squarespace', label: 'Squarespace', icon: '⬛', authType: 'A', category: 'channel',
