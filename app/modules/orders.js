@@ -6208,10 +6208,13 @@
   // _key — the order id). When the twin drives the flow, the legacy orders
   // listener may not have populated that cache, so each bridge method seeds it
   // from the supplied record (or a fresh single-record fetch) before calling
-  // the core. Refund is intentionally absent — it stays on the transitionRma CF
-  // path (a later PR), keeping its separate hasPermission('rma','approve')
-  // server gate. There is no extra RBAC gate inside the bridge: the twin gates
-  // can('orders','edit') before invoking, matching the CommissionsBridge model.
+  // the core. Refund (PR5) is the one bridge method that does NOT touch an
+  // orders.js core — money movement is the CF's job, so issueRefund delegates
+  // straight to the hardened transitionRma CF (create intent RMA → drive the
+  // lifecycle → complete with refundAllocation), and the CF keeps its separate
+  // hasPermission('rma','approve') server gate. There is no extra RBAC gate
+  // inside the bridge: the twin gates can('orders','edit') / can('rma','approve')
+  // before invoking, matching the CommissionsBridge model.
   function _ordersBridgeSeed(orderId, record) {
     if (record && typeof record === 'object') {
       var prev = orders[orderId] || {};
@@ -6325,6 +6328,89 @@
             .catch(function () { fail++; });
         });
       }, Promise.resolve()).then(function () { return { ok: ok, fail: fail }; });
+    },
+    // issueRefund(orderId, { amountCents, method, reason }, record?) → CF result.
+    // The single native "issue a refund for this order" path for orders-v2 PR5.
+    // MONEY MOVES ONLY inside transitionRma (action:'complete') — this bridge does
+    // NO client money-write and NEVER persists a refund amount client-side. It is
+    // a pure delegator: it (1) creates the refund-INTENT RMA record (admin/rma/{id}
+    // — the same NON-money record saveNewRma writes, status:'requested', items:[]
+    // so completion is a clean write-off with no inventory restock), then (2) drives
+    // the RMA through its server-side lifecycle to the only state from which the CF
+    // will issue money — approve → shipped-back → received → inspect → complete —
+    // passing the requested refundAllocation to the FINAL complete call. The CF
+    // (#302, hardened FOR THIS) validates the methods and CAPS the total at the
+    // RMA's authorized amount (never above the order total), and itself flips the
+    // order status to 'refunded'/'partially_returned'. Server gate is
+    // hasPermission('rma','approve') on the approve transition (the caller also
+    // gates can/'rma','approve' before invoking); the bridge has no internal RBAC.
+    // Returns { rmaId, result } where result is the final complete CF response.
+    issueRefund: function (orderId, opts, record) {
+      opts = opts || {};
+      var method = opts.method === 'store-credit' ? 'store-credit' : 'credit-card';
+      var amountCents = Math.round(Number(opts.amountCents) || 0);
+      if (!Number.isFinite(amountCents) || amountCents < 0) {
+        return Promise.reject(new Error('Invalid refund amount'));
+      }
+      var tenantId = MastDB.tenantId();
+      var fns = firebase.functions();
+      var rmaId = 'rma_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      // The intent record mirrors saveNewRma exactly (no money). refundMethod uses
+      // the legacy store_credit/original_payment vocabulary the RMA record speaks;
+      // the CF maps it. refundAmountCents is the AUTHORIZED ceiling the CF caps to.
+      var resolvedRefundMethod = method === 'store-credit' ? 'store_credit' : 'original_payment';
+      function step(action, payload) {
+        return fns.httpsCallable('transitionRma')(Object.assign({
+          tenantId: tenantId, rmaId: rmaId, action: action
+        }, payload ? { payload: payload } : {})).then(function (res) {
+          var d = res && res.data;
+          if (d && d.success === false) {
+            throw new Error((d && d.error) || ('transitionRma ' + action + ' failed'));
+          }
+          return res;
+        });
+      }
+      return _ordersBridgeSeed(orderId, record).then(function (o) {
+        var nowIso = new Date().toISOString();
+        var rec = {
+          type: 'refund',
+          originOrderId: orderId,
+          orderId: orderId,
+          orderNumber: getOrderDisplayNumber(o || { orderId: orderId }),
+          customerEmail: (o && (o.email || o.customerEmail)) || '',
+          customerUid: (o && (o.customerId || o.uid)) || null,
+          uid: (o && (o.customerId || o.uid)) || null,
+          reason: (opts.reason || '').trim(),
+          refundMethod: resolvedRefundMethod,
+          refundAmountCents: amountCents,
+          restockInventory: false,
+          status: 'requested',
+          items: [],
+          requestedAt: nowIso,
+          createdAt: nowIso,
+          createdBy: 'operator',
+          source: 'orders-v2-refund'
+        };
+        // NON-money intent write (an RMA ticket), identical in kind to saveNewRma.
+        return MastDB.set('admin/rma/' + rmaId, rec);
+      })
+        // Drive the lifecycle to 'inspected' (the only state the CF lets 'complete'
+        // issue money from). Each transition is a server-validated state change with
+        // NO refund movement until the final 'complete'.
+        .then(function () { return step('approve'); })
+        .then(function () { return step('mark-shipped-back'); })
+        .then(function () { return step('mark-received'); })
+        .then(function () { return step('inspect', { result: 'pass', notes: 'Refund issued from order detail (orders-v2).' }); })
+        // The ONLY money movement: the CF validates method + caps amount, issues
+        // store credit / queues the card refund, and sets the order to 'refunded'.
+        .then(function () {
+          return step('complete', {
+            disposition: 'write-off',
+            notes: (opts.reason || '').trim(),
+            refundAllocation: [{ method: method, amountCents: amountCents }]
+          });
+        })
+        .then(function (res) { return { rmaId: rmaId, result: res && res.data }; });
     }
   };
   window.renderDashCardNewOrders = renderDashCardNewOrders;

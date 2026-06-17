@@ -292,6 +292,10 @@
   // every action on can('orders','edit') (the bridge has no internal RBAC).
   var esc = (window.MastUI && window.MastUI._esc) ? window.MastUI._esc : function (s) { return s == null ? '' : String(s); };
   function canEdit() { return typeof window.can === 'function' ? window.can('orders', 'edit') : true; }
+  // Issuing a refund is a sensitive action gated by the SAME server key the CF
+  // enforces (rma.approve), distinct from the orders.edit module axis. Mirrors
+  // the legacy RMA approve/complete gate (hasPermission('rma','approve')).
+  function canRefund() { return typeof window.hasPermission === 'function' ? window.hasPermission('rma', 'approve') : false; }
   function toast(msg, isErr) { if (window.showToast) showToast(msg, !!isErr); else if (window.MastAdmin && MastAdmin.showToast) MastAdmin.showToast(msg, !!isErr); }
   function getDisplayNum(o) { return (o && (o.orderNumber || o._key || o.id)) || ''; }
   function fmtDateTime(d) {
@@ -330,6 +334,27 @@
     return { status: 'unknown', label: 'Inventory unknown', available: 0 };
   }
   function isGiftCardItem(it) { return it && (it.bookingType === 'gift-card' || it.isGiftCard); }
+
+  // The order's authorized refund ceiling, in cents — the amount paid. This is a
+  // SUGGESTED DEFAULT only; the CF independently caps the refund at this amount
+  // server-side (resolveRefundCeilingCents), so a client mis-read can never
+  // over-refund. We never persist this value — it just seeds the form field.
+  function orderTotalCents(o) {
+    if (!o) return 0;
+    if (Number.isFinite(o.totalCents) && o.totalCents > 0) return Math.round(o.totalCents);
+    var dollars = window.MastUI.Num.moneyVal(o, 'totalCents', 'total') || 0;
+    return Math.round(dollars * 100);
+  }
+  // Refundable = not already in a refund/cancel terminal state, and there is a
+  // positive total to refund. (A 'refunded' order shows the refunded pill, no
+  // action.) 'partially_returned' stays refundable so a second partial refund can
+  // be issued — the CF caps it.
+  function canRefundOrder(o) {
+    if (!o) return false;
+    var s = String(o.status || '').toLowerCase();
+    if (s === 'refunded' || s === 'cancelled') return false;
+    return orderTotalCents(o) > 0;
+  }
 
   // Reload the V2 cache, then re-open the order detail from fresh data so the
   // header badge + all panes reflect the new status (mirrors procurement-v2's
@@ -398,6 +423,21 @@
           '<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="OrdersV2Actions.openCancel(\'' + esc(orderId) + '\')">Cancel order…</button>'
         : ungated;
       blocks += UI.card('Cancel order', cancelInner);
+    }
+
+    // 4) Issue refund — gated on hasPermission('rma','approve') (the same server
+    // key the CF enforces). Money moves ONLY inside the transitionRma CF, which
+    // caps the amount server-side. Already-refunded orders show their pill, no
+    // action. The card is HIDDEN (not shown-disabled) for non-approvers.
+    if (canRefundOrder(r) && canRefund()) {
+      var status = String(r.status || '').toLowerCase();
+      var partialNote = status === 'partially_returned'
+        ? '<div class="mu-sub" style="margin-bottom:10px;color:var(--amber);">This order is partially returned — an additional refund will be capped at the remaining authorized amount.</div>'
+        : '';
+      var refundInner = partialNote +
+        '<div class="mu-sub" style="margin-bottom:10px;">Issues a refund (store credit or original payment) to the customer. The amount is capped at the order total. This moves money — confirm before issuing.</div>' +
+        '<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="OrdersV2Actions.openRefund(\'' + esc(orderId) + '\')">Issue refund…</button>';
+      blocks += UI.card('Issue refund', refundInner);
     }
     return blocks;
   }
@@ -615,6 +655,91 @@
     return false;
   }
 
+  // ── Refund form (amount + method) ─────────────────────────────────────────
+  // A small form, NOT a returns-management UI: amount (defaults to the order
+  // total — the CF caps it regardless) + method (original payment / store
+  // credit). Submit → OrdersBridge.issueRefund, which creates the intent RMA and
+  // drives the hardened transitionRma CF to issue the money. NO client money-write.
+  function openRefundForm(orderId) {
+    var r = V2.byId[orderId];
+    if (!r) return;
+    var U = window.MastUI;
+    var defaultDollars = (orderTotalCents(r) / 100).toFixed(2);
+    var body = U.card('Issue refund for order ' + esc(getDisplayNum(r)),
+      '<div class="mu-sub" style="margin-bottom:12px;">The refund is processed server-side and capped at the order total (' + esc(U.Num.money(orderTotalCents(r) / 100) || '$0.00') + '). Store credit lands in the customer wallet instantly; original payment queues a refund request for processing.</div>' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:12px;">Refund amount ($)' +
+        '<input type="number" id="ordersV2RefundAmount" class="form-input" min="0" step="0.01" value="' + esc(defaultDollars) + '" style="width:100%;margin-top:4px;font-size:0.85rem;">' +
+      '</label>' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;margin-bottom:12px;">Method' +
+        '<select id="ordersV2RefundMethod" class="form-input" style="width:100%;margin-top:4px;font-size:0.85rem;">' +
+          '<option value="credit-card">Original payment</option>' +
+          '<option value="store-credit">Store credit</option>' +
+        '</select>' +
+      '</label>' +
+      '<label style="font-size:0.78rem;color:var(--warm-gray);display:block;">Reason (optional)' +
+        '<textarea id="ordersV2RefundReason" class="form-input" rows="2" placeholder="Why is this refund being issued?" style="width:100%;margin-top:4px;font-size:0.85rem;"></textarea>' +
+      '</label>');
+    U.slideOut.open({
+      id: 'refund-' + orderId, title: 'Issue refund', subtitle: esc(getDisplayNum(r)), size: 'md',
+      mode: 'create', deepLink: false, createLabel: 'Issue refund',
+      render: function () { return body; },
+      isDirty: function () { return true; },
+      onSave: function () { return submitRefund(orderId); }
+    });
+  }
+  // Track in-flight refunds so a double-click (or a second slide-out Save) can't
+  // fire a second issueRefund while the first CF chain is still running. The CF
+  // is also idempotent (atomic status claim), but the client guard prevents the
+  // common double-submit before the network round-trips even start.
+  var _refundInFlight = {};
+  function submitRefund(orderId) {
+    if (!canRefund()) { toast('You don\'t have permission to issue refunds.', true); return false; }
+    var r = V2.byId[orderId];
+    if (!r) return false;
+    if (_refundInFlight[orderId]) { toast('A refund is already being processed for this order…', true); return false; }
+    var amtEl = document.getElementById('ordersV2RefundAmount');
+    var methodEl = document.getElementById('ordersV2RefundMethod');
+    var reasonEl = document.getElementById('ordersV2RefundReason');
+    var amountCents = amtEl ? Math.round(parseFloat(amtEl.value) * 100) : NaN;
+    if (!Number.isFinite(amountCents) || amountCents <= 0) { toast('Enter a refund amount greater than $0.', true); return false; }
+    var method = methodEl && methodEl.value === 'store-credit' ? 'store-credit' : 'credit-card';
+    var reason = reasonEl ? reasonEl.value.trim() : '';
+    var methodLabel = method === 'store-credit' ? 'store credit' : 'original payment';
+    var amountLabel = window.MastUI.Num.money(amountCents / 100) || ('$' + (amountCents / 100).toFixed(2));
+    // Money-movement confirmation (outward-facing) — routed through the canonical
+    // mastConfirm rich modal, never a native browser dialog (UX standards 02 §3).
+    confirmThen('Issue a ' + amountLabel + ' refund to ' + (r.email || 'the customer') + ' as ' + methodLabel + '? This moves money and cannot be undone here.',
+      function () {
+        // Re-entry guard: the in-flight flag is the authoritative double-submit
+        // stop (submitRefund early-returns while set, and the CF is itself
+        // idempotent via an atomic status claim). The footer-button disable below
+        // is just the visible pending state.
+        if (_refundInFlight[orderId]) { toast('A refund is already being processed for this order…', true); return; }
+        _refundInFlight[orderId] = true;
+        // Disable the slide-out footer primary button + show pending text. The
+        // footer is the canonical #mastSlideOutFooter shell; the Save action is its
+        // primary button. Restored on failure (close-on-success drops it).
+        var foot = document.getElementById('mastSlideOutFooter');
+        var saveBtn = foot ? (foot.querySelector('.btn-primary') || foot.querySelector('button:last-child')) : null;
+        var prevLabel = saveBtn ? saveBtn.textContent : '';
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Issuing…'; }
+        toast('Issuing refund…');
+        ensureBridge().then(function (bridge) {
+          if (!bridge || typeof bridge.issueRefund !== 'function') { toast('Orders engine still loading — try again', true); return; }
+          return Promise.resolve(bridge.issueRefund(orderId, { amountCents: amountCents, method: method, reason: reason }, r)).then(function () {
+            toast('Refund issued — ' + amountLabel + ' as ' + methodLabel);
+            window.MastUI.slideOut.requestCloseForce();
+            return reloadThenOpen(orderId);
+          });
+        }).catch(function (e) {
+          toast('Could not issue refund: ' + (e && e.message || e), true);
+          if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = prevLabel || 'Issue refund'; }
+        }).then(function () { delete _refundInFlight[orderId]; });
+      },
+      { title: 'Issue refund', confirmLabel: 'Issue refund' });
+    return false; // keep the slide-out open; the confirm + CF own the close
+  }
+
   // ── Public action handlers (referenced by the rendered HTML) ──────────────
   window.OrdersV2Actions = {
     openTriage: function (orderId) {
@@ -624,6 +749,10 @@
     openCancel: function (orderId) {
       if (!canEdit()) { toast('You don\'t have permission to edit orders.', true); return; }
       ensureBridge().then(function () { openCancelForm(orderId); });
+    },
+    openRefund: function (orderId) {
+      if (!canRefund()) { toast('You don\'t have permission to issue refunds.', true); return; }
+      ensureBridge().then(function () { openRefundForm(orderId); });
     },
     addNote: function (orderId) {
       if (!canEdit()) { toast('You don\'t have permission to edit orders.', true); return; }
