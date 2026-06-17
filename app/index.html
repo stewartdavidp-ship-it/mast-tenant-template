@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-094613-1829060"></script>
+  <script src="../shared/mastdb.js?v=20260617-095637-a557699"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-094613-1829060"></script>
-  <script src="../shared/brand-sync.js?v=20260617-094613-1829060"></script>
+  <script src="../shared/customer-filters.js?v=20260617-095637-a557699"></script>
+  <script src="../shared/brand-sync.js?v=20260617-095637-a557699"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-094613-1829060"></script>
+  <script src="../shared/variant-reconcile.js?v=20260617-095637-a557699"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-094613-1829060"></script>
-  <script src="../shared/mast-io.js?v=20260617-094613-1829060"></script>
-  <script src="../shared/mast-entity.js?v=20260617-094613-1829060"></script>
+  <script src="../shared/mast-ui.js?v=20260617-095637-a557699"></script>
+  <script src="../shared/mast-io.js?v=20260617-095637-a557699"></script>
+  <script src="../shared/mast-entity.js?v=20260617-095637-a557699"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-094613-1829060"></script>
+  <script src="../shared/product-readiness.core.js?v=20260617-095637-a557699"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-094613-1829060"></script>
+  <script src="../shared/mast-intake.js?v=20260617-095637-a557699"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -10435,11 +10435,11 @@
               </div>
 
               <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;">Client Secret</label>
-              <div style="display:flex;gap:6px;margin-bottom:8px;">
-                <input type="password" id="shopifyCC_ClientSecret" placeholder="Client secret from Settings → Credentials"
-                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-                <button type="button" onclick="toggleReveal('shopifyCC_ClientSecret',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
-              </div>
+              <!-- Shopify client secret — MastIntake secure vault (provider shopify-client-secret).
+                   Persists ONLY via mastIntakeVaultPut; never read back. The server-side
+                   client_credentials exchange reads it vault-first (arch #300). The Client ID
+                   above is the app's public identifier and stays a plain field. -->
+              <div id="shopifyCC_ClientSecretSecureFieldHost" style="margin-bottom:8px;"></div>
             </div>
             <div id="shopifyMethodClientCredsActions" style="display:flex;gap:8px;margin-bottom:12px;">
               <button class="btn btn-primary" onclick="saveShopifyClientCredentials()">Connect</button>
@@ -10458,19 +10458,17 @@
               </div>
 
               <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Admin API Access Token <span id="shopifyTokenBadge"></span></label>
-              <div style="display:flex;gap:6px;margin-bottom:12px;">
-                <input type="password" id="shopifyAccessToken" placeholder="shpat_..."
-                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-                <button type="button" onclick="toggleReveal('shopifyAccessToken',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
-              </div>
+              <!-- Shopify Admin API token — MastIntake secure vault (provider shopify-admin-token).
+                   Persists ONLY via mastIntakeVaultPut; never read back. Save it here, enter the
+                   shop subdomain above, then click Save & Test — the server verifies the token
+                   vault-first (shop.json, arch #297). -->
+              <div id="shopifyAccessTokenSecureFieldHost" style="margin-bottom:12px;"></div>
 
               <label style="font-size:0.85rem;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:6px;">Webhook Secret (API Secret Key) <span id="shopifyWebhookSecretBadge" style="font-size:0.78rem;color:var(--warm-gray);">optional</span></label>
               <p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Found under your custom app's <strong>API credentials</strong> tab → "API secret key". Used to verify inbound webhooks. Without it, webhooks are accepted unsigned.</p>
-              <div style="display:flex;gap:6px;margin-bottom:8px;">
-                <input type="password" id="shopifyWebhookSecret" placeholder="Shopify API secret key…"
-                  style="flex:1;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;box-sizing:border-box;">
-                <button type="button" onclick="toggleReveal('shopifyWebhookSecret',this)" class="btn btn-small" style="font-size:0.78rem;padding:6px 10px;white-space:nowrap;">Show</button>
-              </div>
+              <!-- Shopify webhook secret — MastIntake secure vault (provider shopify-webhook-secret).
+                   Read vault-first for HMAC verification (arch #297). -->
+              <div id="shopifyWebhookSecretSecureFieldHost" style="margin-bottom:8px;"></div>
             </div>
             <div id="shopifyMethodAccessTokenActions" style="display:none;">
               <div style="display:flex;gap:8px;">
@@ -22414,7 +22412,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-094613-1829060';
+var MAST_MODULES_V = '20260617-095637-a557699';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -30718,7 +30716,6 @@ async function saveShopifyClientCredentials() {
   var statusEl = document.getElementById('shopifyConfigStatus');
   var domain = (document.getElementById('shopifyCC_Domain').value || '').trim().toLowerCase();
   var clientId = (document.getElementById('shopifyCC_ClientId').value || '').trim();
-  var clientSecret = (document.getElementById('shopifyCC_ClientSecret').value || '').trim();
 
   // Normalize domain
   domain = domain.replace(/^https?:\/\//, '').replace(/\/+$/, '').replace(/\.myshopify\.com$/, '');
@@ -30728,33 +30725,39 @@ async function saveShopifyClientCredentials() {
   if (!clientId || clientId.length < 10) {
     showToast('Enter the Client ID from your Shopify app settings.', 'error'); return;
   }
-  if (!clientSecret || clientSecret.length < 10 || clientSecret.includes('••••')) {
-    showToast('Enter the Client Secret from your Shopify app settings.', 'error'); return;
+  // The Client Secret is held in the MastIntake vault (its own secureField Save).
+  // Confirm it's collected, then the server reads it vault-first for the exchange
+  // (arch #300). The public Client ID rides in metadata (written to config/shopify).
+  if (!(window.MastIntake && typeof MastIntake.status === 'function')) {
+    showToast('Secure storage is unavailable right now — try again shortly.', 'error'); return;
+  }
+  try {
+    var cs = await MastIntake.status('shopify-client-secret');
+    if (!cs || cs.state !== 'collected') {
+      showToast('Save your Client Secret above first.', 'error'); return;
+    }
+  } catch (e) {
+    showToast('Could not confirm secure storage — try again shortly.', 'error'); return;
   }
 
   statusEl.innerHTML = '<span style="color:var(--warm-gray);">Connecting via client credentials…</span>';
   try {
-    var sp = MastDB.tenantId();
-    try { var prefixRes = await firebase.functions().httpsCallable('secretsManager')({ action: 'read', service: 'shopify', tenantId: sp }); sp = prefixRes.data.secretPrefix || sp; } catch (_) {}
-    var secrets = {};
-    secrets[sp + '-shopify-client-id'] = clientId;
-    secrets[sp + '-shopify-client-secret'] = clientSecret;
     var result = await firebase.functions().httpsCallable('secretsManager')({
       action: 'write',
       service: 'shopify',
       tenantId: MastDB.tenantId(),
-      secrets: secrets,
+      secrets: {},
       metadata: {
         shopDomain: domain,
         apiVersion: '2024-10',
         connectionMethod: 'client_credentials',
+        clientId: clientId,
         updatedAt: new Date().toISOString()
       }
     });
     var v = result.data.verification || {};
     if (v.token && v.token.valid) {
       showToast('Connected to ' + (v.shop && v.shop.name ? v.shop.name : domain) + '!', 'success');
-      document.getElementById('shopifyCC_ClientSecret').value = '';
       writeAudit('update', 'settings', 'shopifyConfig');
       loadShopifyConfig();
     } else {
@@ -30817,6 +30820,34 @@ async function connectShopifyOAuth() {
   }
 }
 
+// Render + hydrate the disconnected-view Shopify secureField hosts (admin token,
+// webhook secret, client secret) — vault-backed replacements for the legacy
+// plaintext inputs. Mirrors loadStripeSecureField; fail-closed.
+async function loadShopifySecureFields() {
+  if (!window.MastIntake) return;
+  try {
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      await MastAdmin.loadModule('connections-providers');
+    }
+    var hosts = [
+      { id: 'shopifyAccessTokenSecureFieldHost', provider: 'shopify-admin-token' },
+      { id: 'shopifyWebhookSecretSecureFieldHost', provider: 'shopify-webhook-secret' },
+      { id: 'shopifyCC_ClientSecretSecureFieldHost', provider: 'shopify-client-secret' }
+    ];
+    hosts.forEach(function (h) {
+      var host = document.getElementById(h.id);
+      if (!host) return;
+      if (!host.getAttribute('data-rendered')) {
+        host.innerHTML = MastIntake.secureField({ provider: h.provider });
+        host.setAttribute('data-rendered', '1'); // render guard (a flag, never a secret)
+      }
+      MastIntake.hydrate(host);
+    });
+  } catch (e) {
+    // Fail-closed: leave the fields disabled; never fall back to a plaintext path.
+  }
+}
+
 function loadShopifyConfig() {
   var statusEl = document.getElementById('shopifyConfigStatus');
   var connectedEl = document.getElementById('shopifyConnected');
@@ -30854,24 +30885,23 @@ function loadShopifyConfig() {
             (config.webhookSecret ? '' : ' <button class="btn btn-small" style="font-size:0.72rem;padding:2px 8px;margin-left:6px;" onclick="showSetWebhookSecret()">Set Secret</button>') +
           '</div>' +
           '<div id="shopifyWebhookSecretInline" style="display:none;margin-top:8px;">' +
-            '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Paste your Shopify app\'s <strong>API secret key</strong> (found under API credentials tab). This verifies inbound webhooks are genuinely from Shopify.</p>' +
-            '<div style="display:flex;gap:6px;">' +
-              '<input type="password" id="shopifyWebhookSecretInlineInput" placeholder="Shopify API secret key\u2026" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.85rem;">' +
-              '<button class="btn btn-primary btn-small" onclick="saveWebhookSecretInline()">Save</button>' +
-              '<button class="btn btn-secondary btn-small" onclick="document.getElementById(\'shopifyWebhookSecretInline\').style.display=\'none\'">Cancel</button>' +
-            '</div>' +
+            '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 6px;">Paste your Shopify app\'s <strong>API secret key</strong> (found under API credentials tab). This verifies inbound webhooks are genuinely from Shopify. Stored in secure vault \u2014 never read back.</p>' +
+            '<div id="shopifyWebhookSecretInlineHost"></div>' +
+            '<button class="btn btn-secondary btn-small" style="margin-top:6px;" onclick="document.getElementById(\'shopifyWebhookSecretInline\').style.display=\'none\'">Done</button>' +
           '</div>';
       }
     } else {
       disconnectedEl.style.display = 'block';
       connectedEl.style.display = 'none';
       if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Not connected. Paste your Shopify credentials below to link your store.</span>';
+      loadShopifySecureFields(); // render + hydrate the vault-backed secret fields
     }
   }).catch(function(err) {
     console.warn('secretsManager Shopify read failed:', err && err.message);
     if (disconnectedEl) disconnectedEl.style.display = 'block';
     if (connectedEl) connectedEl.style.display = 'none';
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Not connected.</span>';
+    loadShopifySecureFields();
   });
 }
 
@@ -32019,7 +32049,6 @@ window.refreshGlobalAskAiBtn = refreshGlobalAskAiBtn;
 async function saveShopifyConfig() {
   if (!can('settings', 'edit')) { showToast('You do not have permission to update settings.', true); return; }
   var rawDomain = (getFieldValue('shopifyShopDomain') || '').trim().toLowerCase();
-  var token = getFieldValue('shopifyAccessToken') || '';
 
   // Normalize domain — strip https://, trailing slashes, and .myshopify.com if user pasted the full URL
   rawDomain = rawDomain.replace(/^https?:\/\//, '').replace(/\/$/, '').replace(/\.myshopify\.com$/, '');
@@ -32027,26 +32056,28 @@ async function saveShopifyConfig() {
     showToast('Shop subdomain looks invalid. Use just the subdomain, e.g., "your-shop-name" (no .myshopify.com).', true);
     return;
   }
-  if (!token || token.includes('••••')) {
-    showToast('Paste your Admin API access token (starts with shpat_).', true);
-    return;
+  // The Admin API token + webhook secret are held in the MastIntake vault (each its
+  // own secureField Save) and never flow through this path. Confirm the token is
+  // collected before testing.
+  if (!(window.MastIntake && typeof MastIntake.status === 'function')) {
+    showToast('Secure storage is unavailable right now — try again shortly.', true); return;
   }
-  if (!token.startsWith('shpat_')) {
-    showToast('Token does not look like a Shopify Admin API token (should start with shpat_).', true);
-    return;
+  try {
+    var ts = await MastIntake.status('shopify-admin-token');
+    if (!ts || ts.state !== 'collected') {
+      showToast('Save your Admin API access token above first.', true);
+      return;
+    }
+  } catch (e) {
+    showToast('Could not confirm secure storage — try again shortly.', true); return;
   }
 
   var statusEl = document.getElementById('shopifyConfigStatus');
   if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray);">Saving and testing connection…</span>';
 
-  var sp = MastDB.tenantId();
+  // No secrets in this payload — token + webhook secret live in the vault. The
+  // server verify reads the token vault-first (shop.json, arch #297).
   var secrets = {};
-  secrets[sp + '-shopify-admin-token'] = token;
-  // Include webhook secret if provided
-  var webhookSecret = (getFieldValue('shopifyWebhookSecret') || '').trim();
-  if (webhookSecret && !webhookSecret.includes('••••')) {
-    secrets[sp + '-shopify-webhook-secret'] = webhookSecret;
-  }
   var metadata = {
     shopDomain: rawDomain,
     apiVersion: '2024-10',
@@ -32121,33 +32152,28 @@ async function testShopifyConnection() {
   }
 }
 
-function showSetWebhookSecret() {
+// Reveal the inline webhook-secret entry in the connected view and render a
+// MastIntake secureField into it (provider shopify-webhook-secret). The secret
+// persists ONLY through the vault (the secureField's own Save); there is no
+// client write path here. Replaces the legacy plaintext input + saveWebhookSecretInline.
+async function showSetWebhookSecret() {
   var el = document.getElementById('shopifyWebhookSecretInline');
   if (el) { el.style.display = 'block'; }
-  var input = document.getElementById('shopifyWebhookSecretInlineInput');
-  if (input) { input.value = ''; input.focus(); }
-}
-
-async function saveWebhookSecretInline() {
-  var input = document.getElementById('shopifyWebhookSecretInlineInput');
-  var secret = input ? input.value.trim() : '';
-  if (!secret) { showToast('Please enter the webhook secret.', true); return; }
+  if (!window.MastIntake) return;
   try {
-    showToast('Saving webhook secret\u2026');
-    var tid = MastDB.tenantId();
-    var secrets = {};
-    secrets[tid + '-shopify-webhook-secret'] = secret;
-    await firebase.functions().httpsCallable('secretsManager')({
-      action: 'write',
-      service: 'shopify',
-      tenantId: tid,
-      secrets: secrets
-    });
-    showToast('Webhook secret saved. HMAC verification is now active.');
-    document.getElementById('shopifyWebhookSecretInline').style.display = 'none';
-    loadShopifyConfig(); // Refresh the connected view
-  } catch (err) {
-    showToast('Failed to save: ' + (err.message || err), true);
+    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+      await MastAdmin.loadModule('connections-providers');
+    }
+    var host = document.getElementById('shopifyWebhookSecretInlineHost');
+    if (host) {
+      if (!host.getAttribute('data-rendered')) {
+        host.innerHTML = MastIntake.secureField({ provider: 'shopify-webhook-secret' });
+        host.setAttribute('data-rendered', '1'); // render guard (a flag, never a secret)
+      }
+      MastIntake.hydrate(host);
+    }
+  } catch (e) {
+    // Fail-closed: leave the field disabled; never fall back to a plaintext path.
   }
 }
 
@@ -32157,6 +32183,7 @@ function editShopifyConfig() {
   var disconnectedEl = document.getElementById('shopifyDisconnected');
   if (connectedEl) connectedEl.style.display = 'none';
   if (disconnectedEl) disconnectedEl.style.display = 'block';
+  loadShopifySecureFields(); // render + hydrate the vault-backed secret fields
   // Pre-fill the current shop domain
   firebase.functions().httpsCallable('secretsManager')({
     action: 'read',
@@ -32166,8 +32193,6 @@ function editShopifyConfig() {
     var cfg = (result && result.data) || {};
     var domEl = document.getElementById('shopifyShopDomain');
     if (domEl && cfg.shopDomain) domEl.value = cfg.shopDomain;
-    var tokEl = document.getElementById('shopifyAccessToken');
-    if (tokEl) { tokEl.value = ''; tokEl.focus(); }
   });
 }
 
