@@ -498,31 +498,47 @@
     });
   }
 
-  // Logo + brand voice (name / tagline). Logo via the PR-571 picker pattern
-  // (library / upload), instant-apply through BrandBridge.setLogoFromUrl. Name +
-  // tagline text inputs bound instant to MastBrandSync.setName / setTagline.
+  // Logo variants + brand voice (name / tagline). Each logo (primary + light /
+  // dark / transparent for contrasting backgrounds) is a compact tile with
+  // library/upload, instant-apply through BrandBridge.setLogoFromUrl(key) /
+  // deleteVariant(key). Name + tagline bound instant to MastBrandSync.
+  var LOGO_TILES = [
+    { key: 'primary', label: 'Primary', desc: 'Your main logo', bg: 'card' },
+    { key: 'light', label: 'Light', desc: 'For dark backgrounds', bg: 'dark' },
+    { key: 'dark', label: 'Dark', desc: 'For light backgrounds', bg: 'light' },
+    { key: 'transparent', label: 'Transparent', desc: 'No background', bg: 'check' }
+  ];
   function logoVoiceSection() {
     var b = V2.brand || {};
-    var logoUrl = (V2.logo && V2.logo.primary && V2.logo.primary.url) || V2.legacyLogoUrl || '';
-    var preview = logoUrl
-      ? '<div class="wv2-logo-prev"><img src="' + esc(logoUrl) + '" alt="Your logo"></div>'
-      : '<div class="wv2-logo-prev empty">No logo yet</div>';
-    var pickers = '<div class="wv2-logo-actions">' +
-      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.logoFromLibrary()">📚 From library</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.logoUpload()">💻 From computer</button>' +
-      '</div>';
+    var logo = V2.logo || {};
+    var variants = logo.variants || {};
+    function urlFor(key) {
+      if (key === 'primary') return (logo.primary && logo.primary.url) || V2.legacyLogoUrl || '';
+      return (variants[key] && variants[key].url) || '';
+    }
+    var tiles = LOGO_TILES.map(function (t) {
+      var url = urlFor(t.key);
+      var prev = url
+        ? '<div class="wv2-logo-tile-prev bg-' + t.bg + '"><img src="' + esc(url) + '" alt=""></div>'
+        : '<div class="wv2-logo-tile-prev bg-' + t.bg + ' empty"><span class="mu-sub">Not set</span></div>';
+      var acts = '<div class="wv2-logo-tile-acts">' +
+        '<button type="button" class="btn btn-secondary btn-small" title="From library" onclick="WebsiteV2.logoFromLibrary(\'' + t.key + '\')">📚</button>' +
+        '<button type="button" class="btn btn-secondary btn-small" title="From computer" onclick="WebsiteV2.logoUpload(\'' + t.key + '\')">💻</button>' +
+        ((t.key !== 'primary' && url) ? '<button type="button" class="btn btn-secondary btn-small" title="Remove" onclick="WebsiteV2.logoRemoveVariant(\'' + t.key + '\')">✕</button>' : '') +
+        '</div>';
+      return '<div class="wv2-logo-tile"><div class="wv2-logo-tile-head">' + esc(t.label) +
+        '<span class="mu-sub">' + esc(t.desc) + '</span></div>' + prev + acts + '</div>';
+    }).join('');
     var nameInput = '<input class="form-input" id="wv2BrandName" type="text" value="' + esc(b.name || '') + '" placeholder="Your business name" style="width:100%;">';
     var taglineInput = '<input class="form-input" id="wv2BrandTagline" type="text" maxlength="80" value="' + esc(b.tagline || '') + '" placeholder="A short phrase about what you make" style="width:100%;">';
     function fg(label, inner, hint) {
       return '<div class="form-group"><label class="form-label">' + esc(label) + '</label>' + inner +
         (hint ? '<div class="mu-sub" style="margin-top:2px;">' + esc(hint) + '</div>' : '') + '</div>';
     }
-    return '<div class="wv2-logorow">' +
-        '<div class="wv2-logo-col">' + preview + pickers + '</div>' +
-        '<div class="wv2-voice-col">' +
-          fg('Business name', nameInput) +
-          fg('Tagline', taglineInput, 'Shown in your browser tab title and link previews.') +
-        '</div>' +
+    return '<div class="wv2-logo-grid">' + tiles + '</div>' +
+      '<div class="wv2-voice-grid" style="margin-top:14px;">' +
+        fg('Business name', nameInput) +
+        fg('Tagline', taglineInput, 'Shown in your browser tab title and link previews.') +
       '</div>';
   }
 
@@ -676,10 +692,12 @@
   // Write a chosen/uploaded logo URL through the single-source BrandBridge.
   // setLogoFromUrl (primary → MastBrandSync.setLogo + storefront placement
   // fan-out). Instant-apply with the pip; reloadSoon refreshes the preview.
-  function applyLogoUrl(url) {
+  var LOGO_KEYS = { primary: 1, light: 1, dark: 1, transparent: 1 };
+  function applyLogoUrl(url, key) {
     if (!url) return;
+    key = LOGO_KEYS[key] ? key : 'primary';
     if (window.BrandBridge && typeof window.BrandBridge.setLogoFromUrl === 'function') {
-      withSave(window.BrandBridge.setLogoFromUrl('primary', url).then(function (ok) {
+      withSave(window.BrandBridge.setLogoFromUrl(key, url).then(function (ok) {
         if (!ok) throw new Error('logo write failed');
         return ok;
       }));
@@ -1614,12 +1632,20 @@
       '.wv2-finetune-body{padding:12px;}' +
       '.wv2-colorrow{display:flex;gap:16px;flex-wrap:wrap;}.wv2-colorrow .mu-colorinput{flex:1;min-width:150px;}' +
       // logo + voice two-column
-      '.wv2-logorow{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start;}' +
-      '.wv2-logo-col{flex:0 0 200px;max-width:240px;}.wv2-voice-col{flex:1;min-width:220px;}' +
-      '.wv2-logo-prev{background:var(--surface-dark,color-mix(in srgb,var(--text-primary) 6%,transparent));border:1px solid var(--border);border-radius:8px;padding:14px;display:flex;align-items:center;justify-content:center;min-height:76px;margin-bottom:8px;}' +
-      '.wv2-logo-prev img{max-height:60px;max-width:100%;object-fit:contain;}' +
-      '.wv2-logo-prev.empty{color:var(--warm-gray);font-size:0.85rem;}' +
-      '.wv2-logo-actions{display:flex;gap:8px;flex-wrap:wrap;}' +
+      // Logo variants — a compact tile per logo (primary + light/dark/transparent),
+      // each previewed on a contrasting background so the variant makes sense.
+      '.wv2-logo-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;}' +
+      '.wv2-logo-tile{border:1px solid var(--border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;}' +
+      '.wv2-logo-tile-head{font-size:0.85rem;font-weight:600;color:var(--text-primary);display:flex;flex-direction:column;line-height:1.3;}' +
+      '.wv2-logo-tile-head .mu-sub{font-weight:400;}' +
+      '.wv2-logo-tile-prev{height:80px;border-radius:8px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;overflow:hidden;}' +
+      '.wv2-logo-tile-prev img{max-width:88%;max-height:64px;object-fit:contain;}' +
+      '.wv2-logo-tile-prev.bg-card{background:var(--surface-card);}' +
+      '.wv2-logo-tile-prev.bg-dark{background:var(--charcoal,var(--surface-dark));}' +
+      '.wv2-logo-tile-prev.bg-light{background:var(--cream,var(--surface-light));}' +
+      '.wv2-logo-tile-prev.bg-check{background-image:repeating-conic-gradient(color-mix(in srgb,var(--text-primary) 8%,transparent) 0% 25%,transparent 0% 50%);background-size:16px 16px;}' +
+      '.wv2-logo-tile-acts{display:flex;gap:6px;flex-wrap:wrap;}' +
+      '.wv2-voice-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;}' +
       // layout & scale grid + conflict warnings
       '.wv2-layoutgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;}' +
       '.wv2-layoutwarn{margin-top:12px;padding:10px 12px;border-radius:8px;background:color-mix(in srgb,var(--warning,var(--amber)) 12%,transparent);border:1px solid color-mix(in srgb,var(--warning,var(--amber)) 26%,transparent);}' +
@@ -1858,17 +1884,18 @@
     },
     // Card 1 · Logo from the shared image library (PR-571 picker). Instant-apply:
     // the picked URL writes immediately through BrandBridge.setLogoFromUrl.
-    logoFromLibrary: function () {
+    logoFromLibrary: function (key) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
       window.openImagePicker(function (imageId, url) {
         if (!url) return;
-        applyLogoUrl(url);
+        applyLogoUrl(url, key);
       });
     },
     // Card 1 · Logo from computer → /uploadImage CF (base64), then the returned
-    // library URL writes through BrandBridge.setLogoFromUrl (mirrors brand-v2).
-    logoUpload: function () {
+    // library URL writes through BrandBridge.setLogoFromUrl(key) (key = primary /
+    // light / dark / transparent).
+    logoUpload: function (key) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
       input.onchange = function () {
@@ -1887,13 +1914,27 @@
               var lib = window.imageLibrary || {}; var d = lib[result.imageId] || {};
               var url = d.url || result.url;
               if (!url) throw new Error('Upload returned no URL');
-              applyLogoUrl(url);
+              applyLogoUrl(url, key);
             }).catch(function (err) { if (window.showToast) showToast('Upload failed: ' + (err && err.message ? err.message : 'error'), true); });
           } catch (err) { if (window.showToast) showToast('Upload failed.', true); }
         };
         reader.readAsDataURL(input.files[0]);
       };
       input.click();
+    },
+    // Card 1 · remove a logo VARIANT (light/dark/transparent) → BrandBridge
+    // .deleteVariant (clears config/brand/logo/variants/{key} + repoints any
+    // placement that referenced it back to primary). Primary is replaced, never
+    // removed, so it has no remove control.
+    logoRemoveVariant: function (key) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      if (!key || key === 'primary' || !LOGO_KEYS[key]) return;
+      if (window.BrandBridge && typeof window.BrandBridge.deleteVariant === 'function') {
+        withSave(Promise.resolve(window.BrandBridge.deleteVariant(key)));
+      } else {
+        try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('brand'); } catch (e) {}
+        if (window.showToast) showToast('Site editor still loading — try again', true);
+      }
     },
 
     // ── Card 2 · Your words & pictures ──────────────────────────────────
