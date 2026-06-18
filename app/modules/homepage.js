@@ -652,18 +652,11 @@
   };
 
   window.hpPickImage = function(sectionKey, fieldId) {
-    if (typeof openImagePicker === 'function') {
-      openImagePicker(function(imgId, url) {
-        if (!websiteConfig.sections) websiteConfig.sections = {};
-        if (!websiteConfig.sections[sectionKey]) websiteConfig.sections[sectionKey] = {};
-        websiteConfig.sections[sectionKey][fieldId] = url;
-        MastDB.set('webPresence/config/sections/' + sectionKey + '/' + fieldId, url);
-        markUnpublished();
-        renderHomepage();
-      });
-    } else {
-      showToast('Image picker not available.', true);
-    }
+    // Single-source the single-image-field write through HomepageBridge.images
+    // (pickField → setField → webPresence/config/sections/{key}/{field}, then
+    // notifyGalleryChanged re-renders the open page builder). Shared with the
+    // website-v2 Card 2 inline image-field control so V1 + V2 never drift.
+    window.HomepageBridge.images.pickField(sectionKey, fieldId);
   };
 
   // W1.8 round-3 — toggle testimonial visibility from the Page Builder
@@ -766,7 +759,134 @@
     },
     // Ensure section content + theme + testimonials are loaded so the twin's
     // delegated writes operate on populated caches. Idempotent.
-    ensureLoaded: function () { return loadData(); }
+    ensureLoaded: function () { return loadData(); },
+
+    // ── Section image management (Card 2 native image editing) ──────────
+    // The single write path for per-section images, shared by the legacy page
+    // builder and the website-v2 Card 2 slide-out. Every method DELEGATES to the
+    // existing shared writers (window.openImageModal / openImagePicker /
+    // openGalleryMetadataModal / moveImage / toggleImageVisibility /
+    // confirmDeleteImage) or to a DOM-free core here — the twin never writes
+    // MastDB.gallery itself. Data shape is unchanged: a gallery doc carries
+    // { section, url, alt, caption, category, order, visible, imageFit, … } and
+    // the storefront reads it per section (getImagesForSection). Single-image
+    // FIELDS (e.g. about.imageUrl) write webPresence/config/sections/{key}/{field}.
+    images: {
+      // Section ids the storefront renders gallery images for (mirrors the page
+      // builder's hasImageCapability — includes dynamic shop-category sections).
+      isCapable: function (sectionId) { return hasImageCapability(sectionId); },
+      // The canonical section list filtered to image-capable sections.
+      capableSections: function () {
+        return getSectionList().filter(function (s) { return hasImageCapability(s.id); });
+      },
+      // Count of visible gallery images in a section (excludes template-hidden).
+      count: function (sectionId) { return countGalleryImages(sectionId); },
+      // Count of images this section lost to a template switch (the grid footer).
+      hiddenCount: function (sectionId) {
+        return Object.values(galleryData).filter(function (g) {
+          return g.section === sectionId && g.templateHidden;
+        }).length;
+      },
+      // Fresh-fetch the gallery collection, sync it into the core shell's
+      // window.gallery (so the shared index.html writers — moveImage /
+      // openImageModal / confirmDeleteImage / getNextOrder — operate on current
+      // data even off the homepage route, where no gallery listener is armed),
+      // and return this section's images sorted by order: [[id, imgDoc], …].
+      list: async function (sectionId) {
+        galleryData = (await MastDB.gallery.list(500)) || {};
+        syncToGlobal(galleryData);
+        return getImagesForSection(sectionId);
+      },
+      // The per-section image grid markup — the EXACT renderer the page builder
+      // uses (gallery-card per image, video handling, reorder/visibility/edit/
+      // delete buttons wired to the shared window.* writers). Call list() first
+      // so window.gallery + galleryData are current. Single-sources the grid so
+      // V1 + V2 never drift.
+      gridHtml: function (sectionId, items) {
+        return renderSectionImageGrid(sectionId, items || getImagesForSection(sectionId));
+      },
+      // Add an image from the shared library → metadata modal → a gallery doc
+      // carrying { section }. Same flow hpAddImage uses; the modal's save fires
+      // window.notifyGalleryChanged() so an open V2 slide-out refreshes.
+      addFromLibrary: function (sectionId) {
+        if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
+        window.openImagePicker(function (imgId, url) {
+          var libImg = (window.imageLibrary || {})[imgId] || {};
+          setTimeout(function () {
+            if (typeof window.openGalleryMetadataModal === 'function') window.openGalleryMetadataModal(sectionId, url, imgId, libImg);
+          }, 200);
+        });
+      },
+      // Add an image by upload (or pasted URL) → the full add modal in upload
+      // mode, section preset. saveImage routes uploads through the /uploadImage
+      // CF / Storage exactly like the page builder.
+      addByUpload: function (sectionId) {
+        if (typeof window.openImageModal !== 'function') { if (window.showToast) showToast('Image editor unavailable.', true); return; }
+        window.openImageModal(null, sectionId);
+      },
+      // Edit one image's metadata (caption/alt/category/product/video/visibility)
+      // via the shared full modal.
+      edit: function (imageId) {
+        if (typeof window.openImageModal === 'function') window.openImageModal(imageId);
+      },
+      // Remove an image (shared confirm → deleteImage → MastDB.gallery.remove).
+      remove: function (imageId) {
+        if (typeof window.confirmDeleteImage === 'function') window.confirmDeleteImage(imageId);
+      },
+      // Reorder an image up/down within its section. Re-syncs window.gallery
+      // first so the shared moveImage swaps against current order values.
+      reorder: async function (imageId, dir) {
+        galleryData = (await MastDB.gallery.list(500)) || {};
+        syncToGlobal(galleryData);
+        if (typeof window.moveImage === 'function') return window.moveImage(imageId, (dir === 'up' || dir === -1) ? 'up' : 'down');
+      },
+      // Toggle an image's public visibility. Re-syncs window.gallery first.
+      toggleVisible: async function (imageId) {
+        galleryData = (await MastDB.gallery.list(500)) || {};
+        syncToGlobal(galleryData);
+        if (typeof window.toggleImageVisibility === 'function') return window.toggleImageVisibility(imageId);
+      },
+
+      // ── Single-image FIELDS (e.g. about.imageUrl) ──────────────────────
+      // The image-type fields a section exposes (from SECTION_DEFS): [{id,label}].
+      // These write ONE url to webPresence/config/sections/{key}/{field} — the
+      // storefront reads e.g. sections.about.imageUrl — NOT a gallery doc.
+      fieldDefs: function (sectionId) {
+        var def = SECTION_DEFS.find(function (d) { return d.key === sectionId; });
+        if (!def || !def.fields) return [];
+        return def.fields.filter(function (f) { return f.type === 'image'; });
+      },
+      // Read the live value of a single-image field (fresh).
+      getFieldValue: async function (sectionKey, fieldId) {
+        var v = await MastDB.get('webPresence/config/sections/' + sectionKey + '/' + fieldId).catch(function () { return ''; });
+        return v || '';
+      },
+      // Pick from the library → write the field (the hpPickImage flow).
+      pickField: function (sectionKey, fieldId) {
+        if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
+        window.openImagePicker(function (imgId, url) {
+          if (!url) return;
+          window.HomepageBridge.images.setField(sectionKey, fieldId, url);
+        });
+      },
+      // Write a single-image field URL (the byte-identical core hpPickImage uses).
+      // Keeps the section-content cache in sync + marks the site unpublished, then
+      // fires notifyGalleryChanged() so the V1 page builder + V2 surfaces refresh.
+      setField: async function (sectionKey, fieldId, url) {
+        if (!websiteConfig) websiteConfig = {};
+        if (!websiteConfig.sections) websiteConfig.sections = {};
+        if (!websiteConfig.sections[sectionKey]) websiteConfig.sections[sectionKey] = {};
+        websiteConfig.sections[sectionKey][fieldId] = url;
+        await MastDB.set('webPresence/config/sections/' + sectionKey + '/' + fieldId, url);
+        markUnpublished();
+        if (typeof window.notifyGalleryChanged === 'function') window.notifyGalleryChanged();
+        return url;
+      },
+      // Clear a single-image field.
+      clearField: function (sectionKey, fieldId) {
+        return window.HomepageBridge.images.setField(sectionKey, fieldId, '');
+      }
+    }
   };
 
   // --- Module Registration ---

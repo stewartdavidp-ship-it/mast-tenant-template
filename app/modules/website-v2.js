@@ -97,9 +97,10 @@
   // productGridVariant, otherwise <id>Variant).
   function variantKeyFor(secId) { return secId === 'product-grid' ? 'productGridVariant' : secId + 'Variant'; }
 
-  // Card 2 · which section ids render storefront gallery images (the classic
-  // "Edit images" punt stays for these — native image-grid editing is out of
-  // scope per the build plan). Mirrors homepage.js IMAGE_CAPABLE_SECTIONS.
+  // Card 2 · which section ids render storefront gallery images — these get the
+  // native "Edit images" slide-out. Static mirror of homepage.js
+  // IMAGE_CAPABLE_SECTIONS; secHasImages() prefers the bridge's isCapable (which
+  // also covers dynamic shop-category sections) and falls back to this list.
   var IMAGE_SECTIONS = ['hero', 'gallery', 'about', 'our-story', 'shop', 'schedule'];
 
   // Card 2 · contact social-link platforms (mirrors homepage-v2 SOCIAL_PLATFORMS).
@@ -793,10 +794,17 @@
     // Layout variant picker (hero / gallery / product-grid) — closes the
     // homepage-v2 variant hatch. swatchGrid of manifest variant options.
     out += wordsVariantSection(sec.id);
-    // Section images stay classic (no native image-grid editing here).
-    if (IMAGE_SECTIONS.indexOf(sec.id) !== -1) {
-      out += '<div class="mu-sub" style="margin-top:12px;">Photos for this section live in the page builder.<br>' +
-        '<button type="button" class="btn btn-secondary btn-small" style="margin-top:6px;" onclick="WebsiteV2.classicImages()">Edit images (classic) →</button></div>';
+    // Section gallery images → native slide-out (Add from library / Upload +
+    // per-image edit / reorder / visibility / delete), all via
+    // HomepageBridge.images. Replaces the old "Edit images (classic) →" punt.
+    if (secHasImages(sec.id)) {
+      var imgN = 0;
+      try { var bi = window.HomepageBridge; if (bi && bi.images && bi.images.count) imgN = bi.images.count(sec.id); } catch (e) {}
+      out += '<div class="wv2-sub-h" style="margin-top:12px;">Photos</div>' +
+        '<div class="wv2-img-line">' +
+          '<span class="mu-sub">' + (imgN ? (imgN + ' image' + (imgN === 1 ? '' : 's')) : 'No images yet') + '</span>' +
+          '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.editImages(\'' + esc(sec.id) + '\')">Edit images</button>' +
+        '</div>';
     }
     return out;
   }
@@ -819,9 +827,10 @@
     } else if (f.type === 'toggle') {
       inner = '<label class="toggle-switch"><input type="checkbox" id="' + esc(iid) + '"' + (val ? ' checked' : '') + '><span class="toggle-slider"></span></label>';
     } else if (f.type === 'image') {
-      // image fields edit on classic (no native image-grid editing here).
-      return '<div class="form-group"><label class="form-label">' + esc(f.label) + '</label>' +
-        '<div class="mu-sub">Set in the page builder.</div></div>';
+      // Single-image FIELD (e.g. about.imageUrl) → native instant-apply control
+      // (From library / Upload / Remove), all via HomepageBridge.images. The
+      // storefront reads this one URL (sections.{key}.{field}), not a gallery doc.
+      return imageFieldControlHtml(secId, f, data);
     } else {
       inner = '<input class="form-input" type="text" id="' + esc(iid) + '" value="' + esc(String(val)) + '" style="width:100%;">';
     }
@@ -854,6 +863,142 @@
     grid = grid.replace(/data-sw="wv2PickVariant"/g, 'data-sw="' + forwarder + '"');
     window[forwarder] = (function (sid) { return function (variantId) { WebsiteV2.pickVariant(sid, variantId); }; })(secId);
     return '<div class="wv2-sub-h" style="margin-top:12px;">Layout</div>' + grid;
+  }
+
+  // ── Card 2 · Section image editing (native — replaces the classic punt) ──
+  // The grid + per-image actions are rendered by HomepageBridge.images.gridHtml
+  // (the SAME renderer the page builder uses) and write through the shared
+  // window.* gallery writers; the single-image field (about.imageUrl) writes via
+  // HomepageBridge.images.setField. The twin holds NO raw MastDB.gallery writes.
+
+  // Which sections expose storefront images (bridge-aware → also dynamic shop
+  // categories; falls back to the static mirror before the bridge warms).
+  function secHasImages(secId) {
+    var b = window.HomepageBridge;
+    if (b && b.images && b.images.isCapable) { try { return b.images.isCapable(secId); } catch (e) {} }
+    return IMAGE_SECTIONS.indexOf(secId) !== -1;
+  }
+
+  // The native single-image FIELD control (preview + From library / Upload /
+  // Remove). Shared by the inline section editor and the image slide-out.
+  function imageFieldControlHtml(secId, f, data) {
+    data = data || sectionData(secId);
+    var val = (data && data[f.id]) || '';
+    var sid = esc(secId), fid = esc(f.id);
+    var prev = val
+      ? '<img src="' + esc(String(val)) + '" alt="" class="wv2-img-fieldprev">'
+      : '<div class="wv2-img-fieldprev wv2-img-fieldempty mu-sub">No image set</div>';
+    return '<div class="form-group wv2-img-field"><label class="form-label">' + esc(f.label) + '</label>' +
+      prev +
+      '<div class="wv2-img-fieldbtns">' +
+        '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.pickFieldImage(\'' + sid + '\',\'' + fid + '\')">📚 From library</button>' +
+        '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.uploadFieldImage(\'' + sid + '\',\'' + fid + '\')">💻 Upload</button>' +
+        (val ? '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.clearFieldImage(\'' + sid + '\',\'' + fid + '\')">Remove</button>' : '') +
+      '</div></div>';
+  }
+
+  // Optimistically stash a single-image field value in the wp cache so the
+  // inline preview / slide-out reflect it before the re-read lands.
+  function optimisticField(secId, fieldId, url) {
+    if (!V2.wp) V2.wp = {};
+    if (!V2.wp.sections) V2.wp.sections = {};
+    if (!V2.wp.sections[secId]) V2.wp.sections[secId] = {};
+    V2.wp.sections[secId][fieldId] = url;
+  }
+
+  // Upload a file from the user's computer to the shared image library via the
+  // /uploadImage CF, then hand back the resulting URL. Mirrors logoUpload.
+  function pickAndUploadImage(tags, onUrl) {
+    var input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*';
+    input.onchange = function () {
+      if (!input.files || !input.files[0]) return;
+      if (window.showToast) showToast('Uploading image…');
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          var base64 = String(e.target.result).split(',')[1];
+          var au = window.auth || (window.firebase && firebase.auth && firebase.auth());
+          if (!au || !au.currentUser || typeof window.callCF !== 'function') { if (window.showToast) showToast('Upload unavailable.', true); return; }
+          au.currentUser.getIdToken().then(function (token) {
+            return window.callCF('/uploadImage', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token }, body: JSON.stringify({ image: base64, tags: tags || [], source: 'website-section-image' }) });
+          }).then(function (resp) { return resp.json(); }).then(function (result) {
+            if (!result || !result.success) throw new Error((result && result.error) || 'Upload failed');
+            var lib = window.imageLibrary || {}; var d = lib[result.imageId] || {};
+            var url = d.url || result.url;
+            if (!url) throw new Error('Upload returned no URL');
+            onUrl(url);
+          }).catch(function (err) { if (window.showToast) showToast('Upload failed: ' + (err && err.message ? err.message : 'error'), true); });
+        } catch (err) { if (window.showToast) showToast('Upload failed.', true); }
+      };
+      reader.readAsDataURL(input.files[0]);
+    };
+    input.click();
+  }
+
+  // The open image slide-out tracks its section here. paintImageSlide is
+  // registered as window.onGalleryMutated so the shared gallery writers (add /
+  // edit / delete / reorder / visibility, which fire window.notifyGalleryChanged)
+  // refresh the grid in place.
+  var WV2_IMG = { sec: null };
+
+  function imageSlideTitle(secId) {
+    var b = window.HomepageBridge;
+    var list = (b && b.getSectionList && b.getSectionList()) || [];
+    var s = list.find(function (x) { return x.id === secId; });
+    return 'Photos · ' + ((s && (s.label || s.id)) || titleCase(secId));
+  }
+
+  // The slide-out body: action bar (+ hero rotation), single-image field
+  // controls (if any), then the shared image grid. items = fresh [[id,doc]].
+  function imageSlideBodyHtml(secId, items) {
+    var b = window.HomepageBridge.images;
+    var out = '<div class="wv2-img-actions">' +
+      '<button type="button" class="btn btn-primary btn-small" onclick="WebsiteV2.imgAddLibrary(\'' + esc(secId) + '\')">📚 Add from library</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgUpload(\'' + esc(secId) + '\')">💻 Upload</button>';
+    if (secId === 'hero') {
+      out += '<select id="heroRotationSpeed" class="form-input wv2-img-rot" onchange="if(window.saveHeroRotationSpeed)saveHeroRotationSpeed(this.value)" title="Image rotation speed">' +
+        ['3', '4', '5', '6', '8', '10', '15', '20'].map(function (s) { return '<option value="' + s + '"' + (s === '6' ? ' selected' : '') + '>' + s + 's</option>'; }).join('') +
+        '</select>';
+    }
+    out += '</div>';
+    var fdefs = (b.fieldDefs && b.fieldDefs(secId)) || [];
+    if (fdefs.length) out += fdefs.map(function (f) { return imageFieldControlHtml(secId, f); }).join('');
+    out += '<div class="wv2-img-grid-wrap">' + b.gridHtml(secId, items) + '</div>';
+    return out;
+  }
+
+  // Open the per-section image slide-out. Loads fresh, registers the refresh
+  // hook, paints. Read-mode (no footer) — every action is instant-apply.
+  function openImageSlideOut(secId) {
+    if (!window.MastUI || !MastUI.slideOut) { if (window.showToast) showToast('Cannot open dialog.', true); return; }
+    WV2_IMG.sec = secId;
+    MastUI.slideOut.open({
+      title: imageSlideTitle(secId),
+      subtitle: 'Loading…',
+      size: 'lg', mode: 'read', deepLink: false,
+      bodyHtml: '<div class="mu-sub">Loading…</div>',
+      actions: [],
+      onClose: function () { if (window.onGalleryMutated === paintImageSlide) window.onGalleryMutated = null; WV2_IMG.sec = null; mountWords(); }
+    });
+    window.onGalleryMutated = paintImageSlide;
+    paintImageSlide();
+  }
+
+  // (Re)paint the open image slide-out from fresh data. list() also re-syncs
+  // window.gallery so the grid's shared moveImage/openImageModal/etc. operate on
+  // current data off the homepage route.
+  function paintImageSlide() {
+    var secId = WV2_IMG.sec;
+    if (!secId || !window.HomepageBridge || !HomepageBridge.images) return;
+    Promise.resolve(HomepageBridge.images.list(secId)).then(function (items) {
+      if (WV2_IMG.sec !== secId) return; // closed / switched while fetching
+      var body = document.getElementById('mastSlideOutBody');
+      if (!body) return;
+      body.innerHTML = imageSlideBodyHtml(secId, items);
+      var sub = document.getElementById('mastSlideOutSubtitle');
+      if (sub) { var n = items.length; sub.textContent = n + ' image' + (n === 1 ? '' : 's'); sub.style.display = ''; }
+      if (secId === 'hero' && typeof window.loadHeroRotationSpeed === 'function') window.loadHeroRotationSpeed();
+    }).catch(function (e) { console.error('[website-v2] paintImageSlide', e); });
   }
 
   // Mount Card 2 into its scaffold body (wv2WordsBody) — replaces the PR2
@@ -1412,6 +1557,15 @@
       '.wv2-social-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;}' +
       '.wv2-var-name{font-size:0.85rem;color:var(--text-primary);}' +
       '.wv2-var-desc{font-size:0.72rem;margin-top:2px;}' +
+      // Section images (inline "Edit images" row + the slide-out controls)
+      '.wv2-img-line{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;}' +
+      '.wv2-img-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;}' +
+      '.wv2-img-rot{margin-left:auto;width:auto;font-size:0.78rem;padding:3px 8px;}' +
+      '.wv2-img-field{margin-top:6px;}' +
+      '.wv2-img-fieldprev{display:block;max-width:220px;max-height:130px;border-radius:8px;border:1px solid var(--border);object-fit:cover;margin:4px 0 8px;}' +
+      '.wv2-img-fieldempty{width:220px;height:90px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--text-primary) 4%,transparent);}' +
+      '.wv2-img-fieldbtns{display:flex;gap:8px;flex-wrap:wrap;}' +
+      '.wv2-img-grid-wrap{margin-top:6px;}' +
       // Copy-from-site import
       '.wv2-import-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
       '.wv2-import-hits{margin-top:10px;display:flex;flex-direction:column;gap:8px;}' +
@@ -1730,10 +1884,54 @@
           var b = document.getElementById('wv2ImportBtn'); if (b) { b.disabled = false; b.textContent = 'Read it'; }
         });
     },
-    // Section images stay classic — open the page builder (the existing punt).
-    classicImages: function () {
-      if (typeof navigateToClassic === 'function') navigateToClassic('homepage');
-      else if (typeof navigateTo === 'function') navigateTo('homepage');
+    // Card 2 · open the per-section image slide-out (native; replaces the old
+    // "Edit images (classic)" punt). Grid + Add-from-library / Upload / per-image
+    // edit / reorder / visibility / delete, all via HomepageBridge.images.
+    editImages: function (secId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge;
+      if (!b || !b.images) { if (window.showToast) showToast('Image editor unavailable.', true); return; }
+      openImageSlideOut(secId);
+    },
+    // Slide-out action bar → add an image from the shared library (metadata modal
+    // save fires notifyGalleryChanged → the slide-out refreshes in place).
+    imgAddLibrary: function (secId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      if (window.HomepageBridge && HomepageBridge.images) HomepageBridge.images.addFromLibrary(secId);
+    },
+    // Slide-out action bar → add an image by upload (full add modal, upload mode).
+    imgUpload: function (secId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      if (window.HomepageBridge && HomepageBridge.images) HomepageBridge.images.addByUpload(secId);
+    },
+    // Single-image FIELD (e.g. about.imageUrl) · pick from the library → setField.
+    // Optimistic cache + re-mount Card 2 for the inline preview; setField fires
+    // notifyGalleryChanged so an open slide-out refreshes too.
+    pickFieldImage: function (secId, fieldId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images) return;
+      if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
+      window.openImagePicker(function (imgId, url) {
+        if (!url) return;
+        optimisticField(secId, fieldId, url);
+        Promise.resolve(b.images.setField(secId, fieldId, url)).then(mountWords);
+      });
+    },
+    // Single-image FIELD · upload from computer → /uploadImage CF → setField.
+    uploadFieldImage: function (secId, fieldId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images) return;
+      pickAndUploadImage(['section-image', secId], function (url) {
+        optimisticField(secId, fieldId, url);
+        Promise.resolve(b.images.setField(secId, fieldId, url)).then(mountWords);
+      });
+    },
+    // Single-image FIELD · clear it.
+    clearFieldImage: function (secId, fieldId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images) return;
+      optimisticField(secId, fieldId, '');
+      Promise.resolve(b.images.clearField(secId, fieldId)).then(mountWords);
     },
     // Featured-testimonial visibility → window.hpToggleTestimonialVisible (the
     // SAME single-source writer the legacy page builder uses; arg-taking, no DOM)

@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260617-203758-b44b4d23"></script>
+  <script src="../shared/mastdb.js?v=20260618-130658-86c479fd"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260617-203758-b44b4d23"></script>
-  <script src="../shared/brand-sync.js?v=20260617-203758-b44b4d23"></script>
+  <script src="../shared/customer-filters.js?v=20260618-130658-86c479fd"></script>
+  <script src="../shared/brand-sync.js?v=20260618-130658-86c479fd"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260617-203758-b44b4d23"></script>
+  <script src="../shared/variant-reconcile.js?v=20260618-130658-86c479fd"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260617-203758-b44b4d23"></script>
-  <script src="../shared/mast-io.js?v=20260617-203758-b44b4d23"></script>
-  <script src="../shared/mast-entity.js?v=20260617-203758-b44b4d23"></script>
+  <script src="../shared/mast-ui.js?v=20260618-130658-86c479fd"></script>
+  <script src="../shared/mast-io.js?v=20260618-130658-86c479fd"></script>
+  <script src="../shared/mast-entity.js?v=20260618-130658-86c479fd"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260617-203758-b44b4d23"></script>
+  <script src="../shared/product-readiness.core.js?v=20260618-130658-86c479fd"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260617-203758-b44b4d23"></script>
+  <script src="../shared/mast-intake.js?v=20260618-130658-86c479fd"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22189,7 +22189,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260617-203758-b44b4d23';
+var MAST_MODULES_V = '20260618-130658-86c479fd';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
@@ -54101,6 +54101,19 @@ function getNextOrder(section) {
   return maxOrder + 1;
 }
 
+// After any gallery-image write, refresh whatever surface is showing images:
+// the legacy page builder (when on its route) AND any registered listener
+// (the website-v2 Card 2 image slide-out registers window.onGalleryMutated
+// while open). Single-sources the post-write refresh so V1 + V2 stay in sync.
+window.notifyGalleryChanged = function notifyGalleryChanged() {
+  if (window.currentRoute === 'homepage' && typeof window.renderHomepage === 'function') {
+    setTimeout(function() { window.renderHomepage(); }, 100);
+  }
+  if (typeof window.onGalleryMutated === 'function') {
+    try { window.onGalleryMutated(); } catch (e) { console.error('onGalleryMutated', e); }
+  }
+};
+
 async function saveImage(imageId) {
   var section = document.getElementById('imgSection').value;
   var alt = document.getElementById('imgAlt').value.trim();
@@ -54244,10 +54257,8 @@ async function saveImage(imageId) {
     pendingFilename = null;
 
     closeModal();
-    // Re-render homepage after modal closes so changes appear immediately
-    if (window.currentRoute === 'homepage' && typeof window.renderHomepage === 'function') {
-      setTimeout(function() { window.renderHomepage(); }, 100);
-    }
+    // Re-render the page builder + refresh any open V2 image slide-out.
+    notifyGalleryChanged();
   } catch (err) {
     showToast('Error saving image: ' + err.message, true);
   }
@@ -54262,7 +54273,7 @@ async function toggleImageVisibility(imageId) {
       updatedAt: MastDB.serverTimestamp()
     });
     await writeAudit('update', 'gallery', imageId);
-    if (window.currentRoute === 'homepage' && window.renderHomepage) setTimeout(window.renderHomepage, 100);
+    notifyGalleryChanged();
   } catch (err) {
     showToast('Error toggling visibility: ' + err.message, true);
   }
@@ -54368,7 +54379,7 @@ async function moveImage(imageId, direction) {
 
   try {
     await MastDB.multiUpdate(updates);
-    if (window.currentRoute === 'homepage' && window.renderHomepage) setTimeout(window.renderHomepage, 100);
+    notifyGalleryChanged();
   } catch (err) {
     showToast('Error reordering: ' + err.message, true);
   }
@@ -54396,7 +54407,7 @@ async function deleteImage(imageId) {
     await MastDB.gallery.remove(imageId);
     showToast('Image deleted.');
     closeModal();
-    if (window.currentRoute === 'homepage' && window.renderHomepage) setTimeout(window.renderHomepage, 100);
+    notifyGalleryChanged();
   } catch (err) {
     showToast('Error deleting image: ' + err.message, true);
   }
@@ -55554,10 +55565,8 @@ async function saveGalleryFromLibrary(sectionId, imageUrl, libraryImageId) {
     await writeAudit('create', 'gallery', galKey);
     showToast('Image added to ' + sectionId + '.');
     closeModal();
-    // Re-render homepage after modal closes so new image appears immediately
-    if (window.currentRoute === 'homepage' && typeof renderHomepage === 'function') {
-      setTimeout(function() { renderHomepage(); }, 100);
-    }
+    // Re-render the page builder + refresh any open V2 image slide-out.
+    notifyGalleryChanged();
   } catch (err) {
     showToast('Error: ' + err.message, true);
   }
