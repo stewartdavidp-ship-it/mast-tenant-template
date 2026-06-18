@@ -977,30 +977,44 @@
   // strip below switches focus. Add from library / Upload append a gallery doc
   // carrying { section }. Every write goes through HomepageBridge.images (no raw
   // MastDB writes here) and re-renders this drill in place.
+  // Resolve the storefront categories for the per-photo Category field. Prefer
+  // the twin's loaded list; else read the raw doc and normalize BOTH shapes (a
+  // plain array OR the object-with-numeric-keys-plus-_v form some tenants store).
+  function drillCategories() {
+    if (V2.cats && V2.cats.length) return Promise.resolve(V2.cats.slice());
+    return Promise.resolve(MastDB.get('public/config/categories')).then(function (raw) {
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw.filter(function (c) { return c && c.id; });
+      return Object.keys(raw).filter(function (k) { return k !== '_v' && raw[k] && raw[k].id; })
+        .map(function (k) { return { id: raw[k].id, label: raw[k].label || raw[k].name || raw[k].id }; });
+    }).catch(function () { return []; });
+  }
   function imagesDrillRecord(id) {
     var b = window.HomepageBridge;
     if (!b || !b.images || !b.images.list) return null;
-    return Promise.resolve(b.images.list(id)).then(function (items) {
+    return Promise.all([b.images.list(id), drillCategories()]).then(function (res) {
+      var items = res[0], cats = res[1] || [];
       var list = (b.getSectionList && b.getSectionList()) || [];
       var sec = list.find(function (s) { return s.id === id; });
       var label = (sec && (sec.label || sec.id)) || titleCase(id);
       var ids = items.map(function (e) { return e[0]; });
       var focus = (WV2_IMGD.focus && ids.indexOf(WV2_IMGD.focus) !== -1) ? WV2_IMGD.focus : (ids[0] || null);
       WV2_IMGD.id = id; WV2_IMGD.focus = focus;
-      return { _key: id, _title: label + ' · Photos', sectionId: id, items: items, focus: focus };
+      return { _key: id, _title: label + ' · Photos', sectionId: id, items: items, focus: focus, cats: cats };
     });
   }
   // The conditional per-photo metadata fields, matching the legacy openImageModal:
   // category (gallery/shop), hero video (url/speed/start/end), image fit
   // (non-hero), product (shop). Instant-apply via WebsiteV2.imgdMeta.
-  function imgMetaFieldsHtml(secId, fid, img) {
+  function imgMetaFieldsHtml(r, fid, img) {
+    var secId = r.sectionId, cats = r.cats || [];
     var f = esc(fid), out = '';
     var isHero = secId === 'hero';
     var showCategory = secId === 'gallery' || secId === 'shop';
-    var shopIds = ['shop'].concat((V2.cats || []).map(function (c) { return c.id; }));
+    var shopIds = ['shop'].concat(cats.map(function (c) { return c.id; }));
     var showProduct = shopIds.indexOf(secId) !== -1;
     if (showCategory) {
-      var copts = '<option value="">— none —</option>' + (V2.cats || []).map(function (c) {
+      var copts = '<option value="">— none —</option>' + cats.map(function (c) {
         return '<option value="' + esc(c.id) + '"' + (img.category === c.id ? ' selected' : '') + '>' + esc(c.label || c.id) + '</option>';
       }).join('');
       out += '<div class="form-group"><label class="form-label">Category</label>' +
@@ -1059,7 +1073,7 @@
         '<input class="form-input" type="text" style="width:100%;" value="' + esc(fimg.alt || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'alt\',this.value)"></div>' +
         '<div class="form-group"><label class="form-label">Caption</label>' +
         '<input class="form-input" type="text" style="width:100%;" value="' + esc(fimg.caption || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'caption\',this.value)"></div>' +
-        imgMetaFieldsHtml(r.sectionId, fid, fimg) +
+        imgMetaFieldsHtml(r, fid, fimg) +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button type="button" class="btn btn-secondary btn-small"' + (idx <= 0 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'up\')">← Earlier</button>' +
           '<button type="button" class="btn btn-secondary btn-small"' + (idx >= items.length - 1 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'down\')">Later →</button>' +
