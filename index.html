@@ -53,6 +53,29 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
 
+  /* ========= PAINT GATE (anti-FOUC) =========
+     Hold a solid, already-themed cover over the page until the first screen is
+     final, then fade the cover out ONCE — so the storefront doesn't visibly
+     repaint as data streams in (theme -> brand copy -> hero/gallery images).
+     This is a single overlay (html::before); it deliberately does NOT touch the
+     opacity/visibility of any real page element, so it can't un-hide things like
+     the mobile-menu overlay or modals. Skipped in builder live-preview mode.
+     The gate script removes both classes after the fade, so the end-state DOM is
+     identical to having no gate at all. A hard timeout guarantees it lifts. */
+  html.mast-cloak::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 2147483646;
+    background: var(--bg); /* themed pre-paint via html.dark/.light, so it matches the page */
+    opacity: 1;
+    transition: opacity 0.34s ease;
+  }
+  html.mast-cloak.mast-revealed::before {
+    opacity: 0;
+    pointer-events: none;
+  }
+
   /* ========= HERO — VIDEO FIRST ========= */
   .hero {
     position: relative;
@@ -1339,6 +1362,55 @@
 <script>
 (function(){if(window.__mastPreview){document.documentElement.classList.add('light');return;}var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();
 </script>
+<script>
+/* Paint gate — cover the page now (pre-paint), fade the cover out once the first
+   screen is final, then remove BOTH gate classes so the end-state DOM is identical
+   to no gate. Reveal fires when theme/flow applied (storefront-theme-ready) AND
+   fonts ready AND the hero image is decoded — or a hard 2s ceiling, whichever is
+   first. The cover (html.mast-cloak::before) never touches any page element.
+   Skipped in builder live-preview (?mastpreview=1) so the admin keeps instant
+   edit feedback. */
+(function(){
+  if (window.__mastPreview) return;
+  var d = document.documentElement;
+  d.classList.add('mast-cloak');
+
+  // First-screen readiness: the homepage hero render resolves this once its image
+  // is decoded. window.load is a backstop for pages/tenants with no hero image.
+  var fsResolve;
+  window.MAST_FIRST_SCREEN_READY = new Promise(function(r){ fsResolve = r; });
+  window.__mastFirstScreenReady = function(){ if (fsResolve) { fsResolve(); fsResolve = null; } };
+  window.addEventListener('load', function(){ window.__mastFirstScreenReady(); });
+
+  var revealed = false;
+  function reveal(){
+    if (revealed) return;
+    revealed = true;
+    d.classList.add('mast-revealed');             // fades the cover out (CSS transition)
+    setTimeout(function(){                          // after the fade, drop both classes →
+      d.classList.remove('mast-revealed');          // end-state DOM == no gate at all
+      d.classList.remove('mast-cloak');
+    }, 420);
+  }
+  window.__mastReveal = reveal;
+
+  // Absolute ceiling — the cover never stays up past this, even if a fetch hangs.
+  // reveal() is idempotent, so this stays armed as a backstop; we never clear it
+  // (clearing it and then deferring reveal to requestAnimationFrame stranded the
+  // cover in a backgrounded tab, where rAF is paused).
+  setTimeout(reveal, 2000);
+
+  function whenReady(){
+    var waits = [ window.MAST_FIRST_SCREEN_READY ];
+    if (document.fonts && document.fonts.ready) waits.push(document.fonts.ready);
+    Promise.all(waits).then(reveal);
+  }
+  // storefront-theme.js dispatches this once colors/variant/section-flow are applied.
+  window.addEventListener('storefront-theme-ready', whenReady);
+  // Backstop if the theme script never loads/dispatches.
+  window.addEventListener('load', whenReady);
+})();
+</script>
 </head>
 <body>
 <button id="themeToggle" onclick="toggleMastTheme()" title="Toggle dark mode" style="position:fixed;top:12px;right:12px;z-index:9999;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;box-shadow:var(--shadow);color:var(--text);display:flex;align-items:center;justify-content:center;padding:0;"></button>
@@ -1718,9 +1790,48 @@ window.TENANT_READY.then(function() {
     return d.getDate().toString();
   }
 
+  // ---- FAST HERO (paint gate) ----
+  // The parallel prefetch in storefront-tenant.js (STOREFRONT_DATA) resolves the
+  // gallery well before the MastDB query below. Use it to decode the hero image
+  // early so the paint gate's cover lifts on a fully-formed hero in one pass. The
+  // MastDB handler below still runs and applies the same image + video playlist.
+  if (window.STOREFRONT_DATA) {
+    window.STOREFRONT_DATA.then(function(sd) {
+      try {
+        var gal = (sd && sd.pageData && sd.pageData.type === 'gallery') ? sd.pageData.data : null;
+        if (!gal) return; // window.load / MastDB handler will lift the gate
+        var heroItems = Object.keys(gal).map(function(k){ return gal[k]; })
+          .filter(function(i){ return i && i.section === 'hero' && i.visible !== false; })
+          .sort(function(a, b){ return (a.order || 0) - (b.order || 0); });
+        var first = heroItems[0];
+        var url = first && first.url; // still image (also the video poster) for the first hero item
+        var poster = document.getElementById('heroPoster');
+        if (!url) { if (window.__mastFirstScreenReady) window.__mastFirstScreenReady(); return; }
+        var im = new Image();
+        im.onload = im.onerror = function(){
+          // Paint the hero still NOW so the cover lifts on a fully-formed hero
+          // (the MastDB handler below re-applies the same image + wires any video).
+          if (poster) {
+            poster.style.backgroundImage = "url('" + url + "')";
+            if (!first.videoUrl) {
+              poster.style.backgroundSize = first.imageFit || 'cover';
+              poster.style.opacity = '1';
+              poster.classList.remove('loaded');
+            }
+          }
+          if (window.__mastFirstScreenReady) window.__mastFirstScreenReady();
+        };
+        im.src = url;
+      } catch (e) { if (window.__mastFirstScreenReady) window.__mastFirstScreenReady(); }
+    });
+  }
+
   // ---- IMAGES (all sections from one query) ----
   MastDB.query('public/gallery').orderByChild('order').once().then(function(data) {
-    if (!data || Object.keys(data).length === 0) return; // keep hardcoded fallback
+    if (!data || Object.keys(data).length === 0) {
+      if (window.__mastFirstScreenReady) window.__mastFirstScreenReady(); // no hero image to wait for
+      return; // keep hardcoded fallback
+    }
     const allItems = Object.values(data).filter(function(i) { return i.visible !== false; });
 
     // Hero: build video playlist from all hero items with videoUrl
@@ -1861,7 +1972,9 @@ window.TENANT_READY.then(function() {
       html += '</div>';
     });
     grid.innerHTML = html;
-  }).catch(function() { /* keep hardcoded fallback */ });
+  }).catch(function() {
+    if (window.__mastFirstScreenReady) window.__mastFirstScreenReady(); // don't hold the gate on a failed gallery read
+  });
 
   // ---- EVENTS (configurable count, default 3) ----
   // W3a-cleanup (OPEN -OtHKHHztxZ8R08YE7k8): moved from `public/settings/...`
