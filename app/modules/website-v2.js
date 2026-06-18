@@ -885,8 +885,21 @@
     var b = window.HomepageBridge; if (!b || !b.images || !b.images.list) return;
     Promise.resolve(b.images.list(secId)).then(function (items) {
       var el2 = document.getElementById('wv2PhotoStrip'); if (!el2) return;
-      if (!items.length) { el2.innerHTML = '<span class="mu-sub">No photos yet.</span>'; return; }
-      el2.innerHTML = items.slice(0, 12).map(function (e) { var d = e[1]; return '<div class="wv2-imgcell" style="background-image:url(' + esc(d.url || '') + ');"' + (d.visible === false ? ' data-off="1"' : '') + '></div>'; }).join('');
+      var n = items.length;
+      el2.innerHTML = n
+        ? items.slice(0, 12).map(function (e) { var d = e[1]; return '<div class="wv2-imgcell" style="background-image:url(' + esc(d.url || '') + ');"' + (d.visible === false ? ' data-off="1"' : '') + '></div>'; }).join('')
+        : '<span class="mu-sub">No photos yet.</span>';
+      // Keep the count fresh too — after adding/removing in the drill and coming
+      // Back, the stacked record's tile/header are stale, so sync them here.
+      var card = el2.closest('.mu-card'); var h = card && card.querySelector('h3');
+      if (h && /^Photos \(/.test(h.textContent)) h.textContent = 'Photos (' + n + ')';
+      var body = document.getElementById('mastSlideOutBody');
+      if (body) {
+        Array.prototype.forEach.call(body.querySelectorAll('.mu-tile'), function (t) {
+          var k = t.querySelector('.mu-tk'), v = t.querySelector('.mu-tv');
+          if (k && v && k.textContent === 'Photos') v.textContent = String(n);
+        });
+      }
     }).catch(function () {});
   }
   // Plain-language label for the hero slideshow slider.
@@ -1120,7 +1133,11 @@
       recordId: function (r) { return r.id; },
       fields: [{ name: '_title', label: 'Section', type: 'text', list: true, readOnly: true }],
       fetch: function (id) { return sectionRecord(id); },
-      detail: { render: function (UU, r) { WV2_SEC.id = r.id; return sectionDetailHtml(UU, r); } }
+      // Fill the Photos strip after EVERY render — open, setMode, AND Back from
+      // the image drill (the engine re-renders the stacked record on Back, which
+      // otherwise leaves the strip stuck on its "Loading…" placeholder). Reported
+      // via feedback iXUE4SKsf5DLkt9kleyN / nkt3OZ1FPG2hQyZabEoB.
+      detail: { render: function (UU, r) { WV2_SEC.id = r.id; setTimeout(function () { fillPhotoStrip(r.id); }, 0); return sectionDetailHtml(UU, r); } }
     });
     MastEntity.define('homepage-images-v2', {
       label: 'Photos', labelPlural: 'Photos', size: 'lg', route: null,
@@ -1911,9 +1928,9 @@
       var r = sectionRecord(id);
       if (!r) { if (window.showToast) showToast('Section still loading — try again', true); return; }
       WV2_SEC.id = id;
+      // the section record's render hook fills the Photos strip after the body
+      // lands (covers open, setMode, and Back from the drill).
       MastEntity.openRecord('homepage-section-v2', r, 'read');
-      // fill the Photos pane's read strip once the body lands
-      setTimeout(function () { fillPhotoStrip(id); }, 60);
     },
     // Instant-apply a section content field → hpUpdateField (self-debounced).
     contentInput: function (secId, fieldId, type, value) {
