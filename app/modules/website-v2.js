@@ -757,8 +757,12 @@
           : '<button type="button" class="wv2-sec-toggle" onclick="event.stopPropagation();WebsiteV2.toggleSection(\'' + sid + '\',' + (on ? 'false' : 'true') + ')">' + (on ? 'Turn off' : 'Turn on') + '</button>')
       : '';
     var open = ed ? 'WebsiteV2.openSection(\'' + sid + '\')' : '';
+    // photo-count badge (parity with the legacy section card's image badge).
+    var b = window.HomepageBridge;
+    var nImg = (b && b.images && b.images.isCapable && b.images.isCapable(sec.id) && b.images.count) ? b.images.count(sec.id) : 0;
+    var badge = nImg > 0 ? '<span class="wv2-sec-count">' + nImg + ' photo' + (nImg === 1 ? '' : 's') + '</span>' : '';
     return '<div class="wv2-sec-row"' + (ed ? ' role="button" tabindex="0" onclick="' + open + '" onkeydown="if(event.key===\'Enter\'){' + open + '}"' : '') + '>' +
-        '<div class="wv2-sec-id"><span class="wv2-sec-name">' + esc(sec.label || sec.id) + '</span> ' + pill + '</div>' +
+        '<div class="wv2-sec-id"><span class="wv2-sec-name">' + esc(sec.label || sec.id) + '</span> ' + pill + badge + '</div>' +
         '<div class="wv2-sec-actions">' + reorder + toggle + (ed ? '<span class="wv2-sec-go">Edit ›</span>' : '') + '</div>' +
       '</div>';
   }
@@ -856,12 +860,26 @@
     (r.fieldImageDefs || []).forEach(function (f) { out += featureImageCardHtml(UU, r, f, ed); });
     if (r.hasImages) {
       var manage = ed ? '<div style="margin-top:12px;"><button type="button" class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'homepage-images-v2\',\'' + esc(r.id) + '\')">Manage photos →</button></div>' : '';
-      out += UU.card('Photos (' + r.imageCount + ')', '<div id="wv2PhotoStrip" class="wv2-imgstrip-read"><span class="mu-sub">Loading…</span></div>' + manage);
+      // template-hidden notice (parity with the legacy page builder).
+      var b = window.HomepageBridge;
+      var hidden = (b && b.images && b.images.hiddenCount) ? b.images.hiddenCount(r.id) : 0;
+      var hiddenNote = hidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + hidden + ' photo' + (hidden === 1 ? '' : 's') + ' hidden by a template switch.</div>' : '';
+      out += UU.card('Photos (' + r.imageCount + ')', '<div id="wv2PhotoStrip" class="wv2-imgstrip-read"><span class="mu-sub">Loading…</span></div>' + hiddenNote + manage);
+    }
+    // Hero slideshow rotation speed (section-level; parity with the legacy hero
+    // editor → public/config/hero/rotationSeconds via saveHeroRotationSpeed).
+    if (r.id === 'hero' && ed) {
+      out += UU.card('Slideshow', '<div class="form-group"><label class="form-label">Rotation speed</label>' +
+        '<select id="heroRotationSpeed" class="form-input" style="width:100%;" onchange="if(window.saveHeroRotationSpeed)saveHeroRotationSpeed(this.value)">' +
+        ['3', '4', '5', '6', '8', '10', '15', '20'].map(function (s) { return '<option value="' + s + '"' + (s === '6' ? ' selected' : '') + '>' + s + ' seconds</option>'; }).join('') +
+        '</select></div>');
     }
     return out;
   }
-  // Fill the read-only photo strip in the open Photos pane from fresh data.
+  // Fill the read-only photo strip in the open Photos pane from fresh data;
+  // also load the hero rotation-speed value into its select.
   function fillPhotoStrip(secId) {
+    if (secId === 'hero' && typeof window.loadHeroRotationSpeed === 'function') window.loadHeroRotationSpeed();
     var el = document.getElementById('wv2PhotoStrip'); if (!el) return;
     var b = window.HomepageBridge; if (!b || !b.images || !b.images.list) return;
     Promise.resolve(b.images.list(secId)).then(function (items) {
@@ -951,6 +969,7 @@
   // current section. The image drill tracks its section + focused image.
   var WV2_SEC = { id: null };
   var WV2_IMGD = { id: null, focus: null };
+  var _imgdMetaT = {}; // debounce timers for per-photo metadata text inputs
 
   // ── Image MANAGER drill (homepage-images-v2) ────────────────────────
   // A stacked slide-out (Back to the section), rendered with MastUI cards: the
@@ -971,12 +990,60 @@
       return { _key: id, _title: label + ' · Photos', sectionId: id, items: items, focus: focus };
     });
   }
+  // The conditional per-photo metadata fields, matching the legacy openImageModal:
+  // category (gallery/shop), hero video (url/speed/start/end), image fit
+  // (non-hero), product (shop). Instant-apply via WebsiteV2.imgdMeta.
+  function imgMetaFieldsHtml(secId, fid, img) {
+    var f = esc(fid), out = '';
+    var isHero = secId === 'hero';
+    var showCategory = secId === 'gallery' || secId === 'shop';
+    var shopIds = ['shop'].concat((V2.cats || []).map(function (c) { return c.id; }));
+    var showProduct = shopIds.indexOf(secId) !== -1;
+    if (showCategory) {
+      var copts = '<option value="">— none —</option>' + (V2.cats || []).map(function (c) {
+        return '<option value="' + esc(c.id) + '"' + (img.category === c.id ? ' selected' : '') + '>' + esc(c.label || c.id) + '</option>';
+      }).join('');
+      out += '<div class="form-group"><label class="form-label">Category</label>' +
+        '<select class="form-input" style="width:100%;" onchange="WebsiteV2.imgdMeta(\'' + f + '\',\'category\',this.value)">' + copts + '</select></div>';
+    }
+    if (isHero) {
+      out += '<div class="form-group"><label class="form-label">Background video URL</label>' +
+        '<input class="form-input" type="text" style="width:100%;" value="' + esc(img.videoUrl || '') + '" placeholder="https://…video.mp4" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'videoUrl\',this.value)"></div>';
+      var sps = String(img.playbackSpeed || 1);
+      var speeds = [['0.25', '0.25× (very slow)'], ['0.5', '0.5× (slow)'], ['0.75', '0.75×'], ['1', '1× (normal)'], ['1.25', '1.25×'], ['1.5', '1.5×'], ['2', '2× (fast)']];
+      out += '<div class="form-group"><label class="form-label">Video speed</label>' +
+        '<select class="form-input" style="width:100%;" onchange="WebsiteV2.imgdMeta(\'' + f + '\',\'playbackSpeed\',this.value)">' +
+        speeds.map(function (s) { return '<option value="' + s[0] + '"' + (sps === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></div>';
+      out += '<div style="display:flex;gap:12px;">' +
+        '<div class="form-group" style="flex:1;"><label class="form-label">Start (s)</label>' +
+          '<input class="form-input" type="number" min="0" step="0.5" style="width:100%;" value="' + (img.videoStart != null ? esc(String(img.videoStart)) : '') + '" placeholder="0" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'videoStart\',this.value)"></div>' +
+        '<div class="form-group" style="flex:1;"><label class="form-label">End (s)</label>' +
+          '<input class="form-input" type="number" min="0" step="0.5" style="width:100%;" value="' + (img.videoEnd != null ? esc(String(img.videoEnd)) : '') + '" placeholder="end" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'videoEnd\',this.value)"></div>' +
+        '</div>';
+    } else {
+      out += '<div class="form-group"><label class="form-label">Image display</label>' +
+        '<select class="form-input" style="width:100%;" onchange="WebsiteV2.imgdMeta(\'' + f + '\',\'imageFit\',this.value)">' +
+        '<option value="contain"' + (img.imageFit !== 'cover' ? ' selected' : '') + '>Fit inside frame (no cropping)</option>' +
+        '<option value="cover"' + (img.imageFit === 'cover' ? ' selected' : '') + '>Fill frame (may crop edges)</option>' +
+        '</select></div>';
+    }
+    if (showProduct) {
+      out += '<div class="form-group"><label class="form-label">Product name</label>' +
+        '<input class="form-input" type="text" style="width:100%;" value="' + esc(img.productName || '') + '" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'productName\',this.value)"></div>' +
+        '<div class="form-group"><label class="form-label">Product link</label>' +
+        '<input class="form-input" type="url" style="width:100%;" value="' + esc(img.productLink || '') + '" placeholder="https://…" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'productLink\',this.value)"></div>' +
+        '<div class="form-group"><label class="form-label">Price</label>' +
+        '<input class="form-input" type="text" style="width:100%;" value="' + esc(img.price || '') + '" placeholder="$45" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'price\',this.value)"></div>';
+    }
+    return out;
+  }
   function imagesDrillHtml(UU, r) {
     var ed = canEdit();
     var items = r.items || [];
     var addBar = ed ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
       '<button type="button" class="btn btn-primary btn-small" onclick="WebsiteV2.imgdAdd(\'' + esc(r.sectionId) + '\')">📚 Add from library</button>' +
       '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdUpload(\'' + esc(r.sectionId) + '\')">💻 Upload</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdPasteUrl(\'' + esc(r.sectionId) + '\')">🔗 Paste URL</button>' +
       '</div>' : '';
     if (!items.length) return addBar + UU.card('Photos', '<div style="text-align:center;padding:22px 16px;color:var(--warm-gray);font-size:0.9rem;">No photos yet.' + (ed ? ' Add one from your library or upload.' : '') + '</div>');
     var focusEntry = items.find(function (e) { return e[0] === r.focus; }) || items[0];
@@ -992,6 +1059,7 @@
         '<input class="form-input" type="text" style="width:100%;" value="' + esc(fimg.alt || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'alt\',this.value)"></div>' +
         '<div class="form-group"><label class="form-label">Caption</label>' +
         '<input class="form-input" type="text" style="width:100%;" value="' + esc(fimg.caption || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'caption\',this.value)"></div>' +
+        imgMetaFieldsHtml(r.sectionId, fid, fimg) +
         '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
           '<button type="button" class="btn btn-secondary btn-small"' + (idx <= 0 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'up\')">← Earlier</button>' +
           '<button type="button" class="btn btn-secondary btn-small"' + (idx >= items.length - 1 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'down\')">Later →</button>' +
@@ -1066,7 +1134,7 @@
     var ed = canEdit();
     var all = Object.keys(data).map(function (k) {
       var t = data[k] || {};
-      return { _key: k, quote: t.quote, author: t.customerName || t.author || t.authorName || '', visible: t.visible !== false };
+      return { _key: k, quote: t.quote, author: t.customerName || t.author || t.authorName || '', visible: t.visible !== false, rating: t.rating || 0, productName: t.productName || '' };
     }).filter(function (t) { return t.quote; })
       .sort(function (a, b) { return (a._key < b._key ? 1 : -1); });
     // No featured testimonials yet → a single muted line that points at the only
@@ -1083,10 +1151,13 @@
       var control = ed
         ? '<button type="button" class="wv2-sec-toggle" onclick="WebsiteV2.toggleTestimonial(\'' + k + '\',' + (t.visible ? 'false' : 'true') + ')">' + (t.visible ? 'Hide' : 'Show') + '</button>'
         : '<span class="wv2-sec-pill ' + (t.visible ? 'on' : 'off') + '">' + (t.visible ? 'Shown' : 'Hidden') + '</span>';
+      var stars = (t.rating > 0) ? '<span class="wv2-test-stars" title="' + t.rating + ' of 5">' + '★'.repeat(Math.min(5, Math.round(t.rating))) + '</span>' : '';
+      var meta = [t.author ? '— ' + t.author : '', t.productName ? 'on ' + t.productName : ''].filter(Boolean).join(' · ');
       return '<div class="wv2-test-row">' +
         '<div class="wv2-test-main">' +
+          (stars ? '<div class="wv2-test-stars-row">' + stars + '</div>' : '') +
           '<div class="wv2-test-quote">' + esc(t.quote) + '</div>' +
-          (t.author ? '<div class="mu-sub">' + esc('— ' + t.author) + '</div>' : '') +
+          (meta ? '<div class="mu-sub">' + esc(meta) + '</div>' : '') +
         '</div>' + control +
       '</div>';
     }).join('');
@@ -1538,6 +1609,9 @@
       '.wv2-sec-pill.off{color:var(--text-secondary,var(--warm-gray));background:color-mix(in srgb,var(--text-primary) 8%,transparent);}' +
       '.wv2-sec-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}' +
       '.wv2-sec-go{font-size:0.78rem;color:var(--teal);font-weight:600;}' +
+      '.wv2-sec-count{font-size:0.72rem;color:var(--text-secondary,var(--warm-gray));}' +
+      '.wv2-test-stars-row{margin-bottom:2px;}' +
+      '.wv2-test-stars{color:var(--amber,var(--teal));font-size:0.78rem;letter-spacing:1px;}' +
       '.wv2-sec-move{display:inline-flex;gap:2px;}' +
       '.wv2-mv{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.72rem;width:22px;height:22px;line-height:1;padding:0;}' +
       '.wv2-mv:hover:not(:disabled){color:var(--text-primary);border-color:var(--teal);}.wv2-mv:disabled{opacity:0.35;cursor:default;}' +
@@ -1965,13 +2039,32 @@
     },
     // Focus a thumbnail (no write — just re-render the drill with new focus).
     imgdFocus: function (imageId) { reopenImagesDrill(WV2_IMGD.id, imageId); },
-    // Inline alt/caption edit → DOM-free metadata patch (self-contained; no
-    // re-render needed — the input already shows the value).
+    // Paste a URL to add a photo to the section (parity with the legacy "Paste
+    // URL" image source). mastPrompt → DOM-free write → re-render drill.
+    imgdPasteUrl: function (secId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images) return;
+      if (typeof window.mastPrompt !== 'function') { if (window.showToast) showToast('Unavailable.', true); return; }
+      window.mastPrompt('Paste the image or video URL:', { title: 'Add photo by URL', placeholder: 'https://…' }).then(function (url) {
+        url = (url || '').trim(); if (!url) return;
+        Promise.resolve(b.images.addFromLibraryDirect(secId, { url: url })).then(function (key) { reopenImagesDrill(secId, key); });
+      });
+    },
+    // Inline per-photo metadata edit (alt/caption/category/imageFit/video/
+    // product) → DOM-free patch. Debounced for text/number; numbers coerced
+    // (empty/0 → null) to match the legacy saveImage. No re-render (the input
+    // already shows the value), so focus is preserved while typing.
     imgdMeta: function (imageId, field, value) {
       if (!canEdit()) return;
       var b = window.HomepageBridge; if (!b || !b.images || !b.images.updateImageMeta) return;
-      var patch = {}; patch[field] = value;
-      b.images.updateImageMeta(imageId, patch);
+      var v = value;
+      if (field === 'playbackSpeed') { v = parseFloat(value); if (!v || v === 1) v = null; }
+      else if (field === 'videoStart' || field === 'videoEnd') { v = (value === '' ? null : parseFloat(value)); if (v != null && (isNaN(v) || v <= 0)) v = null; }
+      var instant = (field === 'category' || field === 'imageFit' || field === 'playbackSpeed');
+      var key = imageId + ':' + field;
+      if (_imgdMetaT[key]) clearTimeout(_imgdMetaT[key]);
+      var write = function () { var patch = {}; patch[field] = v; b.images.updateImageMeta(imageId, patch); };
+      if (instant) write(); else _imgdMetaT[key] = setTimeout(write, 450);
     },
     imgdToggleVis: function (imageId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
