@@ -852,24 +852,15 @@
     window[forwarder] = (function (sid) { return function (variantId) { WebsiteV2.pickVariant(sid, variantId); }; })(r.id);
     return grid;
   }
-  // Photos pane: feature-image field card(s) (e.g. about.imageUrl) + a light
-  // photo gallery card with a "Manage photos →" drill into the engine image
-  // manager (homepage-images-v2). The strip fills async (fillPhotoStrip).
+  // The Photos pane = (about) feature-image field card(s) + the inline photo
+  // MANAGER (add bar + grid + selected-photo editor, mounted in #wv2PhotosMgr,
+  // filled async by fillPhotosManager) + (hero) the slideshow-speed slider.
   function photosPaneHtml(UU, r, ed) {
     var out = '';
     (r.fieldImageDefs || []).forEach(function (f) { out += featureImageCardHtml(UU, r, f, ed); });
     if (r.hasImages) {
-      var manage = ed ? '<div style="margin-top:12px;"><button type="button" class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'homepage-images-v2\',\'' + esc(r.id) + '\')">Manage photos →</button></div>' : '';
-      // template-hidden notice (parity with the legacy page builder).
-      var b = window.HomepageBridge;
-      var hidden = (b && b.images && b.images.hiddenCount) ? b.images.hiddenCount(r.id) : 0;
-      var hiddenNote = hidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + hidden + ' photo' + (hidden === 1 ? '' : 's') + ' hidden by a template switch.</div>' : '';
-      out += UU.card('Photos (' + r.imageCount + ')', '<div id="wv2PhotoStrip" class="wv2-imgstrip-read"><span class="mu-sub">Loading…</span></div>' + hiddenNote + manage);
+      out += '<div id="wv2PhotosMgr"><div class="mu-sub" style="padding:8px 0;">Loading photos…</div></div>';
     }
-    // Hero slideshow speed — a plain-language slider ("Each photo shows for N
-    // seconds"). Writes public/config/hero/rotationSeconds via saveHeroRotationSpeed
-    // on release; the live label updates as you drag. loadHeroRotation() fills the
-    // current value after render.
     if (r.id === 'hero' && ed) {
       out += UU.card('Slideshow', '<div class="form-group"><label class="form-label">How long each photo shows</label>' +
         '<input type="range" id="heroRotationSlider" min="2" max="20" step="1" value="6" style="width:100%;accent-color:var(--teal,var(--amber));" oninput="WebsiteV2.heroRotationInput(this.value)" onchange="WebsiteV2.heroRotationCommit(this.value)">' +
@@ -877,30 +868,83 @@
     }
     return out;
   }
-  // Fill the read-only photo strip in the open Photos pane from fresh data;
-  // also load the hero slideshow-speed value into its slider.
-  function fillPhotoStrip(secId) {
+  // Fetch the section's photos + categories, render the inline manager into
+  // #wv2PhotosMgr, refresh the Photos count tile, and (hero) load the slider.
+  // Called on every section render (open / tab-switch / Back) and after any
+  // photo mutation. Caches items+cats so thumbnail selection is instant.
+  function fillPhotosManager(secId) {
     if (secId === 'hero') loadHeroRotation();
-    var el = document.getElementById('wv2PhotoStrip'); if (!el) return;
+    if (!document.getElementById('wv2PhotosMgr')) return;
     var b = window.HomepageBridge; if (!b || !b.images || !b.images.list) return;
-    Promise.resolve(b.images.list(secId)).then(function (items) {
-      var el2 = document.getElementById('wv2PhotoStrip'); if (!el2) return;
-      var n = items.length;
-      el2.innerHTML = n
-        ? items.slice(0, 12).map(function (e) { var d = e[1]; return '<div class="wv2-imgcell" style="background-image:url(' + esc(d.url || '') + ');"' + (d.visible === false ? ' data-off="1"' : '') + '></div>'; }).join('')
-        : '<span class="mu-sub">No photos yet.</span>';
-      // Keep the count fresh too — after adding/removing in the drill and coming
-      // Back, the stacked record's tile/header are stale, so sync them here.
-      var card = el2.closest('.mu-card'); var h = card && card.querySelector('h3');
-      if (h && /^Photos \(/.test(h.textContent)) h.textContent = 'Photos (' + n + ')';
-      var body = document.getElementById('mastSlideOutBody');
-      if (body) {
-        Array.prototype.forEach.call(body.querySelectorAll('.mu-tile'), function (t) {
-          var k = t.querySelector('.mu-tk'), v = t.querySelector('.mu-tv');
-          if (k && v && k.textContent === 'Photos') v.textContent = String(n);
-        });
-      }
-    }).catch(function () {});
+    Promise.all([b.images.list(secId), photosCategories()]).then(function (res) {
+      var items = res[0], cats = res[1] || [];
+      var mount = document.getElementById('wv2PhotosMgr'); if (!mount) return;
+      var ids = items.map(function (e) { return e[0]; });
+      var focus = (WV2_PHOTOS.focus && ids.indexOf(WV2_PHOTOS.focus) !== -1) ? WV2_PHOTOS.focus : (ids[0] || null);
+      WV2_PHOTOS = { sec: secId, focus: focus, items: items, cats: cats };
+      mount.innerHTML = photosManagerHtml(secId, items, cats, focus, canEdit());
+      updatePhotoCount(items.length);
+    }).catch(function (e) { console.error('[website-v2] fillPhotosManager', e); });
+  }
+  // Re-render the manager from the cached items (no refetch) — used when picking
+  // a thumbnail so selection is instant.
+  function renderPhotosFromCache() {
+    var mount = document.getElementById('wv2PhotosMgr'); if (!mount || !WV2_PHOTOS.items) return;
+    mount.innerHTML = photosManagerHtml(WV2_PHOTOS.sec, WV2_PHOTOS.items, WV2_PHOTOS.cats || [], WV2_PHOTOS.focus, canEdit());
+  }
+  // Sync the sticky "Photos" tile to a fresh count (the stacked record is stale).
+  function updatePhotoCount(n) {
+    var body = document.getElementById('mastSlideOutBody'); if (!body) return;
+    Array.prototype.forEach.call(body.querySelectorAll('.mu-tile'), function (t) {
+      var k = t.querySelector('.mu-tk'), v = t.querySelector('.mu-tv');
+      if (k && v && k.textContent === 'Photos') v.textContent = String(n);
+    });
+  }
+  // The Photos card (add bar + bounded grid) + the Selected-photo editor card.
+  function photosManagerHtml(secId, items, cats, focus, ed) {
+    var b = window.HomepageBridge;
+    var hidden = (b && b.images && b.images.hiddenCount) ? b.images.hiddenCount(secId) : 0;
+    var hiddenNote = hidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + hidden + ' photo' + (hidden === 1 ? '' : 's') + ' hidden by a template switch.</div>' : '';
+    var addBar = ed ? '<div class="wv2-photo-addbar">' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdAdd(\'' + esc(secId) + '\')">📚 From library</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdUpload(\'' + esc(secId) + '\')">💻 Upload</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdPasteUrl(\'' + esc(secId) + '\')">🔗 Paste URL</button>' +
+      '</div>' : '';
+    var grid = items.length
+      ? '<div class="wv2-photogrid">' + items.map(function (e) {
+          var k = e[0], d = e[1];
+          var isVid = d.videoUrl || /\.(mp4|mov|webm)/i.test(d.url || '');
+          return '<button type="button" class="wv2-phototile' + (k === focus ? ' on' : '') + (d.visible === false ? ' off' : '') + '" onclick="WebsiteV2.photoSelect(\'' + esc(k) + '\')" style="background-image:url(' + esc(d.url || '') + ');" title="' + esc(d.alt || d.caption || '') + '">' +
+            (isVid ? '<span class="wv2-phototile-vid">▶</span>' : '') + '</button>';
+        }).join('') + '</div>'
+      : '<div class="mu-sub" style="padding:14px 0;">No photos yet.' + (ed ? ' Add one above.' : '') + '</div>';
+    var photosCard = U.card('Photos (' + items.length + ')', addBar + grid + hiddenNote);
+    return photosCard + (items.length ? photoSelectedCardHtml(secId, items, cats, focus, ed) : '');
+  }
+  // The "Selected photo" editor card: preview + alt/caption + the section's
+  // conditional fields (imgMetaFieldsHtml) + reorder/visibility/remove actions.
+  function photoSelectedCardHtml(secId, items, cats, focus, ed) {
+    var entry = items.find(function (e) { return e[0] === focus; }) || items[0];
+    var fid = entry[0], img = entry[1];
+    var idx = items.findIndex(function (e) { return e[0] === fid; });
+    var isVid = img.videoUrl || /\.(mp4|mov|webm)/i.test(img.url || '');
+    var prev = isVid
+      ? '<div class="wv2-photo-prev wv2-photo-prev-vid"><span>▶</span></div>'
+      : '<div class="wv2-photo-prev" style="background-image:url(' + esc(img.url || '') + ');"></div>';
+    if (!ed) return U.card('Selected photo', prev);
+    var top = '<div class="wv2-photo-edit-top">' + prev +
+      '<div class="wv2-photo-edit-fields">' +
+        '<div class="form-group"><label class="form-label">Alt text</label><input class="form-input" type="text" style="width:100%;" value="' + esc(img.alt || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'alt\',this.value)"></div>' +
+        '<div class="form-group"><label class="form-label">Caption</label><input class="form-input" type="text" style="width:100%;" value="' + esc(img.caption || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'caption\',this.value)"></div>' +
+      '</div></div>';
+    var actions = '<div class="wv2-photo-actions">' +
+      '<button type="button" class="btn btn-secondary btn-small"' + (idx <= 0 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'up\')">← Earlier</button>' +
+      '<button type="button" class="btn btn-secondary btn-small"' + (idx >= items.length - 1 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'down\')">Later →</button>' +
+      '<button type="button" class="btn btn-secondary btn-small"' + (idx <= 0 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMakeFirst(\'' + esc(fid) + '\')">Make first</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdToggleVis(\'' + esc(fid) + '\')">' + (img.visible === false ? 'Show on site' : 'Hide from site') + '</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdRemove(\'' + esc(fid) + '\')">Remove</button>' +
+      '</div>';
+    return U.card(img.visible === false ? 'Selected photo · hidden' : 'Selected photo', top + imgMetaFieldsHtml(secId, cats, fid, img) + actions);
   }
   // Plain-language label for the hero slideshow slider.
   function heroRotationLabel(v) { return 'Each photo shows for ' + v + ' second' + (String(v) === '1' ? '' : 's'); }
@@ -937,15 +981,15 @@
     var paneEl = body.querySelector('.mu-pane[data-pane="' + paneKey + '"]'); if (!paneEl) return;
     var r = sectionRecord(id); if (!r) return;
     var ed = canEdit();
-    if (paneKey === 'photos') { paneEl.innerHTML = photosPaneHtml(U, r, ed); setTimeout(function () { fillPhotoStrip(id); }, 0); }
+    if (paneKey === 'photos') { paneEl.innerHTML = photosPaneHtml(U, r, ed); setTimeout(function () { fillPhotosManager(id); }, 0); }
     else if (paneKey === 'layout') { paneEl.innerHTML = U.card('Layout', ed ? layoutInnerHtml(r) : '<span class="mu-sub">Read only.</span>'); }
   }
 
   // ── Card 2 · Section image editing ─────────────────────────────────
-  // The Photos pane drills into the homepage-images-v2 record (engine SO),
-  // which writes through HomepageBridge.images; the single-image field
-  // (about.imageUrl) writes via HomepageBridge.images.setField. The twin holds
-  // NO raw MastDB.gallery writes.
+  // The Photos pane hosts the full photo manager inline (add bar + grid +
+  // selected-photo editor); writes go through HomepageBridge.images, and the
+  // single-image field (about.imageUrl) via HomepageBridge.images.setField.
+  // The twin holds NO raw MastDB.gallery writes.
 
   // Which sections expose storefront images (bridge-aware → also dynamic shop
   // categories; falls back to the static mirror before the bridge warms).
@@ -996,19 +1040,15 @@
   // The open section record (id) — so a pane re-render can rebuild from the
   // current section. The image drill tracks its section + focused image.
   var WV2_SEC = { id: null };
-  var WV2_IMGD = { id: null, focus: null };
+  // The open photo manager's state: section + focused photo + cached items/cats
+  // (so picking a thumbnail re-renders instantly, with no refetch).
+  var WV2_PHOTOS = { sec: null, focus: null, items: null, cats: null };
   var _imgdMetaT = {}; // debounce timers for per-photo metadata text inputs
 
-  // ── Image MANAGER drill (homepage-images-v2) ────────────────────────
-  // A stacked slide-out (Back to the section), rendered with MastUI cards: the
-  // focused photo shows large with its alt/caption/visibility/order inline; the
-  // strip below switches focus. Add from library / Upload append a gallery doc
-  // carrying { section }. Every write goes through HomepageBridge.images (no raw
-  // MastDB writes here) and re-renders this drill in place.
   // Resolve the storefront categories for the per-photo Category field. Prefer
   // the twin's loaded list; else read the raw doc and normalize BOTH shapes (a
   // plain array OR the object-with-numeric-keys-plus-_v form some tenants store).
-  function drillCategories() {
+  function photosCategories() {
     if (V2.cats && V2.cats.length) return Promise.resolve(V2.cats.slice());
     return Promise.resolve(MastDB.get('public/config/categories')).then(function (raw) {
       if (!raw) return [];
@@ -1017,25 +1057,11 @@
         .map(function (k) { return { id: raw[k].id, label: raw[k].label || raw[k].name || raw[k].id }; });
     }).catch(function () { return []; });
   }
-  function imagesDrillRecord(id) {
-    var b = window.HomepageBridge;
-    if (!b || !b.images || !b.images.list) return null;
-    return Promise.all([b.images.list(id), drillCategories()]).then(function (res) {
-      var items = res[0], cats = res[1] || [];
-      var list = (b.getSectionList && b.getSectionList()) || [];
-      var sec = list.find(function (s) { return s.id === id; });
-      var label = (sec && (sec.label || sec.id)) || titleCase(id);
-      var ids = items.map(function (e) { return e[0]; });
-      var focus = (WV2_IMGD.focus && ids.indexOf(WV2_IMGD.focus) !== -1) ? WV2_IMGD.focus : (ids[0] || null);
-      WV2_IMGD.id = id; WV2_IMGD.focus = focus;
-      return { _key: id, _title: label + ' · Photos', sectionId: id, items: items, focus: focus, cats: cats };
-    });
-  }
   // The conditional per-photo metadata fields, matching the legacy openImageModal:
-  // category (gallery/shop), hero video (url/speed/start/end), image fit
-  // (non-hero), product (shop). Instant-apply via WebsiteV2.imgdMeta.
-  function imgMetaFieldsHtml(r, fid, img) {
-    var secId = r.sectionId, cats = r.cats || [];
+  // category (gallery/shop), image fit (non-hero), hero video (url/speed/start/
+  // end, grouped), product (shop, grouped). Instant-apply via WebsiteV2.imgdMeta.
+  function imgMetaFieldsHtml(secId, cats, fid, img) {
+    cats = cats || [];
     var f = esc(fid), out = '';
     var isHero = secId === 'hero';
     var showCategory = secId === 'gallery' || secId === 'shop';
@@ -1049,19 +1075,15 @@
         '<select class="form-input" style="width:100%;" onchange="WebsiteV2.imgdMeta(\'' + f + '\',\'category\',this.value)">' + copts + '</select></div>';
     }
     if (isHero) {
-      out += '<div class="form-group"><label class="form-label">Background video URL</label>' +
-        '<input class="form-input" type="text" style="width:100%;" value="' + esc(img.videoUrl || '') + '" placeholder="https://…video.mp4" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'videoUrl\',this.value)"></div>';
       var sps = String(img.playbackSpeed || 1);
       var speeds = [['0.25', '0.25× (very slow)'], ['0.5', '0.5× (slow)'], ['0.75', '0.75×'], ['1', '1× (normal)'], ['1.25', '1.25×'], ['1.5', '1.5×'], ['2', '2× (fast)']];
-      out += '<div class="form-group"><label class="form-label">Video speed</label>' +
-        '<select class="form-input" style="width:100%;" onchange="WebsiteV2.imgdMeta(\'' + f + '\',\'playbackSpeed\',this.value)">' +
-        speeds.map(function (s) { return '<option value="' + s[0] + '"' + (sps === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></div>';
-      out += '<div style="display:flex;gap:12px;">' +
-        '<div class="form-group" style="flex:1;"><label class="form-label">Start (s)</label>' +
-          '<input class="form-input" type="number" min="0" step="0.5" style="width:100%;" value="' + (img.videoStart != null ? esc(String(img.videoStart)) : '') + '" placeholder="0" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'videoStart\',this.value)"></div>' +
-        '<div class="form-group" style="flex:1;"><label class="form-label">End (s)</label>' +
-          '<input class="form-input" type="number" min="0" step="0.5" style="width:100%;" value="' + (img.videoEnd != null ? esc(String(img.videoEnd)) : '') + '" placeholder="end" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'videoEnd\',this.value)"></div>' +
-        '</div>';
+      out += '<div class="wv2-photo-fgroup"><div class="wv2-sub-h">Background video</div>' +
+        '<div class="form-group"><label class="form-label">Video URL</label><input class="form-input" type="text" style="width:100%;" value="' + esc(img.videoUrl || '') + '" placeholder="https://…video.mp4" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'videoUrl\',this.value)"></div>' +
+        '<div class="wv2-photo-fgrid3">' +
+          '<div class="form-group"><label class="form-label">Speed</label><select class="form-input" style="width:100%;" onchange="WebsiteV2.imgdMeta(\'' + f + '\',\'playbackSpeed\',this.value)">' + speeds.map(function (s) { return '<option value="' + s[0] + '"' + (sps === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('') + '</select></div>' +
+          '<div class="form-group"><label class="form-label">Start (s)</label><input class="form-input" type="number" min="0" step="0.5" style="width:100%;" value="' + (img.videoStart != null ? esc(String(img.videoStart)) : '') + '" placeholder="0" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'videoStart\',this.value)"></div>' +
+          '<div class="form-group"><label class="form-label">End (s)</label><input class="form-input" type="number" min="0" step="0.5" style="width:100%;" value="' + (img.videoEnd != null ? esc(String(img.videoEnd)) : '') + '" placeholder="end" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'videoEnd\',this.value)"></div>' +
+        '</div></div>';
     } else {
       out += '<div class="form-group"><label class="form-label">Image display</label>' +
         '<select class="form-input" style="width:100%;" onchange="WebsiteV2.imgdMeta(\'' + f + '\',\'imageFit\',this.value)">' +
@@ -1070,58 +1092,12 @@
         '</select></div>';
     }
     if (showProduct) {
-      out += '<div class="form-group"><label class="form-label">Product name</label>' +
-        '<input class="form-input" type="text" style="width:100%;" value="' + esc(img.productName || '') + '" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'productName\',this.value)"></div>' +
-        '<div class="form-group"><label class="form-label">Product link</label>' +
-        '<input class="form-input" type="url" style="width:100%;" value="' + esc(img.productLink || '') + '" placeholder="https://…" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'productLink\',this.value)"></div>' +
-        '<div class="form-group"><label class="form-label">Price</label>' +
-        '<input class="form-input" type="text" style="width:100%;" value="' + esc(img.price || '') + '" placeholder="$45" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'price\',this.value)"></div>';
+      out += '<div class="wv2-photo-fgroup"><div class="wv2-sub-h">Product</div>' +
+        '<div class="form-group"><label class="form-label">Product name</label><input class="form-input" type="text" style="width:100%;" value="' + esc(img.productName || '') + '" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'productName\',this.value)"></div>' +
+        '<div class="form-group"><label class="form-label">Product link</label><input class="form-input" type="url" style="width:100%;" value="' + esc(img.productLink || '') + '" placeholder="https://…" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'productLink\',this.value)"></div>' +
+        '<div class="form-group"><label class="form-label">Price</label><input class="form-input" type="text" style="width:100%;" value="' + esc(img.price || '') + '" placeholder="$45" oninput="WebsiteV2.imgdMeta(\'' + f + '\',\'price\',this.value)"></div></div>';
     }
     return out;
-  }
-  function imagesDrillHtml(UU, r) {
-    var ed = canEdit();
-    var items = r.items || [];
-    var addBar = ed ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
-      '<button type="button" class="btn btn-primary btn-small" onclick="WebsiteV2.imgdAdd(\'' + esc(r.sectionId) + '\')">📚 Add from library</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdUpload(\'' + esc(r.sectionId) + '\')">💻 Upload</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdPasteUrl(\'' + esc(r.sectionId) + '\')">🔗 Paste URL</button>' +
-      '</div>' : '';
-    if (!items.length) return addBar + UU.card('Photos', '<div style="text-align:center;padding:22px 16px;color:var(--warm-gray);font-size:0.9rem;">No photos yet.' + (ed ? ' Add one from your library or upload.' : '') + '</div>');
-    var focusEntry = items.find(function (e) { return e[0] === r.focus; }) || items[0];
-    var fid = focusEntry[0], fimg = focusEntry[1];
-    var idx = items.findIndex(function (e) { return e[0] === fid; });
-    var isVid = fimg.videoUrl || /\.(mp4|mov|webm)/i.test(fimg.url || '');
-    var large = isVid
-      ? '<div class="wv2-imgfocus wv2-imgfocus-vid"><span>▶ video</span></div>'
-      : '<div class="wv2-imgfocus" style="background-image:url(' + esc(fimg.url || '') + ');"></div>';
-    var focusInner = large;
-    if (ed) {
-      focusInner += '<div class="form-group" style="margin-top:12px;"><label class="form-label">Alt text</label>' +
-        '<input class="form-input" type="text" style="width:100%;" value="' + esc(fimg.alt || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'alt\',this.value)"></div>' +
-        '<div class="form-group"><label class="form-label">Caption</label>' +
-        '<input class="form-input" type="text" style="width:100%;" value="' + esc(fimg.caption || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'caption\',this.value)"></div>' +
-        imgMetaFieldsHtml(r, fid, fimg) +
-        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
-          '<button type="button" class="btn btn-secondary btn-small"' + (idx <= 0 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'up\')">← Earlier</button>' +
-          '<button type="button" class="btn btn-secondary btn-small"' + (idx >= items.length - 1 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'down\')">Later →</button>' +
-          '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdToggleVis(\'' + esc(fid) + '\')">' + (fimg.visible === false ? 'Show on site' : 'Hide from site') + '</button>' +
-          '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdRemove(\'' + esc(fid) + '\')">Remove</button>' +
-        '</div>';
-    }
-    var strip = '<div class="wv2-imgstrip">' + items.map(function (e) {
-      var k = e[0], d = e[1];
-      return '<button type="button" class="wv2-imgthumb' + (k === fid ? ' on' : '') + (d.visible === false ? ' off' : '') + '" onclick="WebsiteV2.imgdFocus(\'' + esc(k) + '\')" style="background-image:url(' + esc(d.url || '') + ');" title="' + esc(d.alt || d.caption || '') + '"></button>';
-    }).join('') + '</div>';
-    return addBar + UU.card(fimg.visible === false ? 'Selected photo · hidden' : 'Selected photo', focusInner) + UU.card('All photos (' + items.length + ')', strip);
-  }
-  // Re-render the drill in place (internal=true → keeps the Back stack to the
-  // section). focusKey optionally moves focus (e.g. to a just-added photo).
-  function reopenImagesDrill(id, focusKey) {
-    if (focusKey) WV2_IMGD.focus = focusKey;
-    Promise.resolve(imagesDrillRecord(id)).then(function (rec) {
-      if (rec) MastEntity.openRecord('homepage-images-v2', rec, 'read', true);
-    });
   }
 
   // Register the section + image-manager records on the engine. Both render via
@@ -1133,18 +1109,9 @@
       recordId: function (r) { return r.id; },
       fields: [{ name: '_title', label: 'Section', type: 'text', list: true, readOnly: true }],
       fetch: function (id) { return sectionRecord(id); },
-      // Fill the Photos strip after EVERY render — open, setMode, AND Back from
-      // the image drill (the engine re-renders the stacked record on Back, which
-      // otherwise leaves the strip stuck on its "Loading…" placeholder). Reported
-      // via feedback iXUE4SKsf5DLkt9kleyN / nkt3OZ1FPG2hQyZabEoB.
-      detail: { render: function (UU, r) { WV2_SEC.id = r.id; setTimeout(function () { fillPhotoStrip(r.id); }, 0); return sectionDetailHtml(UU, r); } }
-    });
-    MastEntity.define('homepage-images-v2', {
-      label: 'Photos', labelPlural: 'Photos', size: 'lg', route: null,
-      recordId: function (r) { return r._key; },
-      fields: [{ name: '_title', label: 'Photos', type: 'text', list: true, readOnly: true }],
-      fetch: function (id) { return imagesDrillRecord(id); },
-      detail: { render: function (UU, r) { return imagesDrillHtml(UU, r); } }
+      // Fill the inline photo manager after EVERY render (open, setMode, and any
+      // re-render) so the Photos tab always shows the live grid + editor.
+      detail: { render: function (UU, r) { WV2_SEC.id = r.id; setTimeout(function () { fillPhotosManager(r.id); }, 0); return sectionDetailHtml(UU, r); } }
     });
   }
 
@@ -1667,20 +1634,25 @@
       '.wv2-var-name{font-size:0.85rem;color:var(--text-primary);}' +
       '.wv2-var-desc{font-size:0.72rem;margin-top:2px;}' +
       // Section images (inline "Edit images" row + the slide-out controls)
-      // Photos — read strip on the section's Photos pane + the image-manager
-      // drill (focused image + thumbnail strip). Image-cells use background-image
-      // so they crop cleanly; the engine cards own the surrounding shell.
-      '.wv2-imgstrip-read{display:flex;flex-wrap:wrap;gap:8px;}' +
+      // Photos — the inline manager: feature-image cell (about) + add bar +
+      // bounded thumbnail grid + the selected-photo editor. Tiles/cells use
+      // background-image so they crop cleanly; the engine cards own the shell.
       '.wv2-imgcell{width:64px;height:64px;border-radius:8px;border:1px solid var(--border);background-size:cover;background-position:center;}' +
-      '.wv2-imgcell[data-off]{opacity:0.4;}' +
       '.wv2-imgcell-lg{width:100%;max-width:280px;height:170px;}' +
       '.wv2-imgcell-empty{display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--text-primary) 4%,transparent);}' +
-      '.wv2-imgfocus{width:100%;height:260px;border-radius:10px;border:1px solid var(--border);background-size:contain;background-position:center;background-repeat:no-repeat;background-color:color-mix(in srgb,var(--text-primary) 5%,transparent);}' +
-      '.wv2-imgfocus-vid{display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:1.15rem;}' +
-      '.wv2-imgstrip{display:flex;flex-wrap:wrap;gap:8px;}' +
-      '.wv2-imgthumb{width:72px;height:72px;border-radius:8px;border:2px solid transparent;background-size:cover;background-position:center;cursor:pointer;padding:0;}' +
-      '.wv2-imgthumb.on{border-color:var(--teal);}' +
-      '.wv2-imgthumb.off{opacity:0.4;}' +
+      '.wv2-photo-addbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}' +
+      '.wv2-photogrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;max-height:240px;overflow-y:auto;padding:2px;}' +
+      '.wv2-phototile{position:relative;aspect-ratio:1;border-radius:8px;border:2px solid transparent;background-size:cover;background-position:center;background-color:color-mix(in srgb,var(--text-primary) 6%,transparent);cursor:pointer;padding:0;}' +
+      '.wv2-phototile.on{border-color:var(--teal);}' +
+      '.wv2-phototile.off{opacity:0.4;}' +
+      '.wv2-phototile-vid{position:absolute;bottom:2px;right:3px;font-size:0.72rem;line-height:1;padding:1px 3px;border-radius:4px;background:color-mix(in srgb,var(--surface-card) 78%,transparent);color:var(--text-primary);}' +
+      '.wv2-photo-prev{flex-shrink:0;width:108px;height:108px;border-radius:8px;border:1px solid var(--border);background-size:cover;background-position:center;}' +
+      '.wv2-photo-prev-vid{display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:1.6rem;background:color-mix(in srgb,var(--text-primary) 6%,transparent);}' +
+      '.wv2-photo-edit-top{display:flex;gap:14px;}' +
+      '.wv2-photo-edit-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;}' +
+      '.wv2-photo-fgroup{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);}' +
+      '.wv2-photo-fgrid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;}' +
+      '.wv2-photo-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}' +
       // Copy-from-site import
       '.wv2-import-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
       '.wv2-import-hits{margin-top:10px;display:flex;flex-direction:column;gap:8px;}' +
@@ -2073,38 +2045,38 @@
       Promise.resolve(b.images.clearField(secId, fieldId)).then(function () { rerenderSecPane('photos'); mountWords(); });
     },
 
-    // ── Image MANAGER drill (homepage-images-v2) actions ────────────────
-    // Add a library image directly (shared picker → DOM-free write), focus it,
-    // re-render the drill. No legacy metadata modal.
+    // ── Photos pane · inline manager actions ────────────────────────────
+    // All mutations go through HomepageBridge.images, then fillPhotosManager
+    // re-fetches + re-renders the Photos pane in place (no separate surface).
+    // Add a library image directly (shared picker → DOM-free write), focus it.
     imgdAdd: function (secId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var b = window.HomepageBridge; if (!b || !b.images) return;
       if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
       window.openImagePicker(function (imgId, url) {
         if (!url) return;
-        Promise.resolve(b.images.addFromLibraryDirect(secId, { imgId: imgId, url: url })).then(function (key) { reopenImagesDrill(secId, key); });
+        Promise.resolve(b.images.addFromLibraryDirect(secId, { imgId: imgId, url: url })).then(function (key) { WV2_PHOTOS.focus = key; fillPhotosManager(secId); });
       });
     },
     imgdUpload: function (secId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var b = window.HomepageBridge; if (!b || !b.images) return;
       pickAndUploadImage(['section-image', secId], function (url) {
-        Promise.resolve(b.images.addFromLibraryDirect(secId, { url: url })).then(function (key) { reopenImagesDrill(secId, key); });
+        Promise.resolve(b.images.addFromLibraryDirect(secId, { url: url })).then(function (key) { WV2_PHOTOS.focus = key; fillPhotosManager(secId); });
       });
     },
-    // Focus a thumbnail (no write — just re-render the drill with new focus).
-    imgdFocus: function (imageId) { reopenImagesDrill(WV2_IMGD.id, imageId); },
-    // Paste a URL to add a photo to the section (parity with the legacy "Paste
-    // URL" image source). mastPrompt → DOM-free write → re-render drill.
+    // Paste a URL to add a photo (parity with the legacy "Paste URL" source).
     imgdPasteUrl: function (secId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var b = window.HomepageBridge; if (!b || !b.images) return;
       if (typeof window.mastPrompt !== 'function') { if (window.showToast) showToast('Unavailable.', true); return; }
       window.mastPrompt('Paste the image or video URL:', { title: 'Add photo by URL', placeholder: 'https://…' }).then(function (url) {
         url = (url || '').trim(); if (!url) return;
-        Promise.resolve(b.images.addFromLibraryDirect(secId, { url: url })).then(function (key) { reopenImagesDrill(secId, key); });
+        Promise.resolve(b.images.addFromLibraryDirect(secId, { url: url })).then(function (key) { WV2_PHOTOS.focus = key; fillPhotosManager(secId); });
       });
     },
+    // Select a thumbnail → set focus + re-render the manager from cache (instant).
+    photoSelect: function (imageId) { WV2_PHOTOS.focus = imageId; renderPhotosFromCache(); },
     // Inline per-photo metadata edit (alt/caption/category/imageFit/video/
     // product) → DOM-free patch. Debounced for text/number; numbers coerced
     // (empty/0 → null) to match the legacy saveImage. No re-render (the input
@@ -2124,19 +2096,28 @@
     imgdToggleVis: function (imageId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var b = window.HomepageBridge; if (!b || !b.images) return;
-      Promise.resolve(b.images.toggleVisible(imageId)).then(function () { reopenImagesDrill(WV2_IMGD.id, imageId); });
+      Promise.resolve(b.images.toggleVisible(imageId)).then(function () { WV2_PHOTOS.focus = imageId; fillPhotosManager(WV2_PHOTOS.sec); });
     },
     imgdMove: function (imageId, dir) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var b = window.HomepageBridge; if (!b || !b.images) return;
-      Promise.resolve(b.images.reorder(imageId, dir)).then(function () { reopenImagesDrill(WV2_IMGD.id, imageId); });
+      Promise.resolve(b.images.reorder(imageId, dir)).then(function () { WV2_PHOTOS.focus = imageId; fillPhotosManager(WV2_PHOTOS.sec); });
+    },
+    // Move the selected photo to the front by giving it the lowest order (the
+    // storefront sorts by order ascending, so this puts it first).
+    imgdMakeFirst: function (imageId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images || !b.images.updateImageMeta) return;
+      var items = WV2_PHOTOS.items || [];
+      var minOrder = items.reduce(function (m, e) { var o = (e[1] && e[1].order) || 0; return o < m ? o : m; }, 0);
+      Promise.resolve(b.images.updateImageMeta(imageId, { order: minOrder - 1 })).then(function () { WV2_PHOTOS.focus = imageId; fillPhotosManager(WV2_PHOTOS.sec); });
     },
     imgdRemove: function (imageId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var b = window.HomepageBridge; if (!b || !b.images || !b.images.removeConfirmed) return;
       var go = function () {
-        WV2_IMGD.focus = null; // focus falls back to first after delete
-        Promise.resolve(b.images.removeConfirmed(imageId)).then(function () { reopenImagesDrill(WV2_IMGD.id, null); });
+        WV2_PHOTOS.focus = null; // focus falls back to first after delete
+        Promise.resolve(b.images.removeConfirmed(imageId)).then(function () { fillPhotosManager(WV2_PHOTOS.sec); });
       };
       if (typeof window.mastConfirm === 'function') window.mastConfirm('Remove this photo from the section?', go);
       else go();
