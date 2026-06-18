@@ -53,6 +53,19 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
 
+  /* ========= PAINT GATE (anti-FOUC) =========
+     Hold content hidden until theme/fonts/hero-image are ready, then reveal
+     ONCE so the storefront doesn't visibly repaint as data streams in.
+     We hide <body>'s children (not <body> itself) so the already-themed page
+     background stays painted during the gate — a solid brand backdrop, never a
+     blank white flash. A hard timeout in the gate script guarantees reveal even
+     if a fetch hangs. The gate is skipped in builder live-preview mode. */
+  html.mast-cloak body > *:not(script):not(style) { opacity: 0 !important; }
+  html.mast-revealed body > *:not(script):not(style) {
+    opacity: 1;
+    transition: opacity 0.34s ease;
+  }
+
   /* ========= HERO — VIDEO FIRST ========= */
   .hero {
     position: relative;
@@ -1339,6 +1352,50 @@
 <script>
 (function(){if(window.__mastPreview){document.documentElement.classList.add('light');return;}var s=localStorage.getItem('mast-theme');var d=window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');})();
 </script>
+<script>
+/* Paint gate — cloak now (pre-paint), reveal once the first screen is final.
+   Reveal fires when: theme/flow applied (storefront-theme-ready) AND fonts are
+   ready AND the hero image is decoded — or a hard 2s ceiling, whichever is first.
+   This collapses the staged repaints (default markup -> theme -> brand copy ->
+   hero/gallery images) into a single clean reveal.
+   Skipped in builder live-preview mode (?mastpreview=1): the admin wants instant
+   feedback on each edit, not a gated reveal. */
+(function(){
+  if (window.__mastPreview) return;
+  var d = document.documentElement;
+  d.classList.add('mast-cloak');
+
+  // First-screen readiness: the homepage hero render resolves this once its
+  // image is decoded. window.load is a backstop for tenants with no hero image
+  // (and for any render path that doesn't resolve it explicitly).
+  var fsResolve;
+  window.MAST_FIRST_SCREEN_READY = new Promise(function(r){ fsResolve = r; });
+  window.__mastFirstScreenReady = function(){ if (fsResolve) { fsResolve(); fsResolve = null; } };
+  window.addEventListener('load', function(){ window.__mastFirstScreenReady(); });
+
+  var revealed = false;
+  function reveal(){
+    if (revealed) return;
+    revealed = true;
+    d.classList.remove('mast-cloak');
+    d.classList.add('mast-revealed');
+  }
+  window.__mastReveal = reveal;
+
+  // Absolute ceiling — never stay cloaked past this, even if a fetch hangs/fails.
+  var capTimer = setTimeout(reveal, 2000);
+
+  function whenReady(){
+    var waits = [ window.MAST_FIRST_SCREEN_READY ];
+    if (document.fonts && document.fonts.ready) waits.push(document.fonts.ready);
+    Promise.all(waits).then(function(){ clearTimeout(capTimer); requestAnimationFrame(reveal); });
+  }
+  // storefront-theme.js dispatches this once colors/variant/section-flow are applied.
+  window.addEventListener('storefront-theme-ready', whenReady);
+  // Backstop if the theme script never loads/dispatches.
+  window.addEventListener('load', whenReady);
+})();
+</script>
 </head>
 <body>
 <button id="themeToggle" onclick="toggleMastTheme()" title="Toggle dark mode" style="position:fixed;top:12px;right:12px;z-index:9999;width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--card);cursor:pointer;font-size:16px;box-shadow:var(--shadow);color:var(--text);display:flex;align-items:center;justify-content:center;padding:0;"></button>
@@ -1718,9 +1775,48 @@ window.TENANT_READY.then(function() {
     return d.getDate().toString();
   }
 
+  // ---- FAST HERO (paint gate) ----
+  // The parallel prefetch in storefront-tenant.js (STOREFRONT_DATA) resolves the
+  // gallery well before the MastDB query below. Use it to decode + paint the hero
+  // image early so the paint gate reveals a fully-formed hero in one pass, rather
+  // than revealing a gradient and popping the image in afterwards. The MastDB
+  // handler below still runs and (re)applies the same image + video playlist.
+  if (window.STOREFRONT_DATA) {
+    window.STOREFRONT_DATA.then(function(sd) {
+      try {
+        var gal = (sd && sd.pageData && sd.pageData.type === 'gallery') ? sd.pageData.data : null;
+        if (!gal) return; // window.load / MastDB handler will resolve the gate
+        var heroItems = Object.keys(gal).map(function(k){ return gal[k]; })
+          .filter(function(i){ return i && i.section === 'hero' && i.visible !== false; })
+          .sort(function(a, b){ return (a.order || 0) - (b.order || 0); });
+        var first = heroItems[0];
+        var url = first && first.url; // still image (also the video poster) for the first hero item
+        var poster = document.getElementById('heroPoster');
+        if (!url) { if (window.__mastFirstScreenReady) window.__mastFirstScreenReady(); return; }
+        var im = new Image();
+        im.onload = im.onerror = function() {
+          if (poster && !first.videoUrl) {
+            poster.style.backgroundImage = "url('" + url + "')";
+            poster.style.backgroundSize = first.imageFit || 'cover';
+            poster.style.opacity = '1';
+            poster.classList.remove('loaded');
+          } else if (poster && first.videoUrl) {
+            // video hero: paint the poster still now; the MastDB handler wires the video
+            poster.style.backgroundImage = "url('" + url + "')";
+          }
+          if (window.__mastFirstScreenReady) window.__mastFirstScreenReady();
+        };
+        im.src = url;
+      } catch (e) { if (window.__mastFirstScreenReady) window.__mastFirstScreenReady(); }
+    });
+  }
+
   // ---- IMAGES (all sections from one query) ----
   MastDB.query('public/gallery').orderByChild('order').once().then(function(data) {
-    if (!data || Object.keys(data).length === 0) return; // keep hardcoded fallback
+    if (!data || Object.keys(data).length === 0) {
+      if (window.__mastFirstScreenReady) window.__mastFirstScreenReady(); // no hero image to wait for
+      return; // keep hardcoded fallback
+    }
     const allItems = Object.values(data).filter(function(i) { return i.visible !== false; });
 
     // Hero: build video playlist from all hero items with videoUrl
