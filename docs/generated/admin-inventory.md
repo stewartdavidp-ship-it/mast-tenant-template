@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **60,990** lines
-- **Feature modules:** **121** files in `app/modules/` (**110** routed), **147,147** lines combined
+- **Feature modules:** **121** files in `app/modules/` (**110** routed), **147,248** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -68,7 +68,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/fulfillment.js` | 1,524 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 657 | galleries-v2 |
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
-| `modules/homepage.js` | 901 | homepage |
+| `modules/homepage.js` | 942 | homepage |
 | `modules/inquiries-v2.js` | 380 | inquiries-v2 |
 | `modules/instructors-v2.js` | 416 | instructors-v2 |
 | `modules/jobs-v2.js` | 1,315 | jobs-v2 |
@@ -119,7 +119,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/trips.js` | 2,162 | trips |
 | `modules/vendors-v2.js` | 603 | vendors-v2 |
 | `modules/wallet-v2.js` | 237 | wallet-v2 |
-| `modules/website-v2.js` | 2,282 | website-v2 |
+| `modules/website-v2.js` | 2,342 | website-v2 |
 | `modules/website.js` | 3,480 | website |
 | `modules/wholesale-v2.js` | 745 | wholesale-v2 |
 | `modules/wholesale.js` | 1,953 | wholesale |

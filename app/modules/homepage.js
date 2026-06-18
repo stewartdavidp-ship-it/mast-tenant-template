@@ -833,6 +833,47 @@
       remove: function (imageId) {
         if (typeof window.confirmDeleteImage === 'function') window.confirmDeleteImage(imageId);
       },
+      // DOM-free add of a library/uploaded image to a section (no legacy modal) —
+      // for the engine image-manager drill. Writes the SAME gallery-doc shape
+      // saveGalleryFromLibrary does: { section, url, alt, caption, order, visible,
+      // libraryImageId }. Returns the new key. opts: { url, imgId?, alt?, caption? }.
+      addFromLibraryDirect: async function (sectionId, opts) {
+        opts = opts || {};
+        var url = opts.url; if (!url) return null;
+        var maxOrder = 0;
+        Object.values(galleryData).forEach(function (g) { if (g.section === sectionId && (g.order || 0) > maxOrder) maxOrder = g.order; });
+        var data = {
+          url: url, alt: (opts.alt != null ? opts.alt : '') || '', caption: opts.caption || '',
+          section: sectionId, visible: true, order: maxOrder + 1,
+          createdAt: MastDB.serverTimestamp(), updatedAt: MastDB.serverTimestamp()
+        };
+        if (opts.imgId) data.libraryImageId = opts.imgId;
+        var key = MastDB.gallery.newKey();
+        await MastDB.gallery.set(key, data);
+        if (typeof window.writeAudit === 'function') { try { await window.writeAudit('create', 'gallery', key); } catch (e) {} }
+        galleryData = (await MastDB.gallery.list(500)) || {}; syncToGlobal(galleryData);
+        if (typeof window.notifyGalleryChanged === 'function') window.notifyGalleryChanged();
+        return key;
+      },
+      // DOM-free metadata patch (alt/caption/category/visible/order) for the
+      // engine drill's inline editors. Mirrors saveImage's update branch.
+      updateImageMeta: async function (imageId, patch) {
+        patch = Object.assign({}, patch || {}); patch.updatedAt = MastDB.serverTimestamp();
+        await MastDB.gallery.update(imageId, patch);
+        if (typeof window.writeAudit === 'function') { try { await window.writeAudit('update', 'gallery', imageId); } catch (e) {} }
+        galleryData = (await MastDB.gallery.list(500)) || {}; syncToGlobal(galleryData);
+        if (typeof window.notifyGalleryChanged === 'function') window.notifyGalleryChanged();
+        return true;
+      },
+      // DOM-free delete (no legacy confirm modal) — the engine drill guards with
+      // mastConfirm. Mirrors deleteImage's write.
+      removeConfirmed: async function (imageId) {
+        if (typeof window.writeAudit === 'function') { try { await window.writeAudit('delete', 'gallery', imageId); } catch (e) {} }
+        await MastDB.gallery.remove(imageId);
+        galleryData = (await MastDB.gallery.list(500)) || {}; syncToGlobal(galleryData);
+        if (typeof window.notifyGalleryChanged === 'function') window.notifyGalleryChanged();
+        return true;
+      },
       // Reorder an image up/down within its section. Re-syncs window.gallery
       // first so the shared moveImage swaps against current order values.
       reorder: async function (imageId, dir) {

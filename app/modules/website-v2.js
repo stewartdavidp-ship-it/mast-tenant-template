@@ -735,141 +735,171 @@
   }
   function sectionData(id) { return (V2.wp && V2.wp.sections && V2.wp.sections[id]) || {}; }
 
-  // One section row: name + On/Off + reorder + expand chevron, with an
-  // expand-to-edit body (text fields + variant + image punt).
+  // One section LIST row: the section name opens the record; On/Off + reorder
+  // stay inline (list-level affordances). No inline expand — editing happens in
+  // the standard slide-out record (sectionDetailHtml below).
   function wordsRow(sec, idx, total) {
     var ed = canEdit();
     var on = sectionEnabled(sec.id, sec.required);
-    var open = !!V2.expanded[sec.id];
     var sid = esc(sec.id);
     var pill = '<span class="wv2-sec-pill ' + (on ? 'on' : 'off') + '">' + (on ? 'On' : 'Off') + '</span>';
-    // reorder controls (disabled at the ends)
     var upDis = idx === 0 ? ' disabled' : '';
     var dnDis = idx === total - 1 ? ' disabled' : '';
     var reorder = ed
       ? '<span class="wv2-sec-move">' +
-          '<button type="button" class="wv2-mv"' + upDis + ' title="Move up" onclick="WebsiteV2.moveSection(\'' + sid + '\',-1)">▲</button>' +
-          '<button type="button" class="wv2-mv"' + dnDis + ' title="Move down" onclick="WebsiteV2.moveSection(\'' + sid + '\',1)">▼</button>' +
+          '<button type="button" class="wv2-mv"' + upDis + ' title="Move up" onclick="event.stopPropagation();WebsiteV2.moveSection(\'' + sid + '\',-1)">▲</button>' +
+          '<button type="button" class="wv2-mv"' + dnDis + ' title="Move down" onclick="event.stopPropagation();WebsiteV2.moveSection(\'' + sid + '\',1)">▼</button>' +
         '</span>'
       : '';
-    var toggle = '';
-    if (ed) {
-      toggle = sec.required
-        ? '<span class="mu-sub">Always on</span>'
-        : '<button type="button" class="wv2-sec-toggle" onclick="WebsiteV2.toggleSection(\'' + sid + '\',' + (on ? 'false' : 'true') + ')">' + (on ? 'Turn off' : 'Turn on') + '</button>';
-    }
-    var chevron = '<button type="button" class="wv2-sec-expand" aria-expanded="' + open + '" onclick="WebsiteV2.toggleExpand(\'' + sid + '\')">' + (open ? '▾' : '▸') + '</button>';
-    var head =
-      '<div class="wv2-sec-head">' +
-        '<div class="wv2-sec-id">' + chevron + '<span class="wv2-sec-name">' + esc(sec.label || sec.id) + '</span> ' + pill + '</div>' +
-        '<div class="wv2-sec-actions">' + reorder + toggle + '</div>' +
+    var toggle = ed
+      ? (sec.required
+          ? '<span class="mu-sub">Always on</span>'
+          : '<button type="button" class="wv2-sec-toggle" onclick="event.stopPropagation();WebsiteV2.toggleSection(\'' + sid + '\',' + (on ? 'false' : 'true') + ')">' + (on ? 'Turn off' : 'Turn on') + '</button>')
+      : '';
+    var open = ed ? 'WebsiteV2.openSection(\'' + sid + '\')' : '';
+    return '<div class="wv2-sec-row"' + (ed ? ' role="button" tabindex="0" onclick="' + open + '" onkeydown="if(event.key===\'Enter\'){' + open + '}"' : '') + '>' +
+        '<div class="wv2-sec-id"><span class="wv2-sec-name">' + esc(sec.label || sec.id) + '</span> ' + pill + '</div>' +
+        '<div class="wv2-sec-actions">' + reorder + toggle + (ed ? '<span class="wv2-sec-go">Edit ›</span>' : '') + '</div>' +
       '</div>';
-    var body = open ? '<div class="wv2-sec-body">' + wordsSectionEditor(sec) + '</div>' : '';
-    return '<div class="wv2-sec" data-sec="' + sid + '">' + head + body + '</div>';
   }
 
-  // The expanded editor for one section: inline text fields (instant-apply via
-  // hpUpdateField), social links for contact, the layout-variant picker (where
-  // supported), and the classic image-edit punt.
-  function wordsSectionEditor(sec) {
+  // Build a section record from the live caches — the entity fetch + openSection
+  // both use this so the record always reflects current config.
+  function sectionRecord(id) {
+    var b = window.HomepageBridge;
+    var list = (b && b.getSectionList && b.getSectionList()) || [];
+    var sec = list.find(function (s) { return s.id === id; });
+    if (!sec) return null;
+    var opts = themeOptions();
+    var variants = (opts.variants && opts.variants[id]) || null;
+    var vkey = variantKeyFor(id);
+    var vsel = ((V2.theme || {})[vkey]) || (opts.variantDefaults && opts.variantDefaults[id]) || (variants && variants[0] && variants[0].id) || '';
+    return {
+      id: id, _title: sec.label || id, label: sec.label || id, required: !!sec.required,
+      enabled: sectionEnabled(id, sec.required),
+      fields: (wordsFields()[id] || []), data: sectionData(id), isContact: id === 'contact',
+      hasImages: secHasImages(id),
+      imageCount: (b && b.images && b.images.count) ? b.images.count(id) : 0,
+      fieldImageDefs: (b && b.images && b.images.fieldDefs) ? b.images.fieldDefs(id) : [],
+      variants: variants, variantKey: vkey, variantSelected: vsel
+    };
+  }
+
+  // The section record INTERIOR — composed entirely from MastUI primitives, so it
+  // carries the same shell as every other record: sticky head (status/photo/layout
+  // tiles) + Content / Photos / Layout tabs + cards. No bespoke layout.
+  function sectionDetailHtml(UU, r) {
     var ed = canEdit();
-    if (!ed) return '<div class="mu-sub">You do not have permission to edit this section.</div>';
-    var fields = wordsFields()[sec.id] || [];
-    var data = sectionData(sec.id);
+    var contentFields = (r.fields || []).filter(function (f) { return f.type !== 'image'; });
+    var hasPhotos = r.hasImages || (r.fieldImageDefs && r.fieldImageDefs.length);
+    var hasLayout = r.variants && r.variants.length;
+    var tabs = [{ key: 'content', label: 'Content' }];
+    if (hasPhotos) tabs.push({ key: 'photos', label: 'Photos' });
+    if (hasLayout) tabs.push({ key: 'layout', label: 'Layout' });
+    var active = 'content';
+    var tiles = [{ k: 'Status', v: r.enabled ? '<span style="color:var(--success);">On</span>' : '<span class="mu-sub">Off</span>' }];
+    if (r.hasImages) tiles.push({ k: 'Photos', v: String(r.imageCount) });
+    if (hasLayout) { var vl = (r.variants.find(function (v) { return v.id === r.variantSelected; }) || {}).label; tiles.push({ k: 'Layout', v: esc(vl || r.variantSelected || '—') }); }
+    var out = UU.stickyHead(UU.tiles(tiles), UU.paneTabsBar(tabs, active));
+    out += secPane('content', active, contentPaneHtml(UU, r, ed, contentFields));
+    if (hasPhotos) out += secPane('photos', active, photosPaneHtml(UU, r, ed));
+    if (hasLayout) out += secPane('layout', active, UU.card('Layout', ed ? layoutInnerHtml(r) : '<span class="mu-sub">Read only.</span>'));
+    return out;
+  }
+  function secPane(key, active, inner) { return '<div class="mu-pane" data-pane="' + key + '"' + (key === active ? '' : ' hidden') + '>' + inner + '</div>'; }
+
+  // Content pane: instant-apply text fields (+ social for contact), inside cards.
+  function contentPaneHtml(UU, r, ed, fields) {
+    if (!ed) return UU.card('Content', '<span class="mu-sub">You do not have permission to edit this section.</span>');
+    var inner = fields.length ? fields.map(function (f) { return fieldRowHtml(r.id, f, r.data); }).join('') : '<span class="mu-sub">No text content for this section.</span>';
+    var out = UU.card('Text', inner);
+    if (r.isContact) out += UU.card('Social links', socialInnerHtml(r));
+    return out;
+  }
+  // One instant-apply field row. Inline handlers write through
+  // WebsiteV2.contentInput → hpUpdateField (self-debounced).
+  function fieldRowHtml(secId, f, data) {
+    var val = data[f.id] !== undefined ? data[f.id] : '';
+    var sid = esc(secId), fid = esc(f.id);
+    var ctl;
+    if (f.type === 'textarea') ctl = '<textarea class="form-input" rows="4" style="width:100%;resize:vertical;" oninput="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'textarea\',this.value)">' + esc(String(val)) + '</textarea>';
+    else if (f.type === 'number') ctl = '<input class="form-input" type="number" style="width:100%;" value="' + esc(String(val)) + '" oninput="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'number\',this.value)">';
+    else if (f.type === 'select') ctl = '<select class="form-input" style="width:100%;" onchange="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'select\',this.value)">' + (f.options || []).map(function (o) { var ov = o.v != null ? o.v : o.value, ol = o.l != null ? o.l : o.label; return '<option value="' + esc(ov) + '"' + (String(val) === String(ov) ? ' selected' : '') + '>' + esc(ol) + '</option>'; }).join('') + '</select>';
+    else if (f.type === 'toggle') ctl = '<label class="toggle-switch"><input type="checkbox"' + (val ? ' checked' : '') + ' onchange="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'toggle\',this.checked)"><span class="toggle-slider"></span></label>';
+    else ctl = '<input class="form-input" type="text" style="width:100%;" value="' + esc(String(val)) + '" oninput="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'text\',this.value)">';
+    return '<div class="form-group"><label class="form-label">' + esc(f.label) + '</label>' + ctl + '</div>';
+  }
+  function socialInnerHtml(r) {
+    var links = (r.data && r.data.socialLinks) || {};
+    return '<div class="wv2-social-grid">' + SOCIAL_PLATFORMS.map(function (p) {
+      return '<div class="form-group"><label class="form-label">' + esc(titleCase(p)) + '</label>' +
+        '<input class="form-input" type="url" value="' + esc(links[p] || '') + '" placeholder="https://" style="width:100%;" oninput="WebsiteV2.socialInput(\'' + esc(p) + '\',this.value)"></div>';
+    }).join('') + '</div>';
+  }
+  // Layout pane inner: the manifest variant options as a MastUI swatchGrid.
+  function layoutInnerHtml(r) {
+    var items = (r.variants || []).map(function (v) { return { value: v.id, label: v.label || v.id, _desc: v.desc || '' }; });
+    var grid = U.swatchGrid({
+      items: items, selected: r.variantSelected, onSelectFnName: 'wv2PickVariant', idKey: 'value',
+      renderItem: function (it) { return '<span class="wv2-var-name">' + esc(it.label) + '</span>' + (it._desc ? '<span class="wv2-var-desc mu-sw-label">' + esc(it._desc) + '</span>' : ''); }
+    });
+    var forwarder = 'wv2PickVariant_' + r.id.replace(/-/g, '_');
+    grid = grid.replace(/data-sw="wv2PickVariant"/g, 'data-sw="' + forwarder + '"');
+    window[forwarder] = (function (sid) { return function (variantId) { WebsiteV2.pickVariant(sid, variantId); }; })(r.id);
+    return grid;
+  }
+  // Photos pane: feature-image field card(s) (e.g. about.imageUrl) + a light
+  // photo gallery card with a "Manage photos →" drill into the engine image
+  // manager (homepage-images-v2). The strip fills async (fillPhotoStrip).
+  function photosPaneHtml(UU, r, ed) {
     var out = '';
-    if (fields.length) {
-      out += fields.map(function (f) { return wordsFieldGroup(sec.id, f, data); }).join('');
-    } else {
-      out += '<div class="mu-sub">No text content for this section.</div>';
-    }
-    // Contact social links (mirrors homepage editor's contact section).
-    if (sec.id === 'contact') {
-      var links = data.socialLinks || {};
-      out += '<div class="wv2-sub-h" style="margin-top:12px;">Social links</div>' +
-        '<div class="wv2-social-grid">' + SOCIAL_PLATFORMS.map(function (p) {
-          return '<div class="form-group"><label class="form-label">' + esc(titleCase(p)) + '</label>' +
-            '<input class="form-input" type="url" id="wv2soc-' + esc(p) + '" value="' + esc(links[p] || '') + '" placeholder="https://" style="width:100%;"></div>';
-        }).join('') + '</div>';
-    }
-    // Layout variant picker (hero / gallery / product-grid) — closes the
-    // homepage-v2 variant hatch. swatchGrid of manifest variant options.
-    out += wordsVariantSection(sec.id);
-    // Section gallery images → native slide-out (Add from library / Upload +
-    // per-image edit / reorder / visibility / delete), all via
-    // HomepageBridge.images. Replaces the old "Edit images (classic) →" punt.
-    if (secHasImages(sec.id)) {
-      var imgN = 0;
-      try { var bi = window.HomepageBridge; if (bi && bi.images && bi.images.count) imgN = bi.images.count(sec.id); } catch (e) {}
-      out += '<div class="wv2-sub-h" style="margin-top:12px;">Photos</div>' +
-        '<div class="wv2-img-line">' +
-          '<span class="mu-sub">' + (imgN ? (imgN + ' image' + (imgN === 1 ? '' : 's')) : 'No images yet') + '</span>' +
-          '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.editImages(\'' + esc(sec.id) + '\')">Edit images</button>' +
-        '</div>';
+    (r.fieldImageDefs || []).forEach(function (f) { out += featureImageCardHtml(UU, r, f, ed); });
+    if (r.hasImages) {
+      var manage = ed ? '<div style="margin-top:12px;"><button type="button" class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'homepage-images-v2\',\'' + esc(r.id) + '\')">Manage photos →</button></div>' : '';
+      out += UU.card('Photos (' + r.imageCount + ')', '<div id="wv2PhotoStrip" class="wv2-imgstrip-read"><span class="mu-sub">Loading…</span></div>' + manage);
     }
     return out;
   }
-
-  // One section text field → an instant-apply input wired in wireWords().
-  function wordsFieldGroup(secId, f, data) {
-    var val = data[f.id] !== undefined ? data[f.id] : '';
-    var iid = 'wv2fld-' + secId + '-' + f.id;
-    var inner;
-    if (f.type === 'textarea') {
-      inner = '<textarea class="form-input" id="' + esc(iid) + '" rows="4" style="width:100%;resize:vertical;">' + esc(String(val)) + '</textarea>';
-    } else if (f.type === 'number') {
-      inner = '<input class="form-input" type="number" id="' + esc(iid) + '" value="' + esc(String(val)) + '" style="width:100%;">';
-    } else if (f.type === 'select') {
-      var opts = (f.options || []).map(function (o) {
-        var ov = o.v != null ? o.v : o.value, ol = o.l != null ? o.l : o.label;
-        return '<option value="' + esc(ov) + '"' + (String(val) === String(ov) ? ' selected' : '') + '>' + esc(ol) + '</option>';
-      }).join('');
-      inner = '<select class="form-input" id="' + esc(iid) + '" style="width:100%;">' + opts + '</select>';
-    } else if (f.type === 'toggle') {
-      inner = '<label class="toggle-switch"><input type="checkbox" id="' + esc(iid) + '"' + (val ? ' checked' : '') + '><span class="toggle-slider"></span></label>';
-    } else if (f.type === 'image') {
-      // Single-image FIELD (e.g. about.imageUrl) → native instant-apply control
-      // (From library / Upload / Remove), all via HomepageBridge.images. The
-      // storefront reads this one URL (sections.{key}.{field}), not a gallery doc.
-      return imageFieldControlHtml(secId, f, data);
-    } else {
-      inner = '<input class="form-input" type="text" id="' + esc(iid) + '" value="' + esc(String(val)) + '" style="width:100%;">';
-    }
-    return '<div class="form-group"><label class="form-label">' + esc(f.label) + '</label>' + inner + '</div>';
+  // Fill the read-only photo strip in the open Photos pane from fresh data.
+  function fillPhotoStrip(secId) {
+    var el = document.getElementById('wv2PhotoStrip'); if (!el) return;
+    var b = window.HomepageBridge; if (!b || !b.images || !b.images.list) return;
+    Promise.resolve(b.images.list(secId)).then(function (items) {
+      var el2 = document.getElementById('wv2PhotoStrip'); if (!el2) return;
+      if (!items.length) { el2.innerHTML = '<span class="mu-sub">No photos yet.</span>'; return; }
+      el2.innerHTML = items.slice(0, 12).map(function (e) { var d = e[1]; return '<div class="wv2-imgcell" style="background-image:url(' + esc(d.url || '') + ');"' + (d.visible === false ? ' data-off="1"' : '') + '></div>'; }).join('');
+    }).catch(function () {});
+  }
+  function featureImageCardHtml(UU, r, f, ed) {
+    var val = (r.data && r.data[f.id]) || '';
+    var sid = esc(r.id), fid = esc(f.id);
+    var prev = val
+      ? '<div class="wv2-imgcell wv2-imgcell-lg" style="background-image:url(' + esc(String(val)) + ');"></div>'
+      : '<div class="wv2-imgcell wv2-imgcell-lg wv2-imgcell-empty"><span class="mu-sub">No image set</span></div>';
+    var btns = ed ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.pickFieldImage(\'' + sid + '\',\'' + fid + '\')">📚 From library</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.uploadFieldImage(\'' + sid + '\',\'' + fid + '\')">💻 Upload</button>' +
+      (val ? '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.clearFieldImage(\'' + sid + '\',\'' + fid + '\')">Remove</button>' : '') +
+      '</div>' : '';
+    return UU.card(f.label || 'Image', prev + btns);
+  }
+  // Re-render ONE pane of the open section record in place (cornerstone
+  // rerenderXPane pattern — never a full SO re-render, which bounces to tab 1).
+  function rerenderSecPane(paneKey) {
+    var id = WV2_SEC.id; if (!id) return;
+    var body = document.getElementById('mastSlideOutBody'); if (!body) return;
+    var paneEl = body.querySelector('.mu-pane[data-pane="' + paneKey + '"]'); if (!paneEl) return;
+    var r = sectionRecord(id); if (!r) return;
+    var ed = canEdit();
+    if (paneKey === 'photos') { paneEl.innerHTML = photosPaneHtml(U, r, ed); setTimeout(function () { fillPhotoStrip(id); }, 0); }
+    else if (paneKey === 'layout') { paneEl.innerHTML = U.card('Layout', ed ? layoutInnerHtml(r) : '<span class="mu-sub">Read only.</span>'); }
   }
 
-  // Layout-variant picker for a section (hero/gallery/product-grid). swatchGrid
-  // of the manifest's variant options; the selected tile is the live theme value
-  // (else the manifest default). Picking writes WebsiteBridge.setThemeField.
-  function wordsVariantSection(secId) {
-    var opts = themeOptions();
-    var variants = (opts.variants && opts.variants[secId]) || null;
-    if (!variants || !variants.length) return '';
-    var t = V2.theme || {};
-    var key = variantKeyFor(secId);
-    var def = (opts.variantDefaults && opts.variantDefaults[secId]) || (variants[0] && variants[0].id) || '';
-    var selected = t[key] || def;
-    var items = variants.map(function (v) { return { value: v.id, label: v.label || v.id, _desc: v.desc || '' }; });
-    var grid = U.swatchGrid({
-      items: items, selected: selected, onSelectFnName: 'wv2PickVariant',
-      idKey: 'value',
-      renderItem: function (it) {
-        return '<span class="wv2-var-name">' + esc(it.label) + '</span>' +
-          (it._desc ? '<span class="wv2-var-desc mu-sw-label">' + esc(it._desc) + '</span>' : '');
-      }
-    });
-    // The variant id is encoded into the fn name via a per-section forwarder so
-    // the flat swatchGrid delegate (window[fnName]) routes to the right section.
-    var forwarder = 'wv2PickVariant_' + secId.replace(/-/g, '_');
-    grid = grid.replace(/data-sw="wv2PickVariant"/g, 'data-sw="' + forwarder + '"');
-    window[forwarder] = (function (sid) { return function (variantId) { WebsiteV2.pickVariant(sid, variantId); }; })(secId);
-    return '<div class="wv2-sub-h" style="margin-top:12px;">Layout</div>' + grid;
-  }
-
-  // ── Card 2 · Section image editing (native — replaces the classic punt) ──
-  // The grid + per-image actions are rendered by HomepageBridge.images.gridHtml
-  // (the SAME renderer the page builder uses) and write through the shared
-  // window.* gallery writers; the single-image field (about.imageUrl) writes via
-  // HomepageBridge.images.setField. The twin holds NO raw MastDB.gallery writes.
+  // ── Card 2 · Section image editing ─────────────────────────────────
+  // The Photos pane drills into the homepage-images-v2 record (engine SO),
+  // which writes through HomepageBridge.images; the single-image field
+  // (about.imageUrl) writes via HomepageBridge.images.setField. The twin holds
+  // NO raw MastDB.gallery writes.
 
   // Which sections expose storefront images (bridge-aware → also dynamic shop
   // categories; falls back to the static mirror before the bridge warms).
@@ -879,26 +909,8 @@
     return IMAGE_SECTIONS.indexOf(secId) !== -1;
   }
 
-  // The native single-image FIELD control (preview + From library / Upload /
-  // Remove). Shared by the inline section editor and the image slide-out.
-  function imageFieldControlHtml(secId, f, data) {
-    data = data || sectionData(secId);
-    var val = (data && data[f.id]) || '';
-    var sid = esc(secId), fid = esc(f.id);
-    var prev = val
-      ? '<img src="' + esc(String(val)) + '" alt="" class="wv2-img-fieldprev">'
-      : '<div class="wv2-img-fieldprev wv2-img-fieldempty mu-sub">No image set</div>';
-    return '<div class="form-group wv2-img-field"><label class="form-label">' + esc(f.label) + '</label>' +
-      prev +
-      '<div class="wv2-img-fieldbtns">' +
-        '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.pickFieldImage(\'' + sid + '\',\'' + fid + '\')">📚 From library</button>' +
-        '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.uploadFieldImage(\'' + sid + '\',\'' + fid + '\')">💻 Upload</button>' +
-        (val ? '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.clearFieldImage(\'' + sid + '\',\'' + fid + '\')">Remove</button>' : '') +
-      '</div></div>';
-  }
-
   // Optimistically stash a single-image field value in the wp cache so the
-  // inline preview / slide-out reflect it before the re-read lands.
+  // photos pane reflects it before the re-read lands.
   function optimisticField(secId, fieldId, url) {
     if (!V2.wp) V2.wp = {};
     if (!V2.wp.sections) V2.wp.sections = {};
@@ -935,70 +947,91 @@
     input.click();
   }
 
-  // The open image slide-out tracks its section here. paintImageSlide is
-  // registered as window.onGalleryMutated so the shared gallery writers (add /
-  // edit / delete / reorder / visibility, which fire window.notifyGalleryChanged)
-  // refresh the grid in place.
-  var WV2_IMG = { sec: null };
+  // The open section record (id) — so a pane re-render can rebuild from the
+  // current section. The image drill tracks its section + focused image.
+  var WV2_SEC = { id: null };
+  var WV2_IMGD = { id: null, focus: null };
 
-  function imageSlideTitle(secId) {
+  // ── Image MANAGER drill (homepage-images-v2) ────────────────────────
+  // A stacked slide-out (Back to the section), rendered with MastUI cards: the
+  // focused photo shows large with its alt/caption/visibility/order inline; the
+  // strip below switches focus. Add from library / Upload append a gallery doc
+  // carrying { section }. Every write goes through HomepageBridge.images (no raw
+  // MastDB writes here) and re-renders this drill in place.
+  function imagesDrillRecord(id) {
     var b = window.HomepageBridge;
-    var list = (b && b.getSectionList && b.getSectionList()) || [];
-    var s = list.find(function (x) { return x.id === secId; });
-    return 'Photos · ' + ((s && (s.label || s.id)) || titleCase(secId));
-  }
-
-  // The slide-out body: action bar (+ hero rotation), single-image field
-  // controls (if any), then the shared image grid. items = fresh [[id,doc]].
-  function imageSlideBodyHtml(secId, items) {
-    var b = window.HomepageBridge.images;
-    var out = '<div class="wv2-img-actions">' +
-      '<button type="button" class="btn btn-primary btn-small" onclick="WebsiteV2.imgAddLibrary(\'' + esc(secId) + '\')">📚 Add from library</button>' +
-      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgUpload(\'' + esc(secId) + '\')">💻 Upload</button>';
-    if (secId === 'hero') {
-      out += '<select id="heroRotationSpeed" class="form-input wv2-img-rot" onchange="if(window.saveHeroRotationSpeed)saveHeroRotationSpeed(this.value)" title="Image rotation speed">' +
-        ['3', '4', '5', '6', '8', '10', '15', '20'].map(function (s) { return '<option value="' + s + '"' + (s === '6' ? ' selected' : '') + '>' + s + 's</option>'; }).join('') +
-        '</select>';
-    }
-    out += '</div>';
-    var fdefs = (b.fieldDefs && b.fieldDefs(secId)) || [];
-    if (fdefs.length) out += fdefs.map(function (f) { return imageFieldControlHtml(secId, f); }).join('');
-    out += '<div class="wv2-img-grid-wrap">' + b.gridHtml(secId, items) + '</div>';
-    return out;
-  }
-
-  // Open the per-section image slide-out. Loads fresh, registers the refresh
-  // hook, paints. Read-mode (no footer) — every action is instant-apply.
-  function openImageSlideOut(secId) {
-    if (!window.MastUI || !MastUI.slideOut) { if (window.showToast) showToast('Cannot open dialog.', true); return; }
-    WV2_IMG.sec = secId;
-    MastUI.slideOut.open({
-      title: imageSlideTitle(secId),
-      subtitle: 'Loading…',
-      size: 'lg', mode: 'read', deepLink: false,
-      bodyHtml: '<div class="mu-sub">Loading…</div>',
-      actions: [],
-      onClose: function () { if (window.onGalleryMutated === paintImageSlide) window.onGalleryMutated = null; WV2_IMG.sec = null; mountWords(); }
+    if (!b || !b.images || !b.images.list) return null;
+    return Promise.resolve(b.images.list(id)).then(function (items) {
+      var list = (b.getSectionList && b.getSectionList()) || [];
+      var sec = list.find(function (s) { return s.id === id; });
+      var label = (sec && (sec.label || sec.id)) || titleCase(id);
+      var ids = items.map(function (e) { return e[0]; });
+      var focus = (WV2_IMGD.focus && ids.indexOf(WV2_IMGD.focus) !== -1) ? WV2_IMGD.focus : (ids[0] || null);
+      WV2_IMGD.id = id; WV2_IMGD.focus = focus;
+      return { _key: id, _title: label + ' · Photos', sectionId: id, items: items, focus: focus };
     });
-    window.onGalleryMutated = paintImageSlide;
-    paintImageSlide();
+  }
+  function imagesDrillHtml(UU, r) {
+    var ed = canEdit();
+    var items = r.items || [];
+    var addBar = ed ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' +
+      '<button type="button" class="btn btn-primary btn-small" onclick="WebsiteV2.imgdAdd(\'' + esc(r.sectionId) + '\')">📚 Add from library</button>' +
+      '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdUpload(\'' + esc(r.sectionId) + '\')">💻 Upload</button>' +
+      '</div>' : '';
+    if (!items.length) return addBar + UU.card('Photos', '<div style="text-align:center;padding:22px 16px;color:var(--warm-gray);font-size:0.9rem;">No photos yet.' + (ed ? ' Add one from your library or upload.' : '') + '</div>');
+    var focusEntry = items.find(function (e) { return e[0] === r.focus; }) || items[0];
+    var fid = focusEntry[0], fimg = focusEntry[1];
+    var idx = items.findIndex(function (e) { return e[0] === fid; });
+    var isVid = fimg.videoUrl || /\.(mp4|mov|webm)/i.test(fimg.url || '');
+    var large = isVid
+      ? '<div class="wv2-imgfocus wv2-imgfocus-vid"><span>▶ video</span></div>'
+      : '<div class="wv2-imgfocus" style="background-image:url(' + esc(fimg.url || '') + ');"></div>';
+    var focusInner = large;
+    if (ed) {
+      focusInner += '<div class="form-group" style="margin-top:12px;"><label class="form-label">Alt text</label>' +
+        '<input class="form-input" type="text" style="width:100%;" value="' + esc(fimg.alt || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'alt\',this.value)"></div>' +
+        '<div class="form-group"><label class="form-label">Caption</label>' +
+        '<input class="form-input" type="text" style="width:100%;" value="' + esc(fimg.caption || '') + '" oninput="WebsiteV2.imgdMeta(\'' + esc(fid) + '\',\'caption\',this.value)"></div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button type="button" class="btn btn-secondary btn-small"' + (idx <= 0 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'up\')">← Earlier</button>' +
+          '<button type="button" class="btn btn-secondary btn-small"' + (idx >= items.length - 1 ? ' disabled' : '') + ' onclick="WebsiteV2.imgdMove(\'' + esc(fid) + '\',\'down\')">Later →</button>' +
+          '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdToggleVis(\'' + esc(fid) + '\')">' + (fimg.visible === false ? 'Show on site' : 'Hide from site') + '</button>' +
+          '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdRemove(\'' + esc(fid) + '\')">Remove</button>' +
+        '</div>';
+    }
+    var strip = '<div class="wv2-imgstrip">' + items.map(function (e) {
+      var k = e[0], d = e[1];
+      return '<button type="button" class="wv2-imgthumb' + (k === fid ? ' on' : '') + (d.visible === false ? ' off' : '') + '" onclick="WebsiteV2.imgdFocus(\'' + esc(k) + '\')" style="background-image:url(' + esc(d.url || '') + ');" title="' + esc(d.alt || d.caption || '') + '"></button>';
+    }).join('') + '</div>';
+    return addBar + UU.card(fimg.visible === false ? 'Selected photo · hidden' : 'Selected photo', focusInner) + UU.card('All photos (' + items.length + ')', strip);
+  }
+  // Re-render the drill in place (internal=true → keeps the Back stack to the
+  // section). focusKey optionally moves focus (e.g. to a just-added photo).
+  function reopenImagesDrill(id, focusKey) {
+    if (focusKey) WV2_IMGD.focus = focusKey;
+    Promise.resolve(imagesDrillRecord(id)).then(function (rec) {
+      if (rec) MastEntity.openRecord('homepage-images-v2', rec, 'read', true);
+    });
   }
 
-  // (Re)paint the open image slide-out from fresh data. list() also re-syncs
-  // window.gallery so the grid's shared moveImage/openImageModal/etc. operate on
-  // current data off the homepage route.
-  function paintImageSlide() {
-    var secId = WV2_IMG.sec;
-    if (!secId || !window.HomepageBridge || !HomepageBridge.images) return;
-    Promise.resolve(HomepageBridge.images.list(secId)).then(function (items) {
-      if (WV2_IMG.sec !== secId) return; // closed / switched while fetching
-      var body = document.getElementById('mastSlideOutBody');
-      if (!body) return;
-      body.innerHTML = imageSlideBodyHtml(secId, items);
-      var sub = document.getElementById('mastSlideOutSubtitle');
-      if (sub) { var n = items.length; sub.textContent = n + ' image' + (n === 1 ? '' : 's'); sub.style.display = ''; }
-      if (secId === 'hero' && typeof window.loadHeroRotationSpeed === 'function') window.loadHeroRotationSpeed();
-    }).catch(function (e) { console.error('[website-v2] paintImageSlide', e); });
+  // Register the section + image-manager records on the engine. Both render via
+  // MastUI primitives (no bespoke shell); opened from the Card 2 list / Photos
+  // pane respectively. route:null → drill/open-only, never a top-level route.
+  if (window.MastEntity && typeof MastEntity.define === 'function') {
+    MastEntity.define('homepage-section-v2', {
+      label: 'Section', labelPlural: 'Sections', size: 'lg', route: null,
+      recordId: function (r) { return r.id; },
+      fields: [{ name: '_title', label: 'Section', type: 'text', list: true, readOnly: true }],
+      fetch: function (id) { return sectionRecord(id); },
+      detail: { render: function (UU, r) { WV2_SEC.id = r.id; return sectionDetailHtml(UU, r); } }
+    });
+    MastEntity.define('homepage-images-v2', {
+      label: 'Photos', labelPlural: 'Photos', size: 'lg', route: null,
+      recordId: function (r) { return r._key; },
+      fields: [{ name: '_title', label: 'Photos', type: 'text', list: true, readOnly: true }],
+      fetch: function (id) { return imagesDrillRecord(id); },
+      detail: { render: function (UU, r) { return imagesDrillHtml(UU, r); } }
+    });
   }
 
   // Mount Card 2 into its scaffold body (wv2WordsBody) — replaces the PR2
@@ -1110,55 +1143,11 @@
   // Wire the instant-apply bindings Card 2 can't do inline (text fields, social
   // links, select/toggle, the import URL). swatch tiles fire via the shared
   // delegate (data-sw → the per-section variant forwarder).
-  function wireWords() {
-    if (!canEdit()) return;
-    var list = wordsSectionList();
-    var fieldsBySec = wordsFields();
-    list.forEach(function (sec) {
-      if (!V2.expanded[sec.id]) return; // only the open editor has inputs
-      (fieldsBySec[sec.id] || []).forEach(function (f) {
-        if (f.type === 'image') return;
-        var el = document.getElementById('wv2fld-' + sec.id + '-' + f.id);
-        if (!el) return;
-        U.bindInstant(el, {
-          key: 'wv2fld:' + sec.id + ':' + f.id,
-          delay: f.type === 'select' || f.type === 'toggle' ? 0 : 500,
-          writer: (function (secId, field) {
-            return function (raw) {
-              var value = raw;
-              if (field.type === 'number') value = parseInt(raw, 10) || 0;
-              else if (field.type === 'toggle') value = !!raw;
-              if (!hpReady('hpUpdateField')) return;
-              // optimistic cache so a re-render keeps the typed value
-              if (!V2.wp.sections) V2.wp.sections = {};
-              if (!V2.wp.sections[secId]) V2.wp.sections[secId] = {};
-              V2.wp.sections[secId][field.id] = value;
-              withSave(Promise.resolve(window.hpUpdateField(secId, field.id, value)), { reload: false });
-            };
-          })(sec.id, f)
-        });
-      });
-      if (sec.id === 'contact') {
-        SOCIAL_PLATFORMS.forEach(function (p) {
-          var el = document.getElementById('wv2soc-' + p);
-          if (!el) return;
-          U.bindInstant(el, {
-            key: 'wv2soc:' + p, delay: 500,
-            writer: (function (plat) {
-              return function (v) {
-                if (!hpReady('hpUpdateSocial')) return;
-                if (!V2.wp.sections) V2.wp.sections = {};
-                if (!V2.wp.sections.contact) V2.wp.sections.contact = {};
-                if (!V2.wp.sections.contact.socialLinks) V2.wp.sections.contact.socialLinks = {};
-                V2.wp.sections.contact.socialLinks[plat] = v;
-                withSave(Promise.resolve(window.hpUpdateSocial(plat, v)), { reload: false });
-              };
-            })(p)
-          });
-        });
-      }
-    });
-  }
+  // Section content + social inputs now live in the slide-out record (Content
+  // pane) and write via inline WebsiteV2.contentInput / socialInput handlers, so
+  // the Card 2 list itself has no inputs left to wire. Kept as a no-op so
+  // mountWords' call site is stable.
+  function wireWords() {}
 
   // Guard: the homepage host writers (window.hp*) live in homepage.js. If a
   // delegated write isn't loaded yet, kick a load + toast and bail (never a
@@ -1538,34 +1527,40 @@
       '.wv2-warn-line{font-size:0.78rem;color:var(--warning,var(--amber));margin-bottom:4px;}.wv2-warn-line:last-child{margin-bottom:0;}' +
       // ── Card 2 · Your words & pictures ──
       '.wv2-seclist{display:flex;flex-direction:column;}' +
-      '.wv2-sec{border-top:1px solid var(--border);}.wv2-sec:first-child{border-top:none;}' +
-      '.wv2-sec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;}' +
-      '.wv2-sec-id{display:flex;align-items:center;gap:6px;min-width:0;}' +
-      '.wv2-sec-name{font-size:0.9rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+      // Section LIST rows — each opens the section record (slide-out).
+      '.wv2-sec-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 10px;border-top:1px solid var(--border);border-radius:8px;cursor:pointer;}' +
+      '.wv2-sec-row:first-child{border-top:none;}' +
+      '.wv2-sec-row:hover{background:color-mix(in srgb,var(--text-primary) 4%,transparent);}' +
+      '.wv2-sec-id{display:flex;align-items:center;gap:8px;min-width:0;}' +
+      '.wv2-sec-name{font-size:0.9rem;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
       '.wv2-sec-pill{font-size:0.72rem;font-weight:600;padding:1px 8px;border-radius:999px;}' +
       '.wv2-sec-pill.on{color:var(--success);background:color-mix(in srgb,var(--success) 14%,transparent);}' +
       '.wv2-sec-pill.off{color:var(--text-secondary,var(--warm-gray));background:color-mix(in srgb,var(--text-primary) 8%,transparent);}' +
-      '.wv2-sec-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;}' +
-      '.wv2-sec-expand{background:none;border:none;color:var(--warm-gray);cursor:pointer;font-size:0.85rem;padding:0 2px;line-height:1;}' +
-      '.wv2-sec-expand:hover{color:var(--text-primary);}' +
+      '.wv2-sec-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}' +
+      '.wv2-sec-go{font-size:0.78rem;color:var(--teal);font-weight:600;}' +
       '.wv2-sec-move{display:inline-flex;gap:2px;}' +
       '.wv2-mv{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.72rem;width:22px;height:22px;line-height:1;padding:0;}' +
       '.wv2-mv:hover:not(:disabled){color:var(--text-primary);border-color:var(--teal);}.wv2-mv:disabled{opacity:0.35;cursor:default;}' +
       '.wv2-sec-toggle{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.72rem;padding:3px 10px;}' +
       '.wv2-sec-toggle:hover{color:var(--text-primary);border-color:var(--teal);}' +
-      '.wv2-sec-body{padding:4px 0 14px 22px;}' +
       '.wv2-social-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;}' +
       '.wv2-var-name{font-size:0.85rem;color:var(--text-primary);}' +
       '.wv2-var-desc{font-size:0.72rem;margin-top:2px;}' +
       // Section images (inline "Edit images" row + the slide-out controls)
-      '.wv2-img-line{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;}' +
-      '.wv2-img-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;}' +
-      '.wv2-img-rot{margin-left:auto;width:auto;font-size:0.78rem;padding:3px 8px;}' +
-      '.wv2-img-field{margin-top:6px;}' +
-      '.wv2-img-fieldprev{display:block;max-width:220px;max-height:130px;border-radius:8px;border:1px solid var(--border);object-fit:cover;margin:4px 0 8px;}' +
-      '.wv2-img-fieldempty{width:220px;height:90px;display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--text-primary) 4%,transparent);}' +
-      '.wv2-img-fieldbtns{display:flex;gap:8px;flex-wrap:wrap;}' +
-      '.wv2-img-grid-wrap{margin-top:6px;}' +
+      // Photos — read strip on the section's Photos pane + the image-manager
+      // drill (focused image + thumbnail strip). Image-cells use background-image
+      // so they crop cleanly; the engine cards own the surrounding shell.
+      '.wv2-imgstrip-read{display:flex;flex-wrap:wrap;gap:8px;}' +
+      '.wv2-imgcell{width:64px;height:64px;border-radius:8px;border:1px solid var(--border);background-size:cover;background-position:center;}' +
+      '.wv2-imgcell[data-off]{opacity:0.4;}' +
+      '.wv2-imgcell-lg{width:100%;max-width:280px;height:170px;}' +
+      '.wv2-imgcell-empty{display:flex;align-items:center;justify-content:center;background:color-mix(in srgb,var(--text-primary) 4%,transparent);}' +
+      '.wv2-imgfocus{width:100%;height:260px;border-radius:10px;border:1px solid var(--border);background-size:contain;background-position:center;background-repeat:no-repeat;background-color:color-mix(in srgb,var(--text-primary) 5%,transparent);}' +
+      '.wv2-imgfocus-vid{display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:1.15rem;}' +
+      '.wv2-imgstrip{display:flex;flex-wrap:wrap;gap:8px;}' +
+      '.wv2-imgthumb{width:72px;height:72px;border-radius:8px;border:2px solid transparent;background-size:cover;background-position:center;cursor:pointer;padding:0;}' +
+      '.wv2-imgthumb.on{border-color:var(--teal);}' +
+      '.wv2-imgthumb.off{opacity:0.4;}' +
       // Copy-from-site import
       '.wv2-import-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}' +
       '.wv2-import-hits{margin-top:10px;display:flex;flex-direction:column;gap:8px;}' +
@@ -1805,10 +1800,39 @@
       if (!V2.wp.sections) V2.wp.sections = {}; if (!V2.wp.sections[id]) V2.wp.sections[id] = {}; V2.wp.sections[id].enabled = !!enabled;
       withSave(Promise.resolve(window.hpToggleSection(id, !!enabled)), { reload: false }).then(mountWords);
     },
-    // Expand/collapse a section's inline editor. Pure UI — re-mount Card 2.
-    toggleExpand: function (id) {
-      V2.expanded[id] = !V2.expanded[id];
-      mountWords();
+    // Open a section as a record in the standard slide-out (Content / Photos /
+    // Layout tabs). Replaces the old inline expand.
+    openSection: function (id) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      if (!window.MastEntity) { if (window.showToast) showToast('Editor still loading — try again', true); return; }
+      var r = sectionRecord(id);
+      if (!r) { if (window.showToast) showToast('Section still loading — try again', true); return; }
+      WV2_SEC.id = id;
+      MastEntity.openRecord('homepage-section-v2', r, 'read');
+      // fill the Photos pane's read strip once the body lands
+      setTimeout(function () { fillPhotoStrip(id); }, 60);
+    },
+    // Instant-apply a section content field → hpUpdateField (self-debounced).
+    contentInput: function (secId, fieldId, type, value) {
+      if (!canEdit()) return;
+      var v = value;
+      if (type === 'number') v = parseInt(value, 10) || 0;
+      else if (type === 'toggle') v = !!value;
+      if (!hpReady('hpUpdateField')) return;
+      if (!V2.wp.sections) V2.wp.sections = {};
+      if (!V2.wp.sections[secId]) V2.wp.sections[secId] = {};
+      V2.wp.sections[secId][fieldId] = v;
+      withSave(Promise.resolve(window.hpUpdateField(secId, fieldId, v)), { reload: false });
+    },
+    // Instant-apply a contact social link → hpUpdateSocial.
+    socialInput: function (platform, value) {
+      if (!canEdit()) return;
+      if (!hpReady('hpUpdateSocial')) return;
+      if (!V2.wp.sections) V2.wp.sections = {};
+      if (!V2.wp.sections.contact) V2.wp.sections.contact = {};
+      if (!V2.wp.sections.contact.socialLinks) V2.wp.sections.contact.socialLinks = {};
+      V2.wp.sections.contact.socialLinks[platform] = value;
+      withSave(Promise.resolve(window.hpUpdateSocial(platform, value)), { reload: false });
     },
     // Up/down reorder → HomepageBridge.setSectionOrder (read-modify-write the
     // public/config/sectionOrder array in ONE writer). dir: -1 up / +1 down.
@@ -1830,7 +1854,11 @@
     pickVariant: function (secId, variantId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var key = variantKeyFor(secId);
-      if (V2.theme) V2.theme[key] = variantId; // optimistic so the tile selects
+      if (!V2.theme) V2.theme = {};
+      V2.theme[key] = variantId; // optimistic so the tile selects
+      // re-render the open record's Layout pane in place (selection + tile), and
+      // refresh the Card 2 list underneath for the next open.
+      rerenderSecPane('layout');
       withSave(WebsiteBridgeCall('setThemeField', key, variantId), { reload: false }).then(mountWords);
     },
     // "Use this" import chip → write the suggested value into a section field via
@@ -1843,8 +1871,10 @@
       if (!V2.wp.sections) V2.wp.sections = {};
       if (!V2.wp.sections[secId]) V2.wp.sections[secId] = {};
       V2.wp.sections[secId][fieldId] = value;
-      V2.expanded[secId] = true; // open the section so the filled value is visible
-      withSave(Promise.resolve(window.hpUpdateField(secId, fieldId, value)), { reload: false }).then(mountWords);
+      withSave(Promise.resolve(window.hpUpdateField(secId, fieldId, value)), { reload: false }).then(function () {
+        // open the section record so the filled value is visible
+        if (WebsiteV2 && WebsiteV2.openSection) WebsiteV2.openSection(secId);
+      });
       if (window.showToast) showToast('Added to your homepage.');
     },
     // "Copy from my old site" — analyzeExistingSite CF (brand/content half only,
@@ -1884,29 +1914,9 @@
           var b = document.getElementById('wv2ImportBtn'); if (b) { b.disabled = false; b.textContent = 'Read it'; }
         });
     },
-    // Card 2 · open the per-section image slide-out (native; replaces the old
-    // "Edit images (classic)" punt). Grid + Add-from-library / Upload / per-image
-    // edit / reorder / visibility / delete, all via HomepageBridge.images.
-    editImages: function (secId) {
-      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
-      var b = window.HomepageBridge;
-      if (!b || !b.images) { if (window.showToast) showToast('Image editor unavailable.', true); return; }
-      openImageSlideOut(secId);
-    },
-    // Slide-out action bar → add an image from the shared library (metadata modal
-    // save fires notifyGalleryChanged → the slide-out refreshes in place).
-    imgAddLibrary: function (secId) {
-      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
-      if (window.HomepageBridge && HomepageBridge.images) HomepageBridge.images.addFromLibrary(secId);
-    },
-    // Slide-out action bar → add an image by upload (full add modal, upload mode).
-    imgUpload: function (secId) {
-      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
-      if (window.HomepageBridge && HomepageBridge.images) HomepageBridge.images.addByUpload(secId);
-    },
-    // Single-image FIELD (e.g. about.imageUrl) · pick from the library → setField.
-    // Optimistic cache + re-mount Card 2 for the inline preview; setField fires
-    // notifyGalleryChanged so an open slide-out refreshes too.
+    // ── Photos pane · single-image FIELD (e.g. about.imageUrl) ──────────
+    // Pick from the library → setField. Re-renders the open record's Photos pane
+    // (preview) + the Card 2 list underneath. setField fires notifyGalleryChanged.
     pickFieldImage: function (secId, fieldId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var b = window.HomepageBridge; if (!b || !b.images) return;
@@ -1914,7 +1924,7 @@
       window.openImagePicker(function (imgId, url) {
         if (!url) return;
         optimisticField(secId, fieldId, url);
-        Promise.resolve(b.images.setField(secId, fieldId, url)).then(mountWords);
+        Promise.resolve(b.images.setField(secId, fieldId, url)).then(function () { rerenderSecPane('photos'); mountWords(); });
       });
     },
     // Single-image FIELD · upload from computer → /uploadImage CF → setField.
@@ -1923,7 +1933,7 @@
       var b = window.HomepageBridge; if (!b || !b.images) return;
       pickAndUploadImage(['section-image', secId], function (url) {
         optimisticField(secId, fieldId, url);
-        Promise.resolve(b.images.setField(secId, fieldId, url)).then(mountWords);
+        Promise.resolve(b.images.setField(secId, fieldId, url)).then(function () { rerenderSecPane('photos'); mountWords(); });
       });
     },
     // Single-image FIELD · clear it.
@@ -1931,7 +1941,57 @@
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       var b = window.HomepageBridge; if (!b || !b.images) return;
       optimisticField(secId, fieldId, '');
-      Promise.resolve(b.images.clearField(secId, fieldId)).then(mountWords);
+      Promise.resolve(b.images.clearField(secId, fieldId)).then(function () { rerenderSecPane('photos'); mountWords(); });
+    },
+
+    // ── Image MANAGER drill (homepage-images-v2) actions ────────────────
+    // Add a library image directly (shared picker → DOM-free write), focus it,
+    // re-render the drill. No legacy metadata modal.
+    imgdAdd: function (secId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images) return;
+      if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
+      window.openImagePicker(function (imgId, url) {
+        if (!url) return;
+        Promise.resolve(b.images.addFromLibraryDirect(secId, { imgId: imgId, url: url })).then(function (key) { reopenImagesDrill(secId, key); });
+      });
+    },
+    imgdUpload: function (secId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images) return;
+      pickAndUploadImage(['section-image', secId], function (url) {
+        Promise.resolve(b.images.addFromLibraryDirect(secId, { url: url })).then(function (key) { reopenImagesDrill(secId, key); });
+      });
+    },
+    // Focus a thumbnail (no write — just re-render the drill with new focus).
+    imgdFocus: function (imageId) { reopenImagesDrill(WV2_IMGD.id, imageId); },
+    // Inline alt/caption edit → DOM-free metadata patch (self-contained; no
+    // re-render needed — the input already shows the value).
+    imgdMeta: function (imageId, field, value) {
+      if (!canEdit()) return;
+      var b = window.HomepageBridge; if (!b || !b.images || !b.images.updateImageMeta) return;
+      var patch = {}; patch[field] = value;
+      b.images.updateImageMeta(imageId, patch);
+    },
+    imgdToggleVis: function (imageId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images) return;
+      Promise.resolve(b.images.toggleVisible(imageId)).then(function () { reopenImagesDrill(WV2_IMGD.id, imageId); });
+    },
+    imgdMove: function (imageId, dir) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images) return;
+      Promise.resolve(b.images.reorder(imageId, dir)).then(function () { reopenImagesDrill(WV2_IMGD.id, imageId); });
+    },
+    imgdRemove: function (imageId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images || !b.images.removeConfirmed) return;
+      var go = function () {
+        WV2_IMGD.focus = null; // focus falls back to first after delete
+        Promise.resolve(b.images.removeConfirmed(imageId)).then(function () { reopenImagesDrill(WV2_IMGD.id, null); });
+      };
+      if (typeof window.mastConfirm === 'function') window.mastConfirm('Remove this photo from the section?', go);
+      else go();
     },
     // Featured-testimonial visibility → window.hpToggleTestimonialVisible (the
     // SAME single-source writer the legacy page builder uses; arg-taking, no DOM)
