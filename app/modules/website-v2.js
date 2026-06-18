@@ -866,26 +866,41 @@
       var hiddenNote = hidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + hidden + ' photo' + (hidden === 1 ? '' : 's') + ' hidden by a template switch.</div>' : '';
       out += UU.card('Photos (' + r.imageCount + ')', '<div id="wv2PhotoStrip" class="wv2-imgstrip-read"><span class="mu-sub">Loading…</span></div>' + hiddenNote + manage);
     }
-    // Hero slideshow rotation speed (section-level; parity with the legacy hero
-    // editor → public/config/hero/rotationSeconds via saveHeroRotationSpeed).
+    // Hero slideshow speed — a plain-language slider ("Each photo shows for N
+    // seconds"). Writes public/config/hero/rotationSeconds via saveHeroRotationSpeed
+    // on release; the live label updates as you drag. loadHeroRotation() fills the
+    // current value after render.
     if (r.id === 'hero' && ed) {
-      out += UU.card('Slideshow', '<div class="form-group"><label class="form-label">Rotation speed</label>' +
-        '<select id="heroRotationSpeed" class="form-input" style="width:100%;" onchange="if(window.saveHeroRotationSpeed)saveHeroRotationSpeed(this.value)">' +
-        ['3', '4', '5', '6', '8', '10', '15', '20'].map(function (s) { return '<option value="' + s + '"' + (s === '6' ? ' selected' : '') + '>' + s + ' seconds</option>'; }).join('') +
-        '</select></div>');
+      out += UU.card('Slideshow', '<div class="form-group"><label class="form-label">How long each photo shows</label>' +
+        '<input type="range" id="heroRotationSlider" min="2" max="20" step="1" value="6" style="width:100%;accent-color:var(--teal,var(--amber));" oninput="WebsiteV2.heroRotationInput(this.value)" onchange="WebsiteV2.heroRotationCommit(this.value)">' +
+        '<div class="mu-sub" id="heroRotationLabel" style="margin-top:4px;">Each photo shows for 6 seconds</div></div>');
     }
     return out;
   }
   // Fill the read-only photo strip in the open Photos pane from fresh data;
-  // also load the hero rotation-speed value into its select.
+  // also load the hero slideshow-speed value into its slider.
   function fillPhotoStrip(secId) {
-    if (secId === 'hero' && typeof window.loadHeroRotationSpeed === 'function') window.loadHeroRotationSpeed();
+    if (secId === 'hero') loadHeroRotation();
     var el = document.getElementById('wv2PhotoStrip'); if (!el) return;
     var b = window.HomepageBridge; if (!b || !b.images || !b.images.list) return;
     Promise.resolve(b.images.list(secId)).then(function (items) {
       var el2 = document.getElementById('wv2PhotoStrip'); if (!el2) return;
       if (!items.length) { el2.innerHTML = '<span class="mu-sub">No photos yet.</span>'; return; }
       el2.innerHTML = items.slice(0, 12).map(function (e) { var d = e[1]; return '<div class="wv2-imgcell" style="background-image:url(' + esc(d.url || '') + ');"' + (d.visible === false ? ' data-off="1"' : '') + '></div>'; }).join('');
+    }).catch(function () {});
+  }
+  // Plain-language label for the hero slideshow slider.
+  function heroRotationLabel(v) { return 'Each photo shows for ' + v + ' second' + (String(v) === '1' ? '' : 's'); }
+  // Load the current hero rotation seconds into the slider + label (clamped to
+  // the slider range; defaults to 6 when unset).
+  function loadHeroRotation() {
+    var sl = document.getElementById('heroRotationSlider'); if (!sl) return;
+    Promise.resolve(MastDB.get('public/config/hero/rotationSeconds')).then(function (val) {
+      var s = document.getElementById('heroRotationSlider'); if (!s) return;
+      var n = parseInt(val, 10); if (!n || isNaN(n)) n = 6;
+      n = Math.max(2, Math.min(20, n));
+      s.value = String(n);
+      var lbl = document.getElementById('heroRotationLabel'); if (lbl) lbl.textContent = heroRotationLabel(n);
     }).catch(function () {});
   }
   function featureImageCardHtml(UU, r, f, ed) {
@@ -1921,6 +1936,15 @@
       if (!V2.wp.sections.contact.socialLinks) V2.wp.sections.contact.socialLinks = {};
       V2.wp.sections.contact.socialLinks[platform] = value;
       withSave(Promise.resolve(window.hpUpdateSocial(platform, value)), { reload: false });
+    },
+    // Hero slideshow slider — live label while dragging, write on release.
+    heroRotationInput: function (v) {
+      var lbl = document.getElementById('heroRotationLabel');
+      if (lbl) lbl.textContent = heroRotationLabel(v);
+    },
+    heroRotationCommit: function (v) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      if (typeof window.saveHeroRotationSpeed === 'function') window.saveHeroRotationSpeed(parseInt(v, 10));
     },
     // Up/down reorder → HomepageBridge.setSectionOrder (read-modify-write the
     // public/config/sectionOrder array in ONE writer). dir: -1 up / +1 down.
