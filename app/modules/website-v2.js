@@ -880,8 +880,11 @@
       var items = res[0], cats = res[1] || [];
       var mount = document.getElementById('wv2PhotosMgr'); if (!mount) return;
       var ids = items.map(function (e) { return e[0]; });
-      var focus = (WV2_PHOTOS.focus && ids.indexOf(WV2_PHOTOS.focus) !== -1) ? WV2_PHOTOS.focus : (ids[0] || null);
-      WV2_PHOTOS = { sec: secId, focus: focus, items: items, cats: cats };
+      var visIds = items.filter(function (e) { return e[1].visible !== false; }).map(function (e) { return e[0]; });
+      // keep the current focus if still present, else default to the first
+      // VISIBLE photo (don't open the editor on a hidden one).
+      var focus = (WV2_PHOTOS.focus && ids.indexOf(WV2_PHOTOS.focus) !== -1) ? WV2_PHOTOS.focus : (visIds[0] || ids[0] || null);
+      WV2_PHOTOS = { sec: secId, focus: focus, items: items, cats: cats, showHidden: !!WV2_PHOTOS.showHidden };
       mount.innerHTML = photosManagerHtml(secId, items, cats, focus, canEdit());
       updatePhotoCount(items.length);
     }).catch(function (e) { console.error('[website-v2] fillPhotosManager', e); });
@@ -901,25 +904,37 @@
     });
   }
   // The Photos card (add bar + bounded grid) + the Selected-photo editor card.
+  // Hidden photos are kept OUT of the selectable grid by default — a "Show N
+  // hidden photos" toggle reveals them (so you can still un-hide one).
   function photosManagerHtml(secId, items, cats, focus, ed) {
     var b = window.HomepageBridge;
-    var hidden = (b && b.images && b.images.hiddenCount) ? b.images.hiddenCount(secId) : 0;
-    var hiddenNote = hidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + hidden + ' photo' + (hidden === 1 ? '' : 's') + ' hidden by a template switch.</div>' : '';
+    var tplHidden = (b && b.images && b.images.hiddenCount) ? b.images.hiddenCount(secId) : 0;
+    var tplNote = tplHidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + tplHidden + ' photo' + (tplHidden === 1 ? '' : 's') + ' hidden by a template switch.</div>' : '';
+    var showHidden = !!WV2_PHOTOS.showHidden;
+    var hiddenItems = items.filter(function (e) { return e[1].visible === false; });
+    var displayItems = showHidden ? items : items.filter(function (e) { return e[1].visible !== false; });
+    var displayIds = displayItems.map(function (e) { return e[0]; });
+    // keep the editor's focus on something that's actually shown
+    if (displayIds.indexOf(focus) === -1) focus = displayIds[0] || null;
+    WV2_PHOTOS.focus = focus;
     var addBar = ed ? '<div class="wv2-photo-addbar">' +
       '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdAdd(\'' + esc(secId) + '\')">📚 From library</button>' +
       '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdUpload(\'' + esc(secId) + '\')">💻 Upload</button>' +
       '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.imgdPasteUrl(\'' + esc(secId) + '\')">🔗 Paste URL</button>' +
       '</div>' : '';
-    var grid = items.length
-      ? '<div class="wv2-photogrid">' + items.map(function (e) {
-          var k = e[0], d = e[1];
-          var isVid = d.videoUrl || /\.(mp4|mov|webm)/i.test(d.url || '');
-          return '<button type="button" class="wv2-phototile' + (k === focus ? ' on' : '') + (d.visible === false ? ' off' : '') + '" onclick="WebsiteV2.photoSelect(\'' + esc(k) + '\')" style="background-image:url(' + esc(d.url || '') + ');" title="' + esc(d.alt || d.caption || '') + '">' +
-            (isVid ? '<span class="wv2-phototile-vid">▶</span>' : '') + '</button>';
-        }).join('') + '</div>'
-      : '<div class="mu-sub" style="padding:14px 0;">No photos yet.' + (ed ? ' Add one above.' : '') + '</div>';
-    var photosCard = U.card('Photos (' + items.length + ')', addBar + grid + hiddenNote);
-    return photosCard + (items.length ? photoSelectedCardHtml(secId, items, cats, focus, ed) : '');
+    var grid;
+    if (!items.length) grid = '<div class="mu-sub" style="padding:14px 0;">No photos yet.' + (ed ? ' Add one above.' : '') + '</div>';
+    else if (!displayItems.length) grid = '<div class="mu-sub" style="padding:14px 0;">All photos are hidden from your site.</div>';
+    else grid = '<div class="wv2-photogrid">' + displayItems.map(function (e) {
+        var k = e[0], d = e[1];
+        var isVid = d.videoUrl || /\.(mp4|mov|webm)/i.test(d.url || '');
+        return '<button type="button" class="wv2-phototile' + (k === focus ? ' on' : '') + (d.visible === false ? ' off' : '') + '" onclick="WebsiteV2.photoSelect(\'' + esc(k) + '\')" style="background-image:url(' + esc(d.url || '') + ');" title="' + esc(d.alt || d.caption || '') + '">' +
+          (isVid ? '<span class="wv2-phototile-vid">▶</span>' : '') + '</button>';
+      }).join('') + '</div>';
+    var hiddenToggle = (ed && hiddenItems.length) ? '<div style="margin-top:10px;"><button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.photoToggleHidden()">' +
+      (showHidden ? 'Hide hidden photos' : ('Show ' + hiddenItems.length + ' hidden photo' + (hiddenItems.length === 1 ? '' : 's'))) + '</button></div>' : '';
+    var photosCard = U.card('Photos (' + items.length + ')', addBar + grid + hiddenToggle + tplNote);
+    return photosCard + (focus ? photoSelectedCardHtml(secId, items, cats, focus, ed) : '');
   }
   // The "Selected photo" editor card: preview + alt/caption + the section's
   // conditional fields (imgMetaFieldsHtml) + reorder/visibility/remove actions.
@@ -1042,7 +1057,7 @@
   var WV2_SEC = { id: null };
   // The open photo manager's state: section + focused photo + cached items/cats
   // (so picking a thumbnail re-renders instantly, with no refetch).
-  var WV2_PHOTOS = { sec: null, focus: null, items: null, cats: null };
+  var WV2_PHOTOS = { sec: null, focus: null, items: null, cats: null, showHidden: false };
   var _imgdMetaT = {}; // debounce timers for per-photo metadata text inputs
 
   // Resolve the storefront categories for the per-photo Category field. Prefer
@@ -2077,6 +2092,8 @@
     },
     // Select a thumbnail → set focus + re-render the manager from cache (instant).
     photoSelect: function (imageId) { WV2_PHOTOS.focus = imageId; renderPhotosFromCache(); },
+    // Reveal/collapse hidden photos in the grid (so they can be un-hidden).
+    photoToggleHidden: function () { WV2_PHOTOS.showHidden = !WV2_PHOTOS.showHidden; renderPhotosFromCache(); },
     // Inline per-photo metadata edit (alt/caption/category/imageFit/video/
     // product) → DOM-free patch. Debounced for text/number; numbers coerced
     // (empty/0 → null) to match the legacy saveImage. No re-render (the input
