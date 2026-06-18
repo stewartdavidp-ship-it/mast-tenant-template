@@ -1364,10 +1364,10 @@
 </script>
 <script>
 /* Paint gate — cover the page now (pre-paint), fade the cover out once the first
-   screen is final, then remove BOTH gate classes so the end-state DOM is identical
-   to no gate. Reveal fires when theme/flow applied (storefront-theme-ready) AND
-   fonts ready AND the hero image is decoded — or a hard 2s ceiling, whichever is
-   first. The cover (html.mast-cloak::before) never touches any page element.
+   screen is FULLY final (theme + content + brand + hero image + fonts all applied),
+   then remove BOTH gate classes so the end-state DOM is identical to no gate. A
+   hard 3s ceiling guarantees the cover always lifts. The cover
+   (html.mast-cloak::before) never touches any real page element's style.
    Skipped in builder live-preview (?mastpreview=1) so the admin keeps instant
    edit feedback. */
 (function(){
@@ -1394,21 +1394,30 @@
   }
   window.__mastReveal = reveal;
 
-  // Absolute ceiling — the cover never stays up past this, even if a fetch hangs.
-  // reveal() is idempotent, so this stays armed as a backstop; we never clear it
-  // (clearing it and then deferring reveal to requestAnimationFrame stranded the
-  // cover in a backgrounded tab, where rAF is paused).
-  setTimeout(reveal, 2000);
+  // Absolute ceiling — the cover never stays up past this, even if a signal never
+  // fires. reveal() is idempotent so this just stays armed as a backstop.
+  setTimeout(reveal, 3000);
 
-  function whenReady(){
-    var waits = [ window.MAST_FIRST_SCREEN_READY ];
-    if (document.fonts && document.fonts.ready) waits.push(document.fonts.ready);
-    Promise.all(waits).then(reveal);
-  }
-  // storefront-theme.js dispatches this once colors/variant/section-flow are applied.
-  window.addEventListener('storefront-theme-ready', whenReady);
-  // Backstop if the theme script never loads/dispatches.
-  window.addEventListener('load', whenReady);
+  // Resolve when an event fires; a Promise so a missing event falls back to the cap.
+  function evt(name){ return new Promise(function(res){ window.addEventListener(name, function(){ res(); }, { once: true }); }); }
+
+  // The first screen is "final" only after ALL the big repaints are applied:
+  //   theme   — colors / hero variant / section flow   (storefront-theme-ready)
+  //   content — hero headline / tagline / sub / CTA     (storefront-content-ready)
+  //   brand   — hero logo + brand name                  (tenant-brand-ready)
+  //   image   — hero photo decoded                      (MAST_FIRST_SCREEN_READY)
+  //   fonts   — webfonts loaded so text doesn't reflow  (document.fonts.ready)
+  // Reveal only when every one is done — NOT on window.load, which fires while the
+  // tenant data is still streaming in and would lift the cover on the default
+  // "Welcome" hero before it is themed/branded (the repaint users were seeing).
+  var waits = [
+    evt('storefront-theme-ready'),
+    evt('storefront-content-ready'),
+    evt('tenant-brand-ready'),
+    window.MAST_FIRST_SCREEN_READY
+  ];
+  if (document.fonts && document.fonts.ready) waits.push(document.fonts.ready);
+  Promise.all(waits).then(reveal);
 })();
 </script>
 </head>
