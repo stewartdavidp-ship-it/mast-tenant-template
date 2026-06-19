@@ -240,7 +240,11 @@
     drill: function (id) { var e = CAL.byId[id]; if (e) drillTo(e); }
   };
 
+  var _mcV2Route = { tab: 'marketingCalendarV2Tab', setup: function () { ensureTab(); render(); load(); } };
+  // The legacy 'marketing-calendar' route resolves here too: marketing-calendar.js
+  // (V1) was retired (T6, Legacy-UI sunset); this is now the only Calendar admin
+  // UI for ALL users, regardless of the redesign flag.
   MastAdmin.registerModule('marketing-calendar-v2', {
-    routes: { 'marketing-calendar-v2': { tab: 'marketingCalendarV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'marketing-calendar-v2': _mcV2Route, 'marketing-calendar': _mcV2Route }
   });
 })();
