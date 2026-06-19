@@ -89,6 +89,9 @@
     "rogueOverlays": 1,
     "hardcodedHex": 33
   },
+  "app/modules/gallery-metadata-modal.js": {
+    "hardcodedHex": 4
+  },
   "app/modules/homepage.js": {
     "hardcodedHex": 3
   },
