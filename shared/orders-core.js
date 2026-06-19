@@ -1117,6 +1117,106 @@
   }
 
   // ============================================================
+  // Dashboard Cards (New Orders / Ready to Ship)
+  // ============================================================
+  // Relocated VERBATIM from orders.js (T6 PR4a). The shell calls these on every
+  // dashboard render (renderDashCardWithGating) and from the orders real-time
+  // listener refresh — both permanent consumers — so they live in the EAGER core
+  // and no longer require a loadModule('orders'). They read the shell 'orders'
+  // cache + ordersLoaded as bare globals (resolved at call-time, post-boot) and
+  // the eager order display helpers above; DASHBOARD_CARDS / renderDashboardCard /
+  // updateCardActivity / esc are shell globals.
+
+  function renderDashCardNewOrders() {
+    var container = document.getElementById('dashCardNewOrders');
+    if (!container) return;
+    if (!ordersLoaded) { container.innerHTML = ''; return; }
+    var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'newOrders'; });
+
+    var newOrders = getOrdersArray().filter(function(o) {
+      return (o.status || 'placed') === 'placed';
+    });
+
+    var contentHtml = '';
+    if (newOrders.length === 0) {
+      contentHtml = '<div class="dash-queue-empty">No new orders.</div>';
+    } else {
+      contentHtml = '<div class="dash-queue-grid">';
+      newOrders.forEach(function(o) {
+        var key = o._key;
+        var num = esc(getOrderDisplayNumber(o));
+        var status = o.status || 'placed';
+        var customer = o.customerName || o.email || '';
+        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.72rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
+        contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
+          '<div class="dash-queue-row">' +
+            '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
+            '<span class="status-badge pill" style="font-size:0.72rem;padding:2px 8px;' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' +
+          '</div>' +
+          (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
+          '<div class="dash-queue-meta">' +
+            '<span>' + getOrderItemsLabel(o) + '</span>' +
+            '<span>$' + orderTotalDollars(o).toFixed(2) + '</span>' +
+            '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
+          '</div>' +
+        '</div>';
+      });
+      contentHtml += '</div>';
+    }
+
+    container.innerHTML = renderDashboardCard(cardConfig, newOrders.length, contentHtml);
+    if (newOrders.length > 0 && typeof updateCardActivity === 'function') {
+      var latestTs = newOrders.reduce(function(max, o) { var t = o.placedAt || o.createdAt || ''; return t > max ? t : max; }, '');
+      updateCardActivity('newOrders', latestTs);
+    }
+  }
+
+  // Dashboard Card: Ready to Ship
+
+  function renderDashCardReadyToShip() {
+    var container = document.getElementById('dashCardReadyToShip');
+    if (!container) return;
+    if (!ordersLoaded) { container.innerHTML = ''; return; }
+    var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'readyToShip'; });
+
+    var packedOrders = getOrdersArray().filter(function(o) {
+      return o.status === 'packed';
+    });
+
+    var contentHtml = '';
+    if (packedOrders.length === 0) {
+      contentHtml = '<div class="dash-queue-empty">No packed orders awaiting pickup.</div>';
+    } else {
+      contentHtml = '<div class="dash-queue-grid">';
+      packedOrders.forEach(function(o) {
+        var key = o._key;
+        var num = esc(getOrderDisplayNumber(o));
+        var customer = o.customerName || o.email || '';
+        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.72rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
+        contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
+          '<div class="dash-queue-row">' +
+            '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
+            '<span class="status-badge pill" style="font-size:0.72rem;padding:2px 8px;' + orderStatusBadgeStyle('packed') + '">packed</span>' +
+          '</div>' +
+          (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
+          '<div class="dash-queue-meta">' +
+            '<span>' + getOrderItemsLabel(o) + '</span>' +
+            '<span>$' + orderTotalDollars(o).toFixed(2) + '</span>' +
+            '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
+          '</div>' +
+        '</div>';
+      });
+      contentHtml += '</div>';
+    }
+
+    container.innerHTML = renderDashboardCard(cardConfig, packedOrders.length, contentHtml);
+    if (packedOrders.length > 0 && typeof updateCardActivity === 'function') {
+      var latestTs = packedOrders.reduce(function(max, o) { var t = o.placedAt || o.createdAt || ''; return t > max ? t : max; }, '');
+      updateCardActivity('readyToShip', latestTs);
+    }
+  }
+
+  // ============================================================
   // Exports — window.OrdersCore namespace + back-compat window.<name> aliases
   // (the exact globals orders.js used to export, so all existing bare-global /
   // window.* call sites across modules + the shell are untouched).
@@ -1157,7 +1257,10 @@
     _addOrderNoteCore: _addOrderNoteCore,
     _markOrderShippedCore: _markOrderShippedCore,
     // PR3b — order-detail opener (routes through orders-v2)
-    viewOrder: viewOrder
+    viewOrder: viewOrder,
+    // PR4a — dashboard cards (shell renders these on every dashboard load)
+    renderDashCardNewOrders: renderDashCardNewOrders,
+    renderDashCardReadyToShip: renderDashCardReadyToShip
   };
 
   if (typeof window !== 'undefined') {
@@ -1212,6 +1315,12 @@
     // fulfillment.js / customers.js / the dashboard cards / history deep-links /
     // the orders restorer resolve it with orders.js unloaded.
     window.viewOrder = viewOrder;
+    // PR4a — dashboard cards (New Orders / Ready to Ship) relocated here from
+    // orders.js so the shell dashboard renders them eagerly without a
+    // loadModule('orders'); the orders real-time listener refresh path (typeof-
+    // guarded in index.html) also resolves them.
+    window.renderDashCardNewOrders = renderDashCardNewOrders;
+    window.renderDashCardReadyToShip = renderDashCardReadyToShip;
   }
 
   if (typeof module !== 'undefined' && module.exports) {
