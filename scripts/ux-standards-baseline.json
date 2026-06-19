@@ -80,6 +80,9 @@
   "app/modules/events.js": {
     "hardcodedHex": 51
   },
+  "app/modules/feedback-dialog.js": {
+    "hardcodedHex": 12
+  },
   "app/modules/finance.js": {
     "nativeDialogs": 3,
     "rogueOverlays": 5,
