@@ -19,7 +19,8 @@
  * Reads eager shell globals only (all defined before a user can route to a
  * migration surface): showMigrationSidebar, hideMigrationSidebar,
  * loadMigrationData, renderCSVImportUI, navigateTo, showToast, mastConfirm, esc,
- * MastDB, firebase/auth, fetch. STEP_CATEGORY_ICONS is cluster-internal.
+ * MastDB, MastUI (Num money/moneyVal), firebase/auth, fetch. STEP_CATEGORY_ICONS
+ * is cluster-internal.
  */
 (function () {
   'use strict';
@@ -281,7 +282,7 @@ function renderHistoricalOrders() {
         '<td style="font-size:0.78rem;">' + esc(o.customerName || '—') + '</td>' +
         '<td style="font-size:0.78rem;">' + esc(o.email || '—') + '</td>' +
         '<td style="font-size:0.78rem;">' + esc(itemsSummary || '—') + '</td>' +
-        '<td style="font-weight:500;">' + (o.total ? formatMoney(o.total) : '—') + '</td>' +
+        '<td style="font-weight:500;">' + (window.MastUI.Num.money(window.MastUI.Num.moneyVal(o, 'totalCents', 'total')) || '—') + '</td>' +
         '<td><span class="status-badge" style="background:#7c3aed;color:white;font-size:0.72rem;">IMPORTED</span></td>' +
       '</tr>';
     });
