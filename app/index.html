@@ -20903,7 +20903,7 @@ var MODULE_MANIFEST = {
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
   contacts: { src: 'modules/contacts.js', v: 'fd8ca77af153', routes: ['contacts'] },
   customers: { src: 'modules/customers.js', v: '8a5680c39345', routes: ['customers'] },
-  orders: { src: 'modules/orders.js', v: 'ce6f72720f02', routes: ['rma'] }, // 'orders' route ABSORBED into orders-v2 (T6 PR3): OrdersBridge was absorbed there, which now owns the bare #orders route directly (no MAST_V2_ROUTE_MAP remap). 'commissions' was absorbed into commissions-v2 (PR2). This file now serves only the legacy #rma surface + dashboard cards (deleted in PR4).
+  orders: { src: 'modules/orders.js', v: '84ad95a6a961', routes: ['rma'] }, // 'orders' route ABSORBED into orders-v2 (T6 PR3): OrdersBridge was absorbed there, which now owns the bare #orders route directly (no MAST_V2_ROUTE_MAP remap). 'commissions' was absorbed into commissions-v2 (PR2). This file now serves only the legacy #rma surface + dashboard cards (deleted in PR4).
   'orders-v2': { src: 'modules/orders-v2.js', v: '6e4fcc19ce9d', routes: ['orders-v2', 'orders'] }, // Orders surface (UI-redesign). Owns the bare #orders route (T6 PR3 — absorbed OrdersBridge from orders.js).
   'customers-v2': { src: 'modules/customers-v2.js', v: '4b5d4e9c26c1', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: '9bd9e2838f6d', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
