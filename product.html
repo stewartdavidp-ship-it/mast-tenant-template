@@ -2213,11 +2213,13 @@
     // Upload image first if present, then save commission
     var uploadPromise;
     if (window._commUploadFile) {
-      var storageApp = firebase.app('public-product');
-      var storageRef = storageApp.storage().ref(TENANT_ID + '/commissions/' + refKey + '/reference.' + window._commUploadFile.name.split('.').pop());
-      uploadPromise = storageRef.put(window._commUploadFile).then(function(snapshot) {
-        return snapshot.ref.getDownloadURL();
-      });
+      // W2-C10: route through the server-minted signed-URL flow instead of a
+      // direct client Storage write (window.uploadStorefrontImage, storefront-tenant.js).
+      uploadPromise = window.uploadStorefrontImage({
+        kind: 'commission',
+        ids: { commId: refKey },
+        file: window._commUploadFile
+      }).then(function(res) { return res.publicUrl; });
     } else {
       uploadPromise = Promise.resolve(null);
     }

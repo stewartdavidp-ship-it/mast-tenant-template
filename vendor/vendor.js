@@ -779,26 +779,22 @@
     if (!input.files || !input.files[0]) return;
     showMsg('success', 'Uploading logo...');
 
-    window.TENANT_READY.then(function() {
-      var fbApp;
-      try { fbApp = firebase.app('vendor-upload'); } catch (e) {
-        fbApp = firebase.initializeApp(window.TENANT_FIREBASE_CONFIG, 'vendor-upload');
-      }
-      var storage = fbApp.storage();
-      var file = input.files[0];
-      var ext = file.name.split('.').pop() || 'jpg';
-      var path = window.TENANT_ID + '/events/vendors/' + portalData.show.id + '/' + portalData.vendor.id + '/logo.' + ext;
-      storage.ref(path).put(file).then(function(snap) {
-        return snap.ref.getDownloadURL();
-      }).then(function(url) {
-        portalData.vendor.logoUrl = url;
-        // Also save to server
-        apiCall(FUNCTIONS_BASE + '/eventsVendorUpdate', { token: token, action: 'updateProfile', profile: { logoUrl: url } })
-          .catch(function() {}); // Best-effort server sync
-        showMsg('success', 'Logo uploaded!');
-      }).catch(function(err) {
-        showMsg('error', 'Logo upload failed: ' + err.message);
-      });
+    var file = input.files[0];
+    // W2-C10: server-minted signed-URL upload (window.uploadStorefrontImage,
+    // storefront-tenant.js) instead of a direct client Storage write.
+    window.uploadStorefrontImage({
+      kind: 'event-vendor',
+      ids: { showId: portalData.show.id, vendorId: portalData.vendor.id },
+      file: file
+    }).then(function(res) {
+      var url = res.publicUrl;
+      portalData.vendor.logoUrl = url;
+      // Also save to server
+      apiCall(FUNCTIONS_BASE + '/eventsVendorUpdate', { token: token, action: 'updateProfile', profile: { logoUrl: url } })
+        .catch(function() {}); // Best-effort server sync
+      showMsg('success', 'Logo uploaded!');
+    }).catch(function(err) {
+      showMsg('error', 'Logo upload failed: ' + err.message);
     });
   };
 
@@ -978,25 +974,20 @@
     uploadingAdImage = true;
     render();
 
-    window.TENANT_READY.then(function() {
-      var fbApp;
-      try { fbApp = firebase.app('vendor-upload'); } catch (e) {
-        fbApp = firebase.initializeApp(window.TENANT_FIREBASE_CONFIG, 'vendor-upload');
-      }
-      var storage = fbApp.storage();
-      var ext = file.name.split('.').pop() || 'jpg';
-      var adImageId = editingAdId || Date.now();
-      var path = window.TENANT_ID + '/events/ads/' + portalData.show.id + '/' + portalData.vendor.id + '/' + adImageId + '.' + ext;
-      storage.ref(path).put(file).then(function(snap) {
-        return snap.ref.getDownloadURL();
-      }).then(function(url) {
-        adForm.imageUrl = url;
-        uploadingAdImage = false;
-        showMsg('success', 'Image uploaded!');
-      }).catch(function(err) {
-        uploadingAdImage = false;
-        showMsg('error', 'Image upload failed: ' + err.message);
-      });
+    var adImageId = editingAdId || Date.now();
+    // W2-C10: server-minted signed-URL upload (window.uploadStorefrontImage,
+    // storefront-tenant.js) instead of a direct client Storage write.
+    window.uploadStorefrontImage({
+      kind: 'event-ad',
+      ids: { showId: portalData.show.id, vendorId: portalData.vendor.id, adImageId: adImageId },
+      file: file
+    }).then(function(res) {
+      adForm.imageUrl = res.publicUrl;
+      uploadingAdImage = false;
+      showMsg('success', 'Image uploaded!');
+    }).catch(function(err) {
+      uploadingAdImage = false;
+      showMsg('error', 'Image upload failed: ' + err.message);
     });
   };
 
