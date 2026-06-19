@@ -31553,55 +31553,6 @@ function _productSortValue(p, key, ctx) {
 }
 
 // Surface orphan recipes (no productId, or productId pointing to a deleted product).
-// Per plan OPEN O5 — UI-only surface, no auto-fix. Hidden when zero orphans or when not in develop view.
-function renderDevelopOrphanRecipesPanel() {
-  // Migration cleanup tool — disabled. Orphan recipes are archived during data
-  // cleanup; this panel was a one-time janitorial surface, not a normal-use UI.
-  var prior = document.getElementById('developOrphanRecipesPanel');
-  if (prior) prior.remove();
-  return;
-  // eslint-disable-next-line no-unreachable
-  var grid = document.getElementById('productsGrid');
-  if (!grid) return;
-  if (window.productsStatusFilter !== 'develop') return;
-  // Only render if maker module exposed recipes to us
-  var recipes = (window.makerListRecipes && typeof window.makerListRecipes === 'function')
-    ? window.makerListRecipes()
-    : null;
-  if (!recipes) return;
-  var validPids = {};
-  (window.productsData || []).forEach(function(p) { if (p && p.pid) validPids[p.pid] = true; });
-  var orphans = [];
-  Object.keys(recipes).forEach(function(rid) {
-    var r = recipes[rid];
-    if (!r) return;
-    if (r.status === 'archived') return; // archived recipes aren't orphans
-    if (!r.productId || !validPids[r.productId]) {
-      orphans.push({ rid: rid, recipe: r });
-    }
-  });
-  if (!orphans.length) return; // hidden when zero
-
-  var panel = document.createElement('div');
-  panel.id = 'developOrphanRecipesPanel';
-  panel.style.cssText = 'background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:12px 16px;margin:0 0 16px 0;';
-  var html = '<div style="display:flex;align-items:center;gap:10px;cursor:pointer;" onclick="toggleDevelopOrphansBody()">';
-  html += '<span style="font-size:0.9rem;font-weight:600;color:#b45309;">Unlinked Recipes (' + orphans.length + ')</span>';
-  html += '<span id="developOrphansChevron" style="font-size:0.85rem;color:var(--warm-gray);">▸</span>';
-  html += '<span style="font-size:0.78rem;color:var(--warm-gray);">Recipes without a linked Product. Click a row to create a stub product.</span>';
-  html += '</div>';
-  html += '<div id="developOrphansBody" style="display:none;margin-top:10px;">';
-  orphans.forEach(function(o) {
-    var name = (o.recipe.name || o.rid).replace(/[<>&"]/g, '');
-    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid rgba(0,0,0,0.06);">';
-    html += '<span style="font-size:0.85rem;">' + name + ' <span style="color:var(--warm-gray);font-size:0.78rem;">(' + o.rid + ')</span></span>';
-    html += '<button class="btn btn-secondary btn-small" data-rid="' + o.rid + '" onclick="developCreateProductFromOrphan(this.dataset.rid)" style="font-size:0.78rem;padding:4px 10px;">Create product from this recipe</button>';
-    html += '</div>';
-  });
-  html += '</div>';
-  panel.innerHTML = html;
-  grid.parentNode.insertBefore(panel, grid);
-}
 
 function toggleDevelopOrphansBody() {
   var body = document.getElementById('developOrphansBody');
@@ -31637,7 +31588,6 @@ async function developCreateProductFromOrphan(rid) {
     showToast('Created stub product "' + name + '" linked to recipe ' + rid);
     if (typeof window.loadProducts === 'function') await window.loadProducts();
     renderProducts();
-    renderDevelopOrphanRecipesPanel();
   } catch (err) {
     showToast('Error creating product: ' + (err && err.message ? err.message : err), true);
   }
