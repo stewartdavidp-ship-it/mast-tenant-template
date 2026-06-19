@@ -19670,12 +19670,6 @@ var MAST_V2_ROUTE_MAP = {
   'subscription': 'subscription-v2',
   'coins': 'plan-billing-coins-v2',
   'analytics': 'analytics-v2',
-  // Business Plan advisor → read-port twin (advisor-v2). The advisor is
-  // 100% read/render (plan content is MCP-authored into admin/businessPlan/*);
-  // the only writes are entity-domain actions through MastDB.businessEntity.*.
-  // Reverse-lookup keeps the "Business Plan" nav item highlighted; permissions
-  // stay keyed to `advisor`.
-  'advisor': 'advisor-v2'
 };
 // V2 is the default: the flags are seeded at body-top boot (see the nav-v2
 // chrome hook) so a user with no stored choice starts in V2; only an explicit
@@ -21031,7 +21025,6 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   promotions: { src: 'modules/promotions.js', v: '8252f58c0c30', routes: ['promotions'] },
   book: { src: 'modules/book.js', v: '35ef6b679090', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', v: 'd05e7845704f', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
-  advisor: { src: 'modules/advisor.js', v: 'f090d78919a8', routes: ['advisor'] },
   studio: { src: 'modules/studio.js', v: 'ec2784aaf153', routes: ['studio'] },
   team: { src: 'modules/team.js', v: '99ce0e5762ac', routes: ['team'] },
   students: { src: 'modules/students.js', v: 'fd6a42c0909e', routes: ['students'] },
@@ -21071,7 +21064,7 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   'auditlog-v2': { src: 'modules/auditlog-v2.js', v: 'adccbb8d3337', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'subscription-v2': { src: 'modules/subscription-v2.js', v: '4fe160832575', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
   'analytics-v2': { src: 'modules/analytics-v2.js', v: 'b4e95e781311', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
-  'advisor-v2': { src: 'modules/advisor-v2.js', v: '1fb53daa20c8', routes: ['advisor-v2'] }, // read-port twin of Business-Plan advisor (#advisor remaps here); entity writes via MastDB.businessEntity.* — no new bridge
+  'advisor-v2': { src: 'modules/advisor-v2.js', v: '52e14fe7a4dd', routes: ['advisor-v2', 'advisor'] }, // Business-Plan advisor; owns the legacy 'advisor' route too (V1 advisor.js retired, T6). Entity writes via MastDB.businessEntity.* — no bridge.
   // Add-to-Mast detail drawer — no route; lazy-loaded on demand when a user
   // opens a module card's "details" slide-out (decomposition Track 1).
   addToMastDrawer: { src: 'modules/add-to-mast-drawer.js', v: '6506d070f5c0', routes: [] },
