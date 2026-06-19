@@ -78,18 +78,8 @@
     }
   }
 
-  function getOrdersArray() {
-    var arr = [];
-    Object.keys(orders).forEach(function(key) {
-      var o = orders[key];
-      o._key = key;
-      arr.push(o);
-    });
-    arr.sort(function(a, b) {
-      return (b.placedAt || '').localeCompare(a.placedAt || '');
-    });
-    return arr;
-  }
+  // getOrdersArray moved to shared/orders-core.js (eager): reads the shell
+  // 'orders' cache global. Bare refs + window.getOrdersArray resolve there.
 
   // getOrderDisplayNumber, the tenant-tz cluster (ensureTenantTz / tzPartsFromIso),
   // formatOrderDate, formatOrderDateTime, and getOrderItemsLabel moved to
@@ -1803,43 +1793,9 @@
   // Inventory Helpers
   // ============================================================
 
-  function getItemInventoryStatus(item) {
-    var inv = inventory[item.pid];
-    var qty = item.qty || 1;
-    if (!inv) return { status: 'unknown', label: 'No inventory data', available: 0 };
-    if (inv.stockType === 'made-to-order' || inv.stockType === 'made-to-order-only' || inv.stockType === 'build-to-order') {
-      return { status: 'build', label: 'Build to Order', available: 0 };
-    }
-    if (inv.stockType === 'stock-to-build') {
-      var ck2 = getItemComboKey(item.pid, item.options);
-      var se2 = (ck2 !== '_default' && inv.stock && inv.stock[ck2]) ? inv.stock[ck2] : (inv.stock && inv.stock._default) || null;
-      var avail2 = se2 ? Math.max(0, (se2.onHand || 0) - (se2.committed || 0) - (se2.held || 0) - (se2.damaged || 0)) : 0;
-      if (avail2 <= 0) return { status: 'build', label: 'Made to Order (stock depleted)', available: 0 };
-    }
-    var ck = getItemComboKey(item.pid, item.options);
-    var stockEntry = (ck !== '_default' && inv.stock && inv.stock[ck])
-      ? inv.stock[ck]
-      : (inv.stock && inv.stock._default) || null;
-    var available = stockEntry ? Math.max(0, (stockEntry.onHand || 0) - (stockEntry.committed || 0) - (stockEntry.held || 0) - (stockEntry.damaged || 0)) : 0;
-    if (available >= qty) {
-      return { status: 'stock', label: 'In Stock (' + available + ' available)', available: available };
-    } else if (available > 0) {
-      return { status: 'partial', label: 'Low Stock (' + available + ' available, need ' + qty + ')', available: available };
-    } else {
-      return { status: 'out', label: 'Not in Stock', available: 0 };
-    }
-  }
-
-  function getItemFulfillmentKey(item) {
-    var key = item.pid || '';
-    if (item.options && typeof item.options === 'object') {
-      var optVals = Object.values(item.options).map(function(v) {
-        return v.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-      });
-      if (optVals.length > 0) key += '_' + optVals.join('_');
-    }
-    return key;
-  }
+  // getItemInventoryStatus + getItemFulfillmentKey moved to shared/orders-core.js
+  // (eager). getItemInventoryStatus is consumed cross-module (orders-v2); both
+  // stay reachable as window globals for the V1 render code below.
 
   // ============================================================
   // Order Triage Dialog
@@ -1985,50 +1941,9 @@
     }
   }
 
-  async function triageAndConfirmOrder(orderId, itemActions) {
-    var o = orders[orderId];
-    if (!o) throw new Error('Order not found');
-    var now = new Date().toISOString();
-    var updates = {};
-    var history = o.statusHistory ? o.statusHistory.slice() : [];
-
-    // Build fulfillment map from admin choices
-    var ff = {};
-    var needsBuilding = false;
-    itemActions.forEach(function(ia) {
-      var ffKey = getItemFulfillmentKey(ia.item);
-      if (ia.action === 'stock') {
-        ff[ffKey] = { source: 'stock', buildJobId: null, ready: true };
-        var ck = getItemComboKey(ia.item.pid, ia.item.options);
-        reserveInventory(ia.item.pid, ia.item.qty || 1, ck);
-      } else {
-        ff[ffKey] = { source: 'build', buildJobId: null, ready: false };
-        needsBuilding = true;
-      }
-    });
-
-    updates['fulfillment'] = ff;
-    updates['confirmedAt'] = now;
-    history.push({ status: 'confirmed', at: now, by: 'admin' });
-
-    if (!needsBuilding) {
-      updates['status'] = 'pack';
-      updates['packAt'] = now;
-      history.push({ status: 'pack', at: now, by: 'system', note: 'All items in stock' });
-    } else {
-      updates['status'] = 'building';
-      updates['buildingAt'] = now;
-      history.push({ status: 'building', at: now, by: 'system', note: 'Items need to be made' });
-    }
-    updates['statusHistory'] = history;
-
-    await MastDB.orders.update(orderId, updates);
-    await writeAudit('update', 'orders', orderId);
-
-    if (updates['status'] === 'building') {
-      await createProductionRequests(orderId, o, ff);
-    }
-  }
+  // triageAndConfirmOrder (the DOM-free confirm/triage write core that
+  // OrdersBridge.triageConfirm + executeTriageConfirm + transitionOrder wrap)
+  // moved to shared/orders-core.js (eager). Bare refs resolve to window.
 
   // ============================================================
   // Order Status Transitions
@@ -2121,115 +2036,9 @@
     }
   }
 
-  // Atomically bump a product's per-bucket stock counters. Each name in `fields`
-  // (e.g. 'committed', 'onHand') is incremented by the signed `delta` on the
-  // `_default` bucket, and — when `ck` names a real variant bucket — on that
-  // bucket too. Returns false (no write) when the product has no stock record.
-  //
-  // These writes go through MastDB.multiUpdate, NOT MastDB.update with
-  // '_default/committed'-style keys. MastDB.update would prefix each key with the
-  // 'stock.' fieldPath and hand Firestore the field path 'stock._default/committed';
-  // Firestore forbids '/' in field paths, so the call threw and the surrounding
-  // try/catch swallowed it — inventory silently never moved. multiUpdate takes a
-  // full slash path per leaf and translates each into a slash-free nested field
-  // update (dot-joined fieldPath via mergeFields), preserving the atomic increment.
-  async function _bumpStock(pid, delta, ck, fields) {
-    var inv = inventory[pid];
-    if (!inv || !inv.stock || !inv.stock._default) return false;
-    var base = 'admin/inventory/' + pid + '/stock/';
-    var updates = {};
-    fields.forEach(function (f) {
-      updates[base + '_default/' + f] = MastDB.serverIncrement(delta);
-    });
-    if (ck && ck !== '_default' && inv.stock[ck]) {
-      fields.forEach(function (f) {
-        updates[base + ck + '/' + f] = MastDB.serverIncrement(delta);
-      });
-    }
-    await MastDB.multiUpdate(updates);
-    return true;
-  }
-
-  async function reserveInventory(pid, qty, ck, orderId) {
-    try {
-      if (!(await _bumpStock(pid, qty, ck, ['committed']))) return;
-      await writeAudit('update', 'inventory', pid);
-      await MastDB.push('admin/inventory/' + pid + '/history', {
-        action: 'committed', reason: 'order_placed', qty: qty, comboKey: ck || '_default',
-        orderId: orderId || null, actor: 'maker', actorType: 'maker',
-        timestamp: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Error reserving inventory:', err);
-    }
-  }
-
-  async function releaseInventory(pid, qty, ck, orderId) {
-    try {
-      if (!(await _bumpStock(pid, -qty, ck, ['committed']))) return;
-      await writeAudit('update', 'inventory', pid);
-      await MastDB.push('admin/inventory/' + pid + '/history', {
-        action: 'released', reason: 'order_cancelled', qty: qty, comboKey: ck || '_default',
-        orderId: orderId || null, actor: 'maker', actorType: 'maker',
-        timestamp: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Error releasing inventory:', err);
-    }
-  }
-
-  async function pullFromStock(pid, qty, ck, orderId) {
-    try {
-      if (!(await _bumpStock(pid, -qty, ck, ['committed', 'onHand']))) return;
-      await writeAudit('update', 'inventory', pid);
-      await MastDB.push('admin/inventory/' + pid + '/history', {
-        action: 'shipped', reason: 'order_shipped', qty: -qty, comboKey: ck || '_default',
-        orderId: orderId || null, actor: 'maker', actorType: 'maker',
-        timestamp: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Error pulling from stock:', err);
-    }
-  }
-
-  // ============================================================
-  // Production Requests
-  // ============================================================
-
-  async function createProductionRequests(orderId, order, fulfillment) {
-    if (!fulfillment) return;
-    var items = order.items || [];
-    for (var i = 0; i < items.length; i++) {
-      var item = items[i];
-      // Skip digital items (gift cards) — no production needed
-      if (item.bookingType === 'gift-card' || item.isGiftCard) continue;
-      var ffKey = getItemFulfillmentKey(item);
-      var ff = fulfillment[ffKey];
-      if (ff && ff.source === 'build') {
-        var reqId = MastDB.productionRequests.newKey();
-        await MastDB.productionRequests.set(reqId, {
-          requestId: reqId,
-          orderId: orderId,
-          orderNumber: order.orderNumber || order.orderId,
-          productId: item.pid,
-          productName: item.name,
-          options: item.options || null,
-          qty: item.qty || 1,
-          status: 'pending',
-          priority: 'normal',
-          notes: '',
-          jobId: null,
-          lineItemId: null,
-          fulfilledAt: null,
-          fulfilledBy: null,
-          createdAt: new Date().toISOString()
-        });
-        await writeAudit('create', 'buildJobs', reqId);
-        // Link production request to fulfillment
-        await MastDB.orders.subRef(orderId, 'fulfillment', ffKey, 'buildJobId').set(reqId);
-      }
-    }
-  }
+  // The inventory write cluster (_bumpStock + reserveInventory / releaseInventory /
+  // pullFromStock) and createProductionRequests moved to shared/orders-core.js
+  // (eager). All DOM-free; bare refs resolve to the window globals there.
 
   // ============================================================
   // Shipping Modal
@@ -5881,7 +5690,6 @@
   // formatOrderDate, formatOrderDateTime, getOrderItemsLabel, renderOrderProgress
   // are now exported by shared/orders-core.js (eager).
   window.loadOrders = loadOrders;
-  window.getOrdersArray = getOrdersArray;
   window.setOrderFilter = setOrderFilter;
   window.toggleOrdersBulkSelect = toggleOrdersBulkSelect;
   window.toggleOrdersBulkSelectAll = toggleOrdersBulkSelectAll;
@@ -5918,12 +5726,9 @@
   window.viewOrder = viewOrder;
   window.backToOrders = backToOrders;
   window.renderOrderDetail = renderOrderDetail;
-  window.getItemInventoryStatus = getItemInventoryStatus;
-  window.getItemFulfillmentKey = getItemFulfillmentKey;
   window.openTriageDialog = openTriageDialog;
   window.updateTriageSummary = updateTriageSummary;
   window.executeTriageConfirm = executeTriageConfirm;
-  window.triageAndConfirmOrder = triageAndConfirmOrder;
   window.transitionOrder = transitionOrder;
   window.packAndNavigate = async function(orderId) {
     await transitionOrder(orderId, 'packing');
@@ -5934,10 +5739,6 @@
       navigateTo('pack');
     }
   };
-  window.reserveInventory = reserveInventory;
-  window.releaseInventory = releaseInventory;
-  window.pullFromStock = pullFromStock;
-  window.createProductionRequests = createProductionRequests;
   window.openShippingModal = openShippingModal;
   window.openSimpleShipDialog = openSimpleShipDialog;
   window.submitSimpleShip = submitSimpleShip;
