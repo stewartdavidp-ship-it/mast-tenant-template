@@ -569,3 +569,33 @@ Before moving any code, confirm:
 - **The manifest is parsed by other tools.** Adding `v:` between `src` and `routes` broke the
   adjacency regex in `gen-inventory.mjs` and `lint-rbac.js` (#665 follow-up). Any manifest shape
   change → grep every `src:.*routes:` consumer.
+
+---
+
+## 15. Strategy pivot — ratchet + batch, stop hand-grinding (2026-06-18)
+
+After 6 extraction PRs (#667–#671), a measurement pass reframed the approach.
+
+**The data:** the shell holds **1,296 top-level functions / ~48.8K inline-JS lines**. Four
+manual extractions removed ~600 lines — **under 2%**. By domain: render-engine ~5.5K, inventory
+~4.7K, product ~4.4K, settings ~3.3K, subscription/billing ~1.9K, users/roles ~1.7K, dashboard
+~1.7K, and a ~23K "other" bucket of eager core infra. **Hand-grinding one surface per PR does not
+scale, and full decomposition isn't worth the cost.**
+
+**The pivot:**
+1. **Shell-size ratchet (`scripts/lint-shell-size.js`, baseline `shell-size-baseline.json`).** The
+   highest-leverage move: CI fails if inline-JS lines in `index.html` *grow*. It can only ratchet
+   DOWN. This stops accretion permanently and forces every new feature into a module — converting
+   a finite manual campaign into a self-correcting system. Re-baseline (`--update`) after each
+   extraction. **This is what makes the program durable;** without it, any feature PR silently
+   undoes an extraction.
+2. **Domain-batch the remaining ~23 dialog surfaces** — one coherent module per domain (inventory
+   ops, users/roles, settings dialogs), not one modal per PR. ~5 PRs, not 23.
+3. **Run Track 5 centralization in parallel** — the money/date/CSV cores fix the recurring
+   revenue-bug class (higher real-world value than further shell shrinkage); the #666 goldens make
+   it safe.
+4. **Defer the ~23K eager "other" core infra** — low value-to-move, high risk; only with the
+   Playwright smoke in place.
+
+The big wins are already banked (deploy speed via per-file cache-bust; the safety net; the proven
+recipes). The ratchet protects them and bounds the rest.
