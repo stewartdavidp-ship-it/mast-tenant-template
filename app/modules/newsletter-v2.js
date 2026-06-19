@@ -396,6 +396,53 @@
       '<button class="nl-format-btn nl-format-btn-wide" id="' + idp + 'Link" onmousedown="event.preventDefault();nlInsertLink(\'' + idp + '\')" title="Insert link">🔗</button>' +
       '</div>';
   }
+  // Per-section image strip (max 3) — mirrors the legacy card-editor Images block.
+  // Thumbnails resolve through the shell's imageLibrary (the same map the email/web
+  // output builders read), each with a remove control. Writes delegate to
+  // NewsletterBridge.updateSection({ images }).
+  function composeImageStrip(s) {
+    var sid = s.id, IL = window.imageLibrary || {}, imgs = s.images || [];
+    var thumbs = imgs.map(function (imgId, idx) {
+      var img = IL[imgId];
+      if (!img) return '';
+      return '<div style="position:relative;display:inline-block;">' +
+        '<img src="' + esc(img.url || '') + '" alt="' + esc(img.alt || '') + '" style="width:54px;height:54px;object-fit:cover;border-radius:6px;border:1px solid var(--border);display:block;">' +
+        '<button class="btn btn-small btn-secondary" style="color:var(--text-danger);position:absolute;top:-8px;right:-8px;padding:0 6px;line-height:1.5;" title="Remove image" onclick="NewsletterV2.cmpRemoveImage(\'' + esc(sid) + '\',' + idx + ')">×</button>' +
+        '</div>';
+    }).join('');
+    var addBtn = imgs.length < 3
+      ? '<button class="btn btn-small btn-secondary" onclick="NewsletterV2.cmpAddImage(\'' + esc(sid) + '\')">+ Image</button>'
+      : '';
+    return '<div style="margin-top:10px;">' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">Images (max 3)</div>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' + thumbs + addBtn + '</div>' +
+      '</div>';
+  }
+
+  // Coupon-section body — mirrors the legacy card-editor coupon picker/preview.
+  // A coupon section renders a MastCouponCard preview (single-sourced with the
+  // email/web output) instead of the rich-text editor; the code write delegates
+  // to NewsletterBridge.updateSection({ couponCode, finalContent }).
+  function couponValStr(c) {
+    if (!c) return '';
+    if (c.type === 'percent') return (c.value || 0) + '% off';
+    var cents = Math.round(Number(c.value || 0) * 100);
+    return (window.MastFormat ? MastFormat.money(cents, { cents: true }) : ('$' + Number(c.value || 0))) + ' off';
+  }
+  function composeCouponBlock(s) {
+    var sid = s.id, allC = window.coupons || {}, c = s.couponCode ? allC[s.couponCode] : null, preview;
+    if (s.couponCode && c && window.MastCouponCard) {
+      preview = window.MastCouponCard.renderHtml(Object.assign({}, c, { code: s.couponCode, _code: s.couponCode }), { showCta: false });
+    } else if (s.couponCode && !c) {
+      preview = '<div style="padding:12px;text-align:center;color:var(--warm-gray);">Coupon “' + esc(s.couponCode) + '” not found</div>';
+    } else {
+      preview = '<div style="padding:12px;text-align:center;color:var(--warm-gray);">No coupon selected</div>';
+    }
+    return preview +
+      '<div style="margin-top:8px;"><button class="btn btn-small btn-secondary" onclick="NewsletterV2.cmpPickCoupon(\'' + esc(sid) + '\')">' +
+      (s.couponCode ? 'Change coupon' : 'Select coupon') + '</button></div>';
+  }
+
   function composeSectionCard(s) {
     var sid = s.id, sz = s.cardSize || 'medium', limit = cmpLimit(sz), idp = 'cmp_' + sid;
     var content = cmpSan(s.finalContent || '');
@@ -418,7 +465,11 @@
         '<button class="btn btn-small btn-secondary" onclick="NewsletterV2.cmpPolish(\'' + esc(sid) + '\')">✨ Polish with AI</button>' +
         '<span class="nl-editor-char-counter" id="cmpCnt_' + esc(sid) + '">' + textLen + '/' + limit + '</span>' +
       '</div>';
-    return '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px;">' + header + editor + '</div>';
+    // Coupon sections swap the rich-text editor for the coupon picker/preview
+    // (their content is the coupon card, not free text). All sections carry the
+    // image strip.
+    var body = (s.type === 'coupon') ? composeCouponBlock(s) : editor;
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px;">' + header + body + composeImageStrip(s) + '</div>';
   }
   function composeHtml(UI, r) {
     if (!CMP || CMP.issueId !== (r && r._key)) return '<p class="mu-sub">Loading…</p>';
@@ -712,6 +763,73 @@
       CMP.sections.forEach(function (s, k) { s.order = k; });
       var updates = CMP.sections.map(function (s) { return { id: s.id, order: s.order, gridCol: s.gridCol || 0, gridRow: s.gridRow || 0 }; });
       Promise.resolve(NewsletterBridge.reorderSections(CMP.issueId, updates)).then(function () { reopenCompose(); }).catch(function (e) { console.error('[newsletter-v2] cmpMove', e); });
+    },
+    // ── per-section images (parity with the legacy card-editor Images block) ──
+    cmpAddImage: function (sid) {
+      if (!CMP) return;
+      var sec = CMP.sections.filter(function (x) { return x.id === sid; })[0];
+      if (sec && (sec.images || []).length >= 3) { if (window.showToast) showToast('Max 3 images per section', true); return; }
+      var IL = window.imageLibrary || {}, ids = Object.keys(IL), cur = (sec && sec.images) || [];
+      var grid = ids.map(function (imgId) {
+        var img = IL[imgId]; if (!img) return '';
+        var on = cur.indexOf(imgId) !== -1;
+        return '<div onclick="NewsletterV2.cmpSelectImage(\'' + esc(sid) + '\',\'' + esc(imgId) + '\')" ' +
+          'style="cursor:pointer;border:2px solid ' + (on ? 'var(--amber)' : 'transparent') + ';border-radius:6px;overflow:hidden;">' +
+          '<img src="' + esc(img.url || '') + '" alt="' + esc(img.alt || '') + '" style="width:100%;height:90px;object-fit:cover;display:block;"></div>';
+      }).join('');
+      var inner = ids.length
+        ? '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;max-height:60vh;overflow-y:auto;">' + grid + '</div>'
+        : '<p style="text-align:center;color:var(--warm-gray);">No images in library. Upload images in Manage → Images first.</p>';
+      var html = '<div class="modal-header"><h3>Select image</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div class="modal-body">' + inner + '</div>';
+      if (window.openModal) openModal(html);
+    },
+    cmpSelectImage: function (sid, imgId) {
+      if (!CMP || !window.NewsletterBridge) return;
+      var sec = CMP.sections.filter(function (x) { return x.id === sid; })[0]; if (!sec) return;
+      if (!sec.images) sec.images = [];
+      if (sec.images.indexOf(imgId) !== -1) { if (window.closeModal) closeModal(); return; }
+      if (sec.images.length >= 3) { if (window.showToast) showToast('Max 3 images per section', true); return; }
+      var next = sec.images.concat([imgId]);
+      Promise.resolve(NewsletterBridge.updateSection(CMP.issueId, sid, { images: next })).then(function () {
+        sec.images = next; if (window.closeModal) closeModal(); reopenCompose();
+      }).catch(function (e) { console.error('[newsletter-v2] cmpSelectImage', e); if (window.showToast) showToast('Error adding image.', true); });
+    },
+    cmpRemoveImage: function (sid, idx) {
+      if (!CMP || !window.NewsletterBridge) return;
+      var sec = CMP.sections.filter(function (x) { return x.id === sid; })[0]; if (!sec || !sec.images) return;
+      var next = sec.images.slice(); next.splice(idx, 1);
+      Promise.resolve(NewsletterBridge.updateSection(CMP.issueId, sid, { images: next })).then(function () {
+        sec.images = next; reopenCompose();
+      }).catch(function (e) { console.error('[newsletter-v2] cmpRemoveImage', e); if (window.showToast) showToast('Error removing image.', true); });
+    },
+    // ── per-section coupon (parity with the legacy coupon picker) ──
+    cmpPickCoupon: function (sid) {
+      if (!CMP) return;
+      var allC = window.coupons || {};
+      var codes = Object.keys(allC).filter(function (code) {
+        return (typeof window.getCouponEffectiveStatus !== 'function') || window.getCouponEffectiveStatus(allC[code]) === 'active';
+      });
+      if (!codes.length) { if (window.showToast) showToast('No active coupons. Create coupons in the Coupons tab first.', true); return; }
+      var rows = codes.map(function (code) {
+        return '<div onclick="NewsletterV2.cmpSetCoupon(\'' + esc(sid) + '\',\'' + esc(code) + '\')" ' +
+          'style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid var(--border);border-radius:6px;cursor:pointer;">' +
+          '<span style="font-family:monospace;font-weight:600;">' + esc(code) + '</span>' +
+          '<span style="color:var(--teal);font-weight:600;">' + esc(couponValStr(allC[code])) + '</span></div>';
+      }).join('');
+      var html = '<div class="modal-header"><h3>Select coupon</h3><button class="modal-close" onclick="closeModal()">&times;</button></div>' +
+        '<div class="modal-body"><div style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;">' + rows + '</div></div>';
+      if (window.openModal) openModal(html);
+    },
+    cmpSetCoupon: function (sid, code) {
+      if (!CMP || !window.NewsletterBridge) return;
+      if (window.closeModal) closeModal();
+      var sec = CMP.sections.filter(function (x) { return x.id === sid; })[0];
+      var marker = '[Coupon:' + code + ']';
+      Promise.resolve(NewsletterBridge.updateSection(CMP.issueId, sid, { couponCode: code, finalContent: marker })).then(function () {
+        if (sec) { sec.couponCode = code; sec.finalContent = marker; }
+        reopenCompose();
+      }).catch(function (e) { console.error('[newsletter-v2] cmpSetCoupon', e); if (window.showToast) showToast('Error setting coupon.', true); });
     },
     cmpPolish: function (sid) {
       if (!CMP) return;
