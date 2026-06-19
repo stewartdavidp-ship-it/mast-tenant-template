@@ -19639,7 +19639,7 @@ var MAST_V2_ROUTE_MAP = {
   'show-prep': 'show-prep-v2', 'show-execute': 'show-execute-v2', 'show-history': 'show-history-v2',
   pack: 'pack-v2', ship: 'ship-v2', rma: 'rma-v2',
   pos: 'pos-v2', 'commission-terms': 'commission-terms-v2',
-  receipts: 'receipts-v2', lookbooks: 'lookbooks-v2',
+  receipts: 'receipts-v2',
   'social': 'social-v2',
   'composer': 'composer-v2',
   'engagement-inbox': 'engagement-inbox-v2',
@@ -21009,7 +21009,7 @@ var MODULE_MANIFEST = {
   'pos-v2': { src: 'modules/pos-v2.js', v: '76c432e39802', routes: ['pos-v2'] }, // sales-v2 wave 2: sales ledger (transaction archetype over in-person orders, flag-gated, side-by-side)
   'commission-terms-v2': { src: 'modules/commission-terms-v2.js', v: '87d83ef7faf2', routes: ['commission-terms-v2'] }, // sales-v2 wave 2: versioned commission terms (record archetype, flag-gated, side-by-side)
   'receipts-v2': { src: 'modules/receipts-v2.js', v: '4b05752caba1', routes: ['receipts-v2'] }, // sales-v2 wave 3: day close reconciliation (record archetype + match view, flag-gated, side-by-side)
-  'lookbooks-v2': { src: 'modules/lookbooks-v2.js', v: '751f15df9d9b', routes: ['lookbooks-v2'] }, // sales-v2 wave 3: line sheets / lookbooks (composer archetype, flag-gated, side-by-side)
+  'lookbooks-v2': { src: 'modules/lookbooks-v2.js', v: '128d9ccf76ec', routes: ['lookbooks-v2', 'lookbooks'] }, // sales-v2 wave 3: line sheets / lookbooks. Owns the legacy 'lookbooks' route too (V1 lookbooks.js retired, T6).
   'campaigns-v2': { src: 'modules/campaigns-v2.js', v: 'aad7589a782c', routes: ['campaigns-v2'] }, // UI-redesign conversion: marketing campaigns read detail (flag-gated, side-by-side)
   'email-log-v2': { src: 'modules/email-log-v2.js', v: '8273b9e43c8d', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
   'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', v: '8e3254cc9e22', routes: ['marketing-calendar-v2'] }, // UI-redesign conversion: marketing calendar (index control)
@@ -21027,7 +21027,6 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   emailLog: { src: 'modules/email-log.js', v: '7b49b10cdd0b', routes: ['email-log'] },
   maker: { src: 'modules/maker.js', v: 'aba7879be2dc', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: 'c401d0269d99', routes: ['galleries'] },
-  lookbooks: { src: 'modules/lookbooks.js', v: 'be3eb9e98bc0', routes: ['lookbooks'] },
   brand: { src: 'modules/brand.js', v: '9209c6360b17', routes: ['brand'] },
   promotions: { src: 'modules/promotions.js', v: '8252f58c0c30', routes: ['promotions'] },
   book: { src: 'modules/book.js', v: '35ef6b679090', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },

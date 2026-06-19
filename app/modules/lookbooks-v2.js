@@ -552,7 +552,11 @@
     refresh: render
   };
 
+  var _lbV2Route = { tab: 'lookbooksV2Tab', setup: function () { ensureTab(); render(); load(); } };
+  // The legacy 'lookbooks' route resolves here too: lookbooks.js (V1) was retired
+  // (T6, Legacy-UI sunset) and this is now the only Look Books admin UI for ALL
+  // users, regardless of the redesign flag.
   MastAdmin.registerModule('lookbooks-v2', {
-    routes: { 'lookbooks-v2': { tab: 'lookbooksV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'lookbooks-v2': _lbV2Route, 'lookbooks': _lbV2Route }
   });
 })();
