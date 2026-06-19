@@ -104,6 +104,9 @@
   "app/modules/homepage.js": {
     "hardcodedHex": 3
   },
+  "app/modules/image-modal.js": {
+    "hardcodedHex": 7
+  },
   "app/modules/inventory-stock-ops.js": {
     "hardcodedHex": 7
   },
