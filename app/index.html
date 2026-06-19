@@ -17379,19 +17379,9 @@ function openMatchConfirmModal(opts) {
 }
 window.openMatchConfirmModal = openMatchConfirmModal;
 
-// Defensive stubs for shows module functions referenced in static modal HTML.
-// shows.js overwrites these unconditionally on lazy-load.
-window.closeCreateShowModal = function() {
-  var m = document.getElementById('createShowModal');
-  if (m) m.style.display = 'none';
-};
-window.saveShow = function() {
-  MastAdmin.loadModule('shows').then(function() {
-    if (typeof window.saveShow === 'function') window.saveShow();
-  }).catch(function() {
-    showToast('Could not load the Show module', true);
-  });
-};
+// (Removed defensive saveShow/closeCreateShowModal stubs — they targeted the
+// legacy V1 #createShowModal static markup, which no longer exists, and lazy-
+// loaded the now-retired shows.js. shows-v2 owns its own create flow.)
 
 // ============================================================
 // Auth
@@ -19594,14 +19584,9 @@ var MAST_V2_ROUTE_MAP = {
   // suppressions → the audit queue's Muted-rules lens (audit-suppressions-v2
   // was retired into audit-v2 — one audit pipeline, admin-v2-build-plan.md Q1).
   campaigns: 'campaigns-v2', 'email-log': 'email-log-v2', channels: 'channels-v2', suppressions: 'audit-muted-v2',
-  // Shows lifecycle → the shows-v2 twin (Find/Apply/Prep/Execute/History lenses).
-  // Each legacy route maps 1:1 to its lens twin so the sidebar items
-  // (data-route="show-find"/"show-apply"/…) reverse-lookup + highlight correctly.
-  // `show` (the bare hub route) lands on shows-v2's default Apply lens — same as
-  // the legacy `show` redirect to `show-apply`. navigateToClassic() still bypasses
-  // via _skipV2RemapOnce so an explicit-legacy user reaches V1 shows.js.
-  show: 'shows-v2', 'show-find': 'show-find-v2', 'show-apply': 'show-apply-v2',
-  'show-prep': 'show-prep-v2', 'show-execute': 'show-execute-v2', 'show-history': 'show-history-v2',
+  // Shows lifecycle: shows.js (V1) is RETIRED (T6). The shows-v2 twin now owns
+  // the bare #show* routes directly in its manifest entry, so no remap pair is
+  // needed — navigateTo('show'/'show-find'/…) resolves straight to the twin.
   pack: 'pack-v2', ship: 'ship-v2', rma: 'rma-v2',
   pos: 'pos-v2',
   receipts: 'receipts-v2',
@@ -20903,8 +20888,7 @@ var MODULE_MANIFEST = {
   // secure-intake engine looks up. No route (a data catalog, not a view); lazy-
   // loaded on demand by settings areas via MastAdmin.loadModule('connections-providers').
   'connections-providers': { src: 'modules/connections-providers.js', v: '04b778b661f9', routes: [] },
-  shows: { src: 'modules/shows.js', v: 'e84db6aa7279', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
-  'shows-v2': { src: 'modules/shows-v2.js', v: '85a169d67a10', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2'] }, // UI-redesign conversion: shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin; #show* CUT OVER to this twin via MAST_V2_ROUTE_MAP (PR7). Legacy shows.js still loadable for navigateToClassic; darked in PR8.
+  'shows-v2': { src: 'modules/shows-v2.js', v: '23692c20cf27', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2', 'show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] }, // Shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin. shows.js (V1) RETIRED (T6): its ShowsBridge + DOM-free write cores were absorbed into shows-v2.js, and the bare #show* routes now resolve here directly (no MAST_V2_ROUTE_MAP remap).
   production: { src: 'modules/production.js', v: '2b1cae9ead69', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
   contacts: { src: 'modules/contacts.js', v: 'fd8ca77af153', routes: ['contacts'] },

@@ -990,10 +990,9 @@
   function load() { loadData().then(render); }
   function loadData() {
     V2.today = todayStr();
-    // Ensure the legacy Shows module is loaded so window.ShowsBridge (the future
-    // delegated write path) exists — mirrors classes-v2 / orders-v2. Reads come
-    // from MastDB.shows directly so the twin works even before the listener fires.
-    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('shows'); } catch (e) {} }
+    // window.ShowsBridge (the delegated write path) is defined by the absorbed
+    // closure at the bottom of THIS file (shows.js retired, T6) — no loadModule
+    // needed. Reads come from MastDB.shows directly.
     return Promise.resolve(MastDB.shows.list(200)).catch(function () { return {}; }).then(function (snap) {
       var map = (snap && typeof snap.val === 'function') ? (snap.val() || {}) : (snap || {});
       var out = [];
@@ -1777,11 +1776,11 @@
   }
 
   // ── Public API (referenced by the rendered HTML + route setup) ──────
-  // Ensure the legacy shows module (and thus window.ShowsBridge) is loaded before
-  // a write — mirrors SalesEventsV2.create / jobs-v2.
-  function ensureEngine() {
-    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('shows'); } catch (e) {} }
-  }
+  // window.ShowsBridge is now defined by the absorbed closure at the bottom of
+  // this file (shows.js retired, T6), so it always exists once this module is
+  // loaded — no lazy load needed. Kept as a no-op so the write call sites that
+  // invoke it stay unchanged.
+  function ensureEngine() {}
 
   // Close the detail slide-out (if open) and drop the stale open-record state, so
   // switching lenses / re-rendering the list never leaves an orphaned slide-out
@@ -2577,7 +2576,523 @@
       'show-apply-v2':   { tab: 'showsV2Tab', setup: routeSetup('apply') },
       'show-prep-v2':    { tab: 'showsV2Tab', setup: routeSetup('prep') },
       'show-execute-v2': { tab: 'showsV2Tab', setup: routeSetup('execute') },
-      'show-history-v2': { tab: 'showsV2Tab', setup: routeSetup('history') }
+      'show-history-v2': { tab: 'showsV2Tab', setup: routeSetup('history') },
+      // Legacy #show* routes ABSORBED (T6): shows.js is deleted, so the twin now
+      // owns the bare lifecycle routes directly (no MAST_V2_ROUTE_MAP remap, no
+      // navigateToClassic fallback). `show` (the hub) lands on the Apply lens.
+      'show':            { tab: 'showsV2Tab', setup: routeSetup('apply') },
+      'show-find':       { tab: 'showsV2Tab', setup: routeSetup('find') },
+      'show-apply':      { tab: 'showsV2Tab', setup: routeSetup('apply') },
+      'show-prep':       { tab: 'showsV2Tab', setup: routeSetup('prep') },
+      'show-execute':    { tab: 'showsV2Tab', setup: routeSetup('execute') },
+      'show-history':    { tab: 'showsV2Tab', setup: routeSetup('history') }
     }
   });
+})();
+
+
+
+// ============================================================================
+// ShowsBridge + DOM-free write cores — ABSORBED from the retired shows.js (T6)
+// ============================================================================
+// shows.js (the legacy Shows lifecycle UI, ~4,032 lines) is deleted. Its UI was
+// already darked — shows-v2 is the sole Shows surface — but it still single-
+// sourced every show WRITE through window.ShowsBridge, which shows-v2 reached via
+// loadModule('shows'). That bridge and the DOM-free `_show*Core` write functions
+// it delegates to are lifted here VERBATIM. The closure is self-contained: it
+// references only MastDB / auth / currentUserRole / window.writeAudit (shell
+// globals) plus its own members. window.showsData stays exposed for trips.js (a
+// cross-module read cache; trips falls back to MastDB.shows.list).
+(function () {
+  'use strict';
+
+  // Live show cache the bridge seeds on demand (from the supplied record or a
+  // single MastDB.shows.get in _showsBridgeSeed). Exposed for trips.js.
+  var showsData = {};
+  window.showsData = showsData;
+
+  var SHOW_TYPE_LABELS = {
+    juried: 'Juried',
+    'pop-up': 'Pop-Up',
+    market: 'Market',
+    recurring: 'Recurring',
+    trade: 'Trade',
+    other: 'Other'
+  };
+
+  function isMultiDayShow(s) {
+    return s.startDate && s.endDate && s.endDate !== s.startDate;
+  }
+
+  async function autoPublishShow(showId, showData) {
+    try {
+      var publicEvent = {
+        name: showData.name || 'Unnamed Show',
+        date: showData.startDate || '',
+        endDate: showData.endDate || null,
+        location: [showData.locationCity, showData.locationState].filter(Boolean).join(', '),
+        description: (SHOW_TYPE_LABELS[showData.type] || 'Show') + (showData.websiteUrl ? ' — ' + showData.websiteUrl : ''),
+        visible: true,
+        source: 'show-section',
+        showId: showId,
+        updatedAt: new Date().toISOString()
+      };
+      await MastDB.events.set(showId, publicEvent);
+    } catch (err) {
+      console.error('Auto-publish failed:', err);
+    }
+  }
+
+  async function _showCreateCore(data) {
+    var key = MastDB.shows.newKey();
+    data.id = key;
+    data.applicationStatus = 'considering';
+    data.aiGenerated = false;
+    data.createdAt = new Date().toISOString();
+    data.createdBy = auth.currentUser ? auth.currentUser.uid : 'unknown';
+    await MastDB.shows.set(key, data);
+    return key;
+  }
+
+  async function _showUpdateCore(showId, data) {
+    await MastDB.shows.update(showId, data);
+    return showId;
+  }
+
+  async function _showUpsertSaleCore(showId, selectedDate, saleId, data) {
+    var s = showsData[showId];
+    var multiDay = isMultiDayShow(s);
+    var ref;
+    if (multiDay) {
+      if (saleId) {
+        await MastDB.shows.subRef(showId, 'execute', 'sales', selectedDate, saleId).update(data);
+      } else {
+        data.createdAt = new Date().toISOString();
+        ref = MastDB.shows.subRef(showId, 'execute', 'sales', selectedDate).push();
+        await ref.set(data);
+      }
+    } else {
+      if (saleId) {
+        await MastDB.shows.subRef(showId, 'execute', 'sales', saleId).update(data);
+      } else {
+        data.createdAt = new Date().toISOString();
+        ref = MastDB.shows.subRef(showId, 'execute', 'sales').push();
+        await ref.set(data);
+      }
+    }
+    return saleId || (ref && ref.key) || null;
+  }
+
+  async function _showRemoveSaleCore(showId, selectedDate, saleId) {
+    var s = showsData[showId];
+    var multiDay = isMultiDayShow(s);
+    if (multiDay) {
+      await MastDB.shows.subRef(showId, 'execute', 'sales', selectedDate, saleId).remove();
+    } else {
+      await MastDB.shows.subRef(showId, 'execute', 'sales', saleId).remove();
+    }
+  }
+
+  async function _showSetReconCountCore(showId, itemId, field, value) {
+    var updates = {};
+    updates[field] = value;
+    updates.updatedAt = new Date().toISOString();
+    await MastDB.shows.subRef(showId, 'execute', 'reconciliation', itemId).update(updates);
+  }
+
+  async function _showSetNotesCore(showId, selectedDate, text) {
+    var s = showsData[showId];
+    var multiDay = isMultiDayShow(s);
+    if (multiDay) {
+      await MastDB.shows.subRef(showId, 'execute', 'notes', selectedDate).set(text || null);
+    } else {
+      await MastDB.shows.subRef(showId, 'execute', 'notes', '_default').set(text || null);
+    }
+  }
+
+  async function _showUpsertExpenseCore(showId, expenseId, data) {
+    if (expenseId) {
+      await MastDB.shows.subRef(showId, 'history', 'expenses', expenseId).update(data);
+      return expenseId;
+    }
+    data.createdAt = new Date().toISOString();
+    var ref = MastDB.shows.subRef(showId, 'history', 'expenses').push();
+    await ref.set(data);
+    return ref.key;
+  }
+
+  async function _showRemoveExpenseCore(showId, expenseId) {
+    await MastDB.shows.subRef(showId, 'history', 'expenses', expenseId).remove();
+  }
+
+  async function _showSetReviewCore(showId, data) {
+    await MastDB.shows.subRef(showId, 'history', 'review').set(data);
+  }
+
+  async function _showSetStaffingCore(showId, uid, entry) {
+    entry = entry || {};
+    await MastDB.shows.subRef(showId, 'prep', 'staffing', uid).set({
+      name: entry.name,
+      showRole: entry.showRole,
+      assignedAt: new Date().toISOString()
+    });
+  }
+
+  async function _showRemoveStaffingCore(showId, uid) {
+    await MastDB.shows.subRef(showId, 'prep', 'staffing', uid).remove();
+  }
+
+  async function _showUpsertInventoryCore(showId, itemId, data) {
+    if (itemId) {
+      var s = showsData[showId];
+      var existing = s && s.prep && s.prep.inventory && s.prep.inventory[itemId];
+      if (existing && existing.packed) data.packed = true;
+      await MastDB.shows.subRef(showId, 'prep', 'inventory', itemId).update(data);
+      return itemId;
+    }
+    data.packed = false;
+    data.createdAt = new Date().toISOString();
+    var ref = MastDB.shows.subRef(showId, 'prep', 'inventory').push();
+    await ref.set(data);
+    return ref.key;
+  }
+
+  async function _showSetPackedCore(showId, itemId, packed) {
+    await MastDB.shows.subRef(showId, 'prep', 'inventory', itemId, 'packed').set(packed);
+  }
+
+  async function _showRemoveInventoryCore(showId, itemId) {
+    await MastDB.shows.subRef(showId, 'prep', 'inventory', itemId).remove();
+  }
+
+  async function _showSetLogisticsCore(showId, data) {
+    await MastDB.shows.subRef(showId, 'prep', 'logistics').set(data);
+  }
+
+  async function _showSetStatusCore(showId, newStatus) {
+    var s = showsData[showId] || {};
+    var oldStatus = s.applicationStatus || 'considering';
+    var updates = {
+      applicationStatus: newStatus,
+      updatedAt: new Date().toISOString()
+    };
+    // Track specific timestamps
+    if (newStatus === 'applied') updates.appliedAt = new Date().toISOString();
+    if (newStatus === 'accepted' || newStatus === 'rejected' || newStatus === 'waitlisted') updates.resultNotifiedAt = new Date().toISOString();
+
+    await MastDB.shows.update(showId, updates);
+
+    // Log to applicationHistory
+    var historyRef = MastDB.shows.subRef(showId, 'applicationHistory').push();
+    await historyRef.set({
+      oldStatus: oldStatus,
+      newStatus: newStatus,
+      timestamp: new Date().toISOString(),
+      changedBy: auth.currentUser ? auth.currentUser.uid : 'unknown'
+    });
+
+    var published = false, publishSkippedNonAdmin = false;
+    // Auto-publish to public events when accepted (admin-only — the public
+    // events/{id} write requires an admin; events.js owns that path).
+    if (newStatus === 'accepted') {
+      if (currentUserRole === 'admin') {
+        await autoPublishShow(showId, s);
+        published = true;
+      } else {
+        publishSkippedNonAdmin = true;
+      }
+    }
+    return { oldStatus: oldStatus, newStatus: newStatus, published: published, publishSkippedNonAdmin: publishSkippedNonAdmin };
+  }
+
+  async function _showRemoveCore(showId) {
+    await MastDB.shows.remove(showId);
+    // Also remove from public events if it was published
+    try { await MastDB.events.remove(showId); } catch(e) { /* ignore */ }
+  }
+
+  async function _showAddFromFinderCore(s) {
+    var key = MastDB.shows.newKey();
+    var data = {
+      id: key,
+      name: s.name,
+      type: s.format || s.type || 'other',
+      entryType: s.entryType || 'unknown',
+      format: s.format || s.type || 'other',
+      locationCity: s.locationCity || '',
+      locationState: s.locationState || '',
+      startDate: s.startDate || null,
+      endDate: s.endDate || null,
+      websiteUrl: s.websiteUrl || null,
+      boothFee: s.boothFee || null,
+      juryFee: s.juryFee || null,
+      applicationDeadline: s.applicationDeadline || null,
+      applicationUrl: s.applicationUrl || null,
+      audienceProfile: s.audienceProfile || null,
+      juryType: s.juryType || 'unknown',
+      notes: s.notes || null,
+      applicationStatus: 'considering',
+      aiGenerated: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: auth.currentUser ? auth.currentUser.uid : 'unknown'
+    };
+    await MastDB.shows.set(key, data);
+    return key;
+  }
+
+  async function _showApplyDeepDiveCore(showId, details) {
+    details = details || {};
+    var updates = { deepDive: details };
+    // Deep dive has more accurate data from the actual application page — always overwrite
+    if (details.boothFee) updates.boothFee = Math.round(details.boothFee * 100);
+    if (details.juryFee) updates.juryFee = Math.round(details.juryFee * 100);
+    if (details.applicationDeadline) updates.applicationDeadline = details.applicationDeadline;
+    if (details.applicationUrl) updates.applicationUrl = details.applicationUrl;
+    await MastDB.shows.update(showId, updates);
+  }
+
+  function _showSaveApplicationCore(appData) {
+      appData = Object.assign({}, appData);
+      var key = appData.id || null;
+      delete appData.id;
+      if (key) {
+        return Promise.resolve(MastDB.update('showLight/applications/' + key, appData)).then(function () { return key; });
+      }
+      key = MastDB.showLight.applications.newKey();
+      return Promise.resolve(MastDB.set('showLight/applications/' + key, appData)).then(function () { return key; });
+    }
+
+  function _showSetImageAppMetaCore(imageId, patch) {
+      patch = patch || {};
+      var writes = [];
+      ['applicationDescription', 'applicationPhoto', 'productId', 'productName'].forEach(function (k) {
+        if (Object.prototype.hasOwnProperty.call(patch, k)) {
+          writes.push(Promise.resolve(MastDB.set('images/' + imageId + '/' + k, patch[k] == null ? null : patch[k])));
+        }
+      });
+      return Promise.all(writes).then(function () {});
+    }
+
+  function _showSaveProfileCore(profileData) {
+      var data = Object.assign({}, profileData);
+      return Promise.resolve(MastDB.showLight.profile.update(data)).catch(function (err) {
+        var msg = (err && (err.code || err.message)) || '';
+        if (String(msg).indexOf('not-found') >= 0) return MastDB.showLight.profile.set(data);
+        throw err;
+      });
+    }
+
+  function _showsBridgeSeed(showId, record) {
+      if (record && typeof record === 'object') {
+        var prev = showsData[showId] || {};
+        showsData[showId] = Object.assign({}, prev, record, { id: showId });
+        return Promise.resolve(showsData[showId]);
+      }
+      if (showsData[showId]) return Promise.resolve(showsData[showId]);
+      return Promise.resolve(MastDB.shows.get(showId)).then(function (s) {
+        showsData[showId] = Object.assign({ id: showId }, s || {});
+        return showsData[showId];
+      });
+    }
+
+  function _showsBridgeAudit(action, id) {
+      try { if (typeof window.writeAudit === 'function') return window.writeAudit(action, 'shows', id); } catch (e) {}
+      return null;
+    }
+
+  window.ShowsBridge = {
+      // ── Record lifecycle ──────────────────────────────────────
+      // create(data) → new show id. data = the basic-record fields (money in
+      // CENTS: boothFee/juryFee). Stamps id/applicationStatus:'considering'/
+      // aiGenerated:false/createdAt/createdBy like saveShow's create branch.
+      create: function (data) {
+        return _showCreateCore(Object.assign({}, data)).then(function (id) {
+          return Promise.resolve(_showsBridgeAudit('create', id)).then(function () { return id; });
+        });
+      },
+      // update(id, data) → id. PATCH-style basic-record edit (leaves prep/execute/
+      // history/applicationHistory untouched, like saveShow's edit branch).
+      update: function (id, data) {
+        return _showUpdateCore(id, Object.assign({}, data)).then(function () {
+          return Promise.resolve(_showsBridgeAudit('update', id)).then(function () { return id; });
+        });
+      },
+      // remove(id) → void. Deletes the show AND clears the public events/{id}
+      // mirror (best-effort). RBAC + confirm stay on the caller (like OrdersBridge).
+      remove: function (id) {
+        return Promise.resolve(_showsBridgeAudit('delete', id)).then(function () { return _showRemoveCore(id); });
+      },
+      // setStatus(id, newStatus, record?) → { oldStatus, newStatus, published,
+      // publishSkippedNonAdmin }. Writes applicationStatus + timestamps +
+      // applicationHistory push + the admin-gated autoPublish (events/{id} mirror).
+      // No-op (old === new) returns null without writing (matches legacy guard).
+      setStatus: function (id, newStatus, record) {
+        return _showsBridgeSeed(id, record).then(function (s) {
+          var oldStatus = (s && s.applicationStatus) || 'considering';
+          if (oldStatus === newStatus) return null;
+          return _showSetStatusCore(id, newStatus).then(function (res) {
+            return Promise.resolve(_showsBridgeAudit('update', id)).then(function () { return res; });
+          });
+        });
+      },
+      // ── Finder / deep-dive (WRITE side of the CF flows) ───────
+      // addFromFinder(show) → new show id. Maps a /showFinder result onto the
+      // pipeline record (aiGenerated:true). The CF call stays in the twin.
+      addFromFinder: function (show) {
+        return _showAddFromFinderCore(show).then(function (id) {
+          return Promise.resolve(_showsBridgeAudit('create', id)).then(function () { return id; });
+        });
+      },
+      // applyDeepDive(id, details) → void. Persists the /showDeepDive CF result
+      // (deepDive blob + overwrite scalar fields, fees → CENTS). CF call in twin.
+      applyDeepDive: function (id, details) {
+        return _showApplyDeepDiveCore(id, details).then(function () {
+          return _showsBridgeAudit('update', id);
+        });
+      },
+      // ── Prep subtree (prep/staffing | prep/inventory | prep/logistics) ──
+      // setStaffing(id, uid, e) → void. e = { name, showRole }; stamps assignedAt.
+      setStaffing: function (id, uid, e) {
+        return _showSetStaffingCore(id, uid, e).then(function () { return _showsBridgeAudit('update', id); });
+      },
+      // removeStaffing(id, uid) → void.
+      removeStaffing: function (id, uid) {
+        return _showRemoveStaffingCore(id, uid).then(function () { return _showsBridgeAudit('update', id); });
+      },
+      // upsertInventory(id, item, record?) → itemId. item = { itemId?, name,
+      // quantity, linkedMakeJob, notes }. On edit preserves the packed flag from
+      // the seeded record; on create seeds packed:false + createdAt. Money: none.
+      upsertInventory: function (id, item, record) {
+        item = item || {};
+        var itemId = item.itemId || null;
+        var data = {
+          name: item.name,
+          quantity: item.quantity != null ? item.quantity : null,
+          linkedMakeJob: item.linkedMakeJob != null ? item.linkedMakeJob : null,
+          notes: item.notes != null ? item.notes : null,
+          updatedAt: new Date().toISOString()
+        };
+        return _showsBridgeSeed(id, record).then(function () {
+          return _showUpsertInventoryCore(id, itemId, data);
+        }).then(function (newId) {
+          return Promise.resolve(_showsBridgeAudit('update', id)).then(function () { return newId; });
+        });
+      },
+      // setPacked(id, itemId, bool) → void. Toggles the packed leaf.
+      setPacked: function (id, itemId, bool) {
+        return _showSetPackedCore(id, itemId, !!bool).then(function () { return _showsBridgeAudit('update', id); });
+      },
+      // removeInventory(id, itemId) → void.
+      removeInventory: function (id, itemId) {
+        return _showRemoveInventoryCore(id, itemId).then(function () { return _showsBridgeAudit('update', id); });
+      },
+      // setLogistics(id, data) → void. Singleton logistics doc (full replace).
+      setLogistics: function (id, data) {
+        var clean = Object.assign({}, data, { updatedAt: new Date().toISOString() });
+        return _showSetLogisticsCore(id, clean).then(function () { return _showsBridgeAudit('update', id); });
+      },
+      // ── Execute subtree (execute/sales | execute/reconciliation | execute/notes) ──
+      // upsertSale(id, date, sale, record?) → saleId. sale = { saleId?, description,
+      // priceCents (CENTS — money tally, NO processor), paymentMethod, linkedProductId,
+      // timestamp }. `date` selects the day in MULTI-day shows (derived from the
+      // seeded record); ignored single-day. Mirrors saveShowSale's write matrix.
+      upsertSale: function (id, date, sale, record) {
+        sale = sale || {};
+        var saleId = sale.saleId || null;
+        var data = {
+          description: sale.description,
+          priceCents: sale.priceCents,
+          paymentMethod: sale.paymentMethod,
+          linkedProductId: sale.linkedProductId != null ? sale.linkedProductId : null,
+          timestamp: sale.timestamp,
+          updatedAt: new Date().toISOString()
+        };
+        return _showsBridgeSeed(id, record).then(function () {
+          return _showUpsertSaleCore(id, date, saleId, data);
+        }).then(function (newId) {
+          return Promise.resolve(_showsBridgeAudit('update', id)).then(function () { return newId; });
+        });
+      },
+      // removeSale(id, date, saleId, record?) → void. `date` used multi-day only.
+      removeSale: function (id, date, saleId, record) {
+        return _showsBridgeSeed(id, record).then(function () {
+          return _showRemoveSaleCore(id, date, saleId);
+        }).then(function () { return _showsBridgeAudit('update', id); });
+      },
+      // setReconCount(id, itemId, field, n) → void. Absolute per-field recon count
+      // (field ∈ sold|returned|damaged|gifted). The legacy stepper resolves deltas
+      // to the absolute value; the twin passes the value directly.
+      setReconCount: function (id, itemId, field, n) {
+        return _showSetReconCountCore(id, itemId, field, n).then(function () { return _showsBridgeAudit('update', id); });
+      },
+      // setNotes(id, date, text, record?) → void. Multi-day writes per-date;
+      // single-day writes the _default slot. Empty text → null.
+      setNotes: function (id, date, text, record) {
+        return _showsBridgeSeed(id, record).then(function () {
+          return _showSetNotesCore(id, date, text);
+        }).then(function () { return _showsBridgeAudit('update', id); });
+      },
+      // ── History subtree (history/expenses | history/review) ───
+      // upsertExpense(id, exp) → expenseId. exp = { expenseId?, description,
+      // amountCents (CENTS) }. Create stamps createdAt + mints a push key.
+      upsertExpense: function (id, exp) {
+        exp = exp || {};
+        var expenseId = exp.expenseId || null;
+        var data = {
+          description: exp.description,
+          amountCents: exp.amountCents,
+          updatedAt: new Date().toISOString()
+        };
+        return _showUpsertExpenseCore(id, expenseId, data).then(function (newId) {
+          return Promise.resolve(_showsBridgeAudit('update', id)).then(function () { return newId; });
+        });
+      },
+      // removeExpense(id, expId) → void.
+      removeExpense: function (id, expId) {
+        return _showRemoveExpenseCore(id, expId).then(function () { return _showsBridgeAudit('update', id); });
+      },
+      // setReview(id, review) → void. Singleton review doc (full replace).
+      // review = { rating, wouldAttendAgain, bestSellers, lessonsLearned }.
+      setReview: function (id, review) {
+        review = review || {};
+        var data = {
+          rating: review.rating || null,
+          wouldAttendAgain: review.wouldAttendAgain != null ? review.wouldAttendAgain : null,
+          bestSellers: review.bestSellers != null ? review.bestSellers : null,
+          lessonsLearned: review.lessonsLearned != null ? review.lessonsLearned : null,
+          updatedAt: new Date().toISOString()
+        };
+        return _showSetReviewCore(id, data).then(function () { return _showsBridgeAudit('update', id); });
+      },
+
+      // ── AI Application Builder (WRITE side of the 6-step wizard) ───────
+      // The /studioAssistant CF *call* (Step 5 AI draft) is a token-metered READ and
+      // stays in the twin (like /showFinder + /showDeepDive); only the resulting
+      // WRITES route through these three methods so V1 + V2 share one path.
+      //
+      // saveApplication(appData) → application key. appData = the draft blob
+      // (showId / showName / parsedRequirements / fieldMapping / gapAnalysis /
+      // imageAssignments / status / createdAt / updatedAt) plus an optional `id` to
+      // update an existing draft. Mints a push key on create. Writes
+      // showLight/applications/{key}.
+      saveApplication: function (appData) {
+        return _showSaveApplicationCore(Object.assign({}, appData)).then(function (key) {
+          return Promise.resolve(_showsBridgeAudit('update', key)).then(function () { return key; });
+        });
+      },
+      // setImageAppMeta(imageId, patch) → void. Partial write of the image-tagging
+      // leaves used by the builder: applicationDescription / applicationPhoto /
+      // productId / productName (only the keys present in `patch` are written; null
+      // clears a leaf, matching the legacy per-leaf writes). Writes images/{imageId}.
+      setImageAppMeta: function (imageId, patch) {
+        return _showSetImageAppMetaCore(imageId, patch).then(function () { return _showsBridgeAudit('update', imageId); });
+      },
+      // saveProfile(profileData) → void. Merge-update the singleton studio profile
+      // (showLight/profile) the builder fills applications from. Used by the gap-fill
+      // step to backfill missing profile fields inline.
+      saveProfile: function (profileData) {
+        return _showSaveProfileCore(profileData).then(function () { return _showsBridgeAudit('update', 'profile'); });
+      }
+    };
 })();

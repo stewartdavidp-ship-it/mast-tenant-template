@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **47,847** lines
-- **Feature modules:** **143** files in `app/modules/` (**104** routed), **157,666** lines combined
+- **Core shell:** `app/index.html` — **47,831** lines
+- **Feature modules:** **142** files in `app/modules/` (**103** routed), **154,149** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -122,8 +122,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/settings-panels.js` | 645 | — |
 | `modules/setup-wizard.js` | 4,869 | — |
 | `modules/shopify-harness.js` | 440 | — |
-| `modules/shows-v2.js` | 2,583 | shows-v2, show-find-v2, show-apply-v2, show-prep-v2, show-execute-v2, show-history-v2 |
-| `modules/shows.js` | 4,032 | show, show-find, show-apply, show-prep, show-execute, show-history |
+| `modules/shows-v2.js` | 3,098 | shows-v2, show-find-v2, show-apply-v2, show-prep-v2, show-execute-v2, show-history-v2, show, show-find, show-apply, show-prep, show-execute, show-history |
 | `modules/social-v2.js` | 1,797 | social-v2, social |
 | `modules/stories-v2.js` | 640 | stories-v2 |
 | `modules/students-config-v2.js` | 687 | students-config-v2 |
