@@ -288,10 +288,23 @@ function _finRenderUserCell(uidOrName, snapshotName) {
   return '<span>' + e(label) + '</span>';
 }
 
+// Money display for integer-cents amounts. Delegates the cents→dollars math and
+// grouped/2-decimal formatting to the canonical window.MastFormat core (Track 5)
+// while preserving this module's exact output contract: '$0.00' for null/NaN and
+// a leading '-' BEFORE the '$' for negatives (e.g. -$1,020.00, not $-1,020.00).
 function fmt$(cents) {
   if (cents == null || isNaN(cents)) return '$0.00';
-  var n = Math.abs(cents) / 100;
-  return (cents < 0 ? '-' : '') + '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (cents < 0 ? '-' : '') + MastFormat.money(Math.abs(cents), { cents: true });
+}
+
+// Timestamp-safe date+time display. Routes through MastFormat.coerceDate so a
+// Firestore Timestamp (raw {seconds,nanoseconds} or a .toDate() instance) renders
+// instead of "Invalid Date"; preserves the locale date+time format (toLocaleString).
+function fmtDateTime(v) {
+  var c = MastFormat.coerceDate(v);
+  if (c == null) return '';
+  var d = (c instanceof Date) ? c : new Date(c);
+  return isNaN(d.getTime()) ? '' : d.toLocaleString();
 }
 
 function pct(num, denom) {
@@ -1473,8 +1486,8 @@ function renderFinExpDetailPanel(ex) {
     var a = finExpAccountLookup[ex.plaidAccountId];
     h += '<div>Account:</div><div>' + e(a.institution) + ' ••' + e(a.mask) + '</div>';
   }
-  if (ex.createdAt) h += '<div>Created:</div><div>' + new Date(ex.createdAt).toLocaleString() + '</div>';
-  if (ex.updatedAt) h += '<div>Updated:</div><div>' + new Date(ex.updatedAt).toLocaleString() + '</div>';
+  if (ex.createdAt) h += '<div>Created:</div><div>' + fmtDateTime(ex.createdAt) + '</div>';
+  if (ex.updatedAt) h += '<div>Updated:</div><div>' + fmtDateTime(ex.updatedAt) + '</div>';
   h += '</div></details>';
 
   // Action row
