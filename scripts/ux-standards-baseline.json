@@ -157,6 +157,10 @@
   "app/modules/production.js": {
     "hardcodedHex": 25
   },
+  "app/modules/products-engine.js": {
+    "hardcodedHex": 74,
+    "rogueOverlays": 1
+  },
   "app/modules/promotions.js": {
     "hardcodedHex": 12
   },
