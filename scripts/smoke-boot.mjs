@@ -50,7 +50,7 @@ const ROUTES = [
   'coupons','promotions','galleries','lookbooks','advisor','marketing-calendar','blog',
   'newsletter','social','campaigns','website','procurement','team','channels','wholesale',
   'commissions','rma','jobs','production','materials','book','trips','studio','students',
-  'cs-inbox','cs-tickets','auditlog','migration','products-v2','orders-v2','customers-v2',
+  'cs-inbox','cs-tickets','auditlog','migration','commission-terms','products-v2','orders-v2','customers-v2',
 ];
 
 function fail(msg) { console.error('\n✗ smoke-boot: ' + msg); process.exitCode = 1; }

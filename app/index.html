@@ -19594,7 +19594,7 @@ var MAST_V2_ROUTE_MAP = {
   show: 'shows-v2', 'show-find': 'show-find-v2', 'show-apply': 'show-apply-v2',
   'show-prep': 'show-prep-v2', 'show-execute': 'show-execute-v2', 'show-history': 'show-history-v2',
   pack: 'pack-v2', ship: 'ship-v2', rma: 'rma-v2',
-  pos: 'pos-v2', 'commission-terms': 'commission-terms-v2',
+  pos: 'pos-v2',
   receipts: 'receipts-v2',
   'social': 'social-v2',
   'composer': 'composer-v2',
@@ -20957,7 +20957,7 @@ var MODULE_MANIFEST = {
   'finance-reports-v2': { src: 'modules/finance-reports-v2.js', v: 'e36702711faf', routes: ['finance-reports-v2'] }, // finance wave 4: reports launcher (generators stay classic, single-sourced)
   'rma-v2': { src: 'modules/rma-v2.js', v: 'cfc0b6378ce2', routes: ['rma-v2'] }, // sales-v2 wave 1: returns (transaction archetype + return workflow, flag-gated, side-by-side)
   'pos-v2': { src: 'modules/pos-v2.js', v: '76c432e39802', routes: ['pos-v2'] }, // sales-v2 wave 2: sales ledger (transaction archetype over in-person orders, flag-gated, side-by-side)
-  'commission-terms-v2': { src: 'modules/commission-terms-v2.js', v: '87d83ef7faf2', routes: ['commission-terms-v2'] }, // sales-v2 wave 2: versioned commission terms (record archetype, flag-gated, side-by-side)
+  'commission-terms-v2': { src: 'modules/commission-terms-v2.js', v: 'dbbf310345e5', routes: ['commission-terms-v2', 'commission-terms'] }, // versioned commission terms; owns the legacy 'commission-terms' route too (V1 commission-terms.js retired, T6)
   'receipts-v2': { src: 'modules/receipts-v2.js', v: '4b05752caba1', routes: ['receipts-v2'] }, // sales-v2 wave 3: day close reconciliation (record archetype + match view, flag-gated, side-by-side)
   'lookbooks-v2': { src: 'modules/lookbooks-v2.js', v: '128d9ccf76ec', routes: ['lookbooks-v2', 'lookbooks'] }, // sales-v2 wave 3: line sheets / lookbooks. Owns the legacy 'lookbooks' route too (V1 lookbooks.js retired, T6).
   'campaigns-v2': { src: 'modules/campaigns-v2.js', v: 'aad7589a782c', routes: ['campaigns-v2'] }, // UI-redesign conversion: marketing campaigns read detail (flag-gated, side-by-side)
@@ -20991,7 +20991,6 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   composer: { src: 'modules/composer.js', v: '0289deb2bfb7', routes: ['composer'] },
   // W2.3 — Commission terms editor (admin-side; storefront accept flow is
   // separate and lives on the public side).
-  commissionTerms: { src: 'modules/commission-terms.js', v: 'fb9811962349', routes: ['commission-terms'] },
   // J12 — Tenant feedback on Mast audit findings (suppression management page;
   // menus exposed via window.AuditFeedbackUI for J13 to wire into surfaces).
   auditFeedback: { src: 'modules/audit-feedback.js', v: 'a9530fd2b798', routes: ['suppressions'] },

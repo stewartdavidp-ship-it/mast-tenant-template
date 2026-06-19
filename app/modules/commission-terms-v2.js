@@ -261,7 +261,11 @@
     refresh: render
   };
 
+  var _ctV2Route = { tab: 'commissionTermsV2Tab', setup: function () { ensureTab(); render(); load(); } };
+  // The legacy 'commission-terms' route resolves here too: commission-terms.js
+  // (V1) was retired (T6, Legacy-UI sunset); this is now the only Commission Terms
+  // admin UI for ALL users, regardless of the redesign flag.
   MastAdmin.registerModule('commission-terms-v2', {
-    routes: { 'commission-terms-v2': { tab: 'commissionTermsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'commission-terms-v2': _ctV2Route, 'commission-terms': _ctV2Route }
   });
 })();
