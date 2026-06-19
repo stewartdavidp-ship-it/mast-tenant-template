@@ -150,4 +150,5 @@ jobs:
           node test/lint-ratchet.test.js &&
           node test/lint-conflict-markers.test.js &&
           node test/cache-bust.test.js &&
-          node test/format-goldens.test.js
+          node test/format-goldens.test.js &&
+          node test/mast-format.test.js
