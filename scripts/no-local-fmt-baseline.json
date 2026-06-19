@@ -306,12 +306,8 @@
     "localeDate": 11
   },
   "app/modules/team-v2.js": {
-    "centsDiv": 3,
-    "moneyToFixed": 1
-  },
-  "app/modules/team.js": {
-    "centsDiv": 18,
-    "moneyToFixed": 18
+    "centsDiv": 21,
+    "moneyToFixed": 19
   },
   "app/modules/trips-v2.js": {
     "localeDate": 1

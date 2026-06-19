@@ -19563,7 +19563,7 @@ window.getRouteParams = function() { return currentRouteParams || {}; };
 // flag-gated v2 modules (which read mastUiRedesign at load) register cleanly.
 var MAST_V2_ROUTE_MAP = {
   orders: 'orders-v2', customers: 'customers-v2',
-  trips: 'trips-v2', team: 'team-v2', procurement: 'procurement-v2',
+  trips: 'trips-v2', procurement: 'procurement-v2',
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', 'cs-surveys': 'cs-surveys-v2', terms: 'terms-v2', wallet: 'wallet-v2',
   // "Your website" capstone: #website, #brand, and #homepage all resolve to the
@@ -20901,7 +20901,7 @@ var MODULE_MANIFEST = {
   'promotions-v2': { src: 'modules/promotions-v2.js', v: '233ee7a804eb', routes: ['promotions-v2', 'promotions'] }, // promotions; owns the legacy 'promotions' route too (V1 promotions.js retired, T6)
   'trips-v2': { src: 'modules/trips-v2.js', v: '444cf9fb076e', routes: ['trips-v2'] }, // UI-redesign conversion: trips history (flag-gated, side-by-side)
   'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', v: '9712ea2fdab0', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
-  'team-v2': { src: 'modules/team-v2.js', v: '1f650972965e', routes: ['team-v2'] }, // UI-redesign conversion: team roster/employee (flag-gated, side-by-side)
+  'team-v2': { src: 'modules/team-v2.js', v: 'fba0132fa2d7', routes: ['team-v2', 'team'] }, // Team roster/employee + HR sub-surfaces (time clock / PTO / labor burden / docs / onboarding). team.js (V1) RETIRED (T6): its TeamBridge + TeamPanels + full handler closure were absorbed into team-v2.js, and the bare #team route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'procurement-v2': { src: 'modules/procurement-v2.js', v: 'e0dce287de8a', routes: ['procurement-v2'] }, // UI-redesign conversion: purchase orders (now hosts the Needs-reorder lens)
   'lots-v2': { src: 'modules/lots-v2.js', v: '182c811e7879', routes: ['lots-v2'] }, // Tier 1.5 P2: inventory lots (material+product) list + detail (flag-gated)
   'materials-v2': { src: 'modules/materials-v2.js', v: '9c5c9bf2656f', routes: ['materials-v2'] }, // UI-redesign conversion: maker materials (flag-gated, side-by-side)
@@ -20972,7 +20972,6 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   book: { src: 'modules/book.js', v: '35ef6b679090', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', v: 'd05e7845704f', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'ec2784aaf153', routes: ['studio'] },
-  team: { src: 'modules/team.js', v: '99ce0e5762ac', routes: ['team'] },
   students: { src: 'modules/students.js', v: '6537e0bf1bea', routes: ['students'] },
   channels: { src: 'modules/channels.js', v: '72824337aebd', routes: ['channels'] },
   'customer-service': { src: 'modules/customer-service.js', v: '53ad378a36ba', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
