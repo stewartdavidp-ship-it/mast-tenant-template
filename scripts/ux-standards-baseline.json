@@ -9,6 +9,9 @@
     "translateX": 3,
     "hardcodedHex": 2
   },
+  "app/modules/add-variant-dialog.js": {
+    "hardcodedHex": 1
+  },
   "app/modules/advisor.js": {
     "nativeDialogs": 4,
     "rogueOverlays": 1,
