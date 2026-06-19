@@ -210,8 +210,24 @@
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
   <script src="../shared/mast-intake.js?v=0977cab058ce"></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- Centralized money/date formatter core (Track 5). window.MastFormat — a
+       dependency-free standalone home for the money/date logic that otherwise
+       lives only inside the MastUI engine. Eager (peer of MastUI) so any module
+       can adopt it without load-order risk. Not yet adopted (next PR).
+       ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
+  <script src="../shared/mast-format.js?v=5a27666a6abf"></script>
+  <!-- Centralized CSV-export core (Track 5). window.MastExport — toCsv()/download()
+       with RFC-4180 quoting + formula-injection defense; prefers window.Papa when
+       present, falls back to a built-in serializer. Eager so adopters can call it
+       synchronously. Not yet adopted (next PR).
+       ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
+  <script src="../shared/mast-export.js?v=876e1d5d38f3"></script>
+  <!-- Lazy CDN loaders (Track 3). window.ensurePapa()/ensureXlsx() inject
+       papaparse@5 / xlsx@0.18.5 on FIRST import/export use instead of eagerly on
+       every admin boot (xlsx@0.18.5 carries known CVEs; both are import/export-only).
+       Tiny + eager so the loaders exist before any handler calls them.
+       ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
+  <script src="../shared/lazy-cdn.js?v=bb2dda85dc02"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
        storefront-tenant.js routes registry lookups to the correct pod's
        Firestore. Substituted per pod at deploy time. -->
@@ -20947,7 +20963,7 @@ var MODULE_MANIFEST = {
   'team-v2': { src: 'modules/team-v2.js', v: '1f650972965e', routes: ['team-v2'] }, // UI-redesign conversion: team roster/employee (flag-gated, side-by-side)
   'procurement-v2': { src: 'modules/procurement-v2.js', v: 'e0dce287de8a', routes: ['procurement-v2'] }, // UI-redesign conversion: purchase orders (now hosts the Needs-reorder lens)
   'lots-v2': { src: 'modules/lots-v2.js', v: '182c811e7879', routes: ['lots-v2'] }, // Tier 1.5 P2: inventory lots (material+product) list + detail (flag-gated)
-  'materials-v2': { src: 'modules/materials-v2.js', v: 'f21e9ef5c97e', routes: ['materials-v2'] }, // UI-redesign conversion: maker materials (flag-gated, side-by-side)
+  'materials-v2': { src: 'modules/materials-v2.js', v: '9c5c9bf2656f', routes: ['materials-v2'] }, // UI-redesign conversion: maker materials (flag-gated, side-by-side)
   'cs-support-v2': { src: 'modules/cs-support-v2.js', v: '9da15d6e725d', routes: ['cs-inbox-v2', 'cs-tickets-v2'] }, // ONE support hub: Inbox/Tickets are two lenses of the same conversation queue — route picks the entry lens (customer-service-v2-build-plan.md)
   'cs-surveys-v2': { src: 'modules/cs-surveys-v2.js', v: '1a6dc1d74074', routes: ['cs-surveys-v2'] }, // CS Wave 3: surveys hub (Surveys/Responses/Question sets/Library lenses + automation card)
   'terms-v2': { src: 'modules/terms-v2.js', v: 'f6da3001697d', routes: ['terms-v2'] }, // UI-redesign config-singleton shape: policies/terms launcher→slide-out (flag-gated)
@@ -20961,7 +20977,7 @@ var MODULE_MANIFEST = {
   // the builder delegates to (hp*, hpToggleTestimonialVisible).
   'website-v2': { src: 'modules/website-v2.js', v: '4133d68dcd66', routes: ['website-v2'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2) (flag-gated)
   'commissions-v2': { src: 'modules/commissions-v2.js', v: '8f086a7d5a85', routes: ['commissions-v2'] }, // UI-redesign Process surface: commissions lifecycle (flag-gated, side-by-side)
-  'products-v2': { src: 'modules/products-v2.js', v: '5495de99a4cd', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
+  'products-v2': { src: 'modules/products-v2.js', v: '0d6846f3e487', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: '82492c030beb', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
   'coupons-v2': { src: 'modules/coupons-v2.js', v: 'c7a94342abd2', routes: ['coupons-v2'] }, // UI-redesign conversion: coupons read detail (flag-gated)
   'classes-v2': { src: 'modules/classes-v2.js', v: '10178d0580be', routes: ['classes-v2', 'book-reports-v2', 'classes-rooms-v2', 'classes-settings-v2'] }, // ONE classes hub: Catalog + Rooms & equipment + Reports lenses — route picks the lens (8→6 ratified 2026-06-10)
@@ -21009,7 +21025,7 @@ var MODULE_MANIFEST = {
   website: { src: 'modules/website.js', v: '9e34ffd057ef', routes: ['website'] },
 homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] },
   emailLog: { src: 'modules/email-log.js', v: '7b49b10cdd0b', routes: ['email-log'] },
-  maker: { src: 'modules/maker.js', v: '61388e7b0528', routes: ['materials', 'products'] },
+  maker: { src: 'modules/maker.js', v: 'aba7879be2dc', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: 'c401d0269d99', routes: ['galleries'] },
   lookbooks: { src: 'modules/lookbooks.js', v: 'be3eb9e98bc0', routes: ['lookbooks'] },
   brand: { src: 'modules/brand.js', v: '9209c6360b17', routes: ['brand'] },
