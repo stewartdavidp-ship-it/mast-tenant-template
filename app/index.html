@@ -19583,7 +19583,7 @@ var MAST_V2_ROUTE_MAP = {
   website: 'website-v2', brand: 'website-v2', homepage: 'website-v2', commissions: 'commissions-v2', products: 'products-v2',
   wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
   contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
-  resources: 'classes-rooms-v2', newsletter: 'newsletter-v2',
+  resources: 'classes-rooms-v2',
   'gift-cards': 'gift-cards-v2', coupons: 'coupons-v2', book: 'classes-v2', calendar: 'calendar-v2', 'book-reports': 'book-reports-v2', 'book-settings': 'classes-settings-v2', membership: 'membership-v2',
   'cs-reviews': 'cs-reviews-v2', 'cs-faqs': 'cs-faqs-v2', loyalty: 'loyalty-v2', stories: 'stories-v2', 'cs-members': 'cs-members-v2',
   // `events` is sales.js's alias route for the sales-events tab (the dashboard
@@ -20882,7 +20882,6 @@ var MAST_MODULES_V = '20260618-202331-1353a6aa';
 // Populated as modules are extracted in future sessions.
 var MODULE_MANIFEST = {
   blog: { src: 'modules/blog.js', v: '7471223ca16f', routes: ['blog'] },
-  newsletter: { src: 'modules/newsletter.js', v: '1c87bcb82659', routes: ['newsletter'] },
   trips: { src: 'modules/trips.js', v: '6cefe29d9994', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', v: 'df3d02d649c2', routes: ['wholesale'] },
   finance: { src: 'modules/finance.js', v: '91f388f1e1f0', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
@@ -20970,7 +20969,7 @@ var MODULE_MANIFEST = {
   'enrollments-v2': { src: 'modules/enrollments-v2.js', v: 'f1ec6c15ef8e', routes: ['enrollments-v2'] }, // UI-redesign conversion: enrollments roster read detail (read-focused Faceted Record)
   'passes-v2': { src: 'modules/passes-v2.js', v: '5f5a185fa4d3', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)
   'resources-v2': { src: 'modules/resources-v2.js', v: '817832f43559', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
-  'newsletter-v2': { src: 'modules/newsletter-v2.js', v: '5d6846883847', routes: ['newsletter-v2'] }, // UI-redesign conversion: newsletter subscribers read detail (flag-gated, side-by-side)
+  'newsletter-v2': { src: 'modules/newsletter-v2.js', v: '39ce447d358d', routes: ['newsletter-v2', 'newsletter'] }, // Newsletter hub (issues + subscribers + native composer). newsletter.js (V1) RETIRED (T6): its NewsletterBridge + rich-text helpers + newsletterOpenFromContent were absorbed here; the bare #newsletter route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   sales: { src: 'modules/sales.js', v: 'cc9154861404', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', v: '79ac115984d9', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', v: 'd599d372978f', routes: ['events-shows', 'events-settings'] },
@@ -40715,10 +40714,6 @@ function openModal(html) {
 }
 
 function closeModal() {
-  if (typeof nlEditingCardId !== 'undefined' && nlEditingCardId) {
-    nlCloseCardEditor(nlEditingCardId);
-    return;
-  }
   var ov = document.getElementById('modalOverlay');
   var wasOpen = ov.classList.contains('open');
   ov.classList.remove('open');
@@ -45002,10 +44997,6 @@ function validateRequired(fields) {
 // now live in modules/social-v2.js, which owns the 'social' route.
 // ============================================================
 
-
-// ============================================================
-// NEWSLETTER — Extracted to modules/newsletter.js (lazy-loaded)
-// ============================================================
 
 // ============================================================
 // BLOG — Extracted to modules/blog.js (lazy-loaded)

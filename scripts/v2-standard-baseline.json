@@ -36,5 +36,8 @@
   },
   "vendors-v2.js": {
     "missingFlagGate": 1
+  },
+  "newsletter-v2.js": {
+    "handRolledHeader": 2
   }
 }
