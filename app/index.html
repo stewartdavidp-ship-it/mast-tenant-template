@@ -21067,7 +21067,7 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   // Setup wizard — first-login onboarding flow; no route, lazy-loaded via the
   // eager MastAdmin.loadModule('setupWizard') call in the auth funnel, gated on
   // tenantStatus === 'onboarding' (Track 1, recipe A).
-  setupWizard: { src: 'modules/setup-wizard.js', v: 'b69098e49790', routes: [] },
+  setupWizard: { src: 'modules/setup-wizard.js', v: '3de2f0172a9f', routes: [] },
   // Shopify dev/test harness — no route; lazy-loaded via the eager
   // runShopifyHarness / runShopifySeed / runShopifyCleanup / runShopifyPhase2..8
   // shims (the static "Run …" buttons on the Shopify settings page) (Track 1).
@@ -46292,7 +46292,7 @@ function renderImportStatusBanner() {
       html = '<div style="background:var(--teal);color:white;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
       html += '<div><strong>Import complete!</strong> ' + summaryText + '</div>';
       html += '<div style="display:flex;gap:8px;align-items:center;">';
-      html += '<button class="btn btn-secondary" onclick="navigateTo(\'website\'); setTimeout(function(){ wpSwitchTab(\'import\'); }, 100);" style="font-size:0.78rem;padding:6px 14px;font-weight:600;">View Report</button>';
+      html += '<button class="btn btn-secondary" onclick="navigateToClassic(\'website\', { tab: \'import\', importOnly: \'1\' });" style="font-size:0.78rem;padding:6px 14px;font-weight:600;">View Report</button>';
       html += '<button onclick="_importBannerDismissed[\'' + job._id + '\']=true;document.getElementById(\'importStatusBanner\').style.display=\'none\';" style="background:none;border:none;color:white;font-size:1.15rem;cursor:pointer;padding:4px 8px;opacity:0.8;" title="Dismiss">&times;</button>';
       html += '</div>';
       html += '</div>';

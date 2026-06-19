@@ -4100,7 +4100,7 @@ function wizardRenderGapRows(gapRows, gaps) {
       if (linkTarget === 'settings-payments') {
         h += '<div style="margin-top:6px;"><a href="#" onclick="event.preventDefault(); wizardComplete(); setTimeout(function(){ navigateTo(\'settings\'); }, 300);" style="font-size:0.85rem;color:var(--teal);text-decoration:none;">' + esc(linkLabel) + ' &rarr;</a></div>';
       } else if (linkLabel) {
-        h += '<div style="margin-top:6px;"><a href="#" onclick="event.preventDefault(); wizardComplete(); setTimeout(function(){ navigateTo(\'website\'); setTimeout(function(){ wpSwitchTab(\'import\'); }, 100); }, 300);" style="font-size:0.85rem;color:var(--teal);text-decoration:none;">' + esc(linkLabel) + ' &rarr;</a></div>';
+        h += '<div style="margin-top:6px;"><a href="#" onclick="event.preventDefault(); wizardComplete(); setTimeout(function(){ navigateToClassic(\'website\', { tab: \'import\', importOnly: \'1\' }); }, 300);" style="font-size:0.85rem;color:var(--teal);text-decoration:none;">' + esc(linkLabel) + ' &rarr;</a></div>';
       }
     } else if (isFree && row.status !== 'complete') {
       h += '<div style="font-size:0.78rem;margin-top:4px;color:var(--teal);">&#10003; ' + esc(row.plan.replace('Free: ', '')) + '</div>';
