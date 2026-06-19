@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **58,794** lines
-- **Feature modules:** **135** files in `app/modules/` (**110** routed), **150,379** lines combined
+- **Core shell:** `app/index.html` — **58,575** lines
+- **Feature modules:** **136** files in `app/modules/` (**110** routed), **150,653** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -65,6 +65,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/engagement-inbox.js` | 515 | engagement-inbox |
 | `modules/enrollments-v2.js` | 492 | enrollments-v2 |
 | `modules/events.js` | 1,937 | events-shows, events-settings |
+| `modules/feedback-dialog.js` | 274 | — |
 | `modules/finance-close-v2.js` | 588 | finance-period-close-v2, finance-amendments-v2 |
 | `modules/finance-expenses-v2.js` | 484 | finance-expenses-v2 |
 | `modules/finance-openitems-v2.js` | 545 | finance-ar-v2, finance-ap-v2 |
