@@ -164,6 +164,9 @@
   "app/modules/setup-wizard.js": {
     "hardcodedHex": 100
   },
+  "app/modules/shopify-harness.js": {
+    "hardcodedHex": 26
+  },
   "app/modules/show-light.js": {
     "hardcodedHex": 2
   },
