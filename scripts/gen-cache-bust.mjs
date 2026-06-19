@@ -54,6 +54,7 @@ const LOCKSTEP_SHARED = new Set([
   'variant-reconcile',
   'product-readiness.core',
   'brand-sync',
+  'orders-core',
 ]);
 
 const HASH_LEN = 12;
