@@ -19628,7 +19628,7 @@ var MAST_V2_ROUTE_MAP = {
   blog: 'blog-v2', salesEvents: 'sales-events-v2', events: 'sales-events-v2', inquiries: 'inquiries-v2', jobs: 'jobs-v2',
   // suppressions → the audit queue's Muted-rules lens (audit-suppressions-v2
   // was retired into audit-v2 — one audit pipeline, admin-v2-build-plan.md Q1).
-  campaigns: 'campaigns-v2', 'email-log': 'email-log-v2', 'marketing-calendar': 'marketing-calendar-v2', channels: 'channels-v2', suppressions: 'audit-muted-v2',
+  campaigns: 'campaigns-v2', 'email-log': 'email-log-v2', channels: 'channels-v2', suppressions: 'audit-muted-v2',
   // Shows lifecycle → the shows-v2 twin (Find/Apply/Prep/Execute/History lenses).
   // Each legacy route maps 1:1 to its lens twin so the sidebar items
   // (data-route="show-find"/"show-apply"/…) reverse-lookup + highlight correctly.
@@ -21006,7 +21006,7 @@ var MODULE_MANIFEST = {
   'lookbooks-v2': { src: 'modules/lookbooks-v2.js', v: '128d9ccf76ec', routes: ['lookbooks-v2', 'lookbooks'] }, // sales-v2 wave 3: line sheets / lookbooks. Owns the legacy 'lookbooks' route too (V1 lookbooks.js retired, T6).
   'campaigns-v2': { src: 'modules/campaigns-v2.js', v: 'aad7589a782c', routes: ['campaigns-v2'] }, // UI-redesign conversion: marketing campaigns read detail (flag-gated, side-by-side)
   'email-log-v2': { src: 'modules/email-log-v2.js', v: '8273b9e43c8d', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
-  'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', v: '8e3254cc9e22', routes: ['marketing-calendar-v2'] }, // UI-redesign conversion: marketing calendar (index control)
+  'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', v: 'f18703b4dec4', routes: ['marketing-calendar-v2', 'marketing-calendar'] }, // marketing calendar; owns the legacy 'marketing-calendar' route too (V1 marketing-calendar.js retired, T6)
   'channels-v2': { src: 'modules/channels-v2.js', v: '28b81e534a47', routes: ['channels-v2'] }, // UI-redesign conversion: sales channels read detail (flag-gated, side-by-side)
   'contacts-v2': { src: 'modules/contacts-v2.js', v: '810819197941', routes: ['contacts-v2'] }, // UI-redesign conversion: contacts (CRM) read detail (flag-gated, side-by-side)
   'enrollments-v2': { src: 'modules/enrollments-v2.js', v: 'f1ec6c15ef8e', routes: ['enrollments-v2'] }, // UI-redesign conversion: enrollments roster read detail (read-focused Faceted Record)
@@ -21032,7 +21032,6 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   'customer-service': { src: 'modules/customer-service.js', v: '6308dcb6631e', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
   campaigns: { src: 'modules/campaigns.js', v: '9d866794259c', routes: ['campaigns'] },
-  marketingCalendar: { src: 'modules/marketing-calendar.js', v: '4ee918881e8b', routes: ['marketing-calendar'] },
   engagementInbox: { src: 'modules/engagement-inbox.js', v: 'e0eae6f63be6', routes: ['engagement-inbox'] },
   composer: { src: 'modules/composer.js', v: '0289deb2bfb7', routes: ['composer'] },
   // W2.3 — Commission terms editor (admin-side; storefront accept flow is
