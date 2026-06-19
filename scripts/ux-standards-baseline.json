@@ -161,6 +161,9 @@
     "rogueOverlays": 2,
     "hardcodedHex": 59
   },
+  "app/modules/settings-panels.js": {
+    "hardcodedHex": 25
+  },
   "app/modules/setup-wizard.js": {
     "hardcodedHex": 100
   },
