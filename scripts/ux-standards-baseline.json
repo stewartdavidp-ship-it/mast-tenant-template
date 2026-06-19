@@ -43,6 +43,9 @@
     "rogueOverlays": 1,
     "hardcodedHex": 273
   },
+  "app/modules/coin-wallet-modal.js": {
+    "hardcodedHex": 8
+  },
   "app/modules/commission-terms.js": {
     "hardcodedHex": 9
   },
