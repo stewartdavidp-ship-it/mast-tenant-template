@@ -165,3 +165,27 @@ jobs:
           node test/mast-format.test.js &&
           node test/mast-export.test.js &&
           node test/mast-sanitize.test.js
+
+  # Track-0 runtime safety net: boot the real admin shell headless (the localhost
+  # `?testmode=1` auth bypass), navigate every major surface, and FAIL on any
+  # uncaught CODE error. This is the net the static lints can't be — it catches a
+  # route that only throws when you visit it (a dangling reference from an
+  # extraction, a removed helper from a V1 retirement). Permission/CORS/network
+  # noise from the credential-less preview user is filtered (see smoke-boot.mjs).
+  # Runs in parallel to `lint`; heavier (installs a browser) so it's its own job.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install deps + Chromium
+        working-directory: scripts
+        run: |
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Boot smoke (headless shell → all routes, no uncaught error)
+        run: node scripts/smoke-boot.mjs
