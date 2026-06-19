@@ -1160,22 +1160,28 @@
       sourceProductId: r.productId || null
     };
 
-    if (typeof window.__draftSocialPostFromReview === 'function') {
-      try {
-        window.__draftSocialPostFromReview(prefill);
-        return;
-      } catch (e) { /* fall through */ }
+    // V1 social.js was retired (T6) → social-v2 owns __draftSocialPostFromReview
+    // (it creates the draft, navigates to the social surface, and opens it in the
+    // editor). Ensure social-v2 is loaded so the hook is registered, then call it.
+    function _callDraftHook() {
+      if (typeof window.__draftSocialPostFromReview === 'function') {
+        try { window.__draftSocialPostFromReview(prefill); return true; } catch (e) { /* fall through */ }
+      }
+      return false;
     }
-
-    // Fallback path: stash prefill + navigate. social.js (W1.6) reads this on render.
-    try {
-      sessionStorage.setItem('__socialDraftPrefill', JSON.stringify(prefill));
-    } catch (_e) {}
-    if (typeof navigateTo === 'function') {
-      navigateTo('social');
-    } else {
-      window.location.hash = '#social';
+    if (window.MastAdmin && MastAdmin.loadModule) {
+      showToast('Opening Social with this review pre-filled…');
+      MastAdmin.loadModule('social-v2').then(function () {
+        if (!_callDraftHook() && typeof navigateTo === 'function') navigateTo('social');
+      }).catch(function () {
+        if (typeof navigateTo === 'function') navigateTo('social');
+      });
+      return;
     }
+    if (_callDraftHook()) return;
+    // Last-resort fallback when the module loader is unavailable: just navigate.
+    if (typeof navigateTo === 'function') navigateTo('social');
+    else window.location.hash = '#social';
     showToast('Opening Social with this review pre-filled…');
   }
 

@@ -124,6 +124,411 @@
     return null;
   }
 
+  // ====================================================================
+  // SocialBridge + its state-free write/upload/AI cores — ABSORBED from the
+  // retired V1 social.js (T6). These were DELIBERATELY built with no V1 DOM /
+  // view-state coupling so they could move here verbatim. SocialBridge is the
+  // single-sourced write path: this V2 surface (load/create/signal/markPosted/
+  // removeDraft) and the cross-module draft hooks below all go through it. The
+  // V2 surface maintains its own V2.byId/V2.rows and re-reads Firestore after
+  // each write — so the legacy in-memory `smPosts` cache the bridge still syncs
+  // is vestigial (kept verbatim, harmless) rather than load-bearing.
+  // ====================================================================
+  var smPosts = [];
+
+  function smGetUid() {
+    return currentUser ? currentUser.uid : null;
+  }
+
+  function smSyncLocal(postId, patch) {
+    var post = smPosts.find(function(p) { return p.postId === postId; });
+    if (post) Object.assign(post, patch);
+    return post;
+  }
+
+  function smExtractVideoThumbnail(file) {
+    return new Promise(function(resolve) {
+      var video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      var url = URL.createObjectURL(file);
+      video.src = url;
+      video.onloadeddata = function() {
+        video.currentTime = 0.5;
+      };
+      video.onseeked = function() {
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.min(video.videoWidth, 480);
+        canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        URL.revokeObjectURL(url);
+        resolve(dataUrl.split(',')[1]);
+      };
+      video.onerror = function() {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+    });
+  }
+
+  function smImageToBase64(file) {
+    return new Promise(function(resolve) {
+      var reader = new FileReader();
+      reader.onload = function() {
+        var img = new Image();
+        img.onload = function() {
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.min(img.width, 480);
+          canvas.height = Math.round(canvas.width * (img.height / img.width));
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          var dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          resolve(dataUrl.split(',')[1]);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function smGetVideoDuration(file) {
+    return new Promise(function(resolve) {
+      var video = document.createElement('video');
+      video.preload = 'metadata';
+      var url = URL.createObjectURL(file);
+      video.src = url;
+      video.onloadedmetadata = function() {
+        URL.revokeObjectURL(url);
+        resolve(Math.round(video.duration));
+      };
+      video.onerror = function() {
+        URL.revokeObjectURL(url);
+        resolve(null);
+      };
+    });
+  }
+
+  function smBase64ToBlob(base64, contentType) {
+    var byteChars = atob(base64);
+    var byteArrays = [];
+    for (var offset = 0; offset < byteChars.length; offset += 512) {
+      var slice = byteChars.slice(offset, offset + 512);
+      var byteNumbers = new Array(slice.length);
+      for (var i = 0; i < slice.length; i++) byteNumbers[i] = slice.charCodeAt(i);
+      byteArrays.push(new Uint8Array(byteNumbers));
+    }
+    return new Blob(byteArrays, { type: contentType });
+  }
+
+  // ------------------------------------------------------------
+  // S1 — shared upload core (no V1 DOM/state). Storage upload +
+  // thumbnail-extract + duration-probe. Video goes through the raw
+  // Storage SDK — the /uploadImage CF is base64-IMAGE-only.
+  // ------------------------------------------------------------
+  async function smUploadClipCore(file, onProgress) {
+    var uid = smGetUid();
+    if (!uid) throw new Error('Not signed in');
+    if (!file) throw new Error('No file provided');
+
+    var isVideo = (file.type || '').indexOf('video/') === 0;
+    var clipId = 'clip_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+
+    var thumbnailBase64 = isVideo
+      ? await smExtractVideoThumbnail(file)
+      : await smImageToBase64(file);
+
+    var storageRef = storage.ref('market/clips/' + uid + '/' + clipId + '/original');
+    var uploadTask = storageRef.put(file);
+    if (typeof onProgress === 'function') {
+      uploadTask.on('state_changed', function(snapshot) {
+        var total = snapshot.totalBytes || 0;
+        var pct = total ? Math.round((snapshot.bytesTransferred / total) * 100) : 0;
+        try { onProgress(pct, snapshot.bytesTransferred, total); } catch (e) { /* caller progress handler must not break upload */ }
+      });
+    }
+    await uploadTask;
+    var fileUrl = await storageRef.getDownloadURL();
+
+    var thumbnailUrl = null;
+    if (thumbnailBase64) {
+      var thumbRef = storage.ref('market/clips/' + uid + '/' + clipId + '/thumbnail.jpg');
+      await thumbRef.put(smBase64ToBlob(thumbnailBase64, 'image/jpeg'));
+      thumbnailUrl = await thumbRef.getDownloadURL();
+    }
+
+    var duration = isVideo ? await smGetVideoDuration(file) : null;
+
+    var clipData = {
+      clipId: clipId,
+      fileName: file.name,
+      thumbnailUrl: thumbnailUrl || null,
+      fileUrl: fileUrl,
+      uploadedAt: MastDB.serverTimestamp(),
+      status: 'pending',
+      fileType: isVideo ? 'video' : 'image',
+      duration: duration,
+      fileSize: file.size
+    };
+    await MastDB.market.pendingClips.set(uid, clipId, clipData);
+
+    return {
+      clipId: clipId,
+      fileUrl: fileUrl,
+      thumbnailUrl: thumbnailUrl,
+      thumbnailBase64: thumbnailBase64 || null,
+      fileType: isVideo ? 'video' : 'image',
+      duration: duration,
+      fileSize: file.size
+    };
+  }
+
+  // ------------------------------------------------------------
+  // S1 — shared caption generation (CF wrapper + template fallback).
+  // → { captions:[{style,text}], hashtags:{niche,mid,broad} }
+  // ------------------------------------------------------------
+  async function smGenerateCaptionsCore(ctx) {
+    ctx = ctx || {};
+    try {
+      var result = await firebase.functions().httpsCallable('socialAI')({
+        action: 'captions',
+        tenantId: MastDB.tenantId(),
+        treatment: ctx.treatment || null,
+        platform: ctx.platform || null,
+        productName: ctx.productName || null,
+        productPrice: ctx.productPrice || null,
+        productMaterials: ctx.productMaterials || null,
+        productCategory: ctx.productCategory || null,
+        eventName: ctx.eventName || null,
+        description: ctx.description || null
+      });
+      if (result && result.data) {
+        return {
+          captions: result.data.captions || [],
+          hashtags: result.data.hashtags || {}
+        };
+      }
+    } catch (err) {
+      console.warn('Caption generation error:', err.message);
+    }
+    var subjectText = ctx.productName || ctx.eventName || ctx.description || 'handmade art';
+    return {
+      captions: [
+        { style: 'Story', text: 'Every piece tells a story. This ' + subjectText + ' came to life in our studio — shaped by hand, with care and intention. ✨' },
+        { style: 'Product', text: 'Meet our latest creation: ' + subjectText + '. Handmade, with intention. Link in bio to bring one home. 🔗' },
+        { style: 'Urgency', text: 'This ' + subjectText + ' won\'t last long — each piece is one-of-a-kind. DM us before it\'s gone! 💨' }
+      ],
+      hashtags: {
+        niche: ['#handmade', '#artisan', '#madebyhand', '#makersgonnamake'],
+        mid: ['#shopsmall', '#supportlocal', '#handcrafted', '#smallbusiness'],
+        broad: ['#oneofakind', '#shoplocal', '#makersmovement', '#homedecor']
+      }
+    };
+  }
+
+  // ------------------------------------------------------------
+  // S6 — shoot-card core (CF wrapper + template fallback). → { bullets:[...] }
+  // ------------------------------------------------------------
+  async function smGenerateShootCardCore(ctx) {
+    ctx = ctx || {};
+    var subject = ctx.subject || 'glass art piece';
+    try {
+      var result = await firebase.functions().httpsCallable('socialAI')({
+        action: 'shootCard',
+        tenantId: MastDB.tenantId(),
+        treatment: ctx.treatmentName || ctx.treatment || null,
+        subject: subject,
+        productDetails: ctx.productDetails || '',
+        destinations: ctx.destinations || []
+      });
+      if (result && result.data && Array.isArray(result.data.bullets) && result.data.bullets.length) {
+        return { bullets: result.data.bullets };
+      }
+    } catch (err) {
+      console.warn('Shoot card generation error:', err && err.message);
+    }
+    return {
+      bullets: [
+        'Focus on the ' + subject + ' from multiple angles',
+        'Capture natural light reflecting off the glass',
+        'Film in portrait (9:16) for Reels',
+        'Keep it under 60 seconds',
+        'Start wide, then move in close'
+      ]
+    };
+  }
+
+  // ------------------------------------------------------------
+  // S6 — readiness vision check (CF wrapper, graceful null on error).
+  // ADVISORY only. opts = { treatment, thumbnailBase64 }.
+  // → { score, feedback } | null
+  // ------------------------------------------------------------
+  async function smCheckReadinessCore(opts) {
+    opts = opts || {};
+    if (!opts.thumbnailBase64) return null;
+    try {
+      var visionResult = await firebase.functions().httpsCallable('socialAI')({
+        action: 'readiness',
+        tenantId: MastDB.tenantId(),
+        treatment: opts.treatment || null,
+        thumbnailBase64: opts.thumbnailBase64
+      });
+      if (visionResult && visionResult.data && visionResult.data.score) {
+        return { score: visionResult.data.score, feedback: visionResult.data.feedback || null };
+      }
+    } catch (err) {
+      console.warn('Vision readiness check skipped:', err && err.message);
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------
+  // S6 — persist a pre-shoot shoot card as a PENDING CLIP (status
+  // 'pending-clip', no file yet). → Promise<clipId>
+  // ------------------------------------------------------------
+  async function smSaveShootCardCore(data) {
+    var uid = smGetUid();
+    if (!uid) throw new Error('Not signed in');
+    data = data || {};
+    var clipId = 'preshoot_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    var clipData = {
+      clipId: clipId,
+      fileName: 'Pre-shoot: ' + (data.subject || data.productName || data.description || 'Untitled'),
+      thumbnailUrl: null,
+      fileUrl: null,
+      uploadedAt: MastDB.serverTimestamp(),
+      status: 'pending-clip',
+      fileType: 'video',
+      treatment: data.treatment || null,
+      subjectType: data.subjectType || null,
+      productId: data.productId || null,
+      productName: data.productName || null,
+      eventName: data.eventName || null,
+      description: data.description || null,
+      shootCardBullets: Array.isArray(data.bullets) ? data.bullets : null
+    };
+    await MastDB.market.pendingClips.set(uid, clipId, clipData);
+    if (window.writeAudit) writeAudit('create', 'social-shoot-card', clipId);
+    return clipId;
+  }
+
+  window.SocialBridge = {
+    // Toggle semantics mirror smSetSignal: same score again clears it.
+    setSignal: async function(postId, score, currentScore) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      var newScore = currentScore === score ? null : score;
+      await MastDB.market.posts.update(uid, postId, {
+        signalScore: newScore,
+        scoredAt: newScore ? MastDB.serverTimestamp() : null
+      });
+      smSyncLocal(postId, { signalScore: newScore, scoredAt: newScore ? Date.now() : null });
+      return newScore;
+    },
+    update: async function(postId, patch) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      await MastDB.market.posts.update(uid, postId, patch);
+      smSyncLocal(postId, patch);
+      return patch;
+    },
+    // Flip a composer/scheduled DRAFT to the posted feed.
+    markPosted: async function(postId) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      var patch = { status: 'posted', postedAt: MastDB.serverTimestamp() };
+      await MastDB.market.posts.update(uid, postId, patch);
+      smSyncLocal(postId, { status: 'posted', postedAt: Date.now() });
+      return true;
+    },
+    // Draft deletion. Posted records are the posting HISTORY — they never
+    // delete; callers must gate on status==='draft'.
+    remove: async function(postId) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      await MastDB.remove('market/posts/' + uid + '/' + postId);
+      var idx = smPosts.findIndex(function(p) { return p.postId === postId; });
+      if (idx !== -1) smPosts.splice(idx, 1);
+      return true;
+    },
+
+    // S1 — upload a clip (video or image) + write the pending-clip doc.
+    // onProgress(pct, bytesTransferred, totalBytes) fires during upload.
+    // → Promise<{ clipId, fileUrl, thumbnailUrl, fileType, duration, fileSize }>
+    uploadClip: function(file, opts) {
+      opts = opts || {};
+      return smUploadClipCore(file, opts.onProgress);
+    },
+
+    // S1 — generate captions + hashtags via socialAI, degrading to template
+    // copy on CF error. → Promise<{ captions, hashtags }>
+    generateCaptions: function(ctx) {
+      return smGenerateCaptionsCore(ctx);
+    },
+
+    // S1 — single-sourced final write. Mints a postId, writes market/posts,
+    // flips the originating clip to processed, audits. → Promise<postId>
+    createPost: async function(postData) {
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      var postId = 'post_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      var data = {
+        postId: postId,
+        clipId: postData.clipId || null,
+        productId: postData.productId || null,
+        productName: postData.productName || null,
+        eventName: postData.eventName || null,
+        treatment: postData.treatment || null,
+        platforms: postData.platforms || [],
+        caption: postData.caption || '',
+        hashtags: postData.hashtags || null,
+        postedAt: postData.postedAt || MastDB.serverTimestamp(),
+        signalScore: postData.signalScore != null ? postData.signalScore : null,
+        scoredAt: postData.scoredAt != null ? postData.scoredAt : null,
+        contentType: postData.contentType || 'video',
+        thumbnailUrl: postData.thumbnailUrl || null,
+        description: postData.description || null
+      };
+      await MastDB.market.posts.set(uid, postId, data);
+      if (data.clipId) {
+        await MastDB.market.pendingClips.setStatus(uid, data.clipId, 'processed');
+      }
+      if (window.writeAudit) writeAudit('create', 'social-post', postId);
+      data.postedAt = Date.now();
+      smPosts.unshift(data);
+      return postId;
+    },
+
+    // S6 — pure delegator over the shootCard socialAI action.
+    // → Promise<{ bullets:[...] }>
+    generateShootCard: function(ctx) {
+      return smGenerateShootCardCore(ctx);
+    },
+
+    // S6 — pure delegator over the readiness socialAI vision action. ADVISORY
+    // only; resolves null on error / no thumbnail. → Promise<{ score, feedback } | null>
+    checkReadiness: function(opts) {
+      return smCheckReadinessCore(opts);
+    },
+
+    // S6 — single-sourced pre-shoot persist (pending-clip doc, no file yet).
+    // → Promise<clipId>
+    saveShootCard: function(data) {
+      return smSaveShootCardCore(data);
+    },
+
+    // S6 — retire a pending-clip planning doc. Flips it to 'processed'.
+    retirePendingClip: async function(clipId) {
+      if (!clipId) return false;
+      var uid = smGetUid();
+      if (!uid) throw new Error('Not signed in');
+      await MastDB.market.pendingClips.setStatus(uid, clipId, 'processed');
+      return true;
+    }
+  };
+
   MastEntity.define('social-v2', {
     label: 'Social post', labelPlural: 'Social posts', size: 'lg', route: 'social-v2',
     recordId: function (r) { return r._key || r.postId; },
@@ -258,9 +663,8 @@
   var V2 = { rows: [], byId: {}, sortKey: 'date', sortDir: 'desc', q: '', statusFilter: 'all', pendingClips: 0, pendingClipDocs: [], loaded: false };
 
   function load() {
-    // Ensure legacy social.js is loaded so window.SocialBridge (the delegated
-    // write path) exists — mirrors campaigns-v2 / CampaignsBridge.
-    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('social'); } catch (e) {} }
+    // SocialBridge (the single-sourced write path) is now defined in THIS module
+    // (absorbed from the retired V1 social.js, T6) — no cross-module load needed.
     var uid = window.firebase && firebase.auth && firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
     if (!uid) { V2.loaded = true; render(); return; }
     Promise.all([
@@ -1286,7 +1690,108 @@
     exportCsv: function () { return MastEntity.exportRows('social-v2', visibleRows(), V2.statusFilter); }
   };
 
+  // ====================================================================
+  // Cross-module draft hooks — PORTED from the retired V1 social.js (T6).
+  // Other modules ask the social surface to draft a post against a Content
+  // record (composer / engagement-inbox) or a review (customer-service). The
+  // load-bearing contract is the DRAFT WRITE — a status:'draft' market/posts
+  // record the operator finds (and can finish) in this surface; the V2 detail
+  // view already renders its `sourceContentId`. Both hooks keep their original
+  // typeof-guarded global names so existing consumers are unchanged.
+  // ====================================================================
+  function smCreateDraftPost(data) {
+    // Single-sources the draft write both hooks share. Mirrors the legacy
+    // socialOpenFromContent post shape (status:'draft'). → Promise<postId>.
+    var uid = smGetUid();
+    if (!uid) return Promise.reject(new Error('Not signed in'));
+    var postId = 'post_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    var postData = {
+      postId: postId,
+      clipId: null,
+      productId: data.productId || null,
+      productName: null,
+      eventName: null,
+      treatment: null,
+      platforms: data.platforms || ['instagram-reels'],
+      caption: data.caption || '',
+      hashtags: null,
+      postedAt: MastDB.serverTimestamp(),
+      signalScore: null,
+      scoredAt: null,
+      contentType: data.thumbnailUrl ? 'image' : 'text',
+      thumbnailUrl: data.thumbnailUrl || null,
+      description: data.description || null,
+      status: 'draft',
+      source: data.source || 'studio',
+      sourceContentId: data.sourceContentId || null,
+      sourceReviewId: data.sourceReviewId || null
+    };
+    return Promise.resolve(MastDB.market.posts.set(uid, postId, postData)).then(function () {
+      if (window.writeAudit) writeAudit('create', 'social-post', postId);
+      postData.postedAt = Date.now();
+      smPosts.unshift(postData);
+      return postId;
+    });
+  }
+
+  // composer.js + engagement-inbox.js: on publish/approve, each channel module
+  // mints its own draft attached to the Content. Fire-and-forget side effect —
+  // no navigation; refresh the list in place if this surface is mounted.
+  async function socialOpenFromContent(contentId) {
+    try {
+      var c = await MastDB.get('admin/content/' + contentId);
+      if (!c) { if (window.showToast) showToast('Content not found', true); return; }
+      var caption = (c.body || c.title || '').toString().slice(0, 2200);
+      var firstImage = (c.images && c.images.length) ? c.images[0] : null;
+      await smCreateDraftPost({
+        caption: caption,
+        thumbnailUrl: firstImage,
+        description: c.title || null,
+        source: 'composer',
+        sourceContentId: contentId
+      });
+      if (V2.loaded) load();
+    } catch (e) { console.warn('[social-v2] openFromContent', e); }
+  }
+  window.socialOpenFromContent = socialOpenFromContent;
+
+  // customer-service.js "Draft Social Post" from a review. The operator clicked
+  // expecting to land in the composer, so create the draft, navigate to the
+  // social surface, then open it in the native editor. prefill =
+  // { body, imageUrl, sourceReviewId, sourceProductId }.
+  function applySocialDraftPrefill(prefill) {
+    if (!prefill || typeof prefill !== 'object') return false;
+    if (!canEdit()) { if (window.showToast) showToast('You don\'t have permission to create social posts.', true); return false; }
+    smCreateDraftPost({
+      caption: prefill.body || '',
+      thumbnailUrl: prefill.imageUrl || null,
+      description: prefill.body ? String(prefill.body).slice(0, 120) : null,
+      productId: prefill.sourceProductId || null,
+      sourceReviewId: prefill.sourceReviewId || null,
+      source: 'review'
+    }).then(function (postId) {
+      if (typeof navigateTo === 'function') navigateTo('social');
+      // Open the freshly-created draft in the native editor once the route has
+      // mounted. fetch() reads V2.byId then falls back to MastDB.get, so this is
+      // robust against the async list reload the route setup kicks off.
+      setTimeout(function () {
+        if (!window.MastEntity) return;
+        Promise.resolve(MastEntity.get('social-v2').fetch(postId)).then(function (rec) {
+          if (rec) MastEntity.openRecord('social-v2', rec, 'edit');
+        }).catch(function () {});
+      }, 450);
+    }).catch(function (e) {
+      console.warn('[social-v2] draftFromReview', e);
+      if (window.showToast) showToast('Could not draft the post.', true);
+    });
+    return true;
+  }
+  window.__draftSocialPostFromReview = applySocialDraftPrefill;
+
+  // social-v2 owns the legacy `social` route too (V1 social.js retired, T6) —
+  // same tab + setup, so the route renders flag-independent.
+  var _socialRoute = { tab: 'socialV2Tab', setup: function () { ensureTab(); render(); load(); } };
   MastAdmin.registerModule('social-v2', {
-    routes: { 'social-v2': { tab: 'socialV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'social-v2': _socialRoute, 'social': _socialRoute }
   });
 })();

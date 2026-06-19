@@ -19605,7 +19605,6 @@ var MAST_V2_ROUTE_MAP = {
   pack: 'pack-v2', ship: 'ship-v2', rma: 'rma-v2',
   pos: 'pos-v2',
   receipts: 'receipts-v2',
-  'social': 'social-v2',
   'composer': 'composer-v2',
   'engagement-inbox': 'engagement-inbox-v2',
   'mapping': 'mapping-v2',
@@ -20888,7 +20887,6 @@ var MAST_MODULES_V = '20260618-202331-1353a6aa';
 var MODULE_MANIFEST = {
   blog: { src: 'modules/blog.js', v: '7471223ca16f', routes: ['blog'] },
   newsletter: { src: 'modules/newsletter.js', v: '1c87bcb82659', routes: ['newsletter'] },
-  social: { src: 'modules/social.js', v: 'b27d319578ec', routes: ['social'] },
   trips: { src: 'modules/trips.js', v: '6cefe29d9994', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', v: 'df3d02d649c2', routes: ['wholesale'] },
   finance: { src: 'modules/finance.js', v: '91f388f1e1f0', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
@@ -20993,11 +20991,11 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   team: { src: 'modules/team.js', v: '99ce0e5762ac', routes: ['team'] },
   students: { src: 'modules/students.js', v: '6537e0bf1bea', routes: ['students'] },
   channels: { src: 'modules/channels.js', v: '72824337aebd', routes: ['channels'] },
-  'customer-service': { src: 'modules/customer-service.js', v: '6308dcb6631e', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
+  'customer-service': { src: 'modules/customer-service.js', v: '53ad378a36ba', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
   campaigns: { src: 'modules/campaigns.js', v: '9d866794259c', routes: ['campaigns'] },
-  engagementInbox: { src: 'modules/engagement-inbox.js', v: 'e0eae6f63be6', routes: ['engagement-inbox'] },
-  composer: { src: 'modules/composer.js', v: '0289deb2bfb7', routes: ['composer'] },
+  engagementInbox: { src: 'modules/engagement-inbox.js', v: 'a6665c778030', routes: ['engagement-inbox'] },
+  composer: { src: 'modules/composer.js', v: 'bd69d41344d9', routes: ['composer'] },
   // W2.3 — Commission terms editor (admin-side; storefront accept flow is
   // separate and lives on the public side).
   // J12 — Tenant feedback on Mast audit findings (suppression management page;
@@ -21016,7 +21014,7 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   // Workflow engine — reusable gated-workflow primitive. No routes; loaded
   // on-demand by consuming surfaces (commissions, pick/ship, RMA, etc.)
   // before they render. See docs/workflow-engine-design.md.
-  'social-v2': { src: 'modules/social-v2.js', v: '0ea45601c795', routes: ['social-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
+  'social-v2': { src: 'modules/social-v2.js', v: '8a34b82ab2b1', routes: ['social-v2', 'social'] }, // native social pipeline; owns the legacy 'social' route too (V1 social.js retired, T6)
   'composer-v2': { src: 'modules/composer-v2.js', v: '80f8e8f074cd', routes: ['composer-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'engagement-inbox-v2': { src: 'modules/engagement-inbox-v2.js', v: 'ae7074515108', routes: ['engagement-inbox-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'mapping-v2': { src: 'modules/mapping-v2.js', v: '8996b35a8ba9', routes: ['mapping-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
@@ -46859,7 +46857,8 @@ function validateRequired(fields) {
 // Commissions — Extracted to modules/orders.js (lazy-loaded)
 // ============================================================
 // ============================================================
-// SOCIAL MEDIA — Extracted to modules/social.js (lazy-loaded)
+// SOCIAL MEDIA — V1 social.js RETIRED (T6); the native pipeline + SocialBridge
+// now live in modules/social-v2.js, which owns the 'social' route.
 // ============================================================
 
 

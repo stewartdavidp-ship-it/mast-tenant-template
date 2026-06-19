@@ -439,7 +439,17 @@
 
     // Kick the social + story modules into creating their own drafts
     // attached to this Content. Each module owns its own per-channel draft.
-    try { if (typeof window.socialOpenFromContent === 'function') window.socialOpenFromContent(contentId); } catch (_e) {}
+    // social.js (V1) was retired (T6) → social-v2 owns socialOpenFromContent;
+    // ensure it's loaded so the draft write reliably fires (non-blocking).
+    try {
+      if (window.MastAdmin && MastAdmin.loadModule) {
+        MastAdmin.loadModule('social-v2').then(function () {
+          if (typeof window.socialOpenFromContent === 'function') window.socialOpenFromContent(contentId);
+        }).catch(function () {});
+      } else if (typeof window.socialOpenFromContent === 'function') {
+        window.socialOpenFromContent(contentId);
+      }
+    } catch (_e) {}
     try { if (typeof window.storyOpenFromContent === 'function') window.storyOpenFromContent(contentId); } catch (_e) {}
     return contentId;
   }
