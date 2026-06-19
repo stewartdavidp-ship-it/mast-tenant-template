@@ -140,6 +140,9 @@
   "app/modules/promotions.js": {
     "hardcodedHex": 12
   },
+  "app/modules/publish-to-channel-dialog.js": {
+    "hardcodedHex": 2
+  },
   "app/modules/sales.js": {
     "nativeDialogs": 1,
     "rogueOverlays": 2,
