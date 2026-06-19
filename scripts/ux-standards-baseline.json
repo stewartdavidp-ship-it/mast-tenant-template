@@ -199,6 +199,9 @@
   "app/modules/unified-drift-dialog.js": {
     "rogueOverlays": 1
   },
+  "app/modules/variant-detail-tabs.js": {
+    "hardcodedHex": 138
+  },
   "app/modules/website.js": {
     "rogueOverlays": 1,
     "hardcodedHex": 52
