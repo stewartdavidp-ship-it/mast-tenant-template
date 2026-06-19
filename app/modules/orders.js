@@ -25,25 +25,11 @@
   var commMilestonesCache = Object.create(null);
   var _viewOrderReturnRoute = null;
 
-  // ============================================================
-  // Canonical order grand-total (DOLLARS)
-  // ============================================================
-  // Orders arrive from two writers with different money conventions:
-  // MCP/createTestOrder stamps integer-cents `totalCents`; the storefront
-  // (submitOrder) stored dollar `total` (legacy) and now also stamps `totalCents`.
-  // Some harness/MCP-seeded orders (e.g. SGTE-0187/0188) put CENTS in the dollar
-  // `total` field — reading `o.total` raw renders "$102000.00" instead of $1,020.
-  // moneyVal prefers `totalCents`/100, falling back to dollar `total` — the SAME
-  // single source of truth the orders-v2 detail and the server's
-  // orderRevenueCents normalizer use, so every surface agrees regardless of which
-  // writer produced the record. (Breakdown fields — subtotal/shipping/tax — are
-  // not reconciled here; the grand total is what these v1 surfaces display.)
-  function orderTotalDollars(o) {
-    if (!o) return 0;
-    return (window.MastUI && window.MastUI.Num)
-      ? (window.MastUI.Num.moneyVal(o, 'totalCents', 'total') || 0)
-      : (o.total || 0);
-  }
+  // orderTotalDollars (canonical order grand-total, DOLLARS) moved to
+  // shared/orders-core.js (eager) in PR1c as transitive closure of the invoice
+  // surface (markOrderInvoicePaid / buildInvoiceSection consume it). The bare
+  // orderTotalDollars(...) references in the V1 render code below resolve to
+  // window.orderTotalDollars exposed there.
 
   // ============================================================
   // Badge Style Helpers (inline colors per style guide)
@@ -72,11 +58,11 @@
   // Orders Management
   // ============================================================
 
-  function loadOrders() {
-    if (ordersLoaded) {
-      renderOrders();
-    }
-  }
+  // loadOrders moved to shared/orders-core.js (eager) in PR1c: it's bare-called
+  // by fulfillment.js / wholesale.js / the shell without loadModule('orders'),
+  // so an eager home closes that latent load-order fragility. Its renderOrders()
+  // refresh is now guarded (typeof === 'function') so it skips gracefully when
+  // the V1 orders UI isn't loaded.
 
   // getOrdersArray moved to shared/orders-core.js (eager): reads the shell
   // 'orders' cache global. Bare refs + window.getOrdersArray resolve there.
@@ -1485,309 +1471,15 @@
   // ============================================================
   // Invoice Management
   // ============================================================
-
-  function isOrderInvoiceable(o) {
-    var terms = (o.paymentTerms || '').toLowerCase();
-    var isNetTerms = terms === 'net15' || terms === 'net30' || terms === 'net60';
-    // W2c — wholesale orders from checkout.js write the discriminator as
-    // `type: 'wholesale'` (not `orderType`), so the original gate was always
-    // false on real wholesale orders and the Generate Invoice button never
-    // appeared. Accept all three field forms; no schema migration needed.
-    var isWholesale = o.isWholesale === true || o.orderType === 'wholesale' || o.type === 'wholesale';
-    var status = o.invoiceStatus;
-    var canGenerate = !status || status === 'draft';
-    return (isNetTerms || isWholesale) && canGenerate;
-  }
-
-  function getInvoiceDueDays(o) {
-    var terms = (o.paymentTerms || '').toLowerCase();
-    if (terms === 'net15') return 15;
-    if (terms === 'net60') return 60;
-    return 30;
-  }
-
-  function computeInvoiceDueDate(o) {
-    var days = getInvoiceDueDays(o);
-    var d = new Date();
-    d.setDate(d.getDate() + days);
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
-  }
-
-  function getEffectiveInvoiceStatus(o) {
-    var status = o.invoiceStatus;
-    if (status === 'sent' && o.invoiceDueDate) {
-      var dueMs = new Date(o.invoiceDueDate + 'T00:00:00Z').getTime();
-      if (Date.now() > dueMs) return 'overdue';
-    }
-    return status || null;
-  }
-
-  function invoiceStatusBadgeStyle(status) {
-    var m = {
-      draft:   'background:rgba(107,114,128,0.2);color:#9ca3af;border:1px solid rgba(107,114,128,0.35);',
-      sent:    'background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);',
-      paid:    'background:rgba(34,197,94,0.2);color:#4ade80;border:1px solid rgba(34,197,94,0.35);',
-      overdue: 'background:rgba(220,38,38,0.2);color:#f87171;border:1px solid rgba(220,38,38,0.35);'
-    };
-    return m[status] || m.draft;
-  }
-
-  async function generateInvoice(orderId) {
-    // Allow callers outside the orders module (e.g. wholesale.js viewWholesaleOrder)
-    // to invoke this without first populating the orders cache. Fetch from MastDB
-    // when missing. Only re-render the orders-tab detail when we were actually
-    // operating against the orders-tab cached copy; otherwise the caller handles
-    // its own re-render.
-    var o = orders[orderId];
-    var fromOrdersCache = !!o;
-    if (!o) {
-      try {
-        var snap = await MastDB.orders.get(orderId);
-        o = (snap && typeof snap.val === 'function') ? snap.val() : snap;
-      } catch (_e) {}
-    }
-    if (!o) { showToast('Order not found', true); return; }
-    try {
-      var now = new Date().toISOString();
-      var year = new Date().getFullYear();
-
-      var configRaw = await MastDB.get('admin/config/invoicing');
-      var config = (configRaw && typeof configRaw.val === 'function') ? (configRaw.val() || {}) : (configRaw || {});
-      var seq = typeof config.invoiceSequence === 'number' ? config.invoiceSequence : 0;
-      var nextSeq = seq + 1;
-      var invoiceNumber = 'INV-' + year + '-' + String(nextSeq).padStart(4, '0');
-
-      if (config && Object.keys(config).length > 0) {
-        await MastDB.update('admin/config/invoicing', { invoiceSequence: nextSeq });
-      } else {
-        await MastDB.set('admin/config/invoicing', { invoiceSequence: nextSeq });
-      }
-
-      var dueDate = computeInvoiceDueDate(o);
-      await MastDB.orders.update(orderId, {
-        invoiceStatus: 'draft',
-        invoiceNumber: invoiceNumber,
-        invoiceDueDate: dueDate,
-        invoiceIssuedAt: now,
-        updatedAt: now
-      });
-      o.invoiceStatus = 'draft';
-      o.invoiceNumber = invoiceNumber;
-      o.invoiceDueDate = dueDate;
-      o.invoiceIssuedAt = now;
-
-      showToast('Invoice ' + invoiceNumber + ' generated');
-      if (fromOrdersCache) renderOrderDetail(orderId);
-    } catch (err) {
-      showToast('Failed to generate invoice: ' + err.message, true);
-    }
-  }
-
-  async function sendInvoice(orderId) {
-    var o = orders[orderId];
-    if (!o || !o.invoiceNumber) return;
-    try {
-      showToast('Sending invoice ' + o.invoiceNumber + '...');
-      var now = new Date().toISOString();
-
-      // Square adapter: if the tenant uses Square as payment processor, route through
-      // Square Invoices API so the customer receives a Square-hosted payment link.
-      // Falls back to Mast-native email if Square isn't configured or the call fails.
-      var processor = 'square';
-      try { processor = (await MastDB.get('config/paymentProcessor')) || 'square'; } catch (_) {}
-
-      if (processor === 'square') {
-        try {
-          var sqResult = await firebase.functions().httpsCallable('createSquareInvoice')({
-            tenantId: MastDB.tenantId(),
-            orderId: orderId
-          });
-          if (sqResult.data && sqResult.data.success) {
-            o.invoiceStatus = 'sent';
-            o.invoiceSentAt = now;
-            o.squareInvoiceId = sqResult.data.squareInvoiceId || null;
-            o.squareInvoiceUrl = sqResult.data.squareInvoiceUrl || null;
-            showToast('Invoice ' + o.invoiceNumber + ' sent via Square — customer will receive a payment link');
-            renderOrderDetail(orderId);
-            return;
-          }
-        } catch (sqErr) {
-          console.warn('Square invoice send failed, falling back to email:', sqErr.message);
-        }
-      }
-
-      // Mast-native email fallback
-      if (o.email) {
-        try {
-          await firebase.functions().httpsCallable('testOrderEmail')({
-            orderId: orderId,
-            emailType: 'invoice',
-            tenantId: MastDB.tenantId()
-          });
-        } catch (emailErr) {
-          console.warn('Invoice email send failed (non-fatal):', emailErr.message);
-        }
-      }
-
-      await MastDB.orders.update(orderId, {
-        invoiceStatus: 'sent',
-        invoiceSentAt: now,
-        updatedAt: now
-      });
-      o.invoiceStatus = 'sent';
-      o.invoiceSentAt = now;
-
-      showToast('Invoice ' + o.invoiceNumber + ' sent to ' + (o.email || 'customer'));
-      renderOrderDetail(orderId);
-    } catch (err) {
-      showToast('Failed to send invoice: ' + err.message, true);
-    }
-  }
-
-  async function markOrderInvoicePaid(orderId) {
-    var o = orders[orderId];
-    if (!o) return;
-    try {
-      var now = new Date().toISOString();
-      var totalCents = Math.round(orderTotalDollars(o) * 100);
-      await MastDB.orders.update(orderId, {
-        invoiceStatus: 'paid',
-        invoicePaidAt: now,
-        invoicePaidAmount: totalCents,
-        updatedAt: now
-      });
-      o.invoiceStatus = 'paid';
-      o.invoicePaidAt = now;
-      o.invoicePaidAmount = totalCents;
-      showToast('Invoice marked as paid');
-      renderOrderDetail(orderId);
-    } catch (err) {
-      showToast('Error: ' + err.message, true);
-    }
-  }
-
-  async function resendInvoice(orderId) {
-    var o = orders[orderId];
-    if (!o || !o.email || !o.invoiceNumber) return;
-    try {
-      showToast('Resending invoice ' + o.invoiceNumber + '...');
-      await firebase.functions().httpsCallable('testOrderEmail')({
-        orderId: orderId,
-        emailType: 'invoice',
-        tenantId: MastDB.tenantId()
-      });
-      showToast('Invoice ' + o.invoiceNumber + ' resent to ' + o.email);
-    } catch (err) {
-      showToast('Failed to resend: ' + err.message, true);
-    }
-  }
-
-  function buildInvoiceSection(orderId) {
-    var o = orders[orderId];
-    if (!o) return '';
-
-    var effectiveStatus = getEffectiveInvoiceStatus(o);
-
-    if (!effectiveStatus) return '';
-
-    var h = '<div class="order-detail-section">';
-    h += '<div class="order-detail-section-title">Invoice</div>';
-
-    if (effectiveStatus === 'draft') {
-      // Full preview panel
-      h += '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:16px;margin-bottom:12px;">';
-
-      // Header row
-      h += '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:8px;">';
-      h += '<div>';
-      h += '<div style="font-size:1.15rem;font-weight:700;">' + esc(o.invoiceNumber || '') + '</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Issue Date: ' + formatOrderDate(o.invoiceIssuedAt || new Date().toISOString()) + '</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Due Date: ' + esc(o.invoiceDueDate || '—') + '</div>';
-      h += '</div>';
-      h += '<span class="status-badge pill" style="' + invoiceStatusBadgeStyle('draft') + '">Draft</span>';
-      h += '</div>';
-
-      // Bill To
-      var ship = o.shipping || {};
-      h += '<div style="margin-bottom:14px;">';
-      h += '<div style="font-size:0.72rem;color:var(--warm-gray-light);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Bill To</div>';
-      h += '<div style="font-size:0.85rem;">' + esc(ship.name || o.customerName || o.email || '') + '</div>';
-      if (o.email) h += '<div style="font-size:0.85rem;color:var(--warm-gray);">' + esc(o.email) + '</div>';
-      if (ship.address1) {
-        h += '<div style="font-size:0.85rem;color:var(--warm-gray);">' + esc(ship.address1) + (ship.address2 ? ', ' + esc(ship.address2) : '') + '</div>';
-        h += '<div style="font-size:0.85rem;color:var(--warm-gray);">' + esc(ship.city || '') + ', ' + esc(ship.state || '') + ' ' + esc(ship.zip || '') + '</div>';
-      }
-      h += '</div>';
-
-      // Line items
-      h += '<div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:12px;margin-bottom:12px;">';
-      h += '<div style="display:flex;gap:8px;margin-bottom:6px;font-size:0.72rem;color:var(--warm-gray-light);text-transform:uppercase;letter-spacing:0.5px;">';
-      h += '<div style="flex:1;">Item</div><div style="width:50px;text-align:center;">Qty</div><div style="width:70px;text-align:right;">Unit</div><div style="width:70px;text-align:right;">Total</div>';
-      h += '</div>';
-      (o.items || []).forEach(function(item) {
-        var qty = item.qty || 1;
-        var unitCents = item.priceCents || 0;
-        var lineCents = unitCents * qty;
-        h += '<div style="display:flex;gap:8px;padding:4px 0;font-size:0.85rem;border-bottom:1px solid rgba(255,255,255,0.05);">';
-        h += '<div style="flex:1;">' + esc(item.name) + '</div>';
-        h += '<div style="width:50px;text-align:center;">' + qty + '</div>';
-        h += '<div style="width:70px;text-align:right;">$' + (unitCents / 100).toFixed(2) + '</div>';
-        h += '<div style="width:70px;text-align:right;">$' + (lineCents / 100).toFixed(2) + '</div>';
-        h += '</div>';
-      });
-      h += '</div>';
-
-      // Totals
-      h += '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;margin-bottom:14px;">';
-      h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Subtotal: $' + (o.subtotal || 0).toFixed(2) + '</div>';
-      if (o.tax) h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Tax: $' + o.tax.toFixed(2) + '</div>';
-      if (o.shippingCost) h += '<div style="font-size:0.85rem;color:var(--warm-gray);">Shipping: $' + o.shippingCost.toFixed(2) + '</div>';
-      h += '<div style="font-weight:700;">Total: $' + orderTotalDollars(o).toFixed(2) + '</div>';
-      h += '</div>';
-
-      // Payment instructions
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray);border-top:1px solid rgba(255,255,255,0.08);padding-top:10px;">Payment due by ' + esc(o.invoiceDueDate || '—') + '</div>';
-
-      h += '</div>';
-
-      // Action buttons
-      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
-      h += '<button class="btn btn-primary" onclick="sendInvoice(\'' + esc(orderId) + '\')">Send Invoice</button>';
-      h += '<button class="btn btn-secondary" onclick="generateInvoice(\'' + esc(orderId) + '\')">Regenerate</button>';
-      h += '</div>';
-
-    } else {
-      // Summary for sent / overdue / paid
-      var rows = '';
-      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Invoice #</span><span style="font-weight:600;">' + esc(o.invoiceNumber || '—') + '</span></div>';
-      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Status</span><span class="status-badge pill" style="' + invoiceStatusBadgeStyle(effectiveStatus) + '">' + effectiveStatus + '</span></div>';
-      if (o.invoiceIssuedAt) rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Issued</span><span>' + formatOrderDate(o.invoiceIssuedAt) + '</span></div>';
-      if (o.invoiceSentAt)  rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Sent</span><span>' + formatOrderDate(o.invoiceSentAt) + '</span></div>';
-      if (o.invoiceDueDate) rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Due Date</span><span>' + esc(o.invoiceDueDate) + '</span></div>';
-      if (o.invoicePaidAt)  rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Paid</span><span style="color:#4ade80;">' + formatOrderDate(o.invoicePaidAt) + '</span></div>';
-      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Amount</span><span>$' + orderTotalDollars(o).toFixed(2) + '</span></div>';
-      if (o.squareInvoiceId) {
-        var sqLinkHtml = o.squareInvoiceUrl
-          ? '<a href="' + esc(o.squareInvoiceUrl) + '" target="_blank" rel="noopener" style="color:var(--teal);">View on Square ↗</a>'
-          : 'Square Invoice';
-        rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Via Square</span><span style="font-size:0.85rem;">' + sqLinkHtml + '</span></div>';
-      }
-
-      h += rows;
-      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">';
-      if (effectiveStatus !== 'paid') {
-        h += '<button class="btn btn-primary" onclick="markOrderInvoicePaid(\'' + esc(orderId) + '\')">Mark as Paid</button>';
-      }
-      if ((effectiveStatus === 'sent' || effectiveStatus === 'overdue') && !o.squareInvoiceId) {
-        h += '<button class="btn btn-secondary" onclick="resendInvoice(\'' + esc(orderId) + '\')">Resend Invoice</button>';
-      }
-      h += '<a class="btn btn-secondary" href="#" onclick="event.preventDefault();navigateTo(\'finance-ar\')">View in Finance AR</a>';
-      h += '</div>';
-    }
-
-    h += '</div>';
-    return h;
-  }
+  //
+  // The full invoice surface — isOrderInvoiceable, getEffectiveInvoiceStatus,
+  // invoiceStatusBadgeStyle, generateInvoice, sendInvoice, markOrderInvoicePaid,
+  // resendInvoice, buildInvoiceSection (+ the internal getInvoiceDueDays /
+  // computeInvoiceDueDate helpers) — moved to shared/orders-core.js (eager) in
+  // PR1c. generateInvoice is cross-module (wholesale.js); the rest are reached
+  // from the V1 detail screen + buildInvoiceSection's onclick handlers, which
+  // resolve to the window.* globals exposed there. Their renderOrderDetail()
+  // refreshes are guarded (typeof === 'function') in the relocated copies.
 
   // ============================================================
   // Inventory Helpers
@@ -1949,92 +1641,12 @@
   // Order Status Transitions
   // ============================================================
 
-  async function transitionOrder(orderId, newStatus) {
-    var o = orders[orderId];
-    if (!o) return;
-    var currentStatus = o.status || 'placed';
-    var valid = ORDER_VALID_TRANSITIONS[currentStatus] || [];
-    if (!valid.includes(newStatus)) {
-      showToast('Cannot transition from ' + currentStatus + ' to ' + newStatus, true);
-      return;
-    }
-
-    try {
-      var now = new Date().toISOString();
-      var updates = {};
-      updates['status'] = newStatus;
-      updates[newStatus + 'At'] = now;
-
-      // Append to statusHistory (handle both array and object formats)
-      var history = Array.isArray(o.statusHistory) ? o.statusHistory.slice() : (o.statusHistory ? Object.values(o.statusHistory) : []);
-      history.push({ status: newStatus, at: now, by: 'admin' });
-      updates['statusHistory'] = history;
-
-      // Append to fulfillmentLog for packing/shipping milestones
-      if (newStatus === 'packed' || newStatus === 'handed_to_carrier') {
-        var ffLog = Array.isArray(o.fulfillmentLog) ? o.fulfillmentLog.slice() : (o.fulfillmentLog ? Object.values(o.fulfillmentLog) : []);
-        ffLog.push({ event: newStatus, timestamp: now, userId: 'admin', method: 'manual' });
-        updates['fulfillmentLog'] = ffLog;
-      }
-
-      // On confirm: use triage function with auto-determined actions
-      if (newStatus === 'confirmed') {
-        var autoActions = (o.items || []).map(function(item) {
-          var invStatus = getItemInventoryStatus(item);
-          return { item: item, action: invStatus.status === 'stock' ? 'stock' : 'build' };
-        });
-        await triageAndConfirmOrder(orderId, autoActions);
-        renderOrderDetail(orderId);
-        return; // triageAndConfirmOrder handles all updates
-      }
-
-      await MastDB.orders.update(orderId, updates);
-      // Update local state so re-render shows new status
-      Object.keys(updates).forEach(function(k) { o[k] = updates[k]; });
-      await writeAudit('update', 'orders', orderId);
-
-      // Testing Mode event
-      emitTestingEvent('transitionOrder', { newStatus: newStatus });
-
-      // Auto-progress handed_to_carrier -> shipped
-      if (newStatus === 'handed_to_carrier') {
-        var shippedAt = new Date().toISOString();
-        var shippedUpdates = {
-          status: 'shipped',
-          shippedAt: shippedAt
-        };
-        var sh = updates['statusHistory'] || history;
-        sh.push({ status: 'shipped', at: shippedAt, by: 'system', note: 'Auto-shipped on carrier hand-off' });
-        shippedUpdates['statusHistory'] = sh;
-        var ffLog2 = (updates['fulfillmentLog'] || o.fulfillmentLog || []).slice();
-        ffLog2.push({ event: 'shipped', timestamp: shippedAt, userId: 'system', method: 'auto' });
-        shippedUpdates['fulfillmentLog'] = ffLog2;
-        await MastDB.orders.update(orderId, shippedUpdates);
-        Object.keys(shippedUpdates).forEach(function(k) { o[k] = shippedUpdates[k]; });
-
-        // Trigger inventory deduction + shipped email via cloud function
-        try {
-          await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
-        } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
-
-        showToast(o.email ? 'Order shipped — customer notified' : 'Order shipped — no customer email on file');
-        renderOrderDetail(orderId);
-        return;
-      }
-
-      // Direct transition to shipped (e.g., from packed with tracking)
-      if (newStatus === 'shipped') {
-        try {
-          await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
-        } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
-      }
-
-      showToast('Order updated to ' + updates['status']);
-      renderOrderDetail(orderId);
-    } catch (err) {
-      showToast('Error updating order: ' + err.message, true);
-    }
-  }
+  // transitionOrder (the order lifecycle state machine) moved to
+  // shared/orders-core.js (eager) in PR1c. It's bare-called by fulfillment.js
+  // (staying) WITHOUT loadModule('orders'), so an eager home closes that latent
+  // load-order fragility. Its three renderOrderDetail() refreshes are now guarded
+  // (typeof === 'function') so they skip gracefully when the V1 orders UI isn't
+  // loaded (the default V2 mode). Bare refs + window.transitionOrder resolve there.
 
   // The inventory write cluster (_bumpStock + reserveInventory / releaseInventory /
   // pullFromStock) and createProductionRequests moved to shared/orders-core.js
@@ -5689,7 +5301,10 @@
   // orderStatusBadgeStyle, etsySourceBadgeStyle, getOrderDisplayNumber,
   // formatOrderDate, formatOrderDateTime, getOrderItemsLabel, renderOrderProgress
   // are now exported by shared/orders-core.js (eager).
-  window.loadOrders = loadOrders;
+  // loadOrders + transitionOrder + the invoice surface (isOrderInvoiceable /
+  // getEffectiveInvoiceStatus / invoiceStatusBadgeStyle / generateInvoice /
+  // sendInvoice / markOrderInvoicePaid / resendInvoice / buildInvoiceSection) +
+  // orderTotalDollars are now exported by shared/orders-core.js (eager) — PR1c.
   window.setOrderFilter = setOrderFilter;
   window.toggleOrdersBulkSelect = toggleOrdersBulkSelect;
   window.toggleOrdersBulkSelectAll = toggleOrdersBulkSelectAll;
@@ -5729,7 +5344,6 @@
   window.openTriageDialog = openTriageDialog;
   window.updateTriageSummary = updateTriageSummary;
   window.executeTriageConfirm = executeTriageConfirm;
-  window.transitionOrder = transitionOrder;
   window.packAndNavigate = async function(orderId) {
     await transitionOrder(orderId, 'packing');
     // Navigate to Pack Queue if Ship module is active
@@ -6105,14 +5719,6 @@
   window.completeRma = completeRma;
   window.overrideRmaRefund = overrideRmaRefund;
   window.rmaBadgeStyle = rmaBadgeStyle;
-  window.isOrderInvoiceable = isOrderInvoiceable;
-  window.getEffectiveInvoiceStatus = getEffectiveInvoiceStatus;
-  window.invoiceStatusBadgeStyle = invoiceStatusBadgeStyle;
-  window.generateInvoice = generateInvoice;
-  window.sendInvoice = sendInvoice;
-  window.markOrderInvoicePaid = markOrderInvoicePaid;
-  window.resendInvoice = resendInvoice;
-  window.buildInvoiceSection = buildInvoiceSection;
 
   // ============================================================
   // Ask AI registration (MastAskAi page registry)
