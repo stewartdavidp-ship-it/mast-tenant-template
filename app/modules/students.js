@@ -55,6 +55,13 @@
   };
   function sanitizeWaiverHtml(html) {
     if (!html) return '';
+    // Prefer the standalone MastSanitize core (Track 7): identical allow-list +
+    // URL/on*/scheme stripping to MastUI.sanitizeHtml, plus a safe-src <img> arm
+    // (admin-authored waiver text may embed a logo; safe-src-guarded → no XSS
+    // delta). MastUI is the fallback; DOMPurify/escape stay below as last resorts.
+    if (window.MastSanitize && typeof window.MastSanitize.sanitizeHtml === 'function') {
+      return window.MastSanitize.sanitizeHtml(html);
+    }
     if (window.MastUI && typeof window.MastUI.sanitizeHtml === 'function') {
       return window.MastUI.sanitizeHtml(html);
     }

@@ -129,6 +129,12 @@ jobs:
       # modules adopt window.MastFormat / window.MastExport. New files born clean (0).
       - name: Local money/date formatting ratchet
         run: node scripts/lint-no-local-fmt.js
+      # Track-7 unsanitized-sink ratchet: per-module count of tenant rich-text fields
+      # (`.body`/`.bodyHtml`/`.description`/`.waiver*`) assigned to innerHTML WITHOUT a
+      # sanitize call may only shrink as sinks route through window.MastSanitize. New
+      # files born clean (0). Targeted (NOT the ~888 admin-trusted sinks).
+      - name: Unsanitized tenant-content sink ratchet
+        run: node scripts/lint-no-unsanitized-sink.js
       # Unit tests: the shared engines (mast-io / mast-ui / mast-entity — ~63 pure-helper
       # assertions: CSV formula-injection guard, money/date formatting, the schema engine)
       # plus the finance dollars-vs-cents normalizer (the ~27x MTD-revenue regression guard,

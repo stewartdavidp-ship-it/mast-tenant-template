@@ -85,4 +85,27 @@ t('lint-unbounded-read: bounded list with { limit } passes', () => {
   assert.strictEqual(code, 0);
 });
 
+// ---- Gate 4: unsanitized tenant-content innerHTML (Track 7) ---------------
+t('lint-no-unsanitized-sink: clean tree passes', () => {
+  assert.strictEqual(runGate('lint-no-unsanitized-sink.js'), 0);
+});
+t('lint-no-unsanitized-sink: NEW raw `.innerHTML = post.body` fails', () => {
+  const code = withFixture('app/modules/__lint_fixture__.js',
+    "var el = document.getElementById('x');\nel.innerHTML = post.body;\n",
+    () => runGate('lint-no-unsanitized-sink.js'));
+  assert.strictEqual(code, 1);
+});
+t('lint-no-unsanitized-sink: sanitized body via MastSanitize passes', () => {
+  const code = withFixture('app/modules/__lint_fixture__.js',
+    "var el = document.getElementById('x');\nel.innerHTML = MastSanitize.sanitizeHtml(post.body);\n",
+    () => runGate('lint-no-unsanitized-sink.js'));
+  assert.strictEqual(code, 0);
+});
+t('lint-no-unsanitized-sink: static label containing "waiver" passes (not a property read)', () => {
+  const code = withFixture('app/modules/__lint_fixture__.js',
+    "var el = document.getElementById('x');\nel.innerHTML = '<h2>Waivers & clearances</h2>';\n",
+    () => runGate('lint-no-unsanitized-sink.js'));
+  assert.strictEqual(code, 0);
+});
+
 console.log('\n' + pass + ' passed');

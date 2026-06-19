@@ -778,6 +778,11 @@
   // and inline style/class, so the native editor emits formatting as TAGS
   // (<b>/<i>/<u>/<h2>\u2026) via execCommand styleWithCSS=false.
   function blogCanonicalSanitize(html) {
+    // Prefer the standalone MastSanitize core (Track 7): same allow-list + URL
+    // policy as MastUI.sanitizeHtml, plus safe-src <img> (raster/webp data URIs +
+    // safe URLs) — blog bodies carry inline images. MastUI is the fallback for any
+    // surface that loads before the sanitizer core; bare-escape is the last resort.
+    if (window.MastSanitize && typeof MastSanitize.sanitizeHtml === 'function') return MastSanitize.sanitizeHtml(html);
     if (window.MastUI && typeof MastUI.sanitizeHtml === 'function') return MastUI.sanitizeHtml(html);
     return String(html == null ? '' : html).replace(/[<>]/g, function (c) { return c === '<' ? '&lt;' : '&gt;'; });
   }

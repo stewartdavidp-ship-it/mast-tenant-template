@@ -834,8 +834,10 @@
       try {
         var cd = ev.clipboardData || window.clipboardData; if (!cd) return;
         var html = cd.getData('text/html');
+        var sanFn = (window.MastSanitize && MastSanitize.sanitizeHtml) ? MastSanitize.sanitizeHtml
+          : ((window.MastUI && MastUI.sanitizeHtml) ? MastUI.sanitizeHtml : null);
         var clean = html
-          ? ((window.MastUI && MastUI.sanitizeHtml) ? MastUI.sanitizeHtml(html) : esc(cd.getData('text/plain') || ''))
+          ? (sanFn ? sanFn(html) : esc(cd.getData('text/plain') || ''))
           : esc(cd.getData('text/plain') || '').replace(/\n/g, '<br>');
         ev.preventDefault();
         document.execCommand('insertHTML', false, clean);

@@ -222,6 +222,15 @@
        synchronously. Not yet adopted (next PR).
        ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
   <script src="../shared/mast-export.js?v=876e1d5d38f3"></script>
+  <!-- Canonical HTML sanitizer core (Track 7). window.MastSanitize.sanitizeHtml —
+       a dependency-free, pure home for the allow-list sanitizer that otherwise
+       lives only inside the MastUI engine (MastUI.sanitizeHtml). SUPERSET of that
+       copy: also allows safe-src <img> (raster/webp data URIs + safe URLs), which
+       the storefront-bound provenance surfaces (blog body, waiver text, product
+       copy) carry. Eager (peer of MastUI) so the write-boundary sinks can call it
+       synchronously without load-order risk.
+       ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
+  <script src="../shared/mast-sanitize.js?v=38018e684f41"></script>
   <!-- Lazy CDN loaders (Track 3). window.ensurePapa()/ensureXlsx() inject
        papaparse@5 / xlsx@0.18.5 on FIRST import/export use instead of eagerly on
        every admin boot (xlsx@0.18.5 carries known CVEs; both are import/export-only).
@@ -20877,7 +20886,7 @@ var MAST_MODULES_V = '20260618-202331-1353a6aa';
 // Routes listed here will be lazy-loaded when first navigated to.
 // Populated as modules are extracted in future sessions.
 var MODULE_MANIFEST = {
-  blog: { src: 'modules/blog.js', v: '206f0298b6af', routes: ['blog'] },
+  blog: { src: 'modules/blog.js', v: '7471223ca16f', routes: ['blog'] },
   newsletter: { src: 'modules/newsletter.js', v: '1c87bcb82659', routes: ['newsletter'] },
   social: { src: 'modules/social.js', v: 'b27d319578ec', routes: ['social'] },
   trips: { src: 'modules/trips.js', v: '6cefe29d9994', routes: ['trips'] },
@@ -20939,13 +20948,13 @@ var MODULE_MANIFEST = {
   'stories-v2': { src: 'modules/stories-v2.js', v: '9fc8b7bf3fc6', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
   'jobs-v2': { src: 'modules/jobs-v2.js', v: '0fc65a643e5a', routes: ['jobs-v2'] }, // UI-redesign conversion: Jobs (production) B1 scaffold — list + read-only detail (flag-gated, side-by-side)
   'cs-members-v2': { src: 'modules/cs-members-v2.js', v: '0d444b855147', routes: ['cs-members-v2'] }, // UI-redesign conversion: CS members read detail (flag-gated)
-  'blog-v2': { src: 'modules/blog-v2.js', v: 'c67056f1696e', routes: ['blog-v2'] }, // UI-redesign conversion: blog posts read detail (flag-gated)
+  'blog-v2': { src: 'modules/blog-v2.js', v: '9eb94b39b020', routes: ['blog-v2'] }, // UI-redesign conversion: blog posts read detail (flag-gated)
   'sales-events-v2': { src: 'modules/sales-events-v2.js', v: '058614e335dd', routes: ['sales-events-v2'] }, // UI-redesign conversion: sales events read detail (flag-gated)
   'consignments-v2': { src: 'modules/consignments-v2.js', v: 'ea535cfa9490', routes: ['consignments-v2'] }, // UI-redesign conversion: consignment placements read detail (flag-gated)
   'sessions-v2': { src: 'modules/sessions-v2.js', v: '401940e1fe7a', routes: ['sessions-v2'] }, // UI-redesign conversion: class sessions read detail (flag-gated)
   'inquiries-v2': { src: 'modules/inquiries-v2.js', v: '6720327c5b26', routes: ['inquiries-v2'] }, // UI-redesign conversion: inquiries/leads read detail (flag-gated)
   'students-v2': { src: 'modules/students-v2.js', v: 'bb14cec82b0c', routes: ['students-v2'] }, // UI-redesign conversion: students roster (read-focused Faceted Record)
-  'students-config-v2': { src: 'modules/students-config-v2.js', v: '1878c9a1909a', routes: ['students-config-v2'] }, // UI-redesign conversion: tenant Student SETTINGS hub (waiver templates / clearance types / business documents) — finishes retiring legacy #students config view-tabs
+  'students-config-v2': { src: 'modules/students-config-v2.js', v: '39b2e4a9dc96', routes: ['students-config-v2'] }, // UI-redesign conversion: tenant Student SETTINGS hub (waiver templates / clearance types / business documents) — finishes retiring legacy #students config view-tabs
   'galleries-v2': { src: 'modules/galleries-v2.js', v: '0c19197c9bb5', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
   'instructors-v2': { src: 'modules/instructors-v2.js', v: '7900ac7fc6b7', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
   'wholesale-v2': { src: 'modules/wholesale-v2.js', v: '0a9c019fb163', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
@@ -20982,7 +20991,7 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   cart: { src: 'modules/cart.js', v: 'd05e7845704f', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'ec2784aaf153', routes: ['studio'] },
   team: { src: 'modules/team.js', v: '99ce0e5762ac', routes: ['team'] },
-  students: { src: 'modules/students.js', v: 'fd6a42c0909e', routes: ['students'] },
+  students: { src: 'modules/students.js', v: '6537e0bf1bea', routes: ['students'] },
   channels: { src: 'modules/channels.js', v: '72824337aebd', routes: ['channels'] },
   'customer-service': { src: 'modules/customer-service.js', v: '6308dcb6631e', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
