@@ -152,4 +152,5 @@ jobs:
           node test/cache-bust.test.js &&
           node test/format-goldens.test.js &&
           node test/mast-format.test.js &&
-          node test/mast-export.test.js
+          node test/mast-export.test.js &&
+          node test/mast-sanitize.test.js
