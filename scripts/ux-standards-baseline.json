@@ -154,6 +154,9 @@
     "rogueOverlays": 2,
     "hardcodedHex": 110
   },
+  "app/modules/orders-v2.js": {
+    "hardcodedHex": 1
+  },
   "app/modules/procurement.js": {
     "hardcodedHex": 3
   },

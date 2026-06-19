@@ -19571,7 +19571,7 @@ window.getRouteParams = function() { return currentRouteParams || {}; };
 // localStorage so it survives reloads; flipping reloads the page so the
 // flag-gated v2 modules (which read mastUiRedesign at load) register cleanly.
 var MAST_V2_ROUTE_MAP = {
-  orders: 'orders-v2', customers: 'customers-v2',
+  customers: 'customers-v2',
   trips: 'trips-v2', procurement: 'procurement-v2',
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', 'cs-surveys': 'cs-surveys-v2', terms: 'terms-v2', wallet: 'wallet-v2',
@@ -20903,8 +20903,8 @@ var MODULE_MANIFEST = {
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
   contacts: { src: 'modules/contacts.js', v: 'fd8ca77af153', routes: ['contacts'] },
   customers: { src: 'modules/customers.js', v: '8a5680c39345', routes: ['customers'] },
-  orders: { src: 'modules/orders.js', v: 'fce4649b30d3', routes: ['orders', 'rma'] }, // 'commissions' route ABSORBED into commissions-v2 (T6 PR2): the commission UI + CommissionsBridge were absorbed there, which now owns the bare #commissions route directly (no MAST_V2_ROUTE_MAP remap).
-  'orders-v2': { src: 'modules/orders-v2.js', v: '9a955e0a06b8', routes: ['orders-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
+  orders: { src: 'modules/orders.js', v: '0ccb0cffafae', routes: ['rma'] }, // 'orders' route ABSORBED into orders-v2 (T6 PR3): OrdersBridge was absorbed there, which now owns the bare #orders route directly (no MAST_V2_ROUTE_MAP remap). 'commissions' was absorbed into commissions-v2 (PR2). This file now serves only the legacy #rma surface + dashboard cards (deleted in PR4).
+  'orders-v2': { src: 'modules/orders-v2.js', v: '6e4fcc19ce9d', routes: ['orders-v2', 'orders'] }, // Orders surface (UI-redesign). Owns the bare #orders route (T6 PR3 — absorbed OrdersBridge from orders.js).
   'customers-v2': { src: 'modules/customers-v2.js', v: '4b5d4e9c26c1', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: '9bd9e2838f6d', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
   'calendar-v2': { src: 'modules/calendar-v2.js', v: '37194dc1a8b0', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)

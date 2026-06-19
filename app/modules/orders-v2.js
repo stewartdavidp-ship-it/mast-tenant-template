@@ -533,14 +533,12 @@
     if (pane && rec) { pane.innerHTML = renderEmailPane(rec, orderId); loadEmailHistory(orderId); }
   }
 
-  // Ensure the legacy orders module (which defines window.OrdersBridge) is loaded
-  // before an action fires — the twin may open an order before the #orders route
-  // has ever run. Cached, so this is cheap on repeat.
+  // window.OrdersBridge is now defined in THIS module's IIFE (absorbed from
+  // orders.js in T6 PR3 — orders-v2 is the live Orders surface and owns the
+  // write bridge). It's assigned synchronously at module load, so it is always
+  // present before any action handler fires. Kept as a Promise-returning helper
+  // so the call sites (then-chains) are untouched.
   function ensureBridge() {
-    if (window.OrdersBridge) return Promise.resolve(window.OrdersBridge);
-    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
-      return MastAdmin.loadModule('orders').then(function () { return window.OrdersBridge || null; });
-    }
     return Promise.resolve(window.OrdersBridge || null);
   }
 
@@ -1111,9 +1109,244 @@
     }
   };
 
-  // ── Register the side-by-side route ─────────────────────────────────
+  // ============================================================
+  // OrdersBridge — data-object entry to the SAME order write cores
+  // ============================================================
+  //
+  // Orders is the DEFAULT admin screen and the orders-v2 redesign twin (later
+  // PRs) is a Process surface that must NOT reimplement the inventory /
+  // production-request / refund / cancellation / note logic — a second copy
+  // would drift from the legacy detail screen on the most-trafficked surface.
+  // This bridge exposes those write actions parameterized by data (the legacy
+  // detail handlers read the form DOM, so they can't be called with an object).
+  // It mirrors window.CommissionsBridge / window.ProductionBridge: thin,
+  // additive, delegates to the shared cores extracted above. It changes NO
+  // behavior on the legacy surface — the legacy detail handlers now call the
+  // same cores, so V1 and V2 share ONE byte-identical Firestore write path.
+  //
+  // The cores read the live record from the global `orders` cache (keyed by
+  // _key — the order id). When the twin drives the flow, the legacy orders
+  // listener may not have populated that cache, so each bridge method seeds it
+  // from the supplied record (or a fresh single-record fetch) before calling
+  // the core. Refund (PR5) is the one bridge method that does NOT touch an
+  // orders.js core — money movement is the CF's job, so issueRefund delegates
+  // straight to the hardened transitionRma CF (create intent RMA → drive the
+  // lifecycle → complete with refundAllocation), and the CF keeps its separate
+  // hasPermission('rma','approve') server gate. There is no extra RBAC gate
+  // inside the bridge: the twin gates can('orders','edit') / can('rma','approve')
+  // before invoking, matching the CommissionsBridge model.
+  function _ordersBridgeSeed(orderId, record) {
+    if (record && typeof record === 'object') {
+      var prev = orders[orderId] || {};
+      orders[orderId] = Object.assign({}, prev, record, { _key: orderId });
+      return Promise.resolve(orders[orderId]);
+    }
+    if (orders[orderId]) return Promise.resolve(orders[orderId]);
+    return Promise.resolve(MastDB.orders.get(orderId)).then(function (o) {
+      orders[orderId] = Object.assign({ _key: orderId }, o || {});
+      return orders[orderId];
+    });
+  }
+
+  window.OrdersBridge = {
+    // triageConfirm(orderId, itemActions, record?) → void. itemActions carries
+    // the per-item source choices the legacy triage DOM used to supply:
+    // [{ item, action:'stock'|'build' }]. Applies per-item fulfillment source,
+    // reserveInventory for stock items, createProductionRequests (admin/buildJobs
+    // status:'pending', links fulfillment.{ffKey}.buildJobId) for build items,
+    // sets status→pack|building, writes statusHistory, audits. Delegates to the
+    // pre-existing DOM-free core triageAndConfirmOrder (which the legacy
+    // executeTriageConfirm also calls after its DOM read).
+    triageConfirm: function (orderId, itemActions, record) {
+      return _ordersBridgeSeed(orderId, record).then(function () { return triageAndConfirmOrder(orderId, itemActions); });
+    },
+    // cancelOrder(orderId, reason, record?) → void. reason replaces the legacy
+    // #cancelReason DOM read. Releases committed inventory (variant-aware),
+    // cancels open admin/buildJobs reqs (pending/assigned→cancelled), writes
+    // cancelledAt/cancelReason, MastFlow transition to 'closed' (force), and
+    // auto-creates the CS ticket. Delegates to _cancelOrderCore.
+    cancelOrder: function (orderId, reason, record) {
+      return _ordersBridgeSeed(orderId, record).then(function () { return _cancelOrderCore(orderId, reason); });
+    },
+    // addNote(orderId, text, record?) → void. text replaces the legacy
+    // #orderNoteInput DOM read. Shape-aware notes write (map shape preserved for
+    // tenant-MCP orders, else array append) + audit. Delegates to _addOrderNoteCore.
+    addNote: function (orderId, text, record) {
+      return _ordersBridgeSeed(orderId, record).then(function () { return _addOrderNoteCore(orderId, text); });
+    },
+    // sendEmail(orderId, opts) → CF result. Thin pass-through over the EXISTING
+    // order-email CFs (no new logic). opts.emailType present → templated
+    // testOrderEmail; else opts.subject+opts.body → sendCustomOrderEmail. Returns
+    // the httpsCallable result (result.data.sentTo). Throws on transport error.
+    sendEmail: function (orderId, opts) {
+      opts = opts || {};
+      var tenantId = MastDB.tenantId();
+      if (opts.emailType) {
+        return firebase.functions().httpsCallable('testOrderEmail')({
+          orderId: orderId,
+          emailType: opts.emailType,
+          tenantId: tenantId
+        });
+      }
+      return firebase.functions().httpsCallable('sendCustomOrderEmail')({
+        orderId: orderId,
+        subject: opts.subject,
+        body: opts.body,
+        tenantId: tenantId
+      });
+    },
+    // listEmails(orderId) → [email] sorted newest-first (read-only). Thin
+    // pass-through over MastDB.emails.queryByOrder, normalizing the RTDB
+    // DataSnapshot / Firestore-map / array shapes the same way loadOrderEmails
+    // does for render.
+    listEmails: function (orderId) {
+      return Promise.resolve(MastDB.emails.queryByOrder(orderId)).then(function (snap) {
+        var emails = [];
+        if (snap && typeof snap.forEach === 'function' && typeof snap.val === 'function' && !Array.isArray(snap)) {
+          snap.forEach(function (child) { var e = child.val() || {}; e._key = child.key; emails.push(e); });
+        } else if (Array.isArray(snap)) {
+          snap.forEach(function (e, i) { if (e && typeof e === 'object') { if (!e._key) e._key = 'idx_' + i; emails.push(e); } });
+        } else if (snap && typeof snap === 'object') {
+          Object.keys(snap).forEach(function (key) { var e = snap[key]; if (e && typeof e === 'object') { e._key = key; emails.push(e); } });
+        }
+        emails.sort(function (a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+        return emails;
+      });
+    },
+    // bulkMarkShipped(keys) → { ok, fail }. Wired in PR3 to BOTH the legacy bulk
+    // handler (bulkOrdersMarkShipped) and the orders-v2 twin's bulk bar, so bulk
+    // mark-shipped runs FULL ship side-effects — statusHistory + onOrderShipped
+    // inventory deduction + customer email — instead of the bare status flip the
+    // legacy bulk path used to do (the latent V1 bug). Delegates per-row to the
+    // same _markOrderShippedCore the detail surface uses. Etsy-skip / confirm
+    // prompts stay on the caller (UI concern), matching exportCsv staying in
+    // the twin (MastEntity.exportRows).
+    bulkMarkShipped: function (keys) {
+      keys = keys || [];
+      var ok = 0, fail = 0;
+      return keys.reduce(function (chain, orderId) {
+        return chain.then(function () {
+          return _ordersBridgeSeed(orderId).then(function () { return _markOrderShippedCore(orderId); })
+            .then(function () { ok++; })
+            .catch(function () { fail++; });
+        });
+      }, Promise.resolve()).then(function () { return { ok: ok, fail: fail }; });
+    },
+    // bulkCancel(keys, reason?) → { ok, fail }. Wired in PR3 to BOTH the legacy
+    // bulk handler (bulkOrdersCancel) and the orders-v2 twin's bulk bar.
+    // Delegates per-row to the SAME _cancelOrderCore the detail surface uses, so
+    // bulk cancellation runs FULL side effects (inventory release, buildJobs
+    // cancel, MastFlow transition, CS ticket) instead of the bare status flip the
+    // legacy bulk path used to do. Confirm + reason prompts stay on the caller.
+    bulkCancel: function (keys, reason) {
+      keys = keys || [];
+      var ok = 0, fail = 0;
+      return keys.reduce(function (chain, orderId) {
+        return chain.then(function () {
+          return _ordersBridgeSeed(orderId).then(function () { return _cancelOrderCore(orderId, reason || ''); })
+            .then(function () { ok++; })
+            .catch(function () { fail++; });
+        });
+      }, Promise.resolve()).then(function () { return { ok: ok, fail: fail }; });
+    },
+    // issueRefund(orderId, { amountCents, method, reason }, record?) → CF result.
+    // The single native "issue a refund for this order" path for orders-v2 PR5.
+    // MONEY MOVES ONLY inside transitionRma (action:'complete') — this bridge does
+    // NO client money-write and NEVER persists a refund amount client-side. It is
+    // a pure delegator: it (1) creates the refund-INTENT RMA record (admin/rma/{id}
+    // — the same NON-money record saveNewRma writes, status:'requested', items:[]
+    // so completion is a clean write-off with no inventory restock), then (2) drives
+    // the RMA through its server-side lifecycle to the only state from which the CF
+    // will issue money — approve → shipped-back → received → inspect → complete —
+    // passing the requested refundAllocation to the FINAL complete call. The CF
+    // (#302, hardened FOR THIS) validates the methods and CAPS the total at the
+    // RMA's authorized amount (never above the order total), and itself flips the
+    // order status to 'refunded'/'partially_returned'. Server gate is
+    // hasPermission('rma','approve') on the approve transition (the caller also
+    // gates can/'rma','approve' before invoking); the bridge has no internal RBAC.
+    // Returns { rmaId, result } where result is the final complete CF response.
+    issueRefund: function (orderId, opts, record) {
+      opts = opts || {};
+      var method = opts.method === 'store-credit' ? 'store-credit' : 'credit-card';
+      var amountCents = Math.round(Number(opts.amountCents) || 0);
+      if (!Number.isFinite(amountCents) || amountCents < 0) {
+        return Promise.reject(new Error('Invalid refund amount'));
+      }
+      var tenantId = MastDB.tenantId();
+      var fns = firebase.functions();
+      var rmaId = 'rma_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      // The intent record mirrors saveNewRma exactly (no money). refundMethod uses
+      // the legacy store_credit/original_payment vocabulary the RMA record speaks;
+      // the CF maps it. refundAmountCents is the AUTHORIZED ceiling the CF caps to.
+      var resolvedRefundMethod = method === 'store-credit' ? 'store_credit' : 'original_payment';
+      function step(action, payload) {
+        return fns.httpsCallable('transitionRma')(Object.assign({
+          tenantId: tenantId, rmaId: rmaId, action: action
+        }, payload ? { payload: payload } : {})).then(function (res) {
+          var d = res && res.data;
+          if (d && d.success === false) {
+            throw new Error((d && d.error) || ('transitionRma ' + action + ' failed'));
+          }
+          return res;
+        });
+      }
+      return _ordersBridgeSeed(orderId, record).then(function (o) {
+        var nowIso = new Date().toISOString();
+        var rec = {
+          type: 'refund',
+          originOrderId: orderId,
+          orderId: orderId,
+          orderNumber: getOrderDisplayNumber(o || { orderId: orderId }),
+          customerEmail: (o && (o.email || o.customerEmail)) || '',
+          customerUid: (o && (o.customerId || o.uid)) || null,
+          uid: (o && (o.customerId || o.uid)) || null,
+          reason: (opts.reason || '').trim(),
+          refundMethod: resolvedRefundMethod,
+          refundAmountCents: amountCents,
+          restockInventory: false,
+          status: 'requested',
+          items: [],
+          requestedAt: nowIso,
+          createdAt: nowIso,
+          createdBy: 'operator',
+          source: 'orders-v2-refund'
+        };
+        // NON-money intent write (an RMA ticket), identical in kind to saveNewRma.
+        return MastDB.set('admin/rma/' + rmaId, rec);
+      })
+        // Drive the lifecycle to 'inspected' (the only state the CF lets 'complete'
+        // issue money from). Each transition is a server-validated state change with
+        // NO refund movement until the final 'complete'.
+        .then(function () { return step('approve'); })
+        .then(function () { return step('mark-shipped-back'); })
+        .then(function () { return step('mark-received'); })
+        .then(function () { return step('inspect', { result: 'pass', notes: 'Refund issued from order detail (orders-v2).' }); })
+        // The ONLY money movement: the CF validates method + caps amount, issues
+        // store credit / queues the card refund, and sets the order to 'refunded'.
+        .then(function () {
+          return step('complete', {
+            disposition: 'write-off',
+            notes: (opts.reason || '').trim(),
+            refundAllocation: [{ method: method, amountCents: amountCents }]
+          });
+        })
+        .then(function (res) { return { rmaId: rmaId, result: res && res.data }; });
+    }
+  };
+
+  // ── Register the route ──────────────────────────────────────────────
+  function ordersSetup() { ensureTab(); render(); load(); }
+
   MastAdmin.registerModule('orders-v2', {
-    routes: { 'orders-v2': { tab: 'ordersV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: {
+      'orders-v2': { tab: 'ordersV2Tab', setup: ordersSetup },
+      // T6 PR3: orders-v2 now owns the bare #orders route. The legacy orders.js
+      // list/detail/triage UI is retired from the route; its OrdersBridge write
+      // surface was absorbed above. The canonical Orders screen resolves HERE for
+      // all users — no MAST_V2_ROUTE_MAP remap (mirrors commissions-v2 / team-v2
+      // owning their bare routes after the absorb-first cut).
+      'orders': { tab: 'ordersV2Tab', setup: ordersSetup }
+    }
   });
 
   // ── Ask AI: hydrate the open order record ────────────────────────────────────
