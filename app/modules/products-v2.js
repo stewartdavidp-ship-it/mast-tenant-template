@@ -2704,7 +2704,7 @@
       st.step = Math.max(1, Math.min(3, st.step + dir));
       render();
     }
-    function pickFile(input) {
+    async function pickFile(input) {
       if (!st) return;
       var file = input && input.files && input.files[0];
       if (!file) return;
@@ -2719,7 +2719,9 @@
         st.mappings = window.MakerProductBridge.productAutoDetectMappings(st.headers);
         render();
       }
-      if (['xlsx', 'xls'].indexOf(ext) >= 0 && window.XLSX) {
+      if (['xlsx', 'xls'].indexOf(ext) >= 0) {
+        // SheetJS lazy-loaded on first import use (Track 3).
+        try { await window.ensureXlsx(); } catch (err) { MastAdmin.showToast('Failed to load spreadsheet parser', true); return; }
         var r = new FileReader();
         r.onload = function (e) {
           try {
@@ -2731,7 +2733,9 @@
           } catch (err) { MastAdmin.showToast('Failed to parse file: ' + err.message, true); }
         };
         r.readAsArrayBuffer(file);
-      } else if (window.Papa) {
+      } else {
+        // PapaParse lazy-loaded on first import use (Track 3).
+        try { await window.ensurePapa(); } catch (err) { MastAdmin.showToast('Failed to load CSV parser', true); return; }
         Papa.parse(file, {
           complete: function (res) {
             if (!res.data || res.data.length < 2) { MastAdmin.showToast('File has no data rows', true); return; }
@@ -2739,7 +2743,7 @@
           },
           error: function (err) { MastAdmin.showToast('Failed to parse CSV: ' + err.message, true); }
         });
-      } else { MastAdmin.showToast('CSV parser unavailable', true); }
+      }
     }
     function mappedRows() {
       var defaults = { defaultCategory: st.defaultCategory };

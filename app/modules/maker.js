@@ -6530,7 +6530,7 @@
     return String(s).replace(/<[^>]*>/g, '').trim();
   }
 
-  function parseFileInput(fileInput) {
+  async function parseFileInput(fileInput) {
     var file = fileInput.files[0];
     if (!file) return;
 
@@ -6544,7 +6544,8 @@
 
     var ext = file.name.split('.').pop().toLowerCase();
     if (['xlsx', 'xls'].indexOf(ext) >= 0) {
-      // SheetJS for Excel
+      // SheetJS for Excel — lazy-loaded on first import use (Track 3).
+      try { await window.ensureXlsx(); } catch (err) { showToast('Failed to load spreadsheet parser', 'error'); return; }
       var reader = new FileReader();
       reader.onload = function(e) {
         try {
@@ -6569,7 +6570,8 @@
       };
       reader.readAsArrayBuffer(file);
     } else {
-      // PapaParse for CSV
+      // PapaParse for CSV — lazy-loaded on first import use (Track 3).
+      try { await window.ensurePapa(); } catch (err) { showToast('Failed to load CSV parser', 'error'); return; }
       Papa.parse(file, {
         complete: function(results) {
           if (!results.data || results.data.length < 2) { showToast('File has no data rows', 'error'); return; }
