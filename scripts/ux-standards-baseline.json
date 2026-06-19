@@ -107,6 +107,10 @@
   "app/modules/image-modal.js": {
     "hardcodedHex": 7
   },
+  "app/modules/image-library.js": {
+    "nativeDialogs": 1,
+    "hardcodedHex": 7
+  },
   "app/modules/inventory-stock-ops.js": {
     "hardcodedHex": 7
   },
