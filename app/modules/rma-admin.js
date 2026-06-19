@@ -1,53 +1,29 @@
 /**
- * Orders + Commissions + Dashboard Cards Module
- * Lazy-loaded via MastAdmin module registry.
+ * rma-admin.js — RMA / Returns lifecycle admin surface (T6 PR4b).
+ *
+ * The interactive admin home for `admin/rma/{rmaId}` records, driven end-to-end
+ * by the `transitionRma` Cloud Function: operator-create, approve / decline,
+ * mark-shipped-back / received, inspect (pass/fail), disposition (restock /
+ * seconds / repair / write-off), complete + issue-refund, refund-method/amount
+ * override, and return-reason-code edit.
+ *
+ * This is the canonical `#rma` surface for ALL users (un-gated). It was relocated
+ * here VERBATIM from the retired V1 `orders.js` when that file was deleted: the
+ * `orders` route had already moved to orders-v2 (PR3) and commissions to
+ * commissions-v2 (PR2), leaving orders.js serving only this RMA lifecycle UI.
+ *
+ * Note: `admin/rma` (this surface) is a DIFFERENT data model from the flag-gated
+ * `rma-v2.js` (#rma-v2), which is a returns lens over `orders/{id}` return_*
+ * statuses via the `return` MastFlow. `admin/rma` is the production source of
+ * truth — written by saveNewRma here AND by orders-v2's issueRefund, and read by
+ * customer-service, finance, and the product engine — so #rma resolves here.
+ *
+ * Renders into the shell's #rmaTab DOM (index.html). Lazy-loaded via the module
+ * registry on first #rma visit. Order-display + date helpers + the shell `orders`
+ * cache + orderTotalDollars resolve to the eager shared/orders-core.js globals.
  */
 (function() {
   'use strict';
-
-
-  // orderTotalDollars (canonical order grand-total, DOLLARS) moved to
-  // shared/orders-core.js (eager) in PR1c as transitive closure of the invoice
-  // surface (markOrderInvoicePaid / buildInvoiceSection consume it). The bare
-  // orderTotalDollars(...) references in the V1 render code below resolve to
-  // window.orderTotalDollars exposed there.
-
-  // ============================================================
-  // Badge Style Helpers (inline colors per style guide)
-  // ============================================================
-
-  // orderStatusBadgeStyle + ORDER_STATUS_BADGE_COLORS moved to shared/orders-core.js
-  // (eager). Bare references below resolve to window.orderStatusBadgeStyle.
-
-  // etsySourceBadgeStyle moved to shared/orders-core.js (eager).
-
-  // ============================================================
-  // Orders Management
-  // ============================================================
-
-  // loadOrders moved to shared/orders-core.js (eager) in PR1c: it's bare-called
-  // by fulfillment.js / wholesale.js / the shell without loadModule('orders'),
-  // so an eager home closes that latent load-order fragility. Its renderOrders()
-  // refresh is now guarded (typeof === 'function') so it skips gracefully when
-  // the V1 orders UI isn't loaded.
-
-  // getOrdersArray moved to shared/orders-core.js (eager): reads the shell
-  // 'orders' cache global. Bare refs + window.getOrdersArray resolve there.
-
-  // getOrderDisplayNumber, the tenant-tz cluster (ensureTenantTz / tzPartsFromIso),
-  // formatOrderDate, formatOrderDateTime, and getOrderItemsLabel moved to
-  // shared/orders-core.js (eager). Bare references below (incl. tzPartsFromIso /
-  // ensureTenantTz in the V1 render code) resolve to the corresponding window
-  // globals exposed there.
-
-
-
-  // ============================================================
-  // Dashboard Cards (New Orders / Ready to Ship) relocated to
-  // shared/orders-core.js (eager) in T6 PR4a — the shell renders them on every
-  // dashboard load + from the orders real-time listener, so an eager home drops
-  // the loadModule('orders') the dashboard previously needed.
-  // ============================================================
 
   // ============================================================
   // RMA / Returns Admin Management
@@ -932,17 +908,7 @@
   // Window exports for onclick handlers
   // ============================================================
 
-  // orderStatusBadgeStyle, etsySourceBadgeStyle, getOrderDisplayNumber,
-  // formatOrderDate, formatOrderDateTime, getOrderItemsLabel, renderOrderProgress
-  // are now exported by shared/orders-core.js (eager).
-  // loadOrders + transitionOrder + the invoice surface (isOrderInvoiceable /
-  // getEffectiveInvoiceStatus / invoiceStatusBadgeStyle / generateInvoice /
-  // sendInvoice / markOrderInvoicePaid / resendInvoice / buildInvoiceSection) +
-  // orderTotalDollars are now exported by shared/orders-core.js (eager) — PR1c.
   window.viewRmaTicket = viewRmaTicket;
-
-  // renderDashCardNewOrders / renderDashCardReadyToShip now exported by
-  // shared/orders-core.js (eager) — T6 PR4a.
   window.loadRmaData = loadRmaData;
   window.setRmaFilter = setRmaFilter;
   window.renderRma = renderRma;
@@ -1073,14 +1039,12 @@
   // Register with MastAdmin
   // ============================================================
 
-
-  MastAdmin.registerModule('orders', {
+  MastAdmin.registerModule('rma-admin', {
     routes: {
-      // 'orders' route ABSORBED into orders-v2 (T6 PR3) — it owns the bare route
-      // now (OrdersBridge moved there). The legacy orders list/detail/triage UI in
-      // this file is retired-but-present (reached only as fulfillment's
-      // viewOrder/openShippingModal target + the dashboard cards) until PR3b deletes it.
-      // 'commissions' route ABSORBED into commissions-v2 (T6 PR2).
+      // Canonical #rma surface for ALL users (un-gated). Relocated verbatim from
+      // the retired V1 orders.js (T6 PR4b); the bare 'rma' route resolves here
+      // directly now (no MAST_V2_ROUTE_MAP remap). rma-v2.js (#rma-v2) is a
+      // separate flag-gated returns lens over orders/{id} return_* statuses.
       'rma': { tab: 'rmaTab', setup: function() { loadRmaData(); } }
     },
     detachListeners: function() {

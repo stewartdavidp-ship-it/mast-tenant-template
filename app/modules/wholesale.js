@@ -1735,11 +1735,8 @@ function renderWholesaleInvoiceSection(o, orderId) {
 }
 
 async function generateInvoiceForWholesale(orderId) {
-  if (typeof window.generateInvoice !== 'function') {
-    // generateInvoice is defined in modules/orders.js; trigger module load if
-    // the user hasn't visited Orders yet this session.
-    try { await MastAdmin.loadModule('orders'); } catch (_e) {}
-  }
+  // generateInvoice is provided eagerly by shared/orders-core.js (the invoice
+  // surface moved there in T6 PR1c), so it's always present — no module load.
   if (typeof window.generateInvoice !== 'function') {
     showToast('Invoice helper not available yet — try again', true);
     return;

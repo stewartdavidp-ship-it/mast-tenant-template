@@ -216,10 +216,9 @@
     "moneyToFixed": 3,
     "localeDate": 4
   },
-  "app/modules/orders.js": {
-    "centsDiv": 27,
-    "moneyToFixed": 43,
-    "localeDate": 11
+  "app/modules/rma-admin.js": {
+    "centsDiv": 14,
+    "moneyToFixed": 11
   },
   "app/modules/passes-v2.js": {
     "centsDiv": 1,
