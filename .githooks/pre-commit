@@ -1,51 +1,41 @@
 #!/usr/bin/env bash
-# Pre-commit hook: auto-bump MAST_MODULES_V when admin JS / HTML changes.
+# Pre-commit hook: re-stamp per-file cache-bust hashes when admin / shared JS
+# (or index.html) changes.
 #
-# OPTIONAL / DEV-ONLY. The authoritative enforcement is now the required `lint`
-# CI check (scripts/lint-cache-bust.js, Build 5) — a PR that touches admin
-# JS/HTML without bumping MAST_MODULES_V cannot merge. This hook is just a local
-# convenience that bumps automatically so you never hit that gate; installing it
-# is no longer required. It is safe alongside the CI check: CI never bumps, so
-# there is no double-bump or bot-commit→redeploy loop.
+# OPTIONAL / DEV-ONLY. The authoritative enforcement is the required `lint` CI
+# check (scripts/lint-cache-bust.js → gen-cache-bust.mjs --check): a PR whose
+# committed per-file hashes are stale cannot merge. This hook just stamps
+# automatically so you never hit that gate; installing it is no longer required.
+# It is safe alongside the CI check: CI never writes, so there is no
+# bot-commit→redeploy loop.
 #
 # Triggers on any staged change to:
 #   - app/index.html
-#   - app/modules/*.js
+#   - app/modules/**/*.js
+#   - shared/*.js  (the lockstep engine tags)
 #
-# When triggered, runs scripts/bump-modules-version.sh and re-stages
-# app/index.html so the bump is included in the same commit.
+# When triggered, runs scripts/gen-cache-bust.mjs and re-stages app/index.html so
+# the refreshed hashes are included in the same commit.
 #
-# Setup (optional, one-time per clone):
-#   git config core.hooksPath .githooks
-#
-# Or run: scripts/install-hooks.sh
+# Setup (optional, one-time per clone):  scripts/install-hooks.sh
 
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-# Detect whether this commit touches the admin app
+# Detect whether this commit touches a file whose hash index.html carries.
 STAGED=$(git diff --cached --name-only --diff-filter=ACMRT)
-if ! echo "$STAGED" | grep -qE '^app/(index\.html$|modules/.*\.js$)'; then
-  exit 0  # No admin changes; nothing to do
+if ! echo "$STAGED" | grep -qE '^(app/(index\.html$|modules/.*\.js$)|shared/.*\.js$)'; then
+  exit 0  # Nothing the cache-bust generator versions; nothing to do.
 fi
 
-# Don't recurse: if the only staged file is index.html with ONLY a MAST_MODULES_V change
-# (i.e. the bump script's own commit), skip
-if [[ "$STAGED" == "app/index.html" ]]; then
-  DIFF=$(git diff --cached app/index.html | grep -E '^[+-][^+-]' || true)
-  if echo "$DIFF" | grep -qE '^[+-]var MAST_MODULES_V' && [[ $(echo "$DIFF" | wc -l) -le 2 ]]; then
-    exit 0
-  fi
-fi
+# Re-stamp per-file hashes (idempotent — a no-op if already current).
+node "$REPO_ROOT/scripts/gen-cache-bust.mjs"
 
-# Run the bumper
-"$REPO_ROOT/scripts/bump-modules-version.sh"
-
-# Re-stage app/index.html if the bumper changed it
+# Re-stage app/index.html if the generator changed it.
 if ! git diff --quiet app/index.html; then
   git add app/index.html
-  echo "[pre-commit] re-staged app/index.html with bumped MAST_MODULES_V"
+  echo "[pre-commit] re-staged app/index.html with refreshed per-file cache-bust hashes"
 fi
 
 exit 0

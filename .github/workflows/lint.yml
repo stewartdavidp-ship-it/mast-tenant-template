@@ -146,4 +146,5 @@ jobs:
           node test/mastdb-fieldpath.test.js &&
           node test/mastdb-push-fieldpath.test.js &&
           node test/lint-ratchet.test.js &&
-          node test/lint-conflict-markers.test.js
+          node test/lint-conflict-markers.test.js &&
+          node test/cache-bust.test.js
