@@ -19607,7 +19607,7 @@ window.getRouteParams = function() { return currentRouteParams || {}; };
 // localStorage so it survives reloads; flipping reloads the page so the
 // flag-gated v2 modules (which read mastUiRedesign at load) register cleanly.
 var MAST_V2_ROUTE_MAP = {
-  orders: 'orders-v2', customers: 'customers-v2', promotions: 'promotions-v2',
+  orders: 'orders-v2', customers: 'customers-v2',
   trips: 'trips-v2', team: 'team-v2', procurement: 'procurement-v2',
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', 'cs-surveys': 'cs-surveys-v2', terms: 'terms-v2', wallet: 'wallet-v2',
@@ -20951,7 +20951,7 @@ var MODULE_MANIFEST = {
   'customers-v2': { src: 'modules/customers-v2.js', v: '4b5d4e9c26c1', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: '9bd9e2838f6d', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
   'calendar-v2': { src: 'modules/calendar-v2.js', v: '37194dc1a8b0', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
-  'promotions-v2': { src: 'modules/promotions-v2.js', v: '51b236143897', routes: ['promotions-v2'] }, // UI-redesign conversion: promotions (flag-gated, side-by-side)
+  'promotions-v2': { src: 'modules/promotions-v2.js', v: '233ee7a804eb', routes: ['promotions-v2', 'promotions'] }, // promotions; owns the legacy 'promotions' route too (V1 promotions.js retired, T6)
   'trips-v2': { src: 'modules/trips-v2.js', v: '444cf9fb076e', routes: ['trips-v2'] }, // UI-redesign conversion: trips history (flag-gated, side-by-side)
   'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', v: '9712ea2fdab0', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
   'team-v2': { src: 'modules/team-v2.js', v: '1f650972965e', routes: ['team-v2'] }, // UI-redesign conversion: team roster/employee (flag-gated, side-by-side)
@@ -21022,7 +21022,6 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   maker: { src: 'modules/maker.js', v: 'aba7879be2dc', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: 'c401d0269d99', routes: ['galleries'] },
   brand: { src: 'modules/brand.js', v: '9209c6360b17', routes: ['brand'] },
-  promotions: { src: 'modules/promotions.js', v: '8252f58c0c30', routes: ['promotions'] },
   book: { src: 'modules/book.js', v: '35ef6b679090', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', v: 'd05e7845704f', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'ec2784aaf153', routes: ['studio'] },

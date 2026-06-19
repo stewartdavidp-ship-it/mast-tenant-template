@@ -383,7 +383,11 @@
     exportCsv: function () { return MastEntity.exportRows('promotions-v2', visibleRows(), 'all'); }
   };
 
+  var _promoV2Route = { tab: 'promotionsV2Tab', setup: function () { ensureTab(); render(); load(); } };
+  // The legacy 'promotions' route resolves here too: promotions.js (V1) was retired
+  // (T6, Legacy-UI sunset); this is now the only Sale Promotions admin UI for ALL
+  // users, regardless of the redesign flag.
   MastAdmin.registerModule('promotions-v2', {
-    routes: { 'promotions-v2': { tab: 'promotionsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: { 'promotions-v2': _promoV2Route, 'promotions': _promoV2Route }
   });
 })();
