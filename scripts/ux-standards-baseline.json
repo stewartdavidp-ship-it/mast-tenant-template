@@ -4,6 +4,11 @@
     "rogueOverlays": 1,
     "hardcodedHex": 61
   },
+  "app/modules/add-to-mast-drawer.js": {
+    "rogueOverlays": 1,
+    "translateX": 3,
+    "hardcodedHex": 2
+  },
   "app/modules/advisor.js": {
     "nativeDialogs": 4,
     "rogueOverlays": 1,
