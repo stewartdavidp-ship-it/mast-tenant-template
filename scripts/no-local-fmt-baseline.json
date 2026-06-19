@@ -237,6 +237,11 @@
     "moneyToFixed": 14,
     "localeDate": 4
   },
+  "app/modules/products-engine.js": {
+    "centsDiv": 6,
+    "moneyToFixed": 5,
+    "localeDate": 3
+  },
   "app/modules/products-v2.js": {
     "centsDiv": 13,
     "moneyToFixed": 3
