@@ -173,7 +173,7 @@
     });
   })();
   </script>
-  <script src="../shared/mastdb.js?v=20260618-202331-1353a6aa"></script>
+  <script src="../shared/mastdb.js?v=89a26195d033"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
@@ -184,32 +184,32 @@
        Shared by customers.js (list/export) and customer-service.js (survey
        bulk-send) so the segment matcher cannot drift. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh. -->
-  <script src="../shared/customer-filters.js?v=20260618-202331-1353a6aa"></script>
-  <script src="../shared/brand-sync.js?v=20260618-202331-1353a6aa"></script>
+  <script src="../shared/customer-filters.js?v=04f9cc24bba7"></script>
+  <script src="../shared/brand-sync.js?v=b15437cf3df8"></script>
   <script src="../shared/channel-connection.js?v=1"></script>
-  <script src="../shared/variant-reconcile.js?v=20260618-202331-1353a6aa"></script>
+  <script src="../shared/variant-reconcile.js?v=dbb2bc1bd437"></script>
   <!-- UI redesign engines (docs/ux-audit): shared primitives + Entity Engine.
        The ?v= suffix is kept in lockstep with MAST_MODULES_V by
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=20260618-202331-1353a6aa"></script>
-  <script src="../shared/mast-io.js?v=20260618-202331-1353a6aa"></script>
-  <script src="../shared/mast-entity.js?v=20260618-202331-1353a6aa"></script>
+  <script src="../shared/mast-ui.js?v=fde0580cc585"></script>
+  <script src="../shared/mast-io.js?v=84d9249da0cb"></script>
+  <script src="../shared/mast-entity.js?v=d0486317901a"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
        window.MastProductReadiness. Eager-loaded so it exists before the lazy maker module.
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
-  <script src="../shared/product-readiness.core.js?v=20260618-202331-1353a6aa"></script>
+  <script src="../shared/product-readiness.core.js?v=9dcf533c48b5"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
        the scanned app/modules/connections-providers.js. ?v= kept in lockstep
        with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/secure-intake-framework-design.md §9. -->
-  <script src="../shared/mast-intake.js?v=20260618-202331-1353a6aa"></script>
+  <script src="../shared/mast-intake.js?v=0977cab058ce"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- Pod-specific runtime config — sets window.MAST_POD_PLATFORM_PROJECT so
@@ -22091,7 +22091,10 @@ var MastAdmin = (function() {
       };
       window.addEventListener('error', errorHandler);
       var script = document.createElement('script');
-      script.src = manifest.src + '?v=' + MAST_MODULES_V;
+      // Per-file cache-bust: each manifest entry carries a content hash (`v`),
+      // stamped by scripts/gen-cache-bust.mjs, so a deploy only re-fetches modules
+      // that actually changed. MAST_MODULES_V is the fallback for dangling stubs.
+      script.src = manifest.src + '?v=' + (manifest.v || MAST_MODULES_V);
       script.onload = function() {
         // Remove error handler after a short delay (parse errors fire synchronously)
         setTimeout(function() { window.removeEventListener('error', errorHandler); }, 100);
@@ -22195,47 +22198,47 @@ var MAST_MODULES_V = '20260618-202331-1353a6aa';
 // Routes listed here will be lazy-loaded when first navigated to.
 // Populated as modules are extracted in future sessions.
 var MODULE_MANIFEST = {
-  blog: { src: 'modules/blog.js', routes: ['blog'] },
-  newsletter: { src: 'modules/newsletter.js', routes: ['newsletter'] },
-  social: { src: 'modules/social.js', routes: ['social'] },
-  trips: { src: 'modules/trips.js', routes: ['trips'] },
-  wholesale: { src: 'modules/wholesale.js', routes: ['wholesale'] },
-  finance: { src: 'modules/finance.js', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
+  blog: { src: 'modules/blog.js', v: '206f0298b6af', routes: ['blog'] },
+  newsletter: { src: 'modules/newsletter.js', v: '1c87bcb82659', routes: ['newsletter'] },
+  social: { src: 'modules/social.js', v: 'b27d319578ec', routes: ['social'] },
+  trips: { src: 'modules/trips.js', v: '6cefe29d9994', routes: ['trips'] },
+  wholesale: { src: 'modules/wholesale.js', v: 'df3d02d649c2', routes: ['wholesale'] },
+  finance: { src: 'modules/finance.js', v: 'c787d241e7cf', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
   // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
   // (no top-level route). Empty routes[] keeps it lazy-loadable via MastAdmin.loadModule('accounting').
-  accounting: { src: 'modules/accounting.js', routes: [] },
+  accounting: { src: 'modules/accounting.js', v: 'b852b7cb7ccd', routes: [] },
   // accounting-v2 (QBO-1): flag-gated (?ui=1) V2 twin of the QuickBooks sub-views
   // (COA Map / Sync Log / Conflicts / Backfill). No route — mounted into the
   // QuickBooks settings inner-tab body via switchQboInnerTab when opted in. V1 is
   // the live default until the QBO-3 cutover. Reuses the QBO CFs verbatim and
   // delegates write modals to the V1 accounting.js globals (which stay loaded).
-  'accounting-v2': { src: 'modules/accounting-v2.js', routes: [] },
+  'accounting-v2': { src: 'modules/accounting-v2.js', v: '0d219fa49a70', routes: [] },
   // MastIntake provider catalog — the vendor knowledge (ProviderDefinitions) the
   // secure-intake engine looks up. No route (a data catalog, not a view); lazy-
   // loaded on demand by settings areas via MastAdmin.loadModule('connections-providers').
-  'connections-providers': { src: 'modules/connections-providers.js', routes: [] },
-  shows: { src: 'modules/shows.js', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
-  'shows-v2': { src: 'modules/shows-v2.js', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2'] }, // UI-redesign conversion: shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin; #show* CUT OVER to this twin via MAST_V2_ROUTE_MAP (PR7). Legacy shows.js still loadable for navigateToClassic; darked in PR8.
-  production: { src: 'modules/production.js', routes: ['jobs', 'production', 'stories', 'forecast'] },
-  procurement: { src: 'modules/procurement.js', routes: ['procurement'] },
-  contacts: { src: 'modules/contacts.js', routes: ['contacts'] },
-  customers: { src: 'modules/customers.js', routes: ['customers'] },
-  orders: { src: 'modules/orders.js', routes: ['orders', 'commissions', 'rma'] },
-  'orders-v2': { src: 'modules/orders-v2.js', routes: ['orders-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
-  'customers-v2': { src: 'modules/customers-v2.js', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
-  'duplicates-v2': { src: 'modules/duplicates-v2.js', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
-  'calendar-v2': { src: 'modules/calendar-v2.js', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
-  'promotions-v2': { src: 'modules/promotions-v2.js', routes: ['promotions-v2'] }, // UI-redesign conversion: promotions (flag-gated, side-by-side)
-  'trips-v2': { src: 'modules/trips-v2.js', routes: ['trips-v2'] }, // UI-redesign conversion: trips history (flag-gated, side-by-side)
-  'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
-  'team-v2': { src: 'modules/team-v2.js', routes: ['team-v2'] }, // UI-redesign conversion: team roster/employee (flag-gated, side-by-side)
-  'procurement-v2': { src: 'modules/procurement-v2.js', routes: ['procurement-v2'] }, // UI-redesign conversion: purchase orders (now hosts the Needs-reorder lens)
-  'lots-v2': { src: 'modules/lots-v2.js', routes: ['lots-v2'] }, // Tier 1.5 P2: inventory lots (material+product) list + detail (flag-gated)
-  'materials-v2': { src: 'modules/materials-v2.js', routes: ['materials-v2'] }, // UI-redesign conversion: maker materials (flag-gated, side-by-side)
-  'cs-support-v2': { src: 'modules/cs-support-v2.js', routes: ['cs-inbox-v2', 'cs-tickets-v2'] }, // ONE support hub: Inbox/Tickets are two lenses of the same conversation queue — route picks the entry lens (customer-service-v2-build-plan.md)
-  'cs-surveys-v2': { src: 'modules/cs-surveys-v2.js', routes: ['cs-surveys-v2'] }, // CS Wave 3: surveys hub (Surveys/Responses/Question sets/Library lenses + automation card)
-  'terms-v2': { src: 'modules/terms-v2.js', routes: ['terms-v2'] }, // UI-redesign config-singleton shape: policies/terms launcher→slide-out (flag-gated)
-  'wallet-v2': { src: 'modules/wallet-v2.js', routes: ['wallet-v2'] }, // UI-redesign config-singleton shape: wallet/instruments launcher→slide-out (flag-gated)
+  'connections-providers': { src: 'modules/connections-providers.js', v: '04b778b661f9', routes: [] },
+  shows: { src: 'modules/shows.js', v: 'e84db6aa7279', routes: ['show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] },
+  'shows-v2': { src: 'modules/shows-v2.js', v: '85a169d67a10', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2'] }, // UI-redesign conversion: shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin; #show* CUT OVER to this twin via MAST_V2_ROUTE_MAP (PR7). Legacy shows.js still loadable for navigateToClassic; darked in PR8.
+  production: { src: 'modules/production.js', v: '2b1cae9ead69', routes: ['jobs', 'production', 'stories', 'forecast'] },
+  procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
+  contacts: { src: 'modules/contacts.js', v: 'fd8ca77af153', routes: ['contacts'] },
+  customers: { src: 'modules/customers.js', v: '8a5680c39345', routes: ['customers'] },
+  orders: { src: 'modules/orders.js', v: 'fd85651743d5', routes: ['orders', 'commissions', 'rma'] },
+  'orders-v2': { src: 'modules/orders-v2.js', v: '9a955e0a06b8', routes: ['orders-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
+  'customers-v2': { src: 'modules/customers-v2.js', v: '4b5d4e9c26c1', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
+  'duplicates-v2': { src: 'modules/duplicates-v2.js', v: '9bd9e2838f6d', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
+  'calendar-v2': { src: 'modules/calendar-v2.js', v: '37194dc1a8b0', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
+  'promotions-v2': { src: 'modules/promotions-v2.js', v: '51b236143897', routes: ['promotions-v2'] }, // UI-redesign conversion: promotions (flag-gated, side-by-side)
+  'trips-v2': { src: 'modules/trips-v2.js', v: '444cf9fb076e', routes: ['trips-v2'] }, // UI-redesign conversion: trips history (flag-gated, side-by-side)
+  'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', v: '9712ea2fdab0', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
+  'team-v2': { src: 'modules/team-v2.js', v: '1f650972965e', routes: ['team-v2'] }, // UI-redesign conversion: team roster/employee (flag-gated, side-by-side)
+  'procurement-v2': { src: 'modules/procurement-v2.js', v: 'e0dce287de8a', routes: ['procurement-v2'] }, // UI-redesign conversion: purchase orders (now hosts the Needs-reorder lens)
+  'lots-v2': { src: 'modules/lots-v2.js', v: '182c811e7879', routes: ['lots-v2'] }, // Tier 1.5 P2: inventory lots (material+product) list + detail (flag-gated)
+  'materials-v2': { src: 'modules/materials-v2.js', v: 'f21e9ef5c97e', routes: ['materials-v2'] }, // UI-redesign conversion: maker materials (flag-gated, side-by-side)
+  'cs-support-v2': { src: 'modules/cs-support-v2.js', v: '9da15d6e725d', routes: ['cs-inbox-v2', 'cs-tickets-v2'] }, // ONE support hub: Inbox/Tickets are two lenses of the same conversation queue — route picks the entry lens (customer-service-v2-build-plan.md)
+  'cs-surveys-v2': { src: 'modules/cs-surveys-v2.js', v: '1a6dc1d74074', routes: ['cs-surveys-v2'] }, // CS Wave 3: surveys hub (Surveys/Responses/Question sets/Library lenses + automation card)
+  'terms-v2': { src: 'modules/terms-v2.js', v: 'f6da3001697d', routes: ['terms-v2'] }, // UI-redesign config-singleton shape: policies/terms launcher→slide-out (flag-gated)
+  'wallet-v2': { src: 'modules/wallet-v2.js', v: '134d8c56cada', routes: ['wallet-v2'] }, // UI-redesign config-singleton shape: wallet/instruments launcher→slide-out (flag-gated)
   // brand-v2 + homepage-v2 RETIRED (PR8 capstone): their read-on-page surface is
   // fully absorbed by the unified "Your website" builder (website-v2 — Card 1
   // logo/colors/fonts/name/tagline, Card 2 sections/content/testimonials). The
@@ -22243,111 +22246,111 @@ var MODULE_MANIFEST = {
   // no longer load. The legacy host modules (brand / homepage / website) still load
   // — they own the bridges (BrandBridge / HomepageBridge / WebsiteBridge) + writers
   // the builder delegates to (hp*, hpToggleTestimonialVisible).
-  'website-v2': { src: 'modules/website-v2.js', routes: ['website-v2'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2) (flag-gated)
-  'commissions-v2': { src: 'modules/commissions-v2.js', routes: ['commissions-v2'] }, // UI-redesign Process surface: commissions lifecycle (flag-gated, side-by-side)
-  'products-v2': { src: 'modules/products-v2.js', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
-  'gift-cards-v2': { src: 'modules/gift-cards-v2.js', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
-  'coupons-v2': { src: 'modules/coupons-v2.js', routes: ['coupons-v2'] }, // UI-redesign conversion: coupons read detail (flag-gated)
-  'classes-v2': { src: 'modules/classes-v2.js', routes: ['classes-v2', 'book-reports-v2', 'classes-rooms-v2', 'classes-settings-v2'] }, // ONE classes hub: Catalog + Rooms & equipment + Reports lenses — route picks the lens (8→6 ratified 2026-06-10)
-  'vendors-v2': { src: 'modules/vendors-v2.js', routes: ['vendors-v2'] }, // UI-redesign conversion: vendors read detail (flag-gated)
-  'membership-v2': { src: 'modules/membership-v2.js', routes: ['membership-v2'] }, // UI-redesign conversion: membership members read detail (flag-gated)
-  'cs-reviews-v2': { src: 'modules/cs-reviews-v2.js', routes: ['cs-reviews-v2'] }, // UI-redesign conversion: CS reviews read detail (flag-gated)
-  'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
-  'loyalty-v2': { src: 'modules/loyalty-v2.js', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
-  'stories-v2': { src: 'modules/stories-v2.js', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
-  'jobs-v2': { src: 'modules/jobs-v2.js', routes: ['jobs-v2'] }, // UI-redesign conversion: Jobs (production) B1 scaffold — list + read-only detail (flag-gated, side-by-side)
-  'cs-members-v2': { src: 'modules/cs-members-v2.js', routes: ['cs-members-v2'] }, // UI-redesign conversion: CS members read detail (flag-gated)
-  'blog-v2': { src: 'modules/blog-v2.js', routes: ['blog-v2'] }, // UI-redesign conversion: blog posts read detail (flag-gated)
-  'sales-events-v2': { src: 'modules/sales-events-v2.js', routes: ['sales-events-v2'] }, // UI-redesign conversion: sales events read detail (flag-gated)
-  'consignments-v2': { src: 'modules/consignments-v2.js', routes: ['consignments-v2'] }, // UI-redesign conversion: consignment placements read detail (flag-gated)
-  'sessions-v2': { src: 'modules/sessions-v2.js', routes: ['sessions-v2'] }, // UI-redesign conversion: class sessions read detail (flag-gated)
-  'inquiries-v2': { src: 'modules/inquiries-v2.js', routes: ['inquiries-v2'] }, // UI-redesign conversion: inquiries/leads read detail (flag-gated)
-  'students-v2': { src: 'modules/students-v2.js', routes: ['students-v2'] }, // UI-redesign conversion: students roster (read-focused Faceted Record)
-  'students-config-v2': { src: 'modules/students-config-v2.js', routes: ['students-config-v2'] }, // UI-redesign conversion: tenant Student SETTINGS hub (waiver templates / clearance types / business documents) — finishes retiring legacy #students config view-tabs
-  'galleries-v2': { src: 'modules/galleries-v2.js', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
-  'instructors-v2': { src: 'modules/instructors-v2.js', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
-  'wholesale-v2': { src: 'modules/wholesale-v2.js', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
-  'fulfillment-v2': { src: 'modules/fulfillment-v2.js', routes: ['pack-v2', 'ship-v2'] }, // ONE fulfillment queue: Pack/Ship are one process — route picks the entry bucket (operator-ratified 2026-06-10)
-  'finance-statements-v2': { src: 'modules/finance-statements-v2.js', routes: ['financials-v2', 'finance-revenue-v2', 'finance-pl-v2', 'finance-cash-flow-v2', 'finance-tax-v2'] }, // ONE statements hub: Overview/Revenue/P&L/Cash/Tax are five lenses of the same period reports — route picks the entry lens (finance-v2-build-plan.md)
-  'finance-openitems-v2': { src: 'modules/finance-openitems-v2.js', routes: ['finance-ar-v2', 'finance-ap-v2'] }, // ONE open-items queue: AR/AP aging lenses + vendor records — route picks the entry lens (finance-v2-build-plan.md)
-  'finance-close-v2': { src: 'modules/finance-close-v2.js', routes: ['finance-period-close-v2', 'finance-amendments-v2'] }, // ONE close pipeline: periods/day-closes/amendments lenses over the Close-v3 CFs — route picks the entry lens (finance-v2-build-plan.md)
-  'customer-portfolio-v2': { src: 'modules/customer-portfolio-v2.js', routes: ['customer-portfolio-v2'] }, // finance wave 4: read-only portfolio analytics (quadrants + concentration), drills to customers-v2
-  'finance-reports-v2': { src: 'modules/finance-reports-v2.js', routes: ['finance-reports-v2'] }, // finance wave 4: reports launcher (generators stay classic, single-sourced)
-  'rma-v2': { src: 'modules/rma-v2.js', routes: ['rma-v2'] }, // sales-v2 wave 1: returns (transaction archetype + return workflow, flag-gated, side-by-side)
-  'pos-v2': { src: 'modules/pos-v2.js', routes: ['pos-v2'] }, // sales-v2 wave 2: sales ledger (transaction archetype over in-person orders, flag-gated, side-by-side)
-  'commission-terms-v2': { src: 'modules/commission-terms-v2.js', routes: ['commission-terms-v2'] }, // sales-v2 wave 2: versioned commission terms (record archetype, flag-gated, side-by-side)
-  'receipts-v2': { src: 'modules/receipts-v2.js', routes: ['receipts-v2'] }, // sales-v2 wave 3: day close reconciliation (record archetype + match view, flag-gated, side-by-side)
-  'lookbooks-v2': { src: 'modules/lookbooks-v2.js', routes: ['lookbooks-v2'] }, // sales-v2 wave 3: line sheets / lookbooks (composer archetype, flag-gated, side-by-side)
-  'campaigns-v2': { src: 'modules/campaigns-v2.js', routes: ['campaigns-v2'] }, // UI-redesign conversion: marketing campaigns read detail (flag-gated, side-by-side)
-  'email-log-v2': { src: 'modules/email-log-v2.js', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
-  'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', routes: ['marketing-calendar-v2'] }, // UI-redesign conversion: marketing calendar (index control)
-  'channels-v2': { src: 'modules/channels-v2.js', routes: ['channels-v2'] }, // UI-redesign conversion: sales channels read detail (flag-gated, side-by-side)
-  'contacts-v2': { src: 'modules/contacts-v2.js', routes: ['contacts-v2'] }, // UI-redesign conversion: contacts (CRM) read detail (flag-gated, side-by-side)
-  'enrollments-v2': { src: 'modules/enrollments-v2.js', routes: ['enrollments-v2'] }, // UI-redesign conversion: enrollments roster read detail (read-focused Faceted Record)
-  'passes-v2': { src: 'modules/passes-v2.js', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)
-  'resources-v2': { src: 'modules/resources-v2.js', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
-  'newsletter-v2': { src: 'modules/newsletter-v2.js', routes: ['newsletter-v2'] }, // UI-redesign conversion: newsletter subscribers read detail (flag-gated, side-by-side)
-  sales: { src: 'modules/sales.js', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
-  fulfillment: { src: 'modules/fulfillment.js', routes: ['pack', 'ship', 'fulfillment'] },
-  eventsAdmin: { src: 'modules/events.js', routes: ['events-shows', 'events-settings'] },
-  website: { src: 'modules/website.js', routes: ['website'] },
-homepage: { src: 'modules/homepage.js', routes: ['homepage'] },
-  emailLog: { src: 'modules/email-log.js', routes: ['email-log'] },
-  maker: { src: 'modules/maker.js', routes: ['materials', 'products'] },
-  consignment: { src: 'modules/consignment.js', routes: ['galleries'] },
-  lookbooks: { src: 'modules/lookbooks.js', routes: ['lookbooks'] },
-  brand: { src: 'modules/brand.js', routes: ['brand'] },
-  promotions: { src: 'modules/promotions.js', routes: ['promotions'] },
-  book: { src: 'modules/book.js', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
-  cart: { src: 'modules/cart.js', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
-  advisor: { src: 'modules/advisor.js', routes: ['advisor'] },
-  studio: { src: 'modules/studio.js', routes: ['studio'] },
-  team: { src: 'modules/team.js', routes: ['team'] },
-  students: { src: 'modules/students.js', routes: ['students'] },
-  channels: { src: 'modules/channels.js', routes: ['channels'] },
-  'customer-service': { src: 'modules/customer-service.js', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
+  'website-v2': { src: 'modules/website-v2.js', v: '4133d68dcd66', routes: ['website-v2'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2) (flag-gated)
+  'commissions-v2': { src: 'modules/commissions-v2.js', v: '8f086a7d5a85', routes: ['commissions-v2'] }, // UI-redesign Process surface: commissions lifecycle (flag-gated, side-by-side)
+  'products-v2': { src: 'modules/products-v2.js', v: '5495de99a4cd', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
+  'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: '82492c030beb', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
+  'coupons-v2': { src: 'modules/coupons-v2.js', v: 'c7a94342abd2', routes: ['coupons-v2'] }, // UI-redesign conversion: coupons read detail (flag-gated)
+  'classes-v2': { src: 'modules/classes-v2.js', v: '10178d0580be', routes: ['classes-v2', 'book-reports-v2', 'classes-rooms-v2', 'classes-settings-v2'] }, // ONE classes hub: Catalog + Rooms & equipment + Reports lenses — route picks the lens (8→6 ratified 2026-06-10)
+  'vendors-v2': { src: 'modules/vendors-v2.js', v: 'ecb1bb96518b', routes: ['vendors-v2'] }, // UI-redesign conversion: vendors read detail (flag-gated)
+  'membership-v2': { src: 'modules/membership-v2.js', v: '1e17872446a4', routes: ['membership-v2'] }, // UI-redesign conversion: membership members read detail (flag-gated)
+  'cs-reviews-v2': { src: 'modules/cs-reviews-v2.js', v: '3914ec83b5a8', routes: ['cs-reviews-v2'] }, // UI-redesign conversion: CS reviews read detail (flag-gated)
+  'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', v: '350b80606f25', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
+  'loyalty-v2': { src: 'modules/loyalty-v2.js', v: 'f5602f6695aa', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
+  'stories-v2': { src: 'modules/stories-v2.js', v: '9fc8b7bf3fc6', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
+  'jobs-v2': { src: 'modules/jobs-v2.js', v: '0fc65a643e5a', routes: ['jobs-v2'] }, // UI-redesign conversion: Jobs (production) B1 scaffold — list + read-only detail (flag-gated, side-by-side)
+  'cs-members-v2': { src: 'modules/cs-members-v2.js', v: '0d444b855147', routes: ['cs-members-v2'] }, // UI-redesign conversion: CS members read detail (flag-gated)
+  'blog-v2': { src: 'modules/blog-v2.js', v: 'c67056f1696e', routes: ['blog-v2'] }, // UI-redesign conversion: blog posts read detail (flag-gated)
+  'sales-events-v2': { src: 'modules/sales-events-v2.js', v: '058614e335dd', routes: ['sales-events-v2'] }, // UI-redesign conversion: sales events read detail (flag-gated)
+  'consignments-v2': { src: 'modules/consignments-v2.js', v: 'ea535cfa9490', routes: ['consignments-v2'] }, // UI-redesign conversion: consignment placements read detail (flag-gated)
+  'sessions-v2': { src: 'modules/sessions-v2.js', v: '401940e1fe7a', routes: ['sessions-v2'] }, // UI-redesign conversion: class sessions read detail (flag-gated)
+  'inquiries-v2': { src: 'modules/inquiries-v2.js', v: '6720327c5b26', routes: ['inquiries-v2'] }, // UI-redesign conversion: inquiries/leads read detail (flag-gated)
+  'students-v2': { src: 'modules/students-v2.js', v: 'bb14cec82b0c', routes: ['students-v2'] }, // UI-redesign conversion: students roster (read-focused Faceted Record)
+  'students-config-v2': { src: 'modules/students-config-v2.js', v: '1878c9a1909a', routes: ['students-config-v2'] }, // UI-redesign conversion: tenant Student SETTINGS hub (waiver templates / clearance types / business documents) — finishes retiring legacy #students config view-tabs
+  'galleries-v2': { src: 'modules/galleries-v2.js', v: '0c19197c9bb5', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
+  'instructors-v2': { src: 'modules/instructors-v2.js', v: '7900ac7fc6b7', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
+  'wholesale-v2': { src: 'modules/wholesale-v2.js', v: '0a9c019fb163', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
+  'fulfillment-v2': { src: 'modules/fulfillment-v2.js', v: '217b694d7df5', routes: ['pack-v2', 'ship-v2'] }, // ONE fulfillment queue: Pack/Ship are one process — route picks the entry bucket (operator-ratified 2026-06-10)
+  'finance-statements-v2': { src: 'modules/finance-statements-v2.js', v: '5e7221471fcc', routes: ['financials-v2', 'finance-revenue-v2', 'finance-pl-v2', 'finance-cash-flow-v2', 'finance-tax-v2'] }, // ONE statements hub: Overview/Revenue/P&L/Cash/Tax are five lenses of the same period reports — route picks the entry lens (finance-v2-build-plan.md)
+  'finance-openitems-v2': { src: 'modules/finance-openitems-v2.js', v: '41a8ee5a8b52', routes: ['finance-ar-v2', 'finance-ap-v2'] }, // ONE open-items queue: AR/AP aging lenses + vendor records — route picks the entry lens (finance-v2-build-plan.md)
+  'finance-close-v2': { src: 'modules/finance-close-v2.js', v: 'd8fe56f86d00', routes: ['finance-period-close-v2', 'finance-amendments-v2'] }, // ONE close pipeline: periods/day-closes/amendments lenses over the Close-v3 CFs — route picks the entry lens (finance-v2-build-plan.md)
+  'customer-portfolio-v2': { src: 'modules/customer-portfolio-v2.js', v: 'fd12195110d9', routes: ['customer-portfolio-v2'] }, // finance wave 4: read-only portfolio analytics (quadrants + concentration), drills to customers-v2
+  'finance-reports-v2': { src: 'modules/finance-reports-v2.js', v: 'e36702711faf', routes: ['finance-reports-v2'] }, // finance wave 4: reports launcher (generators stay classic, single-sourced)
+  'rma-v2': { src: 'modules/rma-v2.js', v: 'cfc0b6378ce2', routes: ['rma-v2'] }, // sales-v2 wave 1: returns (transaction archetype + return workflow, flag-gated, side-by-side)
+  'pos-v2': { src: 'modules/pos-v2.js', v: '76c432e39802', routes: ['pos-v2'] }, // sales-v2 wave 2: sales ledger (transaction archetype over in-person orders, flag-gated, side-by-side)
+  'commission-terms-v2': { src: 'modules/commission-terms-v2.js', v: '87d83ef7faf2', routes: ['commission-terms-v2'] }, // sales-v2 wave 2: versioned commission terms (record archetype, flag-gated, side-by-side)
+  'receipts-v2': { src: 'modules/receipts-v2.js', v: '4b05752caba1', routes: ['receipts-v2'] }, // sales-v2 wave 3: day close reconciliation (record archetype + match view, flag-gated, side-by-side)
+  'lookbooks-v2': { src: 'modules/lookbooks-v2.js', v: '751f15df9d9b', routes: ['lookbooks-v2'] }, // sales-v2 wave 3: line sheets / lookbooks (composer archetype, flag-gated, side-by-side)
+  'campaigns-v2': { src: 'modules/campaigns-v2.js', v: 'aad7589a782c', routes: ['campaigns-v2'] }, // UI-redesign conversion: marketing campaigns read detail (flag-gated, side-by-side)
+  'email-log-v2': { src: 'modules/email-log-v2.js', v: '8273b9e43c8d', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
+  'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', v: '8e3254cc9e22', routes: ['marketing-calendar-v2'] }, // UI-redesign conversion: marketing calendar (index control)
+  'channels-v2': { src: 'modules/channels-v2.js', v: '28b81e534a47', routes: ['channels-v2'] }, // UI-redesign conversion: sales channels read detail (flag-gated, side-by-side)
+  'contacts-v2': { src: 'modules/contacts-v2.js', v: '810819197941', routes: ['contacts-v2'] }, // UI-redesign conversion: contacts (CRM) read detail (flag-gated, side-by-side)
+  'enrollments-v2': { src: 'modules/enrollments-v2.js', v: 'f1ec6c15ef8e', routes: ['enrollments-v2'] }, // UI-redesign conversion: enrollments roster read detail (read-focused Faceted Record)
+  'passes-v2': { src: 'modules/passes-v2.js', v: '5f5a185fa4d3', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)
+  'resources-v2': { src: 'modules/resources-v2.js', v: '817832f43559', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
+  'newsletter-v2': { src: 'modules/newsletter-v2.js', v: '9d1dd9284bb1', routes: ['newsletter-v2'] }, // UI-redesign conversion: newsletter subscribers read detail (flag-gated, side-by-side)
+  sales: { src: 'modules/sales.js', v: 'cc9154861404', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
+  fulfillment: { src: 'modules/fulfillment.js', v: '79ac115984d9', routes: ['pack', 'ship', 'fulfillment'] },
+  eventsAdmin: { src: 'modules/events.js', v: 'd599d372978f', routes: ['events-shows', 'events-settings'] },
+  website: { src: 'modules/website.js', v: '9e34ffd057ef', routes: ['website'] },
+homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] },
+  emailLog: { src: 'modules/email-log.js', v: '7b49b10cdd0b', routes: ['email-log'] },
+  maker: { src: 'modules/maker.js', v: '61388e7b0528', routes: ['materials', 'products'] },
+  consignment: { src: 'modules/consignment.js', v: 'c401d0269d99', routes: ['galleries'] },
+  lookbooks: { src: 'modules/lookbooks.js', v: 'be3eb9e98bc0', routes: ['lookbooks'] },
+  brand: { src: 'modules/brand.js', v: '9209c6360b17', routes: ['brand'] },
+  promotions: { src: 'modules/promotions.js', v: '8252f58c0c30', routes: ['promotions'] },
+  book: { src: 'modules/book.js', v: '35ef6b679090', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
+  cart: { src: 'modules/cart.js', v: 'd05e7845704f', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
+  advisor: { src: 'modules/advisor.js', v: 'f090d78919a8', routes: ['advisor'] },
+  studio: { src: 'modules/studio.js', v: 'ec2784aaf153', routes: ['studio'] },
+  team: { src: 'modules/team.js', v: '99ce0e5762ac', routes: ['team'] },
+  students: { src: 'modules/students.js', v: 'fd6a42c0909e', routes: ['students'] },
+  channels: { src: 'modules/channels.js', v: '72824337aebd', routes: ['channels'] },
+  'customer-service': { src: 'modules/customer-service.js', v: '6308dcb6631e', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
-  campaigns: { src: 'modules/campaigns.js', routes: ['campaigns'] },
-  marketingCalendar: { src: 'modules/marketing-calendar.js', routes: ['marketing-calendar'] },
-  engagementInbox: { src: 'modules/engagement-inbox.js', routes: ['engagement-inbox'] },
-  composer: { src: 'modules/composer.js', routes: ['composer'] },
+  campaigns: { src: 'modules/campaigns.js', v: '9d866794259c', routes: ['campaigns'] },
+  marketingCalendar: { src: 'modules/marketing-calendar.js', v: '4ee918881e8b', routes: ['marketing-calendar'] },
+  engagementInbox: { src: 'modules/engagement-inbox.js', v: 'e0eae6f63be6', routes: ['engagement-inbox'] },
+  composer: { src: 'modules/composer.js', v: '0289deb2bfb7', routes: ['composer'] },
   // W2.3 — Commission terms editor (admin-side; storefront accept flow is
   // separate and lives on the public side).
-  commissionTerms: { src: 'modules/commission-terms.js', routes: ['commission-terms'] },
+  commissionTerms: { src: 'modules/commission-terms.js', v: 'fb9811962349', routes: ['commission-terms'] },
   // J12 — Tenant feedback on Mast audit findings (suppression management page;
   // menus exposed via window.AuditFeedbackUI for J13 to wire into surfaces).
-  auditFeedback: { src: 'modules/audit-feedback.js', routes: ['suppressions'] },
+  auditFeedback: { src: 'modules/audit-feedback.js', v: 'a9530fd2b798', routes: ['suppressions'] },
   // J13 — Audit UI surface. NET-NEW module; NOT the transactional auditLog
   // viewer (different collection, different concept). Reads audit_results,
   // rule_suppressions, public/products, channel_config. Wires feedback
   // actions through window.AuditFeedbackUI primitives.
-  audit: { src: 'modules/audit.js', routes: ['audit'] },
+  audit: { src: 'modules/audit.js', v: 'ce34e19a8ccd', routes: ['audit'] },
   // J11 — Assisted product↔listing mapping UI. Full-page interstitial after
   // first channel connect (auto-fired by post-boot trigger via
   // window.MastMappingFlow.checkAndMaybeShow). 'mapping' route is the
   // Settings re-entry surface for later edits + new-listing deltas.
-  mapping: { src: 'modules/mapping.js', routes: ['mapping'] },
+  mapping: { src: 'modules/mapping.js', v: '0253dc02ef34', routes: ['mapping'] },
   // Workflow engine — reusable gated-workflow primitive. No routes; loaded
   // on-demand by consuming surfaces (commissions, pick/ship, RMA, etc.)
   // before they render. See docs/workflow-engine-design.md.
-  'social-v2': { src: 'modules/social-v2.js', routes: ['social-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
-  'composer-v2': { src: 'modules/composer-v2.js', routes: ['composer-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
-  'engagement-inbox-v2': { src: 'modules/engagement-inbox-v2.js', routes: ['engagement-inbox-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
-  'mapping-v2': { src: 'modules/mapping-v2.js', routes: ['mapping-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
-  'audit-v2': { src: 'modules/audit-v2.js', routes: ['audit-v2', 'audit-muted-v2'] }, // audit queue + Muted-rules lens (absorbed audit-suppressions-v2)
-  'studio-v2': { src: 'modules/studio-v2.js', routes: ['studio-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
-  'employees-v2': { src: 'modules/employees-v2.js', routes: ['employees-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
-  'auditlog-v2': { src: 'modules/auditlog-v2.js', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
-  'subscription-v2': { src: 'modules/subscription-v2.js', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
-  'analytics-v2': { src: 'modules/analytics-v2.js', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
-  'advisor-v2': { src: 'modules/advisor-v2.js', routes: ['advisor-v2'] }, // read-port twin of Business-Plan advisor (#advisor remaps here); entity writes via MastDB.businessEntity.* — no new bridge
-  workflowEngine: { src: 'modules/workflows/workflow-engine.js', routes: [] },
-  commissionsWorkflow: { src: 'modules/workflows/commissions.workflow.js', routes: [] },
-  pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', routes: [] },
-  returnWorkflow: { src: 'modules/workflows/return.workflow.js', routes: [] },
-  procurementWorkflow: { src: 'modules/workflows/procurement.workflow.js', routes: [] },
-  productsWorkflow: { src: 'modules/workflows/products.workflow.js', routes: [] },
-  jobsWorkflow: { src: 'modules/workflows/jobs.workflow.js', routes: [] }
+  'social-v2': { src: 'modules/social-v2.js', v: '0ea45601c795', routes: ['social-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
+  'composer-v2': { src: 'modules/composer-v2.js', v: '80f8e8f074cd', routes: ['composer-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
+  'engagement-inbox-v2': { src: 'modules/engagement-inbox-v2.js', v: 'ae7074515108', routes: ['engagement-inbox-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'mapping-v2': { src: 'modules/mapping-v2.js', v: '8996b35a8ba9', routes: ['mapping-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'audit-v2': { src: 'modules/audit-v2.js', v: '21fd634007b5', routes: ['audit-v2', 'audit-muted-v2'] }, // audit queue + Muted-rules lens (absorbed audit-suppressions-v2)
+  'studio-v2': { src: 'modules/studio-v2.js', v: 'd86109156816', routes: ['studio-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
+  'employees-v2': { src: 'modules/employees-v2.js', v: 'aa0b23b87631', routes: ['employees-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
+  'auditlog-v2': { src: 'modules/auditlog-v2.js', v: 'adccbb8d3337', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'subscription-v2': { src: 'modules/subscription-v2.js', v: '4fe160832575', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
+  'analytics-v2': { src: 'modules/analytics-v2.js', v: 'b4e95e781311', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'advisor-v2': { src: 'modules/advisor-v2.js', v: '1fb53daa20c8', routes: ['advisor-v2'] }, // read-port twin of Business-Plan advisor (#advisor remaps here); entity writes via MastDB.businessEntity.* — no new bridge
+  workflowEngine: { src: 'modules/workflows/workflow-engine.js', v: '4fe68ba831b4', routes: [] },
+  commissionsWorkflow: { src: 'modules/workflows/commissions.workflow.js', v: '2d9f5dfe84b9', routes: [] },
+  pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', v: '400c67072c45', routes: [] },
+  returnWorkflow: { src: 'modules/workflows/return.workflow.js', v: '054249e0a329', routes: [] },
+  procurementWorkflow: { src: 'modules/workflows/procurement.workflow.js', v: '739f50e3ae4c', routes: [] },
+  productsWorkflow: { src: 'modules/workflows/products.workflow.js', v: 'c4540de80658', routes: [] },
+  jobsWorkflow: { src: 'modules/workflows/jobs.workflow.js', v: '4d4fb12b7285', routes: [] }
 };
 
 // Reverse lookup: route → moduleId (built from MODULE_MANIFEST)

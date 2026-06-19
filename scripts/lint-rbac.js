@@ -145,7 +145,8 @@ if (!manBlock) {
   violations.push('REGISTRY  app/index.html  could not locate `var MODULE_MANIFEST = {...}` block → CHECK C cannot run');
 } else {
   const routedModules = new Set();
-  for (const m of manBlock[0].matchAll(/src:\s*'modules\/([^']+)'\s*,\s*routes:\s*\[([^\]]*)\]/g)) {
+  // `[^}\n]*?` tolerates an optional `v: '<hash>'` (per-file cache-bust) between src and routes.
+  for (const m of manBlock[0].matchAll(/src:\s*'modules\/([^']+)'[^}\n]*?routes:\s*\[([^\]]*)\]/g)) {
     if (/['"]/.test(m[2])) routedModules.add(path.basename(m[1])); // non-empty routes:[]
   }
   moduleFiles.forEach(file => {

@@ -41,7 +41,9 @@ function parseManifest() {
   if (start === -1) return map;
   const end = txt.indexOf('\n};', start);
   const block = txt.slice(start, end === -1 ? undefined : end);
-  const re = /src:\s*'([^']+)'\s*,\s*routes:\s*\[([^\]]*)\]/g;
+  // Tolerate an optional `v: '<hash>'` (per-file cache-bust) between src and
+  // routes. `[^}\n]*?` keeps the match within the one-line entry.
+  const re = /src:\s*'([^']+)'[^}\n]*?routes:\s*\[([^\]]*)\]/g;
   let m;
   while ((m = re.exec(block))) {
     const src = m[1]; // e.g. modules/orders.js
