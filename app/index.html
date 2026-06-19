@@ -19580,7 +19580,7 @@ var MAST_V2_ROUTE_MAP = {
   // their surface (logo/colors/fonts, sections/content, testimonials) is absorbed
   // into the 4-card builder. `website` is listed FIRST so the reverse-lookup
   // (set-active-nav baseRoute) resolves the consolidated "Your Website" nav item.
-  website: 'website-v2', brand: 'website-v2', homepage: 'website-v2', commissions: 'commissions-v2', products: 'products-v2',
+  website: 'website-v2', brand: 'website-v2', homepage: 'website-v2', products: 'products-v2',
   wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
   contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
   resources: 'classes-rooms-v2',
@@ -20903,7 +20903,7 @@ var MODULE_MANIFEST = {
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
   contacts: { src: 'modules/contacts.js', v: 'fd8ca77af153', routes: ['contacts'] },
   customers: { src: 'modules/customers.js', v: '8a5680c39345', routes: ['customers'] },
-  orders: { src: 'modules/orders.js', v: '43fec58ffdf2', routes: ['orders', 'commissions', 'rma'] },
+  orders: { src: 'modules/orders.js', v: 'fce4649b30d3', routes: ['orders', 'rma'] }, // 'commissions' route ABSORBED into commissions-v2 (T6 PR2): the commission UI + CommissionsBridge were absorbed there, which now owns the bare #commissions route directly (no MAST_V2_ROUTE_MAP remap).
   'orders-v2': { src: 'modules/orders-v2.js', v: '9a955e0a06b8', routes: ['orders-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   'customers-v2': { src: 'modules/customers-v2.js', v: '4b5d4e9c26c1', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: '9bd9e2838f6d', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
@@ -20927,7 +20927,7 @@ var MODULE_MANIFEST = {
   // — they own the bridges (BrandBridge / HomepageBridge / WebsiteBridge) + writers
   // the builder delegates to (hp*, hpToggleTestimonialVisible).
   'website-v2': { src: 'modules/website-v2.js', v: '4133d68dcd66', routes: ['website-v2'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2) (flag-gated)
-  'commissions-v2': { src: 'modules/commissions-v2.js', v: '8f086a7d5a85', routes: ['commissions-v2'] }, // UI-redesign Process surface: commissions lifecycle (flag-gated, side-by-side)
+  'commissions-v2': { src: 'modules/commissions-v2.js', v: '5286f474b932', routes: ['commissions-v2', 'commissions'] }, // UI-redesign Process surface: commissions lifecycle. orders.js (V1) commission slice RETIRED (T6 PR2): its CommissionsBridge + write cores were absorbed here; the bare #commissions route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'products-v2': { src: 'modules/products-v2.js', v: '0d6846f3e487', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: '82492c030beb', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
   'coupons-v2': { src: 'modules/coupons-v2.js', v: 'c7a94342abd2', routes: ['coupons-v2'] }, // UI-redesign conversion: coupons read detail (flag-gated)
