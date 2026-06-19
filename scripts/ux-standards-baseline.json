@@ -99,7 +99,7 @@
   },
   "app/modules/fulfillment.js": {
     "rogueOverlays": 1,
-    "hardcodedHex": 33
+    "hardcodedHex": 37
   },
   "app/modules/gallery-metadata-modal.js": {
     "hardcodedHex": 4

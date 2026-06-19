@@ -160,7 +160,7 @@
   },
   "app/modules/fulfillment.js": {
     "centsDiv": 2,
-    "moneyToFixed": 2,
+    "moneyToFixed": 3,
     "localeDate": 1
   },
   "app/modules/galleries-v2.js": {

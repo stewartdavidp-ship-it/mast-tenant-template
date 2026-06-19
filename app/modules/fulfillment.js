@@ -1497,6 +1497,628 @@
   window.assignRequestToJob = assignRequestToJob;
 
   // ============================================================
+  // Shipping Modal — Multi-step (Shippo API) or Manual fallback
+  // ------------------------------------------------------------
+  // Relocated VERBATIM from orders.js in T6 PR3b. openShippingModal is the
+  // fulfillment surface's "Label" / Shippo rate-shop flow; its only consumer was
+  // (and is) this module's pack/ship onclicks. Kept here (lazy) rather than in the
+  // eager orders-core so the ~600-line flow does not bloat the eager head. Reads
+  // only shell globals (orders/openModal/closeModal/esc/showToast/navigateTo/auth/
+  // callCF/MastDB/firebase/writeAudit/mastConfirm/TRACKING_URLS/productsData) +
+  // getOrderDisplayNumber (orders-core, eager) + guarded production.js helpers
+  // (_getLkApiKey/LK_API_URL). NOTE: the inline `onchange="_shippingState..."`
+  // reference resolves to a (currently undefined) global exactly as it did in
+  // orders.js — behavior preserved byte-for-byte, not "fixed" here.
+  // ============================================================
+
+  var _shippingState = {};
+
+  async function _getShippingProvider() {
+    try {
+      var snap = await MastDB.config.shippingProvider('provider').once('value');
+      return snap.val() || 'manual';
+    } catch(e) { return 'manual'; }
+  }
+
+  async function _getStudioLocations() {
+    var snap = await MastDB.studioLocations.get();
+    return (snap || {});
+  }
+
+  async function _getPackagePresets() {
+    try {
+      var snap = await MastDB.config.shippingProvider('packagePresets').once('value');
+      return snap.val() || [];
+    } catch(e) { return []; }
+  }
+
+  function _calcOrderWeight(order) {
+    var totalOz = 0;
+    (order.items || []).forEach(function(item) {
+      var prod = (typeof productsData !== 'undefined' && productsData) ? productsData.find(function(p) { return p.pid === item.pid; }) : null;
+      if (prod && prod.weightOz) totalOz += prod.weightOz * (item.qty || 1);
+    });
+    return totalOz;
+  }
+
+  function openShippingModal(orderId) {
+    _shippingState = { orderId: orderId, step: 'loading', rates: [], selectedRate: null };
+    openModal('<div style="max-width:500px;padding:16px;text-align:center;"><div class="loading">Loading shipping options...</div></div>');
+    _initShippingPanel(orderId);
+  }
+
+  async function _initShippingPanel(orderId) {
+    try {
+      var provider = await _getShippingProvider();
+      _shippingState.provider = provider;
+
+      if (provider === 'manual') {
+        _renderManualShipping(orderId);
+        return;
+      }
+
+      var locations = await _getStudioLocations();
+      var presets = await _getPackagePresets();
+      var order = orders[orderId];
+      var autoWeight = _calcOrderWeight(order);
+
+      _shippingState.locations = locations;
+      _shippingState.presets = presets;
+      _shippingState.autoWeight = autoWeight;
+      _shippingState.step = 'configure';
+      _renderShippingPanel();
+    } catch (err) {
+      openModal('<div style="max-width:400px;padding:24px;"><h3>Shipping Error</h3><p style="color:var(--danger);">' + esc(err.message) + '</p><button class="btn btn-secondary" onclick="closeModal()">Close</button></div>');
+    }
+  }
+
+  function _renderManualShipping(orderId) {
+    var order = orders[orderId];
+    var etsyNote = (order && order.source === 'etsy') ?
+      '<div style="background:rgba(241,100,30,0.15);border:1px solid rgba(241,100,30,0.4);border-radius:6px;padding:8px 12px;margin-bottom:16px;font-size:0.85rem;color:#fdba74;">' +
+        '<strong>Etsy Order</strong> — Tracking will be pushed to Etsy automatically when you mark shipped.' +
+      '</div>' : '';
+    var html = '<div style="max-width:400px;padding:24px;">' +
+      '<h3>Mark as Shipped</h3>' +
+      etsyNote +
+      '<div class="form-group">' +
+        '<label>Carrier</label>' +
+        '<select id="shippingCarrier">' +
+          '<option value="USPS">USPS</option>' +
+          '<option value="UPS">UPS</option>' +
+          '<option value="FedEx">FedEx</option>' +
+          '<option value="Other">Other</option>' +
+        '</select>' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Tracking Number</label>' +
+        '<input type="text" id="shippingTrackingNum" placeholder="Enter tracking number">' +
+      '</div>' +
+      '<div class="form-group">' +
+        '<label>Note (optional)</label>' +
+        '<input type="text" id="shippingNote" placeholder="e.g. Shipped Priority Mail">' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="submitManualShipping(\'' + esc(orderId) + '\')">Mark Shipped</button>' +
+      '</div>' +
+    '</div>';
+    openModal(html);
+  }
+
+  function _renderShippingPanel() {
+    var s = _shippingState;
+    var order = orders[s.orderId];
+    var num = order ? getOrderDisplayNumber(order) : s.orderId;
+
+    // Ship-from dropdown
+    var locKeys = Object.keys(s.locations || {});
+    var defaultLocKey = '';
+    locKeys.forEach(function(k) { if (s.locations[k].isDefaultShipFrom) defaultLocKey = k; });
+    if (!s.selectedFromKey) s.selectedFromKey = defaultLocKey || (locKeys.length > 0 ? locKeys[0] : '');
+
+    var fromLoc = s.locations[s.selectedFromKey] || {};
+    var fromOptions = '';
+    locKeys.forEach(function(k) {
+      var loc = s.locations[k];
+      if (!loc.address1) return; // Skip locations without addresses
+      var label = (loc.name || k) + ' — ' + [loc.city, loc.state].filter(Boolean).join(', ');
+      fromOptions += '<option value="' + esc(k) + '"' + (s.selectedFromKey === k ? ' selected' : '') + '>' + esc(label) + '</option>';
+    });
+
+    var noAddressWarning = fromOptions === '' ?
+      '<div style="background:rgba(255,152,0,0.15);border:1px solid rgba(255,152,0,0.4);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:0.85rem;color:#fdba74;">' +
+        'No studio locations have ship-from addresses. <a href="#" onclick="closeModal();navigateTo(\'settings\');return false;" style="color:#fed7aa;font-weight:600;">Add one in Settings</a>' +
+      '</div>' : '';
+
+    // Ship-to (from order)
+    var addr = order.shippingAddress || order.shipping || order.address || {};
+    var toLine = [addr.name, addr.address1, addr.city, addr.state, addr.zip].filter(Boolean).join(', ');
+
+    // Package — auto-select first preset if available
+    if (s.selectedPreset === undefined && s.presets && s.presets.length > 0) {
+      s.selectedPreset = 0;
+    }
+    var presetOptions = '<option value="custom">Custom dimensions</option>';
+    (s.presets || []).forEach(function(p, i) {
+      presetOptions += '<option value="' + i + '"' + (s.selectedPreset === i ? ' selected' : '') + '>' +
+        esc(p.name) + ' (' + p.lengthIn + '×' + p.widthIn + '×' + p.heightIn + '")</option>';
+    });
+
+    // Pre-fill dims from selected preset
+    var selectedPresetObj = (s.selectedPreset !== undefined && s.presets) ? s.presets[s.selectedPreset] : null;
+    var presetL = selectedPresetObj ? selectedPresetObj.lengthIn : (s.parcelLength || '');
+    var presetW = selectedPresetObj ? selectedPresetObj.widthIn : (s.parcelWidth || '');
+    var presetH = selectedPresetObj ? selectedPresetObj.heightIn : (s.parcelHeight || '');
+
+    var autoWeightNote = s.autoWeight > 0 ? ' (auto-calculated from products: ' + s.autoWeight + ' oz)' : '';
+    var currentWeight = s.manualWeight || s.autoWeight || '';
+
+    var configHtml = '<div style="max-width:500px;padding:24px;">' +
+      '<h3 style="margin:0 0 16px;">Ship Order ' + esc(num) + '</h3>' +
+      noAddressWarning +
+
+      // Ship-from
+      '<div class="form-group">' +
+        '<label style="font-weight:600;">Ship From</label>' +
+        '<select id="shipFromSelect" onchange="_shippingState.selectedFromKey=this.value">' + fromOptions + '</select>' +
+      '</div>' +
+      '<input type="hidden" id="shipFromPhone" value="' + esc(fromLoc.phone || '617-642-4279') + '">' +
+
+      // Ship-to (read-only)
+      '<div class="form-group">' +
+        '<label style="font-weight:600;">Ship To</label>' +
+        '<div style="padding:8px 12px;background:var(--cream);border-radius:6px;font-size:0.9rem;">' + esc(toLine || 'No shipping address on order') + '</div>' +
+      '</div>' +
+
+      // Package
+      '<div class="form-group">' +
+        '<label style="font-weight:600;">Package</label>' +
+        '<select id="shipPackagePreset" onchange="shippingSelectPreset(this.value)">' + presetOptions + '</select>' +
+      '</div>' +
+      '<div id="shipCustomDims" style="display:' + (s.selectedPreset !== undefined ? 'none' : 'block') + ';">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<div class="form-group" style="min-width:80px;flex:1;"><label>Length (in)</label><input type="number" id="shipLength" min="0" step="0.1" value="' + presetL + '"></div>' +
+          '<div class="form-group" style="min-width:80px;flex:1;"><label>Width (in)</label><input type="number" id="shipWidth" min="0" step="0.1" value="' + presetW + '"></div>' +
+          '<div class="form-group" style="min-width:80px;flex:1;"><label>Height (in)</label><input type="number" id="shipHeight" min="0" step="0.1" value="' + presetH + '"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="form-group" style="max-width:200px;">' +
+        '<label>Weight (oz)' + (autoWeightNote ? '<span style="font-size:0.78rem;color:var(--warm-gray);font-weight:400;">' + autoWeightNote + '</span>' : '') + '</label>' +
+        '<input type="number" id="shipWeight" min="0" step="0.1" value="' + currentWeight + '">' +
+      '</div>' +
+
+      // Actions
+      '<div style="display:flex;gap:8px;justify-content:space-between;margin-top:16px;flex-wrap:wrap;">' +
+        '<button class="btn btn-secondary" style="font-size:0.85rem;" onclick="shippingSwitchToManual(\'' + esc(s.orderId) + '\')">Enter tracking manually</button>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+          '<button class="btn btn-primary" id="shipGetRatesBtn" onclick="shippingGetRates()" ' + (fromOptions === '' ? 'disabled' : '') + '>Get Rates</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    // Rate results
+    if (s.step === 'rates' && s.rates.length > 0) {
+      configHtml = _renderRateResults();
+    } else if (s.step === 'buying') {
+      configHtml = '<div style="max-width:500px;padding:16px;text-align:center;"><div class="loading">Purchasing label...</div></div>';
+    }
+
+    openModal(configHtml);
+  }
+
+  function _renderRateResults() {
+    var s = _shippingState;
+    var order = orders[s.orderId];
+    var num = order ? getOrderDisplayNumber(order) : s.orderId;
+
+    var html = '<div style="max-width:550px;padding:24px;">' +
+      '<h3 style="margin:0 0 4px;">Shipping Rates — ' + esc(num) + '</h3>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;margin:0 0 16px;">Select a rate to purchase a shipping label</p>';
+
+    if (s.rateError) {
+      html += '<div style="background:rgba(220,53,69,0.15);border:1px solid rgba(220,53,69,0.4);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:0.85rem;color:#fca5a5;">' + esc(s.rateError) + '</div>';
+    }
+
+    html += '<div style="overflow-x:auto;">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">' +
+      '<thead><tr style="border-bottom:2px solid var(--cream-dark);">' +
+        '<th style="text-align:left;padding:8px;">Carrier</th>' +
+        '<th style="text-align:left;padding:8px;">Service</th>' +
+        '<th style="text-align:right;padding:8px;">Price</th>' +
+        '<th style="text-align:right;padding:8px;">Est. Days</th>' +
+        '<th style="padding:8px;"></th>' +
+      '</tr></thead><tbody>';
+
+    s.rates.forEach(function(rate, idx) {
+      var selected = s.selectedRate === idx;
+      html += '<tr style="border-bottom:1px solid var(--cream-dark);' + (selected ? 'background:rgba(0,128,128,0.08);' : '') + '">' +
+        '<td style="padding:8px;font-weight:600;">' + esc(rate.carrier || '') + '</td>' +
+        '<td style="padding:8px;">' + esc(rate.service || '') + '</td>' +
+        '<td style="padding:8px;text-align:right;font-family:monospace;font-weight:600;">$' + parseFloat(rate.price || 0).toFixed(2) + '</td>' +
+        '<td style="padding:8px;text-align:right;">' + (rate.estimatedDays || '—') + '</td>' +
+        '<td style="padding:8px;text-align:right;">' +
+          '<button class="btn ' + (selected ? 'btn-primary' : 'btn-secondary') + '" style="font-size:0.78rem;padding:4px 12px;" onclick="shippingSelectRate(' + idx + ')">' + (selected ? 'Selected' : 'Select') + '</button>' +
+        '</td>' +
+      '</tr>';
+    });
+
+    html += '</tbody></table></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+        '<button class="btn btn-secondary" onclick="shippingBackToConfigure()">Back</button>' +
+        '<button class="btn btn-primary" id="shipBuyLabelBtn" onclick="shippingBuyLabel()" ' + (s.selectedRate === null ? 'disabled' : '') + '>Buy Label</button>' +
+      '</div>' +
+    '</div>';
+    return html;
+  }
+
+  function shippingSelectPreset(val) {
+    var s = _shippingState;
+    var customDims = document.getElementById('shipCustomDims');
+    if (val === 'custom') {
+      s.selectedPreset = undefined;
+      if (customDims) customDims.style.display = 'block';
+    } else {
+      var idx = parseInt(val);
+      s.selectedPreset = idx;
+      var preset = s.presets[idx];
+      if (preset) {
+        document.getElementById('shipLength').value = preset.lengthIn || '';
+        document.getElementById('shipWidth').value = preset.widthIn || '';
+        document.getElementById('shipHeight').value = preset.heightIn || '';
+      }
+      if (customDims) customDims.style.display = 'none';
+    }
+  }
+
+  function shippingSelectRate(idx) {
+    _shippingState.selectedRate = idx;
+    // Re-render with selection
+    openModal(_renderRateResults());
+  }
+
+  function shippingBackToConfigure() {
+    _shippingState.step = 'configure';
+    _shippingState.rates = [];
+    _shippingState.selectedRate = null;
+    _renderShippingPanel();
+  }
+
+  function shippingSwitchToManual(orderId) {
+    _renderManualShipping(orderId);
+  }
+
+  async function shippingGetRates() {
+    var s = _shippingState;
+    var btn = document.getElementById('shipGetRatesBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Getting rates...'; }
+
+    try {
+      var fromLoc = s.locations[s.selectedFromKey];
+      if (!fromLoc || !fromLoc.address1) {
+        showToast('Selected location has no address', true);
+        if (btn) { btn.disabled = false; btn.textContent = 'Get Rates'; }
+        return;
+      }
+
+      var order = orders[s.orderId];
+      var toAddr = order.shippingAddress || order.shipping || order.address || {};
+
+      var lengthIn = parseFloat(document.getElementById('shipLength').value) || 0;
+      var widthIn = parseFloat(document.getElementById('shipWidth').value) || 0;
+      var heightIn = parseFloat(document.getElementById('shipHeight').value) || 0;
+      var weightOz = parseFloat(document.getElementById('shipWeight').value) || 0;
+
+      if (!weightOz) {
+        showToast('Weight is required', true);
+        if (btn) { btn.disabled = false; btn.textContent = 'Get Rates'; }
+        return;
+      }
+
+      var token = await auth.currentUser.getIdToken();
+      var resp = await callCF('/shippingGetRates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          tenantId: MastDB.tenantId(),
+          from: {
+            name: fromLoc.name || '',
+            address1: fromLoc.address1,
+            address2: fromLoc.address2 || '',
+            city: fromLoc.city,
+            state: fromLoc.state,
+            zip: fromLoc.zip,
+            phone: (document.getElementById('shipFromPhone') && document.getElementById('shipFromPhone').value.trim()) || fromLoc.phone || '0000000000',
+            email: 'info@runmast.com'
+          },
+          to: {
+            name: toAddr.name || (order.customerName || ''),
+            address1: toAddr.address1 || toAddr.line1 || '',
+            address2: toAddr.address2 || toAddr.line2 || '',
+            city: toAddr.city || '',
+            state: toAddr.state || '',
+            zip: toAddr.zip || toAddr.postalCode || '',
+            phone: toAddr.phone || ''
+          },
+          parcel: { lengthIn: lengthIn, widthIn: widthIn, heightIn: heightIn, weightOz: weightOz }
+        })
+      });
+
+      var data = await resp.json();
+
+      if (!resp.ok) {
+        s.rateError = data.error || 'Failed to get rates';
+        s.step = 'rates';
+        s.rates = [];
+        _renderShippingPanel();
+        return;
+      }
+
+      var rates = (data.result && data.result.rates) || data.rates || [];
+      rates.sort(function(a, b) { return parseFloat(a.price || 0) - parseFloat(b.price || 0); });
+
+      s.rates = rates;
+      s.rateError = null;
+      s.step = 'rates';
+      s.selectedRate = rates.length > 0 ? 0 : null; // Auto-select cheapest
+      _renderShippingPanel();
+
+    } catch (err) {
+      showToast('Error getting rates: ' + err.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Get Rates'; }
+    }
+  }
+
+  async function shippingBuyLabel() {
+    var s = _shippingState;
+    if (s.selectedRate === null) return;
+    var rate = s.rates[s.selectedRate];
+    if (!rate) return;
+
+    s.step = 'buying';
+    _renderShippingPanel();
+
+    try {
+      var token = await auth.currentUser.getIdToken();
+      var resp = await callCF('/shippingBuyLabel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          tenantId: MastDB.tenantId(),
+          rateId: rate.id,
+          orderId: s.orderId
+        })
+      });
+
+      var data = await resp.json();
+
+      if (!resp.ok) {
+        showToast(data.error || 'Failed to buy label', true);
+        s.step = 'rates';
+        _renderShippingPanel();
+        return;
+      }
+
+      var result = data.result || data;
+
+      // Update local order state
+      var order = orders[s.orderId];
+      var now = new Date().toISOString();
+      var history = (order && order.statusHistory) ? order.statusHistory.slice() : [];
+      history.push({ status: 'shipped', at: now, by: 'admin', note: (result.carrier || '') + ' via ' + s.provider });
+
+      await MastDB.orders.update(s.orderId, {
+        status: 'shipped',
+        shippedAt: now,
+        tracking: {
+          carrier: result.carrier || rate.carrier || '',
+          trackingNumber: result.trackingNumber || '',
+          trackingUrl: result.trackingUrl || '',
+          shipmentId: result.shipmentId || '',
+          labelUrl: result.labelUrl || '',
+          labelProvider: s.provider,
+          purchasedAt: now
+        },
+        statusHistory: history
+      });
+      await writeAudit('update', 'orders', s.orderId);
+
+      // Trigger inventory deduction + shipped email via cloud function (canonical path)
+      try {
+        await firebase.functions().httpsCallable('onOrderShipped')({ orderId: s.orderId, tenantId: MastDB.tenantId() });
+      } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
+
+      closeModal();
+      showToast('Label purchased — order shipped!');
+
+      // Show label action
+      if (result.labelUrl) {
+        setTimeout(function() {
+          _offerLabelPrint(s.orderId, result.labelUrl);
+        }, 500);
+      }
+
+    } catch (err) {
+      showToast('Error buying label: ' + err.message, true);
+      s.step = 'rates';
+      _renderShippingPanel();
+    }
+  }
+
+  function _offerLabelPrint(orderId, labelUrl) {
+    var order = orders[orderId];
+    var carrier = (order && order.tracking && order.tracking.carrier) || '';
+    var isMobile = window.innerWidth < 600;
+    var html = '<div style="max-width:400px;text-align:center;padding:24px;">' +
+      '<div style="font-size:1.6rem;margin-bottom:8px;">&#x2705;</div>' +
+      '<h3 style="margin:0 0 8px;">Label Ready</h3>' +
+      '<p style="color:var(--warm-gray);font-size:0.9rem;margin:0 0 16px;">Your shipping label has been purchased and tracking is set.</p>' +
+      '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+        (isMobile ?
+          '<a href="' + esc(labelUrl) + '" target="_blank" class="btn btn-primary" style="text-decoration:none;">View Label</a>' :
+          '<button class="btn btn-primary" onclick="printShippingLabel(\'' + esc(orderId) + '\')">Print Label (4×6)</button>') +
+        '<a href="' + esc(labelUrl) + '" target="_blank" class="btn btn-secondary" style="text-decoration:none;">Download PDF</a>' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Done</button>' +
+      '</div>' +
+    '</div>';
+    openModal(html);
+  }
+
+  async function printShippingLabel(orderId) {
+    var order = orders[orderId];
+    if (!order || !order.tracking || !order.tracking.labelUrl) {
+      showToast('No label URL found on this order', true);
+      return;
+    }
+    var labelUrl = order.tracking.labelUrl;
+    var carrier = order.tracking.carrier || '';
+    var num = getOrderDisplayNumber(order);
+
+    // Try LabelKeeper API if key is configured
+    try {
+      var lkUrl = (typeof LK_API_URL !== 'undefined') ? LK_API_URL : 'https://labelkeeper-api-1075204398975.us-central1.run.app';
+      // Try to get LK API key — check production module first, then read directly
+      var lkKey = null;
+      if (typeof _getLkApiKey === 'function') {
+        lkKey = await _getLkApiKey();
+      }
+      if (!lkKey) {
+        try {
+          var snap = await MastDB.get('config/labelkeeper/apiKey');
+          lkKey = snap.val();
+          if (!lkKey) {
+            snap = await MastDB.get('admin/config/labelkeeper/apiKey');
+            lkKey = snap.val();
+          }
+        } catch(e) {}
+      }
+      if (lkKey) {
+        var resp = await fetch(lkUrl + '/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + lkKey },
+          body: JSON.stringify({
+            type: 'shipping-label',
+            labelImageUrl: labelUrl,
+            orderId: num,
+            carrier: carrier
+          })
+        });
+        if (resp.ok) {
+          var data = await resp.json();
+          if (data.url) {
+            window.open(data.url, '_blank');
+            showToast('Label opened in LabelKeeper');
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('LabelKeeper session failed, falling back to direct open:', e.message);
+    }
+
+    // Fallback: open label URL directly
+    window.open(labelUrl, '_blank');
+    showToast('Label opened — use browser print at 4×6');
+  }
+
+  async function shippingVoidLabel(orderId) {
+    if (!await mastConfirm('Void this shipping label? The postage will be refunded to your account.', { title: 'Void Label', danger: true })) return;
+    var o = orders[orderId];
+    if (!o || !o.tracking || !o.tracking.shipmentId) {
+      showToast('No API-purchased label to void', true);
+      return;
+    }
+    try {
+      var token = await auth.currentUser.getIdToken();
+      var resp = await callCF('/shippingVoidLabel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({
+          tenantId: MastDB.tenantId(),
+          shipmentId: o.tracking.shipmentId,
+          orderId: orderId
+        })
+      });
+      var data = await resp.json();
+      if (!resp.ok) {
+        showToast(data.error || 'Failed to void label', true);
+        return;
+      }
+      // Update local state — CF already cleared tracking on order
+      var now = new Date().toISOString();
+      var history = (o.statusHistory || []).slice();
+      history.push({ status: 'confirmed', at: now, by: 'admin', note: 'Label voided — refund initiated' });
+      await MastDB.orders.update(orderId, {
+        status: 'confirmed',
+        shippedAt: null,
+        tracking: null,
+        statusHistory: history
+      });
+      await writeAudit('update', 'orders', orderId);
+      showToast('Label voided — order returned to confirmed');
+    } catch (err) {
+      showToast('Error voiding label: ' + err.message, true);
+    }
+  }
+
+  async function submitManualShipping(orderId) {
+    var carrier = document.getElementById('shippingCarrier').value;
+    var trackingNum = document.getElementById('shippingTrackingNum').value.trim();
+    var note = document.getElementById('shippingNote').value.trim();
+
+    if (!trackingNum) {
+      showToast('Please enter a tracking number', true);
+      return;
+    }
+
+    try {
+      var now = new Date().toISOString();
+      var trackingUrl = '';
+      if (TRACKING_URLS[carrier]) {
+        trackingUrl = TRACKING_URLS[carrier](trackingNum);
+      }
+
+      var o = orders[orderId];
+      var history = (o && o.statusHistory) ? o.statusHistory.slice() : [];
+      history.push({ status: 'shipped', at: now, by: 'admin', note: note || carrier + ' ' + trackingNum });
+
+      await MastDB.orders.update(orderId, {
+        status: 'shipped',
+        shippedAt: now,
+        tracking: {
+          carrier: carrier,
+          trackingNumber: trackingNum,
+          trackingUrl: trackingUrl
+        },
+        statusHistory: history
+      });
+      await writeAudit('update', 'orders', orderId);
+
+      // Trigger inventory deduction + shipped email via cloud function (canonical path)
+      try {
+        await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
+      } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
+
+      closeModal();
+      showToast('Order marked as shipped');
+    } catch (err) {
+      showToast('Error updating shipping: ' + err.message, true);
+    }
+  }
+
+  window.openShippingModal = openShippingModal;
+  window.submitManualShipping = submitManualShipping;
+  window.shippingGetRates = shippingGetRates;
+  window.shippingBuyLabel = shippingBuyLabel;
+  window.shippingSelectRate = shippingSelectRate;
+  window.shippingSelectPreset = shippingSelectPreset;
+  window.shippingBackToConfigure = shippingBackToConfigure;
+  window.shippingSwitchToManual = shippingSwitchToManual;
+  window.shippingVoidLabel = shippingVoidLabel;
+  window.printShippingLabel = printShippingLabel;
+
+  // ============================================================
   // Module registration
   // ============================================================
 
