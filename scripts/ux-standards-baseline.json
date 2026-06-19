@@ -128,6 +128,10 @@
   "app/modules/marketing-calendar.js": {
     "hardcodedHex": 8
   },
+  "app/modules/match-confirm-modal.js": {
+    "rogueOverlays": 1,
+    "hardcodedHex": 9
+  },
   "app/modules/newsletter.js": {
     "nativeDialogs": 1,
     "hardcodedHex": 36
