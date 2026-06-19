@@ -1,0 +1,351 @@
+{
+  "app/modules/accounting-v2.js": {
+    "localeDate": 1
+  },
+  "app/modules/accounting.js": {
+    "localeDate": 6
+  },
+  "app/modules/add-to-sale-dialog.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1
+  },
+  "app/modules/advisor-v2.js": {
+    "centsDiv": 1,
+    "localeDate": 1
+  },
+  "app/modules/advisor.js": {
+    "centsDiv": 1,
+    "localeDate": 1
+  },
+  "app/modules/analytics-v2.js": {
+    "centsDiv": 2,
+    "moneyToFixed": 2,
+    "localeDate": 2
+  },
+  "app/modules/audit-feedback.js": {
+    "localeDate": 1
+  },
+  "app/modules/audit.js": {
+    "localeDate": 1
+  },
+  "app/modules/auditlog-v2.js": {
+    "localeDate": 1
+  },
+  "app/modules/blog-v2.js": {
+    "moneyToFixed": 2
+  },
+  "app/modules/blog.js": {
+    "moneyToFixed": 3,
+    "localeDate": 6
+  },
+  "app/modules/book.js": {
+    "centsDiv": 11,
+    "moneyToFixed": 9,
+    "localeDate": 8
+  },
+  "app/modules/brand.js": {
+    "localeDate": 1
+  },
+  "app/modules/campaigns.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1,
+    "localeDate": 1
+  },
+  "app/modules/cart.js": {
+    "centsDiv": 5,
+    "moneyToFixed": 6
+  },
+  "app/modules/channels.js": {
+    "centsDiv": 8,
+    "moneyToFixed": 1,
+    "localeDate": 2
+  },
+  "app/modules/classes-v2.js": {
+    "centsDiv": 7,
+    "moneyToFixed": 4
+  },
+  "app/modules/coin-wallet-modal.js": {
+    "centsDiv": 1,
+    "localeDate": 4
+  },
+  "app/modules/commission-terms.js": {
+    "localeDate": 3
+  },
+  "app/modules/commissions-v2.js": {
+    "centsDiv": 1
+  },
+  "app/modules/connections-providers.js": {
+    "localeDate": 4
+  },
+  "app/modules/consignment.js": {
+    "centsDiv": 13,
+    "moneyToFixed": 9
+  },
+  "app/modules/consignments-v2.js": {
+    "centsDiv": 4,
+    "moneyToFixed": 4
+  },
+  "app/modules/contacts-v2.js": {
+    "localeDate": 1
+  },
+  "app/modules/contacts.js": {
+    "centsDiv": 1,
+    "localeDate": 1
+  },
+  "app/modules/coupons-v2.js": {
+    "moneyToFixed": 1
+  },
+  "app/modules/customer-portfolio-v2.js": {
+    "centsDiv": 2
+  },
+  "app/modules/customer-service.js": {
+    "centsDiv": 2,
+    "moneyToFixed": 4,
+    "localeDate": 3
+  },
+  "app/modules/customers-v2.js": {
+    "centsDiv": 4,
+    "moneyToFixed": 2
+  },
+  "app/modules/customers.js": {
+    "centsDiv": 8,
+    "moneyToFixed": 9,
+    "localeDate": 3
+  },
+  "app/modules/duplicates-v2.js": {
+    "centsDiv": 1
+  },
+  "app/modules/email-log-v2.js": {
+    "localeDate": 1
+  },
+  "app/modules/email-log.js": {
+    "localeDate": 5
+  },
+  "app/modules/email-preview-drawer.js": {
+    "localeDate": 1
+  },
+  "app/modules/engagement-inbox-v2.js": {
+    "localeDate": 1
+  },
+  "app/modules/engagement-inbox.js": {
+    "localeDate": 1
+  },
+  "app/modules/events.js": {
+    "centsDiv": 2,
+    "moneyToFixed": 2,
+    "localeDate": 2
+  },
+  "app/modules/finance-close-v2.js": {
+    "centsDiv": 3,
+    "moneyToFixed": 3
+  },
+  "app/modules/finance-expenses-v2.js": {
+    "centsDiv": 1
+  },
+  "app/modules/finance-openitems-v2.js": {
+    "centsDiv": 2,
+    "moneyToFixed": 2
+  },
+  "app/modules/finance-statements-v2.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1
+  },
+  "app/modules/finance.js": {
+    "centsDiv": 63,
+    "moneyToFixed": 77,
+    "localeDate": 14
+  },
+  "app/modules/fulfillment-v2.js": {
+    "moneyToFixed": 1
+  },
+  "app/modules/fulfillment.js": {
+    "centsDiv": 2,
+    "moneyToFixed": 2,
+    "localeDate": 1
+  },
+  "app/modules/galleries-v2.js": {
+    "centsDiv": 8,
+    "moneyToFixed": 2
+  },
+  "app/modules/gift-cards-v2.js": {
+    "centsDiv": 1
+  },
+  "app/modules/image-library.js": {
+    "localeDate": 2
+  },
+  "app/modules/instructors-v2.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1
+  },
+  "app/modules/inventory-ask-ai.js": {
+    "centsDiv": 3,
+    "moneyToFixed": 3
+  },
+  "app/modules/jobs-v2.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1
+  },
+  "app/modules/link-recipe-dialog.js": {
+    "moneyToFixed": 1
+  },
+  "app/modules/lookbooks-v2.js": {
+    "localeDate": 1
+  },
+  "app/modules/lookbooks.js": {
+    "localeDate": 1
+  },
+  "app/modules/maker.js": {
+    "centsDiv": 18,
+    "moneyToFixed": 39,
+    "localeDate": 4
+  },
+  "app/modules/mapping.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1
+  },
+  "app/modules/marketing-calendar.js": {
+    "localeDate": 2
+  },
+  "app/modules/newsletter.js": {
+    "centsDiv": 3,
+    "moneyToFixed": 2,
+    "localeDate": 7
+  },
+  "app/modules/orders-v2.js": {
+    "centsDiv": 6,
+    "moneyToFixed": 3,
+    "localeDate": 4
+  },
+  "app/modules/orders.js": {
+    "centsDiv": 27,
+    "moneyToFixed": 43,
+    "localeDate": 11
+  },
+  "app/modules/passes-v2.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1
+  },
+  "app/modules/procurement-v2.js": {
+    "moneyToFixed": 1
+  },
+  "app/modules/procurement.js": {
+    "moneyToFixed": 15,
+    "localeDate": 1
+  },
+  "app/modules/production.js": {
+    "centsDiv": 16,
+    "moneyToFixed": 14,
+    "localeDate": 4
+  },
+  "app/modules/products-v2.js": {
+    "centsDiv": 13,
+    "moneyToFixed": 3
+  },
+  "app/modules/promotions-v2.js": {
+    "centsDiv": 3
+  },
+  "app/modules/promotions.js": {
+    "centsDiv": 2,
+    "moneyToFixed": 1,
+    "localeDate": 1
+  },
+  "app/modules/receipts-v2.js": {
+    "centsDiv": 13,
+    "localeDate": 4
+  },
+  "app/modules/rma-v2.js": {
+    "centsDiv": 2
+  },
+  "app/modules/sales-events-v2.js": {
+    "centsDiv": 2
+  },
+  "app/modules/sales.js": {
+    "centsDiv": 3,
+    "moneyToFixed": 3,
+    "localeDate": 7
+  },
+  "app/modules/settings-panels.js": {
+    "localeDate": 5
+  },
+  "app/modules/setup-wizard.js": {
+    "centsDiv": 4,
+    "localeDate": 5
+  },
+  "app/modules/shows-v2.js": {
+    "centsDiv": 2,
+    "moneyToFixed": 2,
+    "localeDate": 6
+  },
+  "app/modules/shows.js": {
+    "centsDiv": 29,
+    "moneyToFixed": 22,
+    "localeDate": 8
+  },
+  "app/modules/social-v2.js": {
+    "moneyToFixed": 2
+  },
+  "app/modules/social.js": {
+    "moneyToFixed": 2,
+    "localeDate": 1
+  },
+  "app/modules/studio-v2.js": {
+    "centsDiv": 2,
+    "moneyToFixed": 1
+  },
+  "app/modules/studio.js": {
+    "centsDiv": 4,
+    "moneyToFixed": 4
+  },
+  "app/modules/subscription-v2.js": {
+    "centsDiv": 2,
+    "localeDate": 11
+  },
+  "app/modules/team-v2.js": {
+    "centsDiv": 3,
+    "moneyToFixed": 1
+  },
+  "app/modules/team.js": {
+    "centsDiv": 18,
+    "moneyToFixed": 18
+  },
+  "app/modules/trips-v2.js": {
+    "localeDate": 1
+  },
+  "app/modules/trips.js": {
+    "centsDiv": 4,
+    "moneyToFixed": 8,
+    "localeDate": 2
+  },
+  "app/modules/unified-drift-dialog.js": {
+    "localeDate": 1
+  },
+  "app/modules/variant-detail-tabs.js": {
+    "moneyToFixed": 26
+  },
+  "app/modules/vendors-v2.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1
+  },
+  "app/modules/wallet-v2.js": {
+    "centsDiv": 4,
+    "moneyToFixed": 4
+  },
+  "app/modules/website-v2.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1
+  },
+  "app/modules/website.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1,
+    "localeDate": 2
+  },
+  "app/modules/wholesale-v2.js": {
+    "centsDiv": 3,
+    "moneyToFixed": 1
+  },
+  "app/modules/wholesale.js": {
+    "centsDiv": 12,
+    "moneyToFixed": 13,
+    "localeDate": 5
+  }
+}
