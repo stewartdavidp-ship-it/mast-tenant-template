@@ -1,6 +1,6 @@
 {
   "app/index.html": {
-    "unboundedList": 27,
+    "unboundedList": 18,
     "onSnapshot": 1
   },
   "app/modules/accounting.js": {
@@ -14,6 +14,9 @@
   },
   "app/modules/customers-v2.js": {
     "unboundedList": 1
+  },
+  "app/modules/image-library.js": {
+    "unboundedList": 9
   },
   "app/modules/marketing-calendar.js": {
     "unboundedList": 3
