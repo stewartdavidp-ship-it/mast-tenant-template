@@ -6530,13 +6530,6 @@
     .lb-generating { text-align:center; padding:30px 20px; }
     .lb-generating::before { content:''; display:block; width:32px; height:32px; margin:0 auto 12px; border:3px solid var(--cream-dark); border-top-color:var(--amber); border-radius:50%; animation:spin 0.8s linear infinite; }
 
-    body.dark-mode #lookbooksTab input,
-    body.dark-mode #lookbooksTab textarea,
-    body.dark-mode #lookbooksTab select { background:#2a2a2a; border-color:#444; color:#e0e0e0; }
-    body.dark-mode #lookbooksTab input:focus,
-    body.dark-mode #lookbooksTab textarea:focus,
-    body.dark-mode #lookbooksTab select:focus { border-color:var(--teal); }
-
     /* =================================================================
        Dark-mode rescue for inline light backgrounds (2026-05-24 audit)
        -----------------------------------------------------------------
@@ -7015,8 +7008,6 @@
     </div>
 
     <!-- ===== ADVISOR TAB ===== -->
-    <div id="advisorTab" style="display:none;">
-    </div>
 
     <!-- ===== BUSINESS TAB (D-22: Unified Business Entity page) ===== -->
     <div id="businessTab" style="display:none;">
@@ -7035,7 +7026,6 @@
     </div>
 
     <!-- ===== W2 Marketing Aggregator Tabs ===== -->
-    <div id="marketingCalendarTab" style="display:none;"></div>
     <div id="composerTab" style="display:none;"></div>
     <div id="engagementInboxTab" style="display:none;"></div>
     <div id="campaignsTab" style="display:none;"></div>
@@ -7246,7 +7236,6 @@
     <div id="galleriesTab" style="display:none;"></div>
 
     <!-- ===== LOOKBOOKS MODULE TAB ===== -->
-    <div id="lookbooksTab" style="display:none;"></div>
 
     <div id="placeholderTab" style="display:none;"></div>
 
@@ -8267,39 +8256,6 @@
     </div>
 
     <!-- Admin: Sale Promotions Tab -->
-    <div id="promotionsTab" style="display:none;">
-      <div class="section-header">
-        <h2>Sale Promotions</h2>
-        <button class="btn btn-primary" onclick="openPromotionModal()">+ Create Sale</button>
-      </div>
-      <div id="promotionsLoading" class="loading">Loading...</div>
-      <div id="promotionsEmpty" class="empty-state" style="display:none;">
-        <div class="empty-icon">&#127991;</div>
-        <p>No sale promotions yet. Click "Create Sale" to run your first promotion.</p>
-      </div>
-      <div id="promotionsFilterBar" style="display:none;margin-bottom:12px;">
-        <span class="filter-pill active" onclick="filterPromotions('active', this)">Active</span>
-        <span class="filter-pill" onclick="filterPromotions('scheduled', this)">Scheduled</span>
-        <span class="filter-pill" onclick="filterPromotions('ended', this)">Ended</span>
-        <span class="filter-pill" onclick="filterPromotions('all', this)">All</span>
-      </div>
-      <div class="events-table data-table" id="promotionsTable" style="display:none;">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Discount</th>
-              <th>Products</th>
-              <th>Status</th>
-              <th>Dates</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="promotionsTableBody"></tbody>
-        </table>
-      </div>
-      <div id="promotionCards" class="coupon-cards"></div>
-    </div>
 
     <!-- ===== CART MODULE TABS ===== -->
 
@@ -19535,13 +19491,13 @@ var ROUTE_ALIASES = {
   'consignment': 'galleries'
 };
 
-var ALL_TAB_IDS = ['mappingTab', 'inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'auditTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'auditSuppressionsTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'lookbooksTab', 'promotionsTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'advisorTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab', 'financeOverviewTab', 'financePeriodCloseTab', 'financeAmendmentsTab',
+var ALL_TAB_IDS = ['mappingTab', 'inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'auditTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'auditSuppressionsTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab', 'financeOverviewTab', 'financePeriodCloseTab', 'financeAmendmentsTab',
 // M3 + M6 (Idea -OtADygKA_JhRmk1wUqN): Mast modes tabs — must be in this list
 // so applyRoute correctly hides them when navigating away.
 // W1.8: Sales by Product (PM/Operator doorway) — same reason.
 'addToMastTab', 'businessSetupTab', 'salesByProductTab',
 // W2 — marketing aggregator tabs
-'marketingCalendarTab', 'composerTab', 'engagementInboxTab', 'campaignsTab',
+'composerTab', 'engagementInboxTab', 'campaignsTab',
 // W2.3 — Commission Terms admin editor
 'commissionTermsTab',
 // advisor-v2 — read-port twin of the Business-Plan advisor (#advisor remaps here)
