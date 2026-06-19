@@ -177,6 +177,9 @@
     "rogueOverlays": 3,
     "hardcodedHex": 55
   },
+  "app/modules/unified-drift-dialog.js": {
+    "rogueOverlays": 1
+  },
   "app/modules/website.js": {
     "rogueOverlays": 1,
     "hardcodedHex": 52
