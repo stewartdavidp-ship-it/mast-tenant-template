@@ -43,97 +43,11 @@
 
 
   // ============================================================
-  // Dashboard Cards
+  // Dashboard Cards (New Orders / Ready to Ship) relocated to
+  // shared/orders-core.js (eager) in T6 PR4a — the shell renders them on every
+  // dashboard load + from the orders real-time listener, so an eager home drops
+  // the loadModule('orders') the dashboard previously needed.
   // ============================================================
-
-  function renderDashCardNewOrders() {
-    var container = document.getElementById('dashCardNewOrders');
-    if (!container) return;
-    if (!ordersLoaded) { container.innerHTML = ''; return; }
-    var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'newOrders'; });
-
-    var newOrders = getOrdersArray().filter(function(o) {
-      return (o.status || 'placed') === 'placed';
-    });
-
-    var contentHtml = '';
-    if (newOrders.length === 0) {
-      contentHtml = '<div class="dash-queue-empty">No new orders.</div>';
-    } else {
-      contentHtml = '<div class="dash-queue-grid">';
-      newOrders.forEach(function(o) {
-        var key = o._key;
-        var num = esc(getOrderDisplayNumber(o));
-        var status = o.status || 'placed';
-        var customer = o.customerName || o.email || '';
-        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.72rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
-        contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
-          '<div class="dash-queue-row">' +
-            '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
-            '<span class="status-badge pill" style="font-size:0.72rem;padding:2px 8px;' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' +
-          '</div>' +
-          (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
-          '<div class="dash-queue-meta">' +
-            '<span>' + getOrderItemsLabel(o) + '</span>' +
-            '<span>$' + orderTotalDollars(o).toFixed(2) + '</span>' +
-            '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
-          '</div>' +
-        '</div>';
-      });
-      contentHtml += '</div>';
-    }
-
-    container.innerHTML = renderDashboardCard(cardConfig, newOrders.length, contentHtml);
-    if (newOrders.length > 0 && typeof updateCardActivity === 'function') {
-      var latestTs = newOrders.reduce(function(max, o) { var t = o.placedAt || o.createdAt || ''; return t > max ? t : max; }, '');
-      updateCardActivity('newOrders', latestTs);
-    }
-  }
-
-  // Dashboard Card: Ready to Ship
-
-  function renderDashCardReadyToShip() {
-    var container = document.getElementById('dashCardReadyToShip');
-    if (!container) return;
-    if (!ordersLoaded) { container.innerHTML = ''; return; }
-    var cardConfig = DASHBOARD_CARDS.find(function(c) { return c.id === 'readyToShip'; });
-
-    var packedOrders = getOrdersArray().filter(function(o) {
-      return o.status === 'packed';
-    });
-
-    var contentHtml = '';
-    if (packedOrders.length === 0) {
-      contentHtml = '<div class="dash-queue-empty">No packed orders awaiting pickup.</div>';
-    } else {
-      contentHtml = '<div class="dash-queue-grid">';
-      packedOrders.forEach(function(o) {
-        var key = o._key;
-        var num = esc(getOrderDisplayNumber(o));
-        var customer = o.customerName || o.email || '';
-        var sourceBadge = o.source === 'etsy' ? ' <span class="status-badge" style="font-size:0.72rem;' + etsySourceBadgeStyle() + '">Etsy</span>' : '';
-        contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
-          '<div class="dash-queue-row">' +
-            '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
-            '<span class="status-badge pill" style="font-size:0.72rem;padding:2px 8px;' + orderStatusBadgeStyle('packed') + '">packed</span>' +
-          '</div>' +
-          (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
-          '<div class="dash-queue-meta">' +
-            '<span>' + getOrderItemsLabel(o) + '</span>' +
-            '<span>$' + orderTotalDollars(o).toFixed(2) + '</span>' +
-            '<span>' + formatOrderDate(o.placedAt || o.pendingPaymentAt) + '</span>' +
-          '</div>' +
-        '</div>';
-      });
-      contentHtml += '</div>';
-    }
-
-    container.innerHTML = renderDashboardCard(cardConfig, packedOrders.length, contentHtml);
-    if (packedOrders.length > 0 && typeof updateCardActivity === 'function') {
-      var latestTs = packedOrders.reduce(function(max, o) { var t = o.placedAt || o.createdAt || ''; return t > max ? t : max; }, '');
-      updateCardActivity('readyToShip', latestTs);
-    }
-  }
 
   // ============================================================
   // RMA / Returns Admin Management
@@ -1027,8 +941,8 @@
   // orderTotalDollars are now exported by shared/orders-core.js (eager) — PR1c.
   window.viewRmaTicket = viewRmaTicket;
 
-  window.renderDashCardNewOrders = renderDashCardNewOrders;
-  window.renderDashCardReadyToShip = renderDashCardReadyToShip;
+  // renderDashCardNewOrders / renderDashCardReadyToShip now exported by
+  // shared/orders-core.js (eager) — T6 PR4a.
   window.loadRmaData = loadRmaData;
   window.setRmaFilter = setRmaFilter;
   window.renderRma = renderRma;
