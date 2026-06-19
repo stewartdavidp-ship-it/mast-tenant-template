@@ -198,7 +198,7 @@
   "app/modules/studio.js": {
     "hardcodedHex": 3
   },
-  "app/modules/team.js": {
+  "app/modules/team-v2.js": {
     "nativeDialogs": 2,
     "rogueOverlays": 1,
     "hardcodedHex": 55
