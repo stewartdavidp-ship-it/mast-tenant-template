@@ -1092,6 +1092,31 @@
   }
 
   // ============================================================
+  // viewOrder — open an order's detail view (PR3b).
+  // ------------------------------------------------------------
+  // Relocated from orders.js. The legacy #orders list/detail UI in orders.js is
+  // retired (removed in cut-plan PR3b-2); orders-v2 is the sole order surface.
+  // Every external opener routes here — fulfillment.js's "View" onclick, the
+  // dashboard New-Orders / Ready-to-Ship cards, customers.js, history deep-links,
+  // and the orders MastNavStack restorer — so it lives in the EAGER core to
+  // resolve even when orders.js is unloaded (the default V2 mode). Navigate to the
+  // orders route (loads orders-v2 if needed) and open the record once it lands in
+  // V2.byId. This is the live V2-aware branch lifted verbatim from orders.js's
+  // viewOrder; the obsolete legacy-detail fallback was dropped with that UI.
+  function viewOrder(orderId) {
+    selectedOrderId = orderId;
+    navigateTo('orders');
+    var _tries = 0;
+    (function openWhenReady() {
+      if (window.OrdersV2 && typeof OrdersV2.has === 'function' && OrdersV2.has(orderId)) {
+        OrdersV2.open(orderId);
+        return;
+      }
+      if (++_tries <= 60) setTimeout(openWhenReady, 100); // poll up to ~6s for load()
+    })();
+  }
+
+  // ============================================================
   // Exports — window.OrdersCore namespace + back-compat window.<name> aliases
   // (the exact globals orders.js used to export, so all existing bare-global /
   // window.* call sites across modules + the shell are untouched).
@@ -1130,7 +1155,9 @@
     // PR1d — order-write cores (cancel / add-note / mark-shipped)
     _cancelOrderCore: _cancelOrderCore,
     _addOrderNoteCore: _addOrderNoteCore,
-    _markOrderShippedCore: _markOrderShippedCore
+    _markOrderShippedCore: _markOrderShippedCore,
+    // PR3b — order-detail opener (routes through orders-v2)
+    viewOrder: viewOrder
   };
 
   if (typeof window !== 'undefined') {
@@ -1181,6 +1208,10 @@
     window._cancelOrderCore = _cancelOrderCore;
     window._addOrderNoteCore = _addOrderNoteCore;
     window._markOrderShippedCore = _markOrderShippedCore;
+    // PR3b — viewOrder (the order-detail opener) relocated here from orders.js so
+    // fulfillment.js / customers.js / the dashboard cards / history deep-links /
+    // the orders restorer resolve it with orders.js unloaded.
+    window.viewOrder = viewOrder;
   }
 
   if (typeof module !== 'undefined' && module.exports) {
