@@ -21870,6 +21870,9 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   // Coupon dialogs (add/edit / share / delete) — no route; lazy-loaded via the
   // eager openCouponModal / openCouponShareModal / confirmDeleteCoupon shims (Track 1).
   couponModals: { src: 'modules/coupon-modals.js', v: 'f4dfbb6333b8', routes: [] },
+  // Forecast "New Production Job" modal — no route; lazy-loaded via the eager
+  // openForecastJobModal / doCreateForecastJob shims (Track 1).
+  forecastJobModal: { src: 'modules/forecast-job-modal.js', v: '2efc9b0331e0', routes: [] },
   workflowEngine: { src: 'modules/workflows/workflow-engine.js', v: '4fe68ba831b4', routes: [] },
   commissionsWorkflow: { src: 'modules/workflows/commissions.workflow.js', v: '2d9f5dfe84b9', routes: [] },
   pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', v: '400c67072c45', routes: [] },
@@ -39374,90 +39377,20 @@ function renderForecastSuggestedBuilds() {
   el.innerHTML = html;
 }
 
+// Forecast "New Production Job" modal (openForecastJobModal / doCreateForecastJob)
+// extracted to app/modules/forecast-job-modal.js — lazy-loaded via these eager
+// shims. Reachable only from the Forecast/Jobs surfaces (the delegated
+// [data-create-job-pid] handler below + products-v2's createForecastJob), where
+// production.js (PURPOSE_LABELS / viewProductionJob) is already route-loaded. (Track 1.)
 function openForecastJobModal(pid, suggestedQty) {
-  var product = productsData.find(function(p) { return p.pid === pid; });
-  var name = product ? product.name : pid;
-  var purposeButtons = Object.keys(PURPOSE_LABELS).map(function(key) {
-    // W1-followup OPEN -OtEkpFjIRwH_z-1CJuB: data-attrs + delegated handler.
-    // The delegated listener branches on the presence of data-create-job-purpose
-    // — with it → doCreateForecastJob(pid, qty, purpose); without it →
-    // openForecastJobModal(pid, qty).
-    return '<button class="btn btn-secondary" style="font-size:0.85rem;padding:8px 14px;margin:4px;" data-create-job-pid="' + esc(pid) + '" data-create-job-qty="' + suggestedQty + '" data-create-job-purpose="' + esc(key) + '">' +
-      PURPOSE_LABELS[key] + '</button>';
-  }).join('');
-  var html = '<div style="max-width:450px;padding:24px;">' +
-    '<h3>New Production Job</h3>' +
-    '<div class="form-group">' +
-      '<label class="field-required">Job Name</label>' +
-      '<input type="text" id="newJobName" value="Build ' + esc(name) + ' (' + suggestedQty + ' pcs)">' +
-    '</div>' +
-    '<div class="form-group">' +
-      '<label>Work Type</label>' +
-      '<select id="forecastJobWorkType" style="width:100%;">' +
-        '<option value="flameshop">Flameshop</option>' +
-        '<option value="hotshop">Hotshop</option>' +
-        '<option value="hybrid">Hybrid</option>' +
-        '<option value="other">Other</option>' +
-      '</select>' +
-    '</div>' +
-    '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">Suggested: ' + suggestedQty + ' pieces of ' + esc(name) + '</div>' +
-    '<div class="form-group">' +
-      '<label>Purpose</label>' +
-      '<div style="display:flex;flex-wrap:wrap;gap:0;">' + purposeButtons + '</div>' +
-    '</div>' +
-    '<div style="margin-top:16px;text-align:right;">' +
-      '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
-    '</div>' +
-  '</div>';
-  openModal(html);
+  MastAdmin.loadModule('forecastJobModal').then(function() {
+    if (typeof window.openForecastJobModalImpl === 'function') window.openForecastJobModalImpl(pid, suggestedQty);
+  }).catch(function() {});
 }
-
-async function doCreateForecastJob(pid, suggestedQty, purpose) {
-  if (!can('jobs', 'edit')) {
-    showToast('You do not have permission to create production jobs.', true);
-    return;
-  }
-  var nameInput = document.getElementById('newJobName');
-  var name = nameInput ? nameInput.value.trim() : '';
-  if (!validateRequired([{ el: 'newJobName', msg: 'Job name is required' }])) {
-    showToast('Enter a job name', true); return;
-  }
-  try {
-    var workTypeEl = document.getElementById('forecastJobWorkType');
-    var workType = workTypeEl ? workTypeEl.value : 'flameshop';
-    var product = productsData.find(function(p) { return p.pid === pid; });
-    var jobId = MastDB.productionJobs.newKey();
-    var lineItemId = MastDB.productionJobs.newLineItemKey(jobId);
-    await MastDB.productionJobs.set(jobId, {
-      name: name,
-      description: 'Auto-suggested from Forecast view',
-      purpose: purpose,
-      workType: workType,
-      priority: 'medium',
-      status: 'definition',
-      deadline: null,
-      eventName: null,
-      orderId: null,
-      customerId: null,
-      createdAt: new Date().toISOString(),
-      startedAt: null,
-      completedAt: null,
-      lineItems: {}
-    });
-    await MastDB.productionJobs.setLineItem(jobId, lineItemId, {
-      productId: pid,
-      productName: product ? product.name : pid,
-      targetQuantity: suggestedQty,
-      completedQuantity: 0,
-      notes: ''
-    });
-    await writeAudit('create', 'jobs', jobId);
-    closeModal();
-    viewProductionJob(jobId);
-    showToast('Job created with ' + suggestedQty + ' ' + (product ? product.name : '') + ' pre-added');
-  } catch (err) {
-    showToast('Error creating job: ' + err.message, true);
-  }
+function doCreateForecastJob(pid, suggestedQty, purpose) {
+  MastAdmin.loadModule('forecastJobModal').then(function() {
+    if (typeof window.doCreateForecastJobImpl === 'function') window.doCreateForecastJobImpl(pid, suggestedQty, purpose);
+  }).catch(function() {});
 }
 
 // ---- Demand Overview Table ----
