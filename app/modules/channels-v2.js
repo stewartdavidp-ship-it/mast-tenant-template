@@ -434,6 +434,17 @@
   // ── module state + data ─────────────────────────────────────────────
   var V2 = { rows: [], byId: {}, products: {}, orders: {}, sortKey: 'name', sortDir: 'asc', q: '', typeFilter: '', allowed: true, loaded: false };
 
+  // Keep window.__mastChannelsCache populated + identity-stable for the
+  // product-editor / drift / variant-detail consumers (the retired channels.js
+  // used to refresh it on #channels visits). Mutate IN PLACE so the absorbed
+  // ChannelsBridge's aliased reference (second IIFE) stays on the same object.
+  function syncChannelsCache(cv) {
+    var cache = window.__mastChannelsCache;
+    if (!cache || typeof cache !== 'object') { window.__mastChannelsCache = cache = {}; }
+    Object.keys(cache).forEach(function (k) { delete cache[k]; });
+    Object.keys(cv || {}).forEach(function (k) { cache[k] = cv[k]; });
+  }
+
   function load() {
     // Channels + products are one-shot keyed-object reads (mirror channels.js:
     // admin/channels, public/products). Orders is the only growth surface —
@@ -446,6 +457,7 @@
         .catch(function () { return null; })
     ]).then(function (res) {
       var cv = res[0] || {};
+      syncChannelsCache(cv);
       var out = [];
       Object.keys(cv).forEach(function (k) {
         var ch = cv[k];
@@ -538,7 +550,8 @@
     // ── Classic burn-down Wave C: native create / connect / product assign ──
     create: function () {
       if (!canEditChannels()) { if (window.showToast) showToast('You don\u2019t have permission to add channels', true); return; }
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('channels'); } catch (e) {} }
+      // ChannelsBridge now lives in this file's second IIFE (T6 retire of
+      // channels.js) \u2014 it's defined at module load, so no preload is needed.
       MastEntity.openRecord('channels-v2', {}, 'create');
     },
     connect: function (platform, channelId) {
@@ -657,12 +670,11 @@
   };
 
   // Bridge gate + post-write SO refresh (mirror contacts-v2 Wave A).
+  // ChannelsBridge is defined in this file's second IIFE (absorbed from the
+  // retired channels.js), so it's always present after module load.
   function withBridge(fn) {
     if (window.ChannelsBridge) return fn(window.ChannelsBridge);
-    MastAdmin.loadModule('channels').then(function () {
-      if (window.ChannelsBridge) fn(window.ChannelsBridge);
-      else if (window.showToast) showToast('Channels engine still loading — try again', true);
-    }).catch(function () { if (window.showToast) showToast('Channels engine unavailable', true); });
+    if (window.showToast) showToast('Channels engine unavailable', true);
   }
   function reopenAfterLoad(channelId) {
     Promise.all([
@@ -670,6 +682,7 @@
       Promise.resolve(MastDB.get('public/products')).catch(function () { return null; })
     ]).then(function (res) {
       var cv = res[0] || {};
+      syncChannelsCache(cv);
       var out = [];
       Object.keys(cv).forEach(function (k) {
         var ch = cv[k];
@@ -684,14 +697,311 @@
     });
   }
 
+  function channelsSetup() {
+    ensureTab();
+    V2.allowed = canViewChannels();
+    render();
+    if (V2.allowed) load();
+  }
   MastAdmin.registerModule('channels-v2', {
-    routes: { 'channels-v2': { tab: 'channelsV2Tab', setup: function () {
-      ensureTab();
-      V2.allowed = canViewChannels();
-      // Legacy module first so window.ChannelsBridge exists when onSave fires.
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('channels'); } catch (e) {} }
-      render();
-      if (V2.allowed) load();
-    } } }
+    routes: {
+      'channels-v2': { tab: 'channelsV2Tab', setup: channelsSetup },
+      // Legacy #channels route ABSORBED (T6): channels.js is deleted, so the
+      // twin owns the bare route directly (no MAST_V2_ROUTE_MAP remap). The
+      // shared channelsV2Tab + setup keep it flag-independent for all users.
+      'channels': { tab: 'channelsV2Tab', setup: channelsSetup }
+    }
   });
+})();
+
+// ════════════════════════════════════════════════════════════════════════
+// ChannelsBridge + MastChannelShim — ABSORBED VERBATIM from the retired
+// channels.js (T6 V1 retirement). These are state-free write cores + shim
+// accessors consumed flag-independently by other surfaces:
+//   • window.MastChannelShim    — index.html _shimRoute/_shimPlatform/_shimType
+//   • window.ChannelsBridge     — channels-v2's own create/edit/connect/delete
+//   • window.channelReconnect   — audit.js reconnect action
+//   • window.__mastChannelsCache — products-v2 / unified-drift-dialog /
+//                                  variant-detail-tabs (product-editor cache)
+// This IIFE is NOT flag-gated (the consumers run for legacy-UI users too).
+// channelsData aliases window.__mastChannelsCache so the cache stays the single
+// source of truth (the first IIFE's syncChannelsCache mutates it in place).
+// ════════════════════════════════════════════════════════════════════════
+(function () {
+  'use strict';
+  if (!window.MastDB) return;
+
+  // channelId → channel object. Aliased to the shared product-editor cache so
+  // bridge create/delete mutations and the V2 list loader stay consistent.
+  var channelsData = window.__mastChannelsCache || (window.__mastChannelsCache = {});
+
+  var CHANNEL_TYPES = {
+    dtc_online:       { label: 'Online Store',    color: '#3b82f6', ownership: 'owned',   pricing: 'full_retail',  inventory: 'retained' },
+    own_storefront:   { label: 'Own Storefront',  color: '#14b8a6', ownership: 'owned',   pricing: 'full_retail',  inventory: 'retained' },
+    mobile_events:    { label: 'Craft Fairs',     color: '#f97316', ownership: 'owned',   pricing: 'full_retail',  inventory: 'retained' },
+    marketplace:      { label: 'Marketplace',     color: '#8b5cf6', ownership: 'partner', pricing: 'full_retail',  inventory: 'synced' },
+    wholesale_prebuy: { label: 'Wholesale',       color: '#22c55e', ownership: 'partner', pricing: 'wholesale',    inventory: 'transferred' },
+    consignment:      { label: 'Consignment',     color: '#f59e0b', ownership: 'partner', pricing: 'negotiated',   inventory: 'consigned' },
+    retail_prebuy:    { label: 'Retail Prebuy',   color: '#10b981', ownership: 'partner', pricing: 'wholesale',    inventory: 'transferred' },
+    social_live:      { label: 'Social / Live',   color: '#ec4899', ownership: 'partner', pricing: 'full_retail',  inventory: 'retained' }
+  };
+
+  var ROUTES = {
+    dtc_online:   { label: 'Online (DTC)',  color: '#3b82f6', defaultUsesTier: 'retail',    desc: 'Your own e-commerce storefront.' },
+    marketplace:  { label: 'Marketplace',   color: '#8b5cf6', defaultUsesTier: 'retail',    desc: 'Etsy, Amazon, third-party platform.' },
+    in_person:    { label: 'In-Person',     color: '#f97316', defaultUsesTier: 'direct',    desc: 'Brick-and-mortar, craft fairs, pop-ups.' },
+    wholesale:    { label: 'Wholesale',     color: '#22c55e', defaultUsesTier: 'wholesale', desc: 'Retailers, galleries, consignment.' }
+  };
+
+  var PLATFORMS = {
+    manual:      { label: 'Manual / Mast' },
+    shopify:     { label: 'Shopify' },
+    etsy:        { label: 'Etsy' },
+    square:      { label: 'Square' },
+    squarespace: { label: 'Squarespace' },
+    amazon:      { label: 'Amazon' },
+    tiktok:      { label: 'TikTok' },
+    instagram:   { label: 'Instagram' }
+  };
+
+  // Map legacy `type` → derived `(route, platform)`. Used by the shim when a
+  // channel only carries the legacy field, and by the new form's preset chips.
+  var TYPE_TO_ROUTE_PLATFORM = {
+    dtc_online:       { route: 'dtc_online',  platform: 'manual' },
+    own_storefront:   { route: 'in_person',   platform: 'manual' },
+    mobile_events:    { route: 'in_person',   platform: 'square' },
+    marketplace:      { route: 'marketplace', platform: 'etsy' },
+    wholesale_prebuy: { route: 'wholesale',   platform: 'manual' },
+    consignment:      { route: 'wholesale',   platform: 'manual' },
+    retail_prebuy:    { route: 'wholesale',   platform: 'manual' },
+    social_live:      { route: 'marketplace', platform: 'instagram' }
+  };
+
+  // Reverse derivation — when a channel has only the new fields, synthesize a
+  // legacy `type` for backwards-compat readers (typeBadge, type-specific
+  // overview cards). Keep the mapping conservative: only derive when we have
+  // a confident answer; otherwise return null and the reader handles it.
+  function deriveLegacyType(route, platform) {
+    if (route === 'dtc_online') return 'dtc_online';
+    if (route === 'marketplace') {
+      if (platform === 'instagram' || platform === 'tiktok') return 'social_live';
+      return 'marketplace';
+    }
+    if (route === 'in_person') {
+      if (platform === 'square') return 'mobile_events';
+      return 'own_storefront';
+    }
+    if (route === 'wholesale') return 'wholesale_prebuy';
+    return null;
+  }
+
+  // Shim accessors — every reader of ch.type / ch.defaultPricingTier / etc.
+  // should call these so unmigrated channels stay readable.
+  function getChannelRoute(ch) {
+    if (!ch) return null;
+    if (ch.route) return ch.route;
+    if (ch.type && TYPE_TO_ROUTE_PLATFORM[ch.type]) return TYPE_TO_ROUTE_PLATFORM[ch.type].route;
+    return null;
+  }
+  function getChannelPlatform(ch) {
+    if (!ch) return null;
+    if (ch.platform) return ch.platform;
+    if (ch.type && TYPE_TO_ROUTE_PLATFORM[ch.type]) return TYPE_TO_ROUTE_PLATFORM[ch.type].platform;
+    return null;
+  }
+  function getChannelType(ch) {
+    if (!ch) return null;
+    if (ch.type) return ch.type; // legacy still authoritative when present
+    return deriveLegacyType(ch.route, ch.platform);
+  }
+  function getChannelPlatformAccountId(ch) {
+    if (!ch) return null;
+    return ch.platformAccountId || null;
+  }
+  function getChannelUsesTier(ch) {
+    if (!ch) return 'retail';
+    if (ch.usesTier) return ch.usesTier;
+    if (ch.defaultPricingTier) return ch.defaultPricingTier; // legacy fallback
+    var route = getChannelRoute(ch);
+    if (route && ROUTES[route]) return ROUTES[route].defaultUsesTier;
+    return 'retail';
+  }
+
+  // Reconnect handler — routes to the per-platform OAuth start endpoint.
+  // The actual OAuth flow lives in the per-platform CF (etsyOAuthStart,
+  // shopifyOAuthStart, etc.); we just navigate there with the tenant context.
+  // (channels.js retired: the V1 detail-tab fallback is gone, so when no OAuth
+  // start hook is wired we route to the channels surface — same as audit.js's
+  // own fallback.)
+  window.channelReconnect = function(platform) {
+    if (!platform) return;
+    // Find the first channel for this platform so the OAuth start endpoint
+    // can resume context (account binding, route, etc.).
+    var ch = Object.values(channelsData).find(function(c) {
+      return getChannelPlatform(c) === platform;
+    });
+    if (typeof window.startChannelOAuth === 'function') {
+      window.startChannelOAuth(platform, ch && ch.channelId);
+    } else if (typeof window.navigateTo === 'function') {
+      window.navigateTo('channels');
+    }
+  };
+
+  // Phase 2a (D23, D25) — expose shim accessors + metadata for product editor,
+  // recipe handshake banner, and E2E verification.
+  window.MastChannelShim = {
+    ROUTES: ROUTES,
+    PLATFORMS: PLATFORMS,
+    TYPE_TO_ROUTE_PLATFORM: TYPE_TO_ROUTE_PLATFORM,
+    deriveLegacyType: deriveLegacyType,
+    getRoute: getChannelRoute,
+    getPlatform: getChannelPlatform,
+    getPlatformAccountId: getChannelPlatformAccountId,
+    getType: getChannelType,
+    getUsesTier: getChannelUsesTier
+  };
+
+  // V2 bridge — state-free write cores shared with channels-v2 (playbook §4 /
+  // classic burn-down Wave C: the twin never re-implements a write).
+  window.ChannelsBridge = {
+    ROUTES: ROUTES,
+    PLATFORMS: PLATFORMS,
+    deriveLegacyType: deriveLegacyType,
+    updateChannel: function(channelId, updates) {
+      if (!channelId) return Promise.reject(new Error('channelId required'));
+      // Keep the legacy `type` enum consistent when the new-shape pair changes
+      // (same rule as the legacy Settings save).
+      if (updates && updates.route && updates.platform) {
+        var derived = deriveLegacyType(updates.route, updates.platform);
+        if (derived) updates.type = derived;
+      }
+      return MastDB.update('admin/channels/' + channelId, updates);
+    },
+    // Create — the saveNew() core with explicit fields (both shapes written,
+    // exactly like legacy; multi-channel-per-platform allowed w/ console.warn).
+    createChannel: function(input) {
+      input = input || {};
+      var name = (input.name || '').trim();
+      var route = input.route || '';
+      var platform = input.platform || '';
+      if (!name) return Promise.reject(new Error('Channel name is required.'));
+      if (!route) return Promise.reject(new Error('Please pick a Route.'));
+      if (!platform) return Promise.reject(new Error('Please pick a Platform.'));
+      var sharing = Object.values(channelsData || {}).filter(function(other) {
+        return getChannelPlatform(other) === platform;
+      });
+      if (sharing.length > 0) {
+        console.warn('[channels] Multi-channel on platform "' + platform + '" — order attribution falls back to first match until Phase 3 webhook reverse-routing lands.');
+      }
+      var id = 'ch_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+      var now = new Date().toISOString();
+      var derivedType = deriveLegacyType(route, platform) || 'dtc_online';
+      var t = CHANNEL_TYPES[derivedType] || {};
+      var channel = {
+        channelId: id,
+        name: name,
+        type: derivedType,
+        ownershipModel: t.ownership || 'owned',
+        pricingModel: t.pricing || 'full_retail',
+        inventoryModel: t.inventory || 'retained',
+        route: route,
+        platform: platform,
+        platformAccountId: (input.platformAccountId || '').trim() || null,
+        usesTier: input.usesTier || (ROUTES[route] && ROUTES[route].defaultUsesTier) || 'retail',
+        percentFee: parseFloat(input.percentFee) || 0,
+        fixedFeePerOrderCents: parseInt(input.fixedFeePerOrderCents, 10) || 0,
+        monthlyFixedCents: parseInt(input.monthlyFixedCents, 10) || 0,
+        externalPlatform: (input.externalPlatform || '').trim() || null,
+        defaultEligibility: input.defaultEligibility === 'opt-out' ? 'opt-out' : 'opt-in',
+        contactName: (input.contactName || '').trim() || null,
+        contactEmail: (input.contactEmail || '').trim() || null,
+        contactPhone: (input.contactPhone || '').trim() || null,
+        notes: (input.notes || '').trim() || null,
+        autoMatchSources: [],
+        isActive: true,
+        createdAt: now,
+        updatedAt: now
+      };
+      return MastDB.set('admin/channels/' + id, channel).then(function() {
+        channelsData[id] = channel;
+        window.__mastChannelsCache = channelsData; // Phase 2c — sync product-editor cache
+        return id;
+      });
+    },
+    // Product assignment — confirmAddProducts/removeProduct cores with a
+    // FRESH product read (the module cache may be cold from the V2 twin).
+    // Dual-writes channelBindings (new) + channelIds (legacy), same as legacy.
+    addProducts: async function(channelId, pids) {
+      if (!channelId || !Array.isArray(pids) || !pids.length) throw new Error('channelId + product ids required');
+      var fresh = await MastDB.get('public/products') || {};
+      var batch = {}, added = 0;
+      pids.forEach(function(pid) {
+        var p = fresh[pid];
+        if (!p) return;
+        var ids = Array.isArray(p.channelIds) ? p.channelIds.slice() : [];
+        var bindings = Array.isArray(p.channelBindings) ? p.channelBindings.slice() : [];
+        var alreadyBound = bindings.some(function(b) { return b && b.channelId === channelId; });
+        if (!alreadyBound) { bindings.push({ channelId: channelId, excludedVariantIds: [] }); batch[pid + '/channelBindings'] = bindings; }
+        if (ids.indexOf(channelId) === -1) { ids.push(channelId); batch[pid + '/channelIds'] = ids; }
+        if (!alreadyBound) added++;
+      });
+      if (!added) return { added: 0 };
+      await MastDB.update('public/products', batch);
+      return { added: added };
+    },
+    removeProduct: async function(channelId, pid) {
+      if (!channelId || !pid) throw new Error('channelId + product id required');
+      var p = await MastDB.get('public/products/' + pid);
+      if (!p) throw new Error('Product not found');
+      var batch = {};
+      batch[pid + '/channelIds'] = (Array.isArray(p.channelIds) ? p.channelIds : []).filter(function(id) { return id !== channelId; });
+      batch[pid + '/channelBindings'] = (Array.isArray(p.channelBindings) ? p.channelBindings : []).filter(function(b) { return b && b.channelId !== channelId; });
+      await MastDB.update('public/products', batch);
+      return true;
+    },
+    // OAuth connect/reconnect — same per-platform start endpoint the legacy
+    // banner uses (the OAuth legs live in the per-platform CFs).
+    connect: function(platform, channelId) {
+      if (typeof window.startChannelOAuth === 'function') { window.startChannelOAuth(platform, channelId || null); return true; }
+      if (typeof window.channelReconnect === 'function') { window.channelReconnect(platform); return true; }
+      return false;
+    },
+    // Delete a sales channel — the doDelete() core (plain admin write, no
+    // product-binding cascade: legacy leaves channelIds/channelBindings on
+    // products untouched, so a deleted channel's id simply stops matching).
+    deleteChannel: function(channelId) {
+      if (!channelId) return Promise.reject(new Error('channelId required'));
+      return MastDB.remove('admin/channels/' + channelId).then(function() {
+        if (channelsData && channelsData[channelId]) {
+          delete channelsData[channelId];
+          window.__mastChannelsCache = channelsData; // keep product-editor cache in sync
+        }
+        return true;
+      });
+    },
+    // Platforms with an OAuth integration record under
+    // admin/businessEntity/channels/{platform}. Only these can be disconnected.
+    OAUTH_PLATFORMS: ['shopify', 'etsy', 'square'],
+    // Disconnect / revoke a platform OAuth — single-sources the Settings>Channels
+    // disconnectChannel() flow: the disconnectChannelCallable CF revokes the
+    // platform token, deletes stored credentials (Secret Manager), removes webhook
+    // subscriptions, flips the Firestore integration record, and audits server-side.
+    // Keyed by PLATFORM (shopify/etsy/square), not by sales-channel id — one OAuth
+    // record per platform. Returns the CF payload ({ platformRevokeStatus, ... }).
+    disconnectPlatform: function(platform) {
+      if (!platform) return Promise.reject(new Error('platform required'));
+      if (this.OAUTH_PLATFORMS.indexOf(platform) === -1) {
+        return Promise.reject(new Error('Not an OAuth platform: ' + platform));
+      }
+      if (typeof firebase === 'undefined' || !firebase.functions) {
+        return Promise.reject(new Error('Cloud Functions unavailable'));
+      }
+      var tenantId = (typeof MastDB !== 'undefined' && typeof MastDB.tenantId === 'function') ? MastDB.tenantId() : null;
+      if (!tenantId) return Promise.reject(new Error('Tenant not resolved'));
+      var fn = firebase.functions().httpsCallable('disconnectChannelCallable');
+      return fn({ tenantId: tenantId, platform: platform }).then(function(result) {
+        return (result && result.data) || {};
+      });
+    }
+  };
 })();
