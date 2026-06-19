@@ -170,8 +170,8 @@ async function undoPublishToShopify(pid) {
 
   // Impls for the eager shims + the dialog's generated-onclick targets.
   window.openPublishToChannelDialogImpl = openPublishToChannelDialog;
-  window.publishProductToShopify = publishProductToShopify;
-  window.undoPublishToShopify = undoPublishToShopify;
+  window.publishProductToShopifyImpl = publishProductToShopify;
+  window.undoPublishToShopifyImpl = undoPublishToShopify;
 
   if (typeof MastAdmin !== 'undefined' && MastAdmin.registerModule) {
     MastAdmin.registerModule('publishToChannelDialog', {});

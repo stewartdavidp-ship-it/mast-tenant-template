@@ -21894,7 +21894,7 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   // Publish-to-Channel dialog — no route; lazy-loaded via the eager
   // openPublishToChannelDialog / publishProductToShopify / undoPublishToShopify
   // shims (Track 1).
-  publishToChannelDialog: { src: 'modules/publish-to-channel-dialog.js', v: '87ec213f8137', routes: [] },
+  publishToChannelDialog: { src: 'modules/publish-to-channel-dialog.js', v: '01f3c887f805', routes: [] },
   workflowEngine: { src: 'modules/workflows/workflow-engine.js', v: '4fe68ba831b4', routes: [] },
   commissionsWorkflow: { src: 'modules/workflows/commissions.workflow.js', v: '2d9f5dfe84b9', routes: [] },
   pickshipWorkflow: { src: 'modules/workflows/pickship.workflow.js', v: '400c67072c45', routes: [] },
@@ -42115,12 +42115,12 @@ function renderPublishUndoBanner(pid) {
 // undoPublishToShopify from the eager renderPublishUndoBanner markup). (Track 1.)
 function publishProductToShopify(pid) {
   return MastAdmin.loadModule('publishToChannelDialog').then(function() {
-    if (typeof window.publishProductToShopify === 'function') return window.publishProductToShopify(pid);
+    if (typeof window.publishProductToShopifyImpl === 'function') return window.publishProductToShopifyImpl(pid);
   }).catch(function() {});
 }
 function undoPublishToShopify(pid) {
   return MastAdmin.loadModule('publishToChannelDialog').then(function() {
-    if (typeof window.undoPublishToShopify === 'function') return window.undoPublishToShopify(pid);
+    if (typeof window.undoPublishToShopifyImpl === 'function') return window.undoPublishToShopifyImpl(pid);
   }).catch(function() {});
 }
 
