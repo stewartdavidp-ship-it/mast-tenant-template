@@ -48,6 +48,7 @@ const LOCKSTEP_SHARED = new Set([
   'mast-intake',
   'mast-format',
   'mast-export',
+  'mast-sanitize',
   'lazy-cdn',
   'customer-filters',
   'variant-reconcile',
