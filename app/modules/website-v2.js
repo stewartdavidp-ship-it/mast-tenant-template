@@ -1076,6 +1076,7 @@
   // The open photo manager's state: section + focused photo + cached items/cats
   // (so picking a thumbnail re-renders instantly, with no refetch).
   var WV2_PHOTOS = { sec: null, focus: null, items: null, cats: null, showHidden: false };
+  var WV2_CATIMG = { cat: null, coverId: '' }; // the open category's cover-image doc
   var _imgdMetaT = {}; // debounce timers for per-photo metadata text inputs
   var _catDetailT = {}; // debounce timers for category Details inputs (name / wholesale)
 
@@ -1155,7 +1156,7 @@
       recordId: function (r) { return r.id; },
       fields: [{ name: '_title', label: 'Category', type: 'text', list: true, readOnly: true }],
       fetch: function (id) { return catRecord(id); },
-      detail: { render: function (UU, r) { setTimeout(function () { fillPhotosManager(r.id); }, 0); return catDetailHtml(UU, r); } }
+      detail: { render: function (UU, r) { setTimeout(function () { fillCategoryImage(r.id); }, 0); return catDetailHtml(UU, r); } }
     });
   }
 
@@ -1399,7 +1400,7 @@
       : '<span class="mu-sub">Read only.</span>';
     var out = UU.stickyHead(UU.tiles(tiles), UU.paneTabsBar(tabs, 'details'));
     out += secPane('details', 'details', UU.card('Details', detailsInner));
-    out += secPane('photos', 'details', '<div id="wv2PhotosMgr"><div class="mu-sub" style="padding:8px 0;">Loading photos…</div></div>');
+    out += secPane('photos', 'details', UU.card('Category image', '<div class="mu-sub" style="margin-bottom:10px;">The photo shown for this category on your shop.</div><div id="wv2CatImg"><div class="mu-sub" style="padding:8px 0;">Loading…</div></div>'));
     out += secPane('products', 'details', UU.card('Products in ' + esc(r.label) + ' (' + r.products.length + ')', catProductsListHtml(r)));
     return out;
   }
@@ -1417,6 +1418,40 @@
     }).join('');
     return '<div class="mu-sub" style="margin-bottom:10px;">Click a product to open and edit it. To move a product in or out of a category, change it on the product.</div>' +
       '<div class="wv2-prod-list">' + rows + '</div>';
+  }
+  // The category's single cover image = the first photo tagged to the category.
+  // Render a simple preview + From library / Upload / Remove (no per-photo
+  // metadata — a category just needs its one representative photo).
+  function fillCategoryImage(catId) {
+    if (!document.getElementById('wv2CatImg')) return;
+    var b = window.HomepageBridge; if (!b || !b.images || !b.images.list) return;
+    Promise.resolve(b.images.list(catId)).then(function (items) {
+      var el = document.getElementById('wv2CatImg'); if (!el) return;
+      var cover = items[0] ? items[0][1] : null;
+      WV2_CATIMG = { cat: catId, coverId: items[0] ? items[0][0] : '' };
+      var ed = canEdit();
+      var prev = (cover && cover.url)
+        ? '<div class="wv2-imgcell wv2-imgcell-lg" style="background-image:url(' + esc(cover.url) + ');"></div>'
+        : '<div class="wv2-imgcell wv2-imgcell-lg wv2-imgcell-empty"><span class="mu-sub">No image yet</span></div>';
+      var btns = ed ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">' +
+        '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.catImageFromLibrary(\'' + esc(catId) + '\')">📚 From library</button>' +
+        '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.catImageUpload(\'' + esc(catId) + '\')">💻 Upload</button>' +
+        ((cover && cover.url) ? '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.catImageRemove(\'' + esc(catId) + '\')">Remove</button>' : '') +
+        '</div>' : '';
+      el.innerHTML = prev + btns;
+      updatePhotoCount(items.length);
+    }).catch(function () {});
+  }
+  // Set the category cover: replace the existing photo's url if one exists, else
+  // create a single gallery doc tagged to the category. Then re-render.
+  function setCatImage(catId, url) {
+    if (!url) return;
+    var b = window.HomepageBridge; if (!b || !b.images) return;
+    var coverId = (WV2_CATIMG && WV2_CATIMG.cat === catId) ? WV2_CATIMG.coverId : '';
+    var p = coverId
+      ? b.images.updateImageMeta(coverId, { url: url })
+      : b.images.addFromLibraryDirect(catId, { url: url });
+    Promise.resolve(p).then(function () { fillCategoryImage(catId); });
   }
 
   // The product-derived suggestion chip-row: slugs found on products but missing
@@ -2293,6 +2328,23 @@
     openProduct: function (pid) {
       if (!pid || !window.MastEntity) return;
       MastEntity.drill('products-v2', pid);
+    },
+    // Category cover image (Photos tab) — pick from library / upload / remove.
+    catImageFromLibrary: function (catId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
+      if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
+      window.openImagePicker(function (imgId, url) { if (url) setCatImage(catId, url); });
+    },
+    catImageUpload: function (catId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
+      pickAndUploadImage(['category-image', catId], function (url) { setCatImage(catId, url); });
+    },
+    catImageRemove: function (catId) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
+      var b = window.HomepageBridge; if (!b || !b.images || !b.images.removeConfirmed) return;
+      var coverId = (WV2_CATIMG && WV2_CATIMG.cat === catId) ? WV2_CATIMG.coverId : '';
+      if (!coverId) return;
+      Promise.resolve(b.images.removeConfirmed(coverId)).then(function () { fillCategoryImage(catId); });
     },
     // Reorder a category up/down — read-modify-write the whole array (instant).
     moveCat: function (id, dir) {
