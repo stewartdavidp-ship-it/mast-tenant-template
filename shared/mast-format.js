@@ -55,6 +55,13 @@
       var d = new Date(ms);
       return isNaN(d.getTime()) ? null : d;
     }
+    // A raw epoch number — treated as MILLISECONDS, matching the original
+    // MastUI.Num.date(`new Date(d)`) behavior (faithful drop-in; without this a
+    // numeric timestamp would regress to '').
+    if (typeof v === 'number' && isFinite(v)) {
+      var dn = new Date(v);
+      return isNaN(dn.getTime()) ? null : dn;
+    }
     // Strings flow straight through (date()/dateRaw() own calendar-date parsing).
     if (typeof v === 'string') return v;
     return null;

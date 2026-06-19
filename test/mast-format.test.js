@@ -135,4 +135,10 @@ t('date GAP CLOSED: Timestamp with .toDate() → "Jun 7, 2026"', () =>
 t('dateRaw GAP CLOSED: {seconds,nanoseconds} Timestamp → "2026-06-07"', () =>
   assert.strictEqual(F.dateRaw({ seconds: MIDDAY_2026_06_07, nanoseconds: 0 }), '2026-06-07'));
 
+// ── numeric epoch (ms) — faithful to the original Num.date(new Date(number)) ──
+t('coerceDate: epoch-ms number → Date (not null)', () =>
+  assert.ok(F.coerceDate(MIDDAY_2026_06_07 * 1000) instanceof Date));
+t('date: epoch-ms number → formatted (no regression vs Num)', () =>
+  assert.strictEqual(F.date(MIDDAY_2026_06_07 * 1000), 'Jun 7, 2026'));
+
 console.log(`\n${pass} mast-format assertions passed.`);
