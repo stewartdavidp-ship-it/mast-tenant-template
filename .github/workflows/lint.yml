@@ -76,6 +76,12 @@ jobs:
       # makes a syntax error un-mergeable.
       - name: Module syntax check
         run: node scripts/lint-syntax.js
+      # Track-0 safety net: MODULE_MANIFEST integrity. No dangling src rows, no
+      # duplicate routes, and every loadModule('x') literal resolves to a live
+      # manifest id — so an extraction (T1) or V1 deletion (T6) can't leave a
+      # broken edge that only surfaces at runtime as an "Unknown module" reject.
+      - name: Manifest / route integrity
+        run: node scripts/lint-manifest-integrity.js
       - name: MastDB access lint
         run: node scripts/lint-mastdb.js
       - name: Design token lint (advisory)
