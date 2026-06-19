@@ -104,11 +104,11 @@
   "app/modules/homepage.js": {
     "hardcodedHex": 3
   },
-  "app/modules/image-modal.js": {
-    "hardcodedHex": 7
-  },
   "app/modules/image-library.js": {
     "nativeDialogs": 1,
+    "hardcodedHex": 7
+  },
+  "app/modules/image-modal.js": {
     "hardcodedHex": 7
   },
   "app/modules/inventory-stock-ops.js": {
@@ -138,6 +138,9 @@
   "app/modules/match-confirm-modal.js": {
     "rogueOverlays": 1,
     "hardcodedHex": 9
+  },
+  "app/modules/migration-plan.js": {
+    "hardcodedHex": 48
   },
   "app/modules/newsletter.js": {
     "nativeDialogs": 1,
