@@ -348,5 +348,9 @@
     "centsDiv": 12,
     "moneyToFixed": 13,
     "localeDate": 5
+  },
+  "app/modules/newsletter-v2.js": {
+    "centsDiv": 1,
+    "localeDate": 1
   }
 }
