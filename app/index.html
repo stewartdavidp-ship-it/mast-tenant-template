@@ -239,7 +239,7 @@
        them (fulfillment.js, the shell's order tables + dashboard cards) always
        resolve — closing the load-order fragility of the old lazy-only home.
        ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
-  <script src="../shared/orders-core.js?v=c8116888608b"></script>
+  <script src="../shared/orders-core.js?v=7151f515600e"></script>
   <!-- Lazy CDN loaders (Track 3). window.ensurePapa()/ensureXlsx() inject
        papaparse@5 / xlsx@0.18.5 on FIRST import/export use instead of eagerly on
        every admin boot (xlsx@0.18.5 carries known CVEs; both are import/export-only).
@@ -20903,7 +20903,7 @@ var MODULE_MANIFEST = {
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
   contacts: { src: 'modules/contacts.js', v: 'fd8ca77af153', routes: ['contacts'] },
   customers: { src: 'modules/customers.js', v: '8a5680c39345', routes: ['customers'] },
-  orders: { src: 'modules/orders.js', v: '2a8cbed71391', routes: ['orders', 'commissions', 'rma'] },
+  orders: { src: 'modules/orders.js', v: '43fec58ffdf2', routes: ['orders', 'commissions', 'rma'] },
   'orders-v2': { src: 'modules/orders-v2.js', v: '9a955e0a06b8', routes: ['orders-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   'customers-v2': { src: 'modules/customers-v2.js', v: '4b5d4e9c26c1', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: '9bd9e2838f6d', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
