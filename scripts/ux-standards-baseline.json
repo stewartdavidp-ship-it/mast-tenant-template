@@ -101,6 +101,9 @@
   "app/modules/library-upload-modal.js": {
     "hardcodedHex": 5
   },
+  "app/modules/link-recipe-dialog.js": {
+    "hardcodedHex": 2
+  },
   "app/modules/lookbooks.js": {
     "hardcodedHex": 15
   },
