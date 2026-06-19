@@ -1359,12 +1359,17 @@
   };
 
   // Register module
+  // Shared route handler. The legacy 'advisor' route resolves here too: advisor.js
+  // (V1) was retired (T6, Legacy-UI sunset); this is now the only Business Plan
+  // admin UI for ALL users, regardless of the redesign flag.
+  var _advV2Route = {
+    tab: 'advisorV2Tab',
+    setup: function () { ensureTab(); if (!advisorLoaded) loadAdvisor(); }
+  };
   MastAdmin.registerModule('advisor-v2', {
     routes: {
-      'advisor-v2': {
-        tab: 'advisorV2Tab',
-        setup: function () { ensureTab(); if (!advisorLoaded) loadAdvisor(); }
-      }
+      'advisor-v2': _advV2Route,
+      'advisor': _advV2Route
     },
     detachListeners: function () {
       planData = null;
