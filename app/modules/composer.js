@@ -318,7 +318,7 @@
           if (typeof window.blogOpenFromContent === 'function') await window.blogOpenFromContent(c.id);
           done.push('blog');
         } else if (channel === 'social') {
-          await _ensureModule('social');
+          await _ensureModule('social-v2'); // V1 social.js retired (T6); social-v2 owns socialOpenFromContent
           if (typeof window.socialOpenFromContent === 'function') await window.socialOpenFromContent(c.id);
           done.push('social');
         } else if (channel === 'newsletter') {

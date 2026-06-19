@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **49,700** lines
-- **Feature modules:** **143** files in `app/modules/` (**105** routed), **157,004** lines combined
+- **Core shell:** `app/index.html` — **49,699** lines
+- **Feature modules:** **142** files in `app/modules/` (**104** routed), **155,731** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -52,7 +52,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/cs-support-v2.js` | 368 | cs-inbox-v2, cs-tickets-v2 |
 | `modules/cs-surveys-v2.js` | 718 | cs-surveys-v2 |
 | `modules/customer-portfolio-v2.js` | 188 | customer-portfolio-v2 |
-| `modules/customer-service.js` | 3,624 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
+| `modules/customer-service.js` | 3,630 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-v2.js` | 541 | customers-v2 |
 | `modules/customers.js` | 3,545 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
@@ -61,7 +61,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/email-preview-drawer.js` | 123 | — |
 | `modules/employees-v2.js` | 581 | employees-v2 |
 | `modules/engagement-inbox-v2.js` | 383 | engagement-inbox-v2 |
-| `modules/engagement-inbox.js` | 515 | engagement-inbox |
+| `modules/engagement-inbox.js` | 525 | engagement-inbox |
 | `modules/enrollments-v2.js` | 492 | enrollments-v2 |
 | `modules/events.js` | 1,937 | events-shows, events-settings |
 | `modules/feedback-dialog.js` | 274 | — |
@@ -123,8 +123,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/shopify-harness.js` | 440 | — |
 | `modules/shows-v2.js` | 2,583 | shows-v2, show-find-v2, show-apply-v2, show-prep-v2, show-execute-v2, show-history-v2 |
 | `modules/shows.js` | 4,032 | show, show-find, show-apply, show-prep, show-execute, show-history |
-| `modules/social-v2.js` | 1,292 | social-v2 |
-| `modules/social.js` | 1,794 | social |
+| `modules/social-v2.js` | 1,797 | social-v2, social |
 | `modules/stories-v2.js` | 640 | stories-v2 |
 | `modules/students-config-v2.js` | 687 | students-config-v2 |
 | `modules/students-v2.js` | 784 | students-v2 |
