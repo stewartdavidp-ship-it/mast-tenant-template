@@ -19598,7 +19598,7 @@ var MAST_V2_ROUTE_MAP = {
   // Shows lifecycle: shows.js (V1) is RETIRED (T6). The shows-v2 twin now owns
   // the bare #show* routes directly in its manifest entry, so no remap pair is
   // needed — navigateTo('show'/'show-find'/…) resolves straight to the twin.
-  pack: 'pack-v2', ship: 'ship-v2', rma: 'rma-v2',
+  pack: 'pack-v2', ship: 'ship-v2', // 'rma' NOT remapped (T6 PR4b): bare #rma → un-gated rma-admin module (admin/rma lifecycle) for ALL users; flag-gated orders/{id} returns lens stays at #rma-v2.
   pos: 'pos-v2',
   receipts: 'receipts-v2',
   'composer': 'composer-v2',
@@ -20883,7 +20883,7 @@ var MAST_MODULES_V = '20260618-202331-1353a6aa';
 var MODULE_MANIFEST = {
   blog: { src: 'modules/blog.js', v: '7471223ca16f', routes: ['blog'] },
   trips: { src: 'modules/trips.js', v: '6cefe29d9994', routes: ['trips'] },
-  wholesale: { src: 'modules/wholesale.js', v: 'df3d02d649c2', routes: ['wholesale'] },
+  wholesale: { src: 'modules/wholesale.js', v: '0675eb5aa646', routes: ['wholesale'] },
   finance: { src: 'modules/finance.js', v: '91f388f1e1f0', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
   // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
   // (no top-level route). Empty routes[] keeps it lazy-loadable via MastAdmin.loadModule('accounting').
@@ -20902,8 +20902,8 @@ var MODULE_MANIFEST = {
   production: { src: 'modules/production.js', v: '2b1cae9ead69', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
   contacts: { src: 'modules/contacts.js', v: 'fd8ca77af153', routes: ['contacts'] },
-  customers: { src: 'modules/customers.js', v: '8a5680c39345', routes: ['customers'] },
-  orders: { src: 'modules/orders.js', v: '2094e72d9c1b', routes: ['rma'] }, // 'orders' route ABSORBED into orders-v2 (T6 PR3): OrdersBridge was absorbed there, which now owns the bare #orders route directly (no MAST_V2_ROUTE_MAP remap). 'commissions' was absorbed into commissions-v2 (PR2). This file now serves only the legacy #rma surface + dashboard cards (deleted in PR4).
+  customers: { src: 'modules/customers.js', v: '13faf78cf7dc', routes: ['customers'] },
+  'rma-admin': { src: 'modules/rma-admin.js', v: 'eb0662c15cd7', routes: ['rma'] }, // RMA/Returns lifecycle admin (admin/rma records via the transitionRma CF). orders.js (V1) RETIRED (T6 PR4b): the orders route went to orders-v2 (PR3), commissions to commissions-v2 (PR2), and this RMA lifecycle UI was relocated here VERBATIM and un-gated, so the bare #rma route resolves here directly for ALL users (no MAST_V2_ROUTE_MAP remap). rma-v2.js (#rma-v2) is a separate flag-gated returns lens over orders/{id} return_* statuses.
   'orders-v2': { src: 'modules/orders-v2.js', v: '6e4fcc19ce9d', routes: ['orders-v2', 'orders'] }, // Orders surface (UI-redesign). Owns the bare #orders route (T6 PR3 — absorbed OrdersBridge from orders.js).
   'customers-v2': { src: 'modules/customers-v2.js', v: '4b5d4e9c26c1', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: '9bd9e2838f6d', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
@@ -31612,7 +31612,7 @@ window.toggleProductsDensity = function() {
 
 // Tenant business timezone helpers — lazy fetch from businessEntity, used
 // by URL-driven date filtering so admin agrees with MCP regardless of
-// where the user is browsing from. Mirrors the helpers in modules/orders.js
+// where the user is browsing from. Mirrors the helpers in shared/orders-core.js
 // but lives in core because productsTab is a core view (not a module).
 window._productsTenantTz = window._productsTenantTz === undefined ? null : window._productsTenantTz;
 window._productsTenantTzLoading = window._productsTenantTzLoading || null;
@@ -43259,7 +43259,7 @@ function openGalleryMetadataModal(sectionId, imageUrl, libraryImageId, libImg) {
 // Toast
 // ============================================================
 // ============================================================
-// Orders Management — Extracted to modules/orders.js (lazy-loaded)
+// Orders Management — order list/detail/lifecycle now in orders-v2.js + shared/orders-core.js (orders.js retired, T6 PR4b)
 // ============================================================
 // ============================================================
 // Fulfillment — Extracted to modules/fulfillment.js (lazy-loaded)
@@ -44429,7 +44429,7 @@ function openMoveItemsModal(prefillPid, prefillVariant, prefillFrom) {
   }).catch(function() {});
 }
 
-// ---- Shipping Modal, Cancel Order, Order Notes — Extracted to modules/orders.js (lazy-loaded) ----
+// ---- Shipping Modal, Cancel Order, Order Notes — now in shared/orders-core.js + orders-v2.js (orders.js retired, T6 PR4b) ----
 
 // ============================================================
 // Clone Product Dialog
@@ -44990,7 +44990,7 @@ function validateRequired(fields) {
 }
 
 // ============================================================
-// Commissions — Extracted to modules/orders.js (lazy-loaded)
+// Commissions — now in commissions-v2.js (orders.js commission slice retired, T6 PR2/PR4b)
 // ============================================================
 // ============================================================
 // SOCIAL MEDIA — V1 social.js RETIRED (T6); the native pipeline + SocialBridge
@@ -46661,7 +46661,7 @@ var ROUTE_FOR_ACTION = (function() {
   return m;
 })();
 
-// ─── Dashboard Cards: New Orders + Ready to Ship — Extracted to modules/orders.js (lazy-loaded) ───
+// ─── Dashboard Cards: New Orders + Ready to Ship — now in shared/orders-core.js (eager) (orders.js retired, T6 PR4a/PR4b) ───
 
 // ─── Dashboard Card: Low Inventory ──────────────────────────
 

@@ -2923,14 +2923,9 @@
           showToast && showToast('Could not open order — orders module failed to load.', true);
         }
       };
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
-        MastAdmin.loadModule('orders').then(callView).catch(function(err) {
-          console.error('[customers] failed to load orders module', err);
-          showToast && showToast('Failed to load orders module: ' + (err && err.message || err), true);
-        });
-      } else {
-        setTimeout(callView, 50);
-      }
+      // viewOrder is provided eagerly by shared/orders-core.js (relocated there
+      // off the now-retired orders.js in T6 PR3b/PR4) — no module load needed.
+      setTimeout(callView, 50);
     };
     if (window.MastDirty) MastDirty.checkAndExit(doNav); else doNav();
   }

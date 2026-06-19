@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **47,831** lines
-- **Feature modules:** **139** files in `app/modules/` (**100** routed), **145,205** lines combined
+- **Feature modules:** **139** files in `app/modules/` (**100** routed), **145,161** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -53,7 +53,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/customer-portfolio-v2.js` | 188 | customer-portfolio-v2 |
 | `modules/customer-service.js` | 3,630 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-v2.js` | 541 | customers-v2 |
-| `modules/customers.js` | 3,545 | customers |
+| `modules/customers.js` | 3,540 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
 | `modules/email-log-v2.js` | 386 | email-log-v2 |
 | `modules/email-log.js` | 561 | email-log |
@@ -101,7 +101,6 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/module-selection-modal.js` | 147 | — |
 | `modules/newsletter-v2.js` | 1,758 | newsletter-v2, newsletter |
 | `modules/orders-v2.js` | 1,405 | orders-v2, orders |
-| `modules/orders.js` | 1,097 | rma |
 | `modules/passes-v2.js` | 547 | passes-v2 |
 | `modules/pos-v2.js` | 182 | pos-v2 |
 | `modules/procurement-v2.js` | 882 | procurement-v2 |
@@ -113,6 +112,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/publish-to-channel-dialog.js` | 179 | — |
 | `modules/receipts-v2.js` | 460 | receipts-v2 |
 | `modules/resources-v2.js` | 345 | resources-v2 |
+| `modules/rma-admin.js` | 1,061 | rma |
 | `modules/rma-v2.js` | 219 | rma-v2 |
 | `modules/sales-events-v2.js` | 745 | sales-events-v2 |
 | `modules/sales.js` | 3,409 | pos, receipts, events, salesEvents, terms |
@@ -140,7 +140,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/website-v2.js` | 2,611 | website-v2 |
 | `modules/website.js` | 3,480 | website |
 | `modules/wholesale-v2.js` | 745 | wholesale-v2 |
-| `modules/wholesale.js` | 1,953 | wholesale |
+| `modules/wholesale.js` | 1,950 | wholesale |
 | `modules/workflows/commissions.workflow.js` | 266 | — |
 | `modules/workflows/jobs.workflow.js` | 118 | — |
 | `modules/workflows/pickship.workflow.js` | 394 | — |

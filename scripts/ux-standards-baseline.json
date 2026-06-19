@@ -149,10 +149,9 @@
     "nativeDialogs": 1,
     "hardcodedHex": 36
   },
-  "app/modules/orders.js": {
-    "nativeDialogs": 4,
-    "rogueOverlays": 2,
-    "hardcodedHex": 110
+  "app/modules/rma-admin.js": {
+    "rogueOverlays": 1,
+    "hardcodedHex": 25
   },
   "app/modules/orders-v2.js": {
     "hardcodedHex": 1
