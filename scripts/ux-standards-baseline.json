@@ -9,6 +9,9 @@
     "translateX": 3,
     "hardcodedHex": 2
   },
+  "app/modules/add-to-sale-dialog.js": {
+    "hardcodedHex": 2
+  },
   "app/modules/add-variant-dialog.js": {
     "hardcodedHex": 1
   },
