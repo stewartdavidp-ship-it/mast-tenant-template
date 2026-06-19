@@ -95,6 +95,9 @@
   "app/modules/inventory-stock-ops.js": {
     "hardcodedHex": 7
   },
+  "app/modules/library-upload-modal.js": {
+    "hardcodedHex": 5
+  },
   "app/modules/lookbooks.js": {
     "hardcodedHex": 15
   },
