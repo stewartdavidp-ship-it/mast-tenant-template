@@ -83,7 +83,7 @@
     // Card 3 (Your shop): the live storefront categories array (each
     // { id, label, wholesaleGroup? }) + a per-slug product count (for the
     // delete-safety warning + product-derived "stray category" suggestions).
-    cats: null, catEditId: null, catMore: {}, productCatCounts: null, suggestions: null,
+    cats: null, productCatCounts: null, productsByCat: null, suggestions: null,
     // Card 4 (See it live & share): the live-preview iframe. previewVP is the
     // active viewport (desktop/tablet/mobile); previewNonce is bumped on each
     // reload to force the iframe to refetch (the storefront-side ?mastpreview=1
@@ -1077,6 +1077,7 @@
   // (so picking a thumbnail re-renders instantly, with no refetch).
   var WV2_PHOTOS = { sec: null, focus: null, items: null, cats: null, showHidden: false };
   var _imgdMetaT = {}; // debounce timers for per-photo metadata text inputs
+  var _catDetailT = {}; // debounce timers for category Details inputs (name / wholesale)
 
   // Resolve the storefront categories for the per-photo Category field. Prefer
   // the twin's loaded list; else read the raw doc and normalize BOTH shapes (a
@@ -1145,6 +1146,16 @@
       // Fill the inline photo manager after EVERY render (open, setMode, and any
       // re-render) so the Photos tab always shows the live grid + editor.
       detail: { render: function (UU, r) { WV2_SEC.id = r.id; setTimeout(function () { fillPhotosManager(r.id); }, 0); return sectionDetailHtml(UU, r); } }
+    });
+    // Shop CATEGORY record — Details / Photos / Products tabs. Opened from the
+    // Card 3 list; Photos reuses the same inline manager (scoped to the category's
+    // images); Products drills to the product record. route:null → open-only.
+    MastEntity.define('shop-category-v2', {
+      label: 'Category', labelPlural: 'Categories', size: 'lg', route: null,
+      recordId: function (r) { return r.id; },
+      fields: [{ name: '_title', label: 'Category', type: 'text', list: true, readOnly: true }],
+      fetch: function (id) { return catRecord(id); },
+      detail: { render: function (UU, r) { setTimeout(function () { fillPhotosManager(r.id); }, 0); return catDetailHtml(UU, r); } }
     });
   }
 
@@ -1334,60 +1345,78 @@
 
   function titleSlug(slug) { return titleCase(String(slug || '')); }
 
-  // One category row: inline-editable label, slug chip, optional wholesaleGroup
-  // under a row-level "More ▾", reorder ▲▼, delete. Edit mode swaps the label for
-  // a text input committed on the row's Save.
+  // One category LIST row: name + product count + reorder + delete; the row opens
+  // the category record (Details / Photos / Products tabs). Rename + wholesale +
+  // photos + products all live in that record now.
   function shopCatRow(cat, idx, total) {
     var ed = canEdit();
-    var editing = V2.catEditId === cat.id;
-    var more = !!V2.catMore[cat.id];
     var cid = esc(cat.id);
     var count = (V2.productCatCounts && V2.productCatCounts[String(cat.id).toLowerCase()]) || 0;
     var countPill = count > 0
       ? '<span class="wv2-cat-count" title="' + count + ' product' + (count === 1 ? '' : 's') + ' in this category">' + count + '</span>'
       : '';
-    // reorder controls (disabled at the ends)
     var upDis = idx === 0 ? ' disabled' : '';
     var dnDis = idx === total - 1 ? ' disabled' : '';
     var reorder = ed
       ? '<span class="wv2-cat-move">' +
-          '<button type="button" class="wv2-mv"' + upDis + ' title="Move up" onclick="WebsiteV2.moveCat(\'' + cid + '\',-1)">▲</button>' +
-          '<button type="button" class="wv2-mv"' + dnDis + ' title="Move down" onclick="WebsiteV2.moveCat(\'' + cid + '\',1)">▼</button>' +
+          '<button type="button" class="wv2-mv"' + upDis + ' title="Move up" onclick="event.stopPropagation();WebsiteV2.moveCat(\'' + cid + '\',-1)">▲</button>' +
+          '<button type="button" class="wv2-mv"' + dnDis + ' title="Move down" onclick="event.stopPropagation();WebsiteV2.moveCat(\'' + cid + '\',1)">▼</button>' +
         '</span>'
       : '';
-    var main;
-    if (editing && ed) {
-      main = '<div class="wv2-cat-edit">' +
-        '<input class="form-input" id="wv2CatLabel-' + cid + '" type="text" value="' + esc(cat.label) + '" style="width:100%;">' +
-        '<div class="wv2-cat-edit-actions">' +
-          '<button type="button" class="btn btn-primary btn-small" onclick="WebsiteV2.saveCatLabel(\'' + cid + '\')">Save</button>' +
-          '<button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.cancelCatEdit()">Cancel</button>' +
-        '</div>' +
+    var del = ed ? '<button type="button" class="wv2-cat-btn danger" title="Delete" onclick="event.stopPropagation();WebsiteV2.deleteCat(\'' + cid + '\')">Delete</button>' : '';
+    var open = ed ? 'WebsiteV2.openCategory(\'' + cid + '\')' : '';
+    return '<div class="wv2-cat-row" data-cat="' + cid + '"' + (ed ? ' role="button" tabindex="0" onclick="' + open + '" onkeydown="if(event.key===\'Enter\'){' + open + '}"' : '') + '>' +
+        '<div class="wv2-cat-main"><span class="wv2-cat-label">' + esc(cat.label) + '</span>' + countPill + '<span class="wv2-cat-slug">' + cid + '</span></div>' +
+        '<div class="wv2-cat-actions">' + reorder + del + (ed ? '<span class="wv2-cat-go">Edit ›</span>' : '') + '</div>' +
       '</div>';
-    } else {
-      main = '<div class="wv2-cat-main">' +
-        '<span class="wv2-cat-label">' + esc(cat.label) + '</span>' + countPill +
-        '<span class="wv2-cat-slug">' + cid + '</span>' +
-      '</div>';
-    }
-    var actions = '';
-    if (ed && !editing) {
-      actions = '<div class="wv2-cat-actions">' + reorder +
-        '<button type="button" class="wv2-cat-btn" title="Rename" onclick="WebsiteV2.editCat(\'' + cid + '\')">Rename</button>' +
-        '<button type="button" class="wv2-cat-btn wv2-cat-more" title="More options" onclick="WebsiteV2.toggleCatMore(\'' + cid + '\')">More ' + (more ? '▴' : '▾') + '</button>' +
-        '<button type="button" class="wv2-cat-btn danger" title="Delete" onclick="WebsiteV2.deleteCat(\'' + cid + '\')">Delete</button>' +
-      '</div>';
-    }
-    // Row-level "More" — the de-emphasized wholesaleGroup parity field.
-    var moreBody = (more && ed && !editing)
-      ? '<div class="wv2-cat-morebody">' +
-          '<label class="form-label">Wholesale group <span class="mu-sub">(optional — groups categories for wholesale)</span></label>' +
-          '<input class="form-input" id="wv2CatWholesale-' + cid + '" type="text" value="' + esc(cat.wholesaleGroup || '') + '" placeholder="e.g. Decorative" style="width:100%;max-width:280px;">' +
-        '</div>'
-      : '';
-    return '<div class="wv2-cat" data-cat="' + cid + '">' +
-        '<div class="wv2-cat-head">' + main + actions + '</div>' + moreBody +
-      '</div>';
+  }
+
+  // Build a category record from the live caches — the entity fetch + openCategory.
+  function catRecord(id) {
+    var cat = (V2.cats || []).filter(function (c) { return c.id === id; })[0];
+    if (!cat) return null;
+    var products = (V2.productsByCat && V2.productsByCat[String(id).toLowerCase()]) || [];
+    var b = window.HomepageBridge;
+    var imageCount = (b && b.images && b.images.count) ? b.images.count(id) : 0;
+    return { id: id, _title: cat.label || id, label: cat.label || id, wholesaleGroup: cat.wholesaleGroup || '', products: products, imageCount: imageCount };
+  }
+  // The category record interior — Details (rename + wholesale) · Photos (the
+  // reused inline photo manager, scoped to this category's images) · Products
+  // (read-only list → drill to the product record). MastUI primitives throughout.
+  function catDetailHtml(UU, r) {
+    var ed = canEdit();
+    var tabs = [{ key: 'details', label: 'Details' }, { key: 'photos', label: 'Photos' }, { key: 'products', label: 'Products' }];
+    var tiles = [
+      { k: 'Products', v: String(r.products.length) },
+      { k: 'Photos', v: String(r.imageCount) },
+      { k: 'Wholesale', v: r.wholesaleGroup ? esc(r.wholesaleGroup) : '<span class="mu-sub">—</span>' }
+    ];
+    var sid = esc(r.id);
+    var detailsInner = ed
+      ? '<div class="form-group"><label class="form-label">Category name</label><input class="form-input" type="text" style="width:100%;" value="' + esc(r.label) + '" oninput="WebsiteV2.catDetail(\'' + sid + '\',\'label\',this.value)"></div>' +
+        '<div class="form-group"><label class="form-label">Wholesale group <span class="mu-sub">(optional — groups categories for wholesale)</span></label><input class="form-input" type="text" style="width:100%;" value="' + esc(r.wholesaleGroup) + '" placeholder="e.g. Decorative" oninput="WebsiteV2.catDetail(\'' + sid + '\',\'wholesaleGroup\',this.value)"></div>' +
+        '<div class="mu-sub" style="margin-top:2px;">Filter ID: ' + sid + ' · shown as a filter pill on your shop.</div>'
+      : '<span class="mu-sub">Read only.</span>';
+    var out = UU.stickyHead(UU.tiles(tiles), UU.paneTabsBar(tabs, 'details'));
+    out += secPane('details', 'details', UU.card('Details', detailsInner));
+    out += secPane('photos', 'details', '<div id="wv2PhotosMgr"><div class="mu-sub" style="padding:8px 0;">Loading photos…</div></div>');
+    out += secPane('products', 'details', UU.card('Products in ' + esc(r.label) + ' (' + r.products.length + ')', catProductsListHtml(r)));
+    return out;
+  }
+  function catProductsListHtml(r) {
+    if (!r.products.length) return '<div class="mu-sub" style="padding:8px 0;">No products in this category yet. Add this category to a product and it shows up here.</div>';
+    var rows = r.products.map(function (p) {
+      var price = (typeof p.priceCents === 'number') ? ('$' + (p.priceCents / 100).toFixed(2)) : '';
+      var sub = [price, (p.status && p.status !== 'active') ? p.status : ''].filter(Boolean).join(' · ');
+      var thumb = p.image
+        ? '<div class="wv2-prod-thumb" style="background-image:url(' + esc(p.image) + ');"></div>'
+        : '<div class="wv2-prod-thumb wv2-prod-thumb-empty"></div>';
+      return '<button type="button" class="wv2-prod-row" onclick="WebsiteV2.openProduct(\'' + esc(p.pid) + '\')">' +
+        thumb + '<div class="wv2-prod-main"><div class="wv2-prod-name">' + esc(p.name) + '</div>' + (sub ? '<div class="mu-sub">' + esc(sub) + '</div>' : '') + '</div>' +
+        '<span class="wv2-cat-go">Edit ›</span></button>';
+    }).join('');
+    return '<div class="mu-sub" style="margin-bottom:10px;">Click a product to open and edit it. To move a product in or out of a category, change it on the product.</div>' +
+      '<div class="wv2-prod-list">' + rows + '</div>';
   }
 
   // The product-derived suggestion chip-row: slugs found on products but missing
@@ -1710,22 +1739,29 @@
       '.wv2-test-quote{font-size:0.85rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;}' +
       // ── Card 3 · Your shop (categories) ──
       '.wv2-catlist{display:flex;flex-direction:column;}' +
-      '.wv2-cat{border-top:1px solid var(--border);}.wv2-cat:first-child{border-top:none;}' +
-      '.wv2-cat-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;flex-wrap:wrap;}' +
+      // Category LIST rows — each opens the category record (Details/Photos/Products).
+      '.wv2-cat-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 10px;border-top:1px solid var(--border);border-radius:8px;cursor:pointer;flex-wrap:wrap;}' +
+      '.wv2-cat-row:first-child{border-top:none;}' +
+      '.wv2-cat-row:hover{background:color-mix(in srgb,var(--text-primary) 4%,transparent);}' +
       '.wv2-cat-main{display:flex;align-items:center;gap:9px;min-width:0;flex:1;}' +
-      '.wv2-cat-label{font-size:0.9rem;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+      '.wv2-cat-label{font-size:0.9rem;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
       '.wv2-cat-slug{font-size:0.72rem;color:var(--text-secondary,var(--warm-gray));font-family:ui-monospace,monospace;opacity:0.8;}' +
       '.wv2-cat-count{font-size:0.72rem;font-weight:600;color:var(--teal);background:color-mix(in srgb,var(--teal) 14%,transparent);padding:1px 8px;border-radius:999px;flex-shrink:0;}' +
-      '.wv2-cat-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;}' +
+      '.wv2-cat-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap;}' +
+      '.wv2-cat-go{font-size:0.78rem;color:var(--teal);font-weight:600;}' +
       '.wv2-cat-move{display:inline-flex;gap:2px;}' +
       '.wv2-cat-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.72rem;padding:3px 10px;}' +
       '.wv2-cat-btn:hover{color:var(--text-primary);border-color:var(--teal);}' +
       '.wv2-cat-btn.danger:hover{color:var(--danger);border-color:var(--danger);}' +
-      '.wv2-cat-more{opacity:0.85;}' +
-      '.wv2-cat-edit{display:flex;flex-direction:column;gap:8px;flex:1;min-width:0;}' +
-      '.wv2-cat-edit-actions{display:flex;gap:8px;}' +
-      '.wv2-cat-morebody{padding:2px 0 12px;}' +
-      '.wv2-cat-morebody .form-label{display:block;font-size:0.78rem;margin-bottom:4px;}' +
+      // Category record · Products tab — read-only rows that drill to the product.
+      '.wv2-prod-list{display:flex;flex-direction:column;}' +
+      '.wv2-prod-row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:9px 6px;border:none;border-top:1px solid var(--border);background:none;cursor:pointer;color:inherit;}' +
+      '.wv2-prod-row:first-child{border-top:none;}' +
+      '.wv2-prod-row:hover{background:color-mix(in srgb,var(--text-primary) 4%,transparent);}' +
+      '.wv2-prod-thumb{flex-shrink:0;width:40px;height:40px;border-radius:8px;border:1px solid var(--border);background-size:cover;background-position:center;}' +
+      '.wv2-prod-thumb-empty{background:color-mix(in srgb,var(--text-primary) 6%,transparent);}' +
+      '.wv2-prod-main{flex:1;min-width:0;}' +
+      '.wv2-prod-name{font-size:0.9rem;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
       '.wv2-cat-add{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);}' +
       // product-derived suggestion chips
       '.wv2-suggest{margin-top:18px;border-top:1px solid var(--border);padding-top:16px;}' +
@@ -2224,47 +2260,39 @@
       commitCats(arr);
       if (window.showToast) showToast('Added “' + titleSlug(slug) + '” to your shop.');
     },
-    // Enter inline rename for a category row.
-    editCat: function (id) {
+    // Open a category as a record (Details / Photos / Products tabs).
+    openCategory: function (id) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
-      V2.catEditId = id;
-      mountShop();
-      var el = document.getElementById('wv2CatLabel-' + id);
-      if (el) { el.focus(); el.select && el.select(); }
+      if (!window.MastEntity) { if (window.showToast) showToast('Editor still loading — try again', true); return; }
+      var r = catRecord(id);
+      if (!r) { if (window.showToast) showToast('Category still loading — try again', true); return; }
+      MastEntity.openRecord('shop-category-v2', r, 'read');
     },
-    cancelCatEdit: function () { V2.catEditId = null; mountShop(); },
-    // Save a renamed label (slug unchanged — parity with V1: we do NOT remap slugs
-    // this PR so existing products stay filed under the same id).
-    saveCatLabel: function (id) {
-      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your shop.', true); return; }
-      var el = document.getElementById('wv2CatLabel-' + id);
-      var label = (el && el.value || '').trim();
-      if (!label) { if (window.showToast) showToast('Category name can’t be empty.', true); return; }
-      var arr = catsWorking();
-      var row = arr.filter(function (c) { return c.id === id; })[0];
-      if (!row) return;
-      row.label = label;
-      V2.catEditId = null;
-      commitCats(arr);
+    // Instant-apply (debounced) the Details tab fields — name (label, slug
+    // unchanged) and wholesale group — through the single-source category writer.
+    // Skips reloadSoon (rename/wholesale don't change product counts), so typing
+    // stays light; mountShop refreshes the Card 3 list label underneath.
+    catDetail: function (id, field, value) {
+      if (!canEdit()) return;
+      var key = id + ':' + field;
+      if (_catDetailT[key]) clearTimeout(_catDetailT[key]);
+      _catDetailT[key] = setTimeout(function () {
+        var arr = catsWorking();
+        var row = arr.filter(function (c) { return c.id === id; })[0];
+        if (!row) return;
+        var v = (value || '').trim();
+        if (field === 'label') { if (!v) return; row.label = v; }
+        else if (field === 'wholesaleGroup') { if (v) row.wholesaleGroup = v; else delete row.wholesaleGroup; }
+        V2.cats = arr.map(function (c) { return Object.assign({}, c); });
+        withSave(WebsiteBridgeCall('saveCategories', arr), { reload: false });
+        mountShop();
+      }, 500);
     },
-    // Toggle the row-level "More" disclosure (wholesaleGroup). Editing the field
-    // commits on blur (wired by an inline change handler below).
-    toggleCatMore: function (id) {
-      V2.catMore[id] = !V2.catMore[id];
-      mountShop();
-      if (V2.catMore[id]) {
-        var el = document.getElementById('wv2CatWholesale-' + id);
-        if (el) {
-          el.addEventListener('change', function () {
-            var arr = catsWorking();
-            var row = arr.filter(function (c) { return c.id === id; })[0];
-            if (!row) return;
-            var v = (el.value || '').trim();
-            if (v) row.wholesaleGroup = v; else delete row.wholesaleGroup;
-            commitCats(arr);
-          });
-        }
-      }
+    // Products tab → open the product record (stacked SO with Back). products-v2
+    // fetch reads the product fresh, so this works from here.
+    openProduct: function (pid) {
+      if (!pid || !window.MastEntity) return;
+      MastEntity.drill('products-v2', pid);
     },
     // Reorder a category up/down — read-modify-write the whole array (instant).
     moveCat: function (id, dir) {
@@ -2430,12 +2458,14 @@
       if (!window.MastDB || !MastDB.products || typeof MastDB.products.list !== 'function') return;
       Promise.resolve(MastDB.products.list()).then(function (res) {
         var arr = Array.isArray(res) ? res : Object.values(res || {});
-        var counts = {};
+        var counts = {}, byCat = {};
         arr.forEach(function (p) {
           var slugs = productCatSlugs(p);
-          slugs.forEach(function (s) { if (s) counts[s] = (counts[s] || 0) + 1; });
+          var sum = { pid: p.pid || p.id || p._key, name: p.name || '(untitled)', priceCents: (typeof p.priceCents === 'number' ? p.priceCents : null), status: p.status || 'active', image: (Array.isArray(p.images) && p.images[0]) || '' };
+          slugs.forEach(function (s) { if (s) { counts[s] = (counts[s] || 0) + 1; (byCat[s] = byCat[s] || []).push(sum); } });
         });
         V2.productCatCounts = counts;
+        V2.productsByCat = byCat;                 // catSlug → [product summaries] for the category record's Products tab
         V2.suggestions = computeSuggestions(counts);
         mountShop();
       }).catch(function (e) { console.warn('[website-v2] product cats', e && e.message); });
