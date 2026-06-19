@@ -177,6 +177,61 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
     }
   }
 
+  // ── Storefront signed-URL image upload (W2-C10) ──────────────────────────
+  // Replaces direct client Storage writes (storage().ref().put()). The
+  // storefront previously wrote images to a CLIENT-CHOSEN path, gated only by
+  // size+contentType in storage rules (no auth, no tenant/path binding) — any
+  // anonymous actor could write into ANY tenant's namespace. This helper mints
+  // a server-signed PUT URL (arch CF mintStorefrontUploadUrl) scoped to a valid
+  // tenant + canonical path + image type, PUTs the file, and returns the public
+  // read URL — UX-identical to the old getDownloadURL() result. Storage rules
+  // then deny direct anonymous client writes (arch Stage 3).
+  //
+  //   uploadStorefrontImage({ kind, ids, file }) → Promise<{ publicUrl, objectPath }>
+  //     kind ∈ 'commission' | 'event-submission' | 'event-vendor' | 'event-ad'
+  //     ids  → commission:       { commId }
+  //            event-submission: { showId, tempId, index }
+  //            event-vendor:     { showId, vendorId }
+  //            event-ad:         { showId, vendorId, adImageId }
+  var _UPLOAD_ALLOWED_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+  var _UPLOAD_CT_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/jpg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp' };
+  function uploadStorefrontImage(opts) {
+    opts = opts || {};
+    var file = opts.file;
+    var kind = opts.kind;
+    var ids = opts.ids || {};
+    return window.TENANT_READY.then(function() {
+      if (!file) throw new Error('No file provided');
+      var contentType = file.type || 'image/jpeg';
+      var ext = (file.name && file.name.indexOf('.') !== -1)
+        ? file.name.split('.').pop().toLowerCase() : '';
+      // Normalize to the server allowlist — fall back to contentType, then jpg.
+      if (_UPLOAD_ALLOWED_EXTS.indexOf(ext) === -1) {
+        ext = _UPLOAD_CT_EXT[contentType] || 'jpg';
+      }
+      var cfBase = (window.TENANT_FIREBASE_CONFIG && window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+        ? window.TENANT_FIREBASE_CONFIG.cloudFunctionsBase
+        : 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+      return fetch(cfBase + '/mintStorefrontUploadUrl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Tenant-ID': window.TENANT_ID },
+        body: JSON.stringify({ tenantId: window.TENANT_ID, kind: kind, ids: ids, ext: ext, contentType: contentType, sizeBytes: file.size || null })
+      }).then(function(r) {
+        return r.json().then(function(d) {
+          if (!r.ok) throw new Error((d && d.error) || ('Upload authorization failed (' + r.status + ')'));
+          return d;
+        });
+      }).then(function(minted) {
+        return fetch(minted.uploadUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file })
+          .then(function(putRes) {
+            if (!putRes.ok) throw new Error('Upload failed (' + putRes.status + ')');
+            return { publicUrl: minted.publicUrl, objectPath: minted.objectPath };
+          });
+      });
+    });
+  }
+  window.uploadStorefrontImage = uploadStorefrontImage;
+
   function showError() {
     document.addEventListener('DOMContentLoaded', function() {
       document.body.innerHTML =

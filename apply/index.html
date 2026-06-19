@@ -360,20 +360,18 @@ body { font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif; ba
   };
 
   function uploadImages(showId) {
-    // Upload to Firebase Storage using tenant config
+    // W2-C10: route each image through the server-minted signed-URL flow
+    // (window.uploadStorefrontImage, storefront-tenant.js) instead of direct
+    // client Storage writes. Canonical path is built server-side; tempId groups
+    // this submission's images, image index preserved.
     return window.TENANT_READY.then(function() {
-      var fbApp;
-      try { fbApp = firebase.app('apply-upload'); } catch (e) {
-        fbApp = firebase.initializeApp(window.TENANT_FIREBASE_CONFIG, 'apply-upload');
-      }
-      var storage = fbApp.storage();
       var tempId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       return Promise.all(imageFiles.map(function(file, i) {
-        var ext = file.name.split('.').pop() || 'jpg';
-        var path = window.TENANT_ID + '/events/submissions/' + showId + '/' + tempId + '/image-' + i + '.' + ext;
-        return storage.ref(path).put(file).then(function(snap) {
-          return snap.ref.getDownloadURL();
-        });
+        return window.uploadStorefrontImage({
+          kind: 'event-submission',
+          ids: { showId: showId, tempId: tempId, index: i },
+          file: file
+        }).then(function(res) { return res.publicUrl; });
       }));
     });
   }
