@@ -322,7 +322,7 @@
           if (typeof window.socialOpenFromContent === 'function') await window.socialOpenFromContent(c.id);
           done.push('social');
         } else if (channel === 'newsletter') {
-          await _ensureModule('newsletter');
+          await _ensureModule('newsletter-v2'); // V1 newsletter.js retired (T6); newsletter-v2 owns newsletterOpenFromContent
           if (typeof window.newsletterOpenFromContent === 'function') await window.newsletterOpenFromContent(c.id);
           done.push('newsletter');
         } else if (channel === 'story') {
