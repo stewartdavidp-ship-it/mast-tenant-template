@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **46,896** lines
-- **Feature modules:** **140** files in `app/modules/` (**99** routed), **144,150** lines combined
+- **Feature modules:** **140** files in `app/modules/` (**99** routed), **144,165** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -133,7 +133,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/team-v2.js` | 4,132 | team-v2, team |
 | `modules/terms-v2.js` | 300 | terms-v2 |
 | `modules/trips-v2.js` | 357 | trips-v2 |
-| `modules/trips.js` | 2,162 | trips |
+| `modules/trips.js` | 2,177 | trips |
 | `modules/unified-drift-dialog.js` | 152 | — |
 | `modules/variant-detail-tabs.js` | 1,013 | — |
 | `modules/vendors-v2.js` | 603 | vendors-v2 |

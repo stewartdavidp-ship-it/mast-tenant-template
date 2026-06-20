@@ -1229,14 +1229,29 @@
       return t.status === 'completed' && new Date(t.startTime).getFullYear() === year;
     });
 
+    // Cells run through the shared _csvCell guard (formula-injection-safe quoting:
+    // prefixes "'" to =,+,-,@,tab,CR-leading cells + RFC-4180 quoting). Defensive
+    // RFC-only fallback if the shell global is absent. Replaces the prior
+    // force-quote-every-field idiom, which also left driver/origin/destination/
+    // purpose un-escaped — clean cells are now conditionally quoted.
+    var cell = (typeof window._csvCell === 'function')
+      ? window._csvCell
+      : function (s) { var v = String(s == null ? '' : s); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var csv = 'Date,Driver,Origin,Destination,Purpose,Miles,IRS Rate (¢/mi),Deductible ($),Notes\n';
     completed.forEach(function(t) {
       var d = new Date(t.startTime);
       var dateStr = (d.getMonth()+1) + '/' + d.getDate() + '/' + d.getFullYear();
-      csv += '"' + dateStr + '","' + (t.driverName || '') + '","' + (t.origin ? t.origin.label : '') + '","' +
-        (t.destination ? t.destination.label : '') + '","' + (t.purpose || '') + '",' +
-        (t.miles || 0).toFixed(1) + ',' + (t.irsRateCentsPerMile || 70) + ',' +
-        (t.deductibleValue || 0).toFixed(2) + ',"' + (t.notes || '').replace(/"/g, '""') + '"\n';
+      csv += [
+        dateStr,
+        t.driverName || '',
+        t.origin ? t.origin.label : '',
+        t.destination ? t.destination.label : '',
+        t.purpose || '',
+        (t.miles || 0).toFixed(1),
+        (t.irsRateCentsPerMile || 70),
+        (t.deductibleValue || 0).toFixed(2),
+        t.notes || ''
+      ].map(cell).join(',') + '\n';
     });
 
     var blob = new Blob([csv], { type: 'text/csv' });
