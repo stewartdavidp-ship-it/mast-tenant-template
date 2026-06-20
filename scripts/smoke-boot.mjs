@@ -48,6 +48,7 @@ const isRealBug = m => m && !EXPECTED.test(m);
 const ROUTES = [
   'dashboard','products','inventory','orders','customers','contacts','financials',
   'finance-revenue','finance-expenses','finance-ap','finance-ar','settings','subscription',
+  'business', // lazy-loads modules/business-view.js via the route setup (recipe A, Track 1)
   'coupons','promotions','galleries','lookbooks','advisor','marketing-calendar','blog',
   'newsletter','social','campaigns','website','procurement','team','channels','wholesale',
   'commissions','rma','jobs','production','materials','book','trips','studio','students',

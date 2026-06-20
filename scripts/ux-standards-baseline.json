@@ -24,6 +24,9 @@
   "app/modules/blog-v2.js": {
     "hardcodedHex": 1
   },
+  "app/modules/business-view.js": {
+    "hardcodedHex": 43
+  },
   "app/modules/book.js": {
     "nativeDialogs": 3,
     "rogueOverlays": 1,
