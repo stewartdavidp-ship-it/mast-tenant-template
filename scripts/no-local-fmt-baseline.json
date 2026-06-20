@@ -180,6 +180,10 @@
     "moneyToFixed": 39,
     "localeDate": 4
   },
+  "app/modules/maker-settings.js": {
+    "moneyToFixed": 1,
+    "localeDate": 1
+  },
   "app/modules/mapping.js": {
     "centsDiv": 1,
     "moneyToFixed": 1
