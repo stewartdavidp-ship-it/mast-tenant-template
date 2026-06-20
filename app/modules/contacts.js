@@ -619,9 +619,16 @@ async function saveNewContact() {
       // Also invalidates the per-customer contacts cache so the next render
       // refetches and picks up the new record.
       try {
-        if (typeof window.customersAppendLinkedContact === 'function') {
-          window.customersAppendLinkedContact(pending.customerId, id);
-        }
+        // PR1: customersAppendLinkedContact moved to the lazy customers-core.
+        // Ensure it's loaded so the global resolves (it's a no-op in default V2
+        // mode where the customer cache is dormant, same as before the move).
+        var _appendLinked = function () {
+          if (typeof window.customersAppendLinkedContact === 'function') {
+            window.customersAppendLinkedContact(pending.customerId, id);
+          }
+        };
+        if (window.customersAppendLinkedContact) _appendLinked();
+        else if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('customers-core').then(_appendLinked).catch(function () {});
       } catch (e) { /* non-fatal */ }
 
       // Clear the hint and pop the MastNavStack back to the originating

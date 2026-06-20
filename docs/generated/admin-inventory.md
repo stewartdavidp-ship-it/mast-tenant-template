@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **46,896** lines
-- **Feature modules:** **140** files in `app/modules/` (**99** routed), **144,165** lines combined
+- **Core shell:** `app/index.html` — **46,897** lines
+- **Feature modules:** **141** files in `app/modules/` (**99** routed), **144,309** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -41,7 +41,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/consignment.js` | 2,338 | galleries |
 | `modules/consignments-v2.js` | 496 | consignments-v2 |
 | `modules/contacts-v2.js` | 545 | contacts-v2 |
-| `modules/contacts.js` | 1,733 | contacts |
+| `modules/contacts.js` | 1,740 | contacts |
 | `modules/coupon-modals.js` | 341 | — |
 | `modules/coupons-v2.js` | 542 | coupons-v2 |
 | `modules/create-role-modal.js` | 71 | — |
@@ -51,9 +51,10 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/cs-support-v2.js` | 368 | cs-inbox-v2, cs-tickets-v2 |
 | `modules/cs-surveys-v2.js` | 718 | cs-surveys-v2 |
 | `modules/customer-portfolio-v2.js` | 188 | customer-portfolio-v2 |
-| `modules/customer-service.js` | 3,620 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
+| `modules/customer-service.js` | 3,624 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
+| `modules/customers-core.js` | 564 | — |
 | `modules/customers-v2.js` | 541 | customers-v2 |
-| `modules/customers.js` | 3,540 | customers |
+| `modules/customers.js` | 3,105 | customers |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
 | `modules/email-log-v2.js` | 386 | email-log-v2 |
 | `modules/email-log.js` | 561 | email-log |
@@ -69,7 +70,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance-openitems-v2.js` | 545 | finance-ar-v2, finance-ap-v2 |
 | `modules/finance-reports-v2.js` | 258 | finance-reports-v2 |
 | `modules/finance-statements-v2.js` | 466 | financials-v2, finance-revenue-v2, finance-pl-v2, finance-cash-flow-v2, finance-tax-v2 |
-| `modules/finance.js` | 8,600 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
+| `modules/finance.js` | 8,604 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/forecast-job-modal.js` | 116 | — |
 | `modules/fulfillment-v2.js` | 614 | pack-v2, ship-v2 |
 | `modules/fulfillment.js` | 2,146 | pack, ship, fulfillment |

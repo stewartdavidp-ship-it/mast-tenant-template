@@ -20883,7 +20883,7 @@ var MAST_MODULES_V = '20260618-202331-1353a6aa';
 var MODULE_MANIFEST = {
   trips: { src: 'modules/trips.js', v: '04f6eabdd57a', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', v: '0675eb5aa646', routes: ['wholesale'] },
-  finance: { src: 'modules/finance.js', v: '934bf1a58d6e', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
+  finance: { src: 'modules/finance.js', v: 'eb3d4aed1841', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
   // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
   // (no top-level route). Empty routes[] keeps it lazy-loadable via MastAdmin.loadModule('accounting').
   accounting: { src: 'modules/accounting.js', v: 'b852b7cb7ccd', routes: [] },
@@ -20900,12 +20900,13 @@ var MODULE_MANIFEST = {
   'shows-v2': { src: 'modules/shows-v2.js', v: '23692c20cf27', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2', 'show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] }, // Shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin. shows.js (V1) RETIRED (T6): its ShowsBridge + DOM-free write cores were absorbed into shows-v2.js, and the bare #show* routes now resolve here directly (no MAST_V2_ROUTE_MAP remap).
   production: { src: 'modules/production.js', v: '69ab19210c64', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
-  contacts: { src: 'modules/contacts.js', v: 'fd8ca77af153', routes: ['contacts'] },
-  customers: { src: 'modules/customers.js', v: '13faf78cf7dc', routes: ['customers'] },
+  contacts: { src: 'modules/contacts.js', v: 'cf4b8c58276c', routes: ['contacts'] },
+  customers: { src: 'modules/customers.js', v: 'ab65bad9ace0', routes: ['customers'] },
+  'customers-core': { src: 'modules/customers-core.js', v: '305cd957b1a2', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module customer write layer (CustomersBridge, wallet-adjust, merge, add-contact, open-detail) lifted out of customers.js so V2 consumers load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'rma-admin': { src: 'modules/rma-admin.js', v: 'eb0662c15cd7', routes: ['rma'] }, // RMA/Returns lifecycle admin (admin/rma records via the transitionRma CF). orders.js (V1) RETIRED (T6 PR4b): the orders route went to orders-v2 (PR3), commissions to commissions-v2 (PR2), and this RMA lifecycle UI was relocated here VERBATIM and un-gated, so the bare #rma route resolves here directly for ALL users (no MAST_V2_ROUTE_MAP remap). rma-v2.js (#rma-v2) is a separate flag-gated returns lens over orders/{id} return_* statuses.
   'orders-v2': { src: 'modules/orders-v2.js', v: '6e4fcc19ce9d', routes: ['orders-v2', 'orders'] }, // Orders surface (UI-redesign). Owns the bare #orders route (T6 PR3 — absorbed OrdersBridge from orders.js).
-  'customers-v2': { src: 'modules/customers-v2.js', v: '4b5d4e9c26c1', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
-  'duplicates-v2': { src: 'modules/duplicates-v2.js', v: '9bd9e2838f6d', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
+  'customers-v2': { src: 'modules/customers-v2.js', v: 'ccd9ef05de60', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
+  'duplicates-v2': { src: 'modules/duplicates-v2.js', v: 'a8e6475587d6', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
   'calendar-v2': { src: 'modules/calendar-v2.js', v: '37194dc1a8b0', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
   'promotions-v2': { src: 'modules/promotions-v2.js', v: '233ee7a804eb', routes: ['promotions-v2', 'promotions'] }, // promotions; owns the legacy 'promotions' route too (V1 promotions.js retired, T6)
   'trips-v2': { src: 'modules/trips-v2.js', v: '444cf9fb076e', routes: ['trips-v2'] }, // UI-redesign conversion: trips history (flag-gated, side-by-side)
@@ -20935,7 +20936,7 @@ var MODULE_MANIFEST = {
   'membership-v2': { src: 'modules/membership-v2.js', v: '1e17872446a4', routes: ['membership-v2'] }, // UI-redesign conversion: membership members read detail (flag-gated)
   'cs-reviews-v2': { src: 'modules/cs-reviews-v2.js', v: '3914ec83b5a8', routes: ['cs-reviews-v2'] }, // UI-redesign conversion: CS reviews read detail (flag-gated)
   'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', v: '350b80606f25', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
-  'loyalty-v2': { src: 'modules/loyalty-v2.js', v: 'f5602f6695aa', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
+  'loyalty-v2': { src: 'modules/loyalty-v2.js', v: '7df34997ff70', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
   'stories-v2': { src: 'modules/stories-v2.js', v: '9fc8b7bf3fc6', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
   'jobs-v2': { src: 'modules/jobs-v2.js', v: '0fc65a643e5a', routes: ['jobs-v2'] }, // UI-redesign conversion: Jobs (production) B1 scaffold — list + read-only detail (flag-gated, side-by-side)
   'cs-members-v2': { src: 'modules/cs-members-v2.js', v: '0d444b855147', routes: ['cs-members-v2'] }, // UI-redesign conversion: CS members read detail (flag-gated)
@@ -20979,10 +20980,10 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   consignment: { src: 'modules/consignment.js', v: 'c401d0269d99', routes: ['galleries'] },
   brand: { src: 'modules/brand.js', v: '9209c6360b17', routes: ['brand'] },
   book: { src: 'modules/book.js', v: '6989b28f020b', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
-  cart: { src: 'modules/cart.js', v: 'd05e7845704f', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
+  cart: { src: 'modules/cart.js', v: '089b810a2bba', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'ec2784aaf153', routes: ['studio'] },
   students: { src: 'modules/students.js', v: '6537e0bf1bea', routes: ['students'] },
-  'customer-service': { src: 'modules/customer-service.js', v: '05369387c1ef', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
+  'customer-service': { src: 'modules/customer-service.js', v: 'aa34a00e5bb7', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
   campaigns: { src: 'modules/campaigns.js', v: '9d866794259c', routes: ['campaigns'] },
   engagementInbox: { src: 'modules/engagement-inbox.js', v: 'a6665c778030', routes: ['engagement-inbox'] },

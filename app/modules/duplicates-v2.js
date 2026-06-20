@@ -156,7 +156,7 @@
   function _merge(pick) {
     var f = DUP.active; if (!f) return;
     var ensure = window.customersMerge ? Promise.resolve()
-      : (window.MastAdmin && MastAdmin.loadModule ? MastAdmin.loadModule('customers') : Promise.reject(new Error('merge unavailable')));
+      : (window.MastAdmin && MastAdmin.loadModule ? MastAdmin.loadModule('customers-core') : Promise.reject(new Error('merge unavailable')));
     ensure.then(function () {
       var ids = pick(f);  // [winnerId, loserId]
       // window.customersMerge runs its own confirm + reindex + marks the flag merged.

@@ -159,7 +159,7 @@
         else if (a.tier) detail = 'tier=' + a.tier;
         else if (a.passDefId) detail = 'pass=' + a.passDefId;
         var custLink = a.customerId
-          ? '<a href="#" onclick="customersOpenDetail(\'' + esc(a.customerId) + '\');return false;" style="color:var(--teal);text-decoration:underline;">' + esc(a.customerId.slice(0,12)) + '\u2026</a>'
+          ? '<a href="#" onclick="if(window.MastAdmin&&MastAdmin.loadModule){MastAdmin.loadModule(\'customers-core\').then(function(){if(window.customersOpenDetail)customersOpenDetail(\'' + esc(a.customerId) + '\')})}return false;" style="color:var(--teal);text-decoration:underline;">' + esc(a.customerId.slice(0,12)) + '\u2026</a>'
           : '<span style="color:var(--warm-gray-light);">\u2014</span>';
         h += '<tr>';
         h += '<td>' + esc(a.createdAt || '').slice(0, 19).replace('T', ' ') + '</td>';

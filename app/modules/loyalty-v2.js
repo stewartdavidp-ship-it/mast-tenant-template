@@ -485,7 +485,7 @@
       uid = (uid || '').trim();
       if (!uid) { if (window.showToast) showToast('No linked account for this member.', true); return; }
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
-        Promise.resolve(MastAdmin.loadModule('customers')).then(function () {
+        Promise.resolve(MastAdmin.loadModule('customers-core')).then(function () {
           if (window.customersOpenWalletAdjust) customersOpenWalletAdjust('loyalty', uid, uid);
           else if (window.showToast) showToast('Wallet tools still loading — try again', true);
         });

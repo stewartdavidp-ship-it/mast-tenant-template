@@ -62,8 +62,11 @@
     "rogueOverlays": 3,
     "hardcodedHex": 21
   },
+  "app/modules/customers-core.js": {
+    "hardcodedHex": 12
+  },
   "app/modules/customers.js": {
-    "hardcodedHex": 40
+    "hardcodedHex": 28
   },
   "app/modules/email-log.js": {
     "hardcodedHex": 30

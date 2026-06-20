@@ -234,7 +234,7 @@
   // Bridge gate + post-write SO refresh (mirror contacts-v2 Wave A).
   function withBridge(fn) {
     if (window.CustomersBridge) return fn(window.CustomersBridge);
-    MastAdmin.loadModule('customers').then(function () {
+    MastAdmin.loadModule('customers-core').then(function () {
       if (window.CustomersBridge) fn(window.CustomersBridge);
       else if (window.showToast) showToast('Customers engine still loading — try again', true);
     }).catch(function () { if (window.showToast) showToast('Customers engine unavailable', true); });
@@ -468,7 +468,7 @@
       // adjustCustomerWallet CF — same implementation, V2 entry point.
       var rec = V2.byId[id] || {};
       var uid = rec._walletUid || (rec.linkedIds && rec.linkedIds.uids && rec.linkedIds.uids[0]) || '';
-      MastAdmin.loadModule('customers').then(function () {
+      MastAdmin.loadModule('customers-core').then(function () {
         if (window.customersOpenWalletAdjust) customersOpenWalletAdjust(kind, id, uid);
         else if (window.showToast) showToast('Wallet tools still loading — try again', true);
       });
