@@ -153,7 +153,7 @@ function handleGalCategoryChange(sel) {
   if (typeof openManageCategoriesDialog === 'function') {
     rebuildGalSelect();
   } else if (typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
-    MastAdmin.loadModule('website').then(rebuildGalSelect);
+    MastAdmin.loadModule('website-core').then(rebuildGalSelect);
   }
 }
 

@@ -189,8 +189,11 @@
     "hardcodedHex": 138
   },
   "app/modules/website.js": {
+    "hardcodedHex": 48
+  },
+  "app/modules/website-core.js": {
     "rogueOverlays": 1,
-    "hardcodedHex": 52
+    "hardcodedHex": 7
   },
   "app/modules/wholesale.js": {
     "rogueOverlays": 2,

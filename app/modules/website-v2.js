@@ -685,7 +685,7 @@
     if (window.WebsiteBridge && typeof window.WebsiteBridge[method] === 'function') {
       return window.WebsiteBridge[method].apply(window.WebsiteBridge, args);
     }
-    try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('website'); } catch (e) {}
+    try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('website-core'); } catch (e) {}
     return Promise.reject(new Error('Site editor still loading — try again'));
   }
 
@@ -1897,7 +1897,7 @@
         return;
       }
       if (!window.WebsiteBridge || typeof window.WebsiteBridge.previewSwitch !== 'function') {
-        try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('website'); } catch (e) {}
+        try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('website-core'); } catch (e) {}
         if (window.showToast) showToast('Site editor still loading — try again', true);
         return;
       }
@@ -2531,7 +2531,7 @@
   function loadLooks() {
     if (!window.WebsiteBridge || typeof window.WebsiteBridge.getTemplates !== 'function') {
       // host not ready yet — ensureHostModules warms website.js, retry shortly
-      try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('website'); } catch (e) {}
+      try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('website-core'); } catch (e) {}
       setTimeout(function () {
         if (window.WebsiteBridge && typeof window.WebsiteBridge.getTemplates === 'function') loadLooks();
       }, 400);
@@ -2597,7 +2597,7 @@
       });
     } catch (e) {}
     try { MastAdmin.loadModule('brand'); } catch (e) {}
-    try { MastAdmin.loadModule('website'); } catch (e) {} // owns WebsiteBridge.setThemeField
+    try { MastAdmin.loadModule('website-core'); } catch (e) {} // owns WebsiteBridge.setThemeField
   }
 
   MastAdmin.registerModule('website-v2', {
