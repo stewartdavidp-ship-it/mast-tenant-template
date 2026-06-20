@@ -5874,12 +5874,18 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
 }
 
 function downloadCsv(rows, filename) {
+  // SECURITY (CSV formula injection): route every cell through the shell-global
+  // _csvCell (app/index.html ~40372) — the same guard _finDownloadCsv uses. It
+  // prefixes a "'" to cells starting with =,+,-,@ and applies RFC-4180 quoting.
+  // Output is byte-identical to the prior inline serializer except injection-
+  // prone cells gain the leading quote. Row DATA / order / headers unchanged.
+  if (typeof window._csvCell !== 'function') {
+    showToast('CSV export unavailable: _csvCell helper missing', true);
+    return;
+  }
+  var cellFn = window._csvCell;
   var csv = rows.map(function(row) {
-    return row.map(function(cell) {
-      var s = String(cell==null?'':cell);
-      if (s.indexOf(',')>=0||s.indexOf('"')>=0||s.indexOf('\n')>=0) s = '"'+s.replace(/"/g,'""')+'"';
-      return s;
-    }).join(',');
+    return row.map(function(cell) { return cellFn(cell); }).join(',');
   }).join('\n');
   var blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
   var url = URL.createObjectURL(blob);
