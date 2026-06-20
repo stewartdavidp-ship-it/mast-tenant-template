@@ -1667,11 +1667,14 @@
         m.createdAt || '', m.batchId || ''
       ]);
     });
+    // Cells run through the shared _csvCell guard (formula-injection-safe quoting:
+    // prefixes "'" to =,+,-,@,tab,CR-leading cells + RFC-4180 quoting). Defensive
+    // RFC-only fallback if the shell global is absent.
+    var cell = (typeof window._csvCell === 'function')
+      ? window._csvCell
+      : function (s) { var v = String(s == null ? '' : s); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var csv = rows.map(function(r) {
-      return r.map(function(cell) {
-        var s = String(cell == null ? '' : cell).replace(/"/g, '""');
-        return /[,"\n]/.test(s) ? '"' + s + '"' : s;
-      }).join(',');
+      return r.map(cell).join(',');
     }).join('\n');
     var blob = new Blob([csv], { type: 'text/csv' });
     var url = URL.createObjectURL(blob);

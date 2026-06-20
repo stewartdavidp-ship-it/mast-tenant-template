@@ -4224,13 +4224,15 @@
     var rows = _passCohortMatchedInstances();
     if (!rows.length) return;
     var header = ['customerName', 'customerEmail', 'status', 'visitsRemaining', 'visitsUsed', 'activatedAt', 'expiresAt', 'lastUsedAt'];
+    // Cells run through the shared _csvCell guard (formula-injection-safe quoting:
+    // prefixes "'" to =,+,-,@,tab,CR-leading cells + RFC-4180 quoting). Defensive
+    // RFC-only fallback if the shell global is absent.
+    var cell = (typeof window._csvCell === 'function')
+      ? window._csvCell
+      : function (s) { var v = String(s == null ? '' : s); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
     var lines = [header.join(',')];
     rows.forEach(function(r) {
-      lines.push(header.map(function(k) {
-        var v = r[k] == null ? '' : String(r[k]);
-        if (v.indexOf(',') >= 0 || v.indexOf('"') >= 0 || v.indexOf('\n') >= 0) v = '"' + v.replace(/"/g, '""') + '"';
-        return v;
-      }).join(','));
+      lines.push(header.map(function(k) { return cell(r[k] == null ? '' : r[k]); }).join(','));
     });
     var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     var url = URL.createObjectURL(blob);
