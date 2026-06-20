@@ -135,6 +135,33 @@ if (booted) {
     if (fresh.length) (routeBugs['settings>maker'] ||= []).push(...fresh);
   }
 
+  // customers-v2 record-open (T6 PR5). The Certifications + Activity party facets
+  // (PR2/PR4) only render when a record is OPENED — list navigation alone never
+  // calls detail.certifications / detail.activity. With customers.js now DELETED,
+  // a dangling reference inside those builders would fire only on open, which the
+  // route loop above can't reach. So open a synthetic record through the engine and
+  // assert no uncaught CODE error. openRecord renders the passed record directly
+  // (the list flow fetches BEFORE opening), so this needs no Firebase; the facets
+  // null-guard missing _certs/_activity, and offline reads are EXPECTED-filtered.
+  {
+    const before = pageErrors.length;
+    await page.evaluate(() => window.navigateTo('customers')).catch(() => {});
+    await page.waitForTimeout(400);
+    await page.evaluate(() => {
+      if (!(window.MastEntity && window.MastEntity.openRecord)) return;
+      window.MastEntity.openRecord('customers-v2', {
+        _key: 'smoke-cust', id: 'smoke-cust', displayName: 'Smoke Customer',
+        primaryEmail: 'smoke@example.test', source: 'manual', status: 'active',
+        stats: { orderCount: 0, lifetimeSpendCents: 0 }
+      }, 'read');
+    }).catch(e => {
+      if (isRealBug(e.message)) (routeBugs['customers>record'] ||= []).push('openThrow: ' + e.message);
+    });
+    await page.waitForTimeout(900);
+    const fresh = pageErrors.slice(before).filter(isRealBug);
+    if (fresh.length) (routeBugs['customers>record'] ||= []).push(...fresh);
+  }
+
   const bad = Object.entries(routeBugs);
   if (bad.length) {
     fail(bad.length + ' route(s) threw an uncaught code error:');
