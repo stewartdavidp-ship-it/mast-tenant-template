@@ -297,6 +297,11 @@
     "centsDiv": 1,
     "moneyToFixed": 1
   },
+  "app/modules/website-import.js": {
+    "centsDiv": 1,
+    "moneyToFixed": 1,
+    "localeDate": 1
+  },
   "app/modules/website.js": {
     "centsDiv": 1,
     "moneyToFixed": 1,

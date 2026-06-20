@@ -73,6 +73,10 @@ const UNGATED_ALLOWLIST = new Set([
 const MODULE_GATE_BASELINE = new Set([
   // The canonical 6 the original RBAC-gap audit named:
   'production.js', 'students.js', 'studio.js', 'trips.js', 'website.js', 'show-light.js',
+  // website-import.js: AI catalog-import wizard relocated VERBATIM out of website.js
+  // (T6 PR2). It inherits website.js's ungated posture (no fix-in-place during a
+  // verbatim move); gating the import write/delete handlers is a follow-up.
+  'website-import.js',
   // Other legacy feature modules with the same gap (routed, write, 0 gates):
   'audit-feedback.js', 'audit.js', 'blog.js', 'book.js', 'brand.js', 'campaigns.js',
   'channels.js', 'commission-terms.js', 'composer.js', 'contacts.js',
