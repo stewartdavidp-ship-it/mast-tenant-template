@@ -624,7 +624,7 @@
 
   function formatPrice(cents) {
     if (typeof cents !== 'number') return '$0.00';
-    return '$' + (cents / 100).toFixed(2);
+    return '$' + MastFormat.moneyRaw(cents, { cents: true });
   }
 
   function todayStr() {
@@ -1021,7 +1021,7 @@
       '<div class="book-form-section-title">Pricing &amp; Capacity</div>' +
       '<div class="book-responsive-grid">' +
       '<div class="book-field"><label class="form-label">Capacity <span class="book-required">*</span></label><input type="number" id="bcfCapacity" class="form-input" min="1" value="' + (cls ? cls.capacity || '' : '') + '" required></div>' +
-      '<div class="book-field"><label class="form-label">Drop-in Price ($) <span class="book-required">*</span></label><input type="number" id="bcfPrice" class="form-input" min="0" step="0.01" value="' + (cls ? (cls.priceCents / 100).toFixed(2) : '') + '" required></div>' +
+      '<div class="book-field"><label class="form-label">Drop-in Price ($) <span class="book-required">*</span></label><input type="number" id="bcfPrice" class="form-input" min="0" step="0.01" value="' + (cls ? MastFormat.moneyRaw(cls.priceCents, { cents: true }) : '') + '" required></div>' +
       '<div class="book-field"><label class="form-label">Duration (min) <span class="book-required">*</span></label><input type="number" id="bcfDuration" class="form-input" min="1" value="' + (cls ? cls.duration || '' : '') + '" required></div>' +
       '</div>' +
       '<div class="book-responsive-grid">' +
@@ -1059,7 +1059,7 @@
       '<div class="book-form-section-title">Series Details</div>' +
       '<div class="book-responsive-grid">' +
       '<div class="book-field"><label class="form-label">Total Sessions</label><input type="number" id="bcfSeriesTotal" class="form-input" min="1" value="' + (series.totalSessions || '') + '"></div>' +
-      '<div class="book-field"><label class="form-label">Series Price ($)</label><input type="number" id="bcfSeriesPrice" class="form-input" min="0" step="0.01" value="' + (series.seriesPriceCents ? (series.seriesPriceCents / 100).toFixed(2) : '') + '"></div>' +
+      '<div class="book-field"><label class="form-label">Series Price ($)</label><input type="number" id="bcfSeriesPrice" class="form-input" min="0" step="0.01" value="' + (series.seriesPriceCents ? MastFormat.moneyRaw(series.seriesPriceCents, { cents: true }) : '') + '"></div>' +
       '<div class="book-field"><label class="form-label">Allow Drop-in</label><select id="bcfSeriesDropin" class="form-input"><option value="true"' + (series.allowDropIn !== false ? ' selected' : '') + '>Yes</option><option value="false"' + (series.allowDropIn === false ? ' selected' : '') + '>No</option></select></div>' +
       '<div class="book-field"><label class="form-label">Allow Late Enroll</label><select id="bcfSeriesLateEnroll" class="form-input"><option value="false"' + (series.allowLateEnroll !== true ? ' selected' : '') + '>No</option><option value="true"' + (series.allowLateEnroll === true ? ' selected' : '') + '>Yes</option></select></div>' +
       '</div></div>' +
@@ -1069,7 +1069,7 @@
       '<div class="book-form-section-title">Materials</div>' +
       '<div class="book-responsive-grid">' +
       '<div class="book-field"><label class="form-label">Materials Included</label><select id="bcfMaterials" class="form-input" onchange="window._bookToggleMaterialsCost()"><option value="false"' + (cls && cls.materialsIncluded ? '' : ' selected') + '>No</option><option value="true"' + (cls && cls.materialsIncluded ? ' selected' : '') + '>Yes</option></select></div>' +
-      '<div class="book-field" id="bcfMaterialsCostWrap" style="' + (cls && cls.materialsIncluded ? 'display:none;' : '') + '"><label class="form-label">Materials Cost ($)</label><input type="number" id="bcfMaterialsCost" class="form-input" min="0" step="0.01" value="' + (cls && cls.materialsCostCents ? (cls.materialsCostCents / 100).toFixed(2) : '') + '" placeholder="0.00">' +
+      '<div class="book-field" id="bcfMaterialsCostWrap" style="' + (cls && cls.materialsIncluded ? 'display:none;' : '') + '"><label class="form-label">Materials Cost ($)</label><input type="number" id="bcfMaterialsCost" class="form-input" min="0" step="0.01" value="' + (cls && cls.materialsCostCents ? MastFormat.moneyRaw(cls.materialsCostCents, { cents: true }) : '') + '" placeholder="0.00">' +
       '<div class="book-field-hint">Added as separate line item at checkout</div></div>' +
       '<div class="book-field"><label class="form-label">Materials Note</label><input type="text" id="bcfMaterialsNote" class="form-input" value="' + esc(cls ? cls.materialsNote : '') + '" placeholder="e.g. 25lbs of clay + glazes"></div>' +
       '</div></div>' +
@@ -1784,7 +1784,7 @@
         var sess = r.sessionId ? allSessionsMap[r.sessionId] : null;
         var when = sess
           ? (formatDate(sess.date) + (sess.startTime ? ' ' + formatTime(sess.startTime) : ''))
-          : (r.enrolledAt ? new Date(r.enrolledAt).toLocaleDateString() : '—');
+          : (r.enrolledAt ? MastFormat.date(r.enrolledAt) : '—');
         var statusLabel = r.status === 'waitlisted' && r.waitlistPosition
           ? r.status + ' #' + r.waitlistPosition
           : (r.status || '—');
@@ -2307,7 +2307,7 @@
       '<div class="book-responsive-grid">' +
       '<div class="book-field"><label class="form-label">Email</label><input type="email" id="ifEmail" class="form-input" value="' + esc(instr ? instr.email : '') + '" placeholder="instructor@email.com"></div>' +
       '<div class="book-field"><label class="form-label">Phone</label><input type="text" id="ifPhone" class="form-input" value="' + esc(instr ? instr.phone : '') + '" placeholder="(555) 123-4567"></div>' +
-      '<div class="book-field"><label class="form-label">Pay Rate ($/hr)</label><input type="number" id="ifPayRate" class="form-input" min="0" step="0.01" value="' + (instr && instr.payRateCents ? (instr.payRateCents / 100).toFixed(2) : '') + '"></div>' +
+      '<div class="book-field"><label class="form-label">Pay Rate ($/hr)</label><input type="number" id="ifPayRate" class="form-input" min="0" step="0.01" value="' + (instr && instr.payRateCents ? MastFormat.moneyRaw(instr.payRateCents, { cents: true }) : '') + '"></div>' +
       '</div></div>' +
 
       // ── Media & Notes ──
@@ -3133,9 +3133,9 @@
       var rowsHtml = matched.map(function(inst) {
         var total = (typeof inst.visitsUsed === 'number' && typeof inst.visitsRemaining === 'number') ? (inst.visitsUsed + inst.visitsRemaining) : null;
         var visits = (inst.visitsRemaining != null ? inst.visitsRemaining : '—') + ' / ' + (total != null ? total : '—');
-        var exp = inst.expiresAt ? new Date(inst.expiresAt).toLocaleDateString() : '—';
-        var lastUse = inst.lastUsedAt ? new Date(inst.lastUsedAt).toLocaleDateString() : '—';
-        var act = inst.activatedAt ? new Date(inst.activatedAt).toLocaleDateString() : '—';
+        var exp = inst.expiresAt ? MastFormat.date(inst.expiresAt) : '—';
+        var lastUse = inst.lastUsedAt ? MastFormat.date(inst.lastUsedAt) : '—';
+        var act = inst.activatedAt ? MastFormat.date(inst.activatedAt) : '—';
         var openCust = inst.customerId
           ? 'onclick="window._passOpenCustomer(\'' + esc(inst.customerId) + '\')" style="cursor:pointer;"'
           : '';
@@ -3266,7 +3266,7 @@
       '<div class="book-form-section">' +
       '<div class="book-form-section-title">Pricing &amp; Terms</div>' +
       '<div class="book-responsive-grid">' +
-      '<div class="book-field"><label class="form-label">Price ($) <span class="book-required">*</span></label><input type="number" id="pdfPrice" class="form-input" min="0" step="0.01" value="' + (pd ? (pd.priceCents / 100).toFixed(2) : '') + '" required></div>' +
+      '<div class="book-field"><label class="form-label">Price ($) <span class="book-required">*</span></label><input type="number" id="pdfPrice" class="form-input" min="0" step="0.01" value="' + (pd ? MastFormat.moneyRaw(pd.priceCents, { cents: true }) : '') + '" required></div>' +
       '<div class="book-field" id="pdfVisitCountWrap"><label class="form-label">Visit Count</label><input type="number" id="pdfVisitCount" class="form-input" min="1" value="' + (pd && pd.visitCount ? pd.visitCount : '') + '" placeholder="Unlimited">' +
       '<div class="book-field-hint">Leave blank for unlimited visits</div></div>' +
       '<div class="book-field"><label class="form-label">Validity (days)</label><input type="number" id="pdfValidityDays" class="form-input" min="1" value="' + (pd && pd.validityDays ? pd.validityDays : '') + '" placeholder="No limit">' +
