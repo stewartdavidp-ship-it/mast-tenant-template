@@ -191,9 +191,11 @@
     amber: '--amber', teal: '--teal', danger: '--danger', success: '--success',
     warning: '--warning', info: '--info', neutral: '--warm-gray'
   };
-  function badge(label, tone) {
-    var v = _toneVar[tone] || _toneVar.neutral;
-    var c = 'var(' + v + ', var(--warm-gray))';
+  // Soft-tint dot-pill from a single resolved CSS color `c` (hex or var()). The
+  // bg/border are derived from `c` via color-mix (both-mode safe). Shared by
+  // badge() (tone-driven) and statusBadge() (registry-driven) so the two are
+  // visually identical and the markup lives in exactly one place.
+  function _badgeHtml(label, c) {
     var style =
       'display:inline-flex;align-items:center;gap:6px;font-size:0.72rem;font-weight:600;' +
       'padding:3px 10px;border-radius:999px;line-height:1.4;white-space:nowrap;' +
@@ -201,6 +203,126 @@
       'border:1px solid color-mix(in srgb,' + c + ' 30%,transparent);';
     var dot = '<span style="width:6px;height:6px;border-radius:50%;background:' + c + ';flex:0 0 6px;"></span>';
     return '<span class="mast-badge" style="' + style + '">' + dot + esc(label) + '</span>';
+  }
+  function badge(label, tone) {
+    var v = _toneVar[tone] || _toneVar.neutral;
+    return _badgeHtml(label, 'var(' + v + ', var(--warm-gray))');
+  }
+
+  // ── Status badge — flat per-domain registry (Track 5; master plan §7 + §12.3) ──
+  // ONE canonical status pill to replace ~55 hand-rolled badge markups + ~56
+  // status→color/label maps scattered across modules. The registry is FLAT and
+  // PER-DOMAIN — { domain: { status: { color, label } } } — because the same word
+  // means different things in different domains (an "open" order ≠ an "open"
+  // ticket), so a single global map would force false unification (§12.3).
+  //
+  // `color` is the TEXT color captured VERBATIM from each source map's `color:`
+  // field (the hue carrier); the soft-tint bg/border are derived from it (same
+  // construction as badge() above). We keep the literal hex rather than mapping
+  // to this file's tone vocabulary ON PURPOSE: the captured hues are orange/
+  // purple/blue/green/yellow, which have NO token in the palette, and the tones
+  // success/warning/info are undefined in :root (they fall back to gray) — so
+  // mapping to tones would SILENTLY ERASE the colors these badges show today.
+  // `label` is captured AS DISPLAYED today; casing varies by domain (order/rma/
+  // material render lowercase, ticket/invoice/product Title-Case) — faithful, not
+  // polished, so adoption is a near-no-op. (shared/ is excluded from the
+  // hardcoded-hex lint, so these literals are allowed here.)
+  // BUILD-ONLY: no call site adopts this yet — adoption is a later per-module pass.
+  var _statusRegistry = {
+    // order — ORDER_STATUS_BADGE_COLORS (shared/orders-core.js); label = status.replace(/_/g,' ')
+    order: {
+      pending_payment:    { color: '#FFB74D', label: 'pending payment' },
+      payment_failed:     { color: '#EF5350', label: 'payment failed' },
+      placed:             { color: '#FFB74D', label: 'placed' },
+      confirmed:          { color: '#64B5F6', label: 'confirmed' },
+      building:           { color: '#CE93D8', label: 'building' },
+      ready:              { color: '#4DB6AC', label: 'ready' },
+      pack:               { color: '#4DB6AC', label: 'pack' },
+      packing:            { color: '#FFD54F', label: 'packing' },
+      packed:             { color: '#66BB6A', label: 'packed' },
+      handed_to_carrier:  { color: '#B39DDB', label: 'handed to carrier' },
+      shipped:            { color: '#7986CB', label: 'shipped' },
+      delivered:          { color: '#66BB6A', label: 'delivered' },
+      cancelled:          { color: '#EF5350', label: 'cancelled' },
+      return_requested:   { color: '#FFB74D', label: 'return requested' },
+      return_approved:    { color: '#FFB74D', label: 'return approved' },
+      return_shipped:     { color: '#B39DDB', label: 'return shipped' },
+      return_received:    { color: '#64B5F6', label: 'return received' },
+      partially_returned: { color: '#FFB74D', label: 'partially returned' },
+      refunded:           { color: '#EF5350', label: 'refunded' }
+    },
+    // invoice — invoiceStatusBadgeStyle map (shared/orders-core.js); source fallback = draft
+    invoice: {
+      draft:   { color: '#9ca3af', label: 'Draft' },
+      sent:    { color: '#60a5fa', label: 'Sent' },
+      paid:    { color: '#4ade80', label: 'Paid' },
+      overdue: { color: '#f87171', label: 'Overdue' }
+    },
+    // rma — RMA_STATUS_BADGE_COLORS (app/modules/rma-admin.js); label = status.replace(/-/g,' ')
+    rma: {
+      requested:       { color: '#FFB74D', label: 'requested' },
+      approved:        { color: '#64B5F6', label: 'approved' },
+      'shipped-back':  { color: '#CE93D8', label: 'shipped back' },
+      received:        { color: '#4DB6AC', label: 'received' },
+      inspected:       { color: '#4DB6AC', label: 'inspected' },
+      restocked:       { color: '#66BB6A', label: 'restocked' },
+      seconds:         { color: '#FFB74D', label: 'seconds' },
+      'repair-queued': { color: '#64B5F6', label: 'repair queued' },
+      'written-off':   { color: '#BDBDBD', label: 'written off' },
+      'refund-issued': { color: '#66BB6A', label: 'refund issued' },
+      declined:        { color: '#EF5350', label: 'declined' }
+    },
+    // ticket (customer service) — STATUS_STYLES + STATUS_LABELS (app/modules/customer-service.js); source fallback = closed
+    ticket: {
+      open:        { color: '#64B5F6', label: 'Open' },
+      in_progress: { color: '#FFD54F', label: 'In Progress' },
+      waiting:     { color: '#CE93D8', label: 'Waiting' },
+      resolved:    { color: '#4DB6AC', label: 'Resolved' },
+      closed:      { color: '#9E9E9E', label: 'Closed' }
+    },
+    // product — productStatusBadgeHtml styles map (app/modules/maker.js); source fallback = draft. NB: 'ready' shows as "Review".
+    product: {
+      draft:    { color: '#525252', label: 'Draft' },
+      ready:    { color: '#b45309', label: 'Review' },
+      active:   { color: 'var(--teal,#2a7c6f)', label: 'Active' },
+      archived: { color: '#9a3412', label: 'Archived' }
+    },
+    // material — MATERIAL_STATUS_COLORS (app/modules/maker.js); label = raw status; source fallback = draft
+    material: {
+      active:   { color: '#16a34a', label: 'active' },
+      draft:    { color: 'var(--amber)', label: 'draft' },
+      archived: { color: '#9ca3af', label: 'archived' }
+    }
+  };
+
+  function _humanizeStatus(s) {
+    return String(s == null ? '' : s).replace(/[_-]/g, ' ');
+  }
+  // statusBadge(status, domain) → the canonical status pill HTML. Unknown domain
+  // OR unknown status → a NEUTRAL badge (NEVER throws); the raw status is
+  // humanized (underscores/hyphens → spaces, matching the order/rma idiom) so it
+  // still reads, and empty/null status → an em-dash. The label is HTML-escaped by
+  // _badgeHtml; `domain`/`status` are otherwise used only as lookup keys.
+  function statusBadge(status, domain) {
+    var key = String(status == null ? '' : status);
+    var dom = _statusRegistry[domain];
+    var entry = dom && dom[key];
+    if (entry) return _badgeHtml(entry.label, entry.color);
+    return _badgeHtml(key ? _humanizeStatus(key) : '—', 'var(--warm-gray)');
+  }
+
+  // ── Empty state (one canonical "no X yet"; replaces ~60 hand-rolled) ────────
+  // Models the dominant idiom: <div class="empty-state"><div class="empty-icon">
+  // …</div><div class="empty-title">…</div><p>…</p></div>, reusing the existing
+  // .empty-state / .empty-icon / .empty-title CSS (incl. dark-mode) in index.html
+  // — zero new CSS. icon/title/hint are all optional and HTML-escaped; pass a
+  // plain glyph/emoji for icon (e.g. '📦'), not a raw HTML entity.
+  function emptyState(opts) {
+    opts = opts || {};
+    var icon = opts.icon ? '<div class="empty-icon">' + esc(opts.icon) + '</div>' : '';
+    var title = opts.title ? '<div class="empty-title">' + esc(opts.title) + '</div>' : '';
+    var hint = opts.hint ? '<p>' + esc(opts.hint) + '</p>' : '';
+    return '<div class="empty-state">' + icon + title + hint + '</div>';
   }
 
   // ── Tabs (one component for L1 module + L2 detail; 10) ──────────────
@@ -909,7 +1031,7 @@
   if (typeof window !== 'undefined') {
     injectStyles(); wireDelegates();
     window.MastUI = {
-      Num: Num, badge: badge, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc, sanitizeHtml: sanitizeHtml,
+      Num: Num, badge: badge, statusBadge: statusBadge, emptyState: emptyState, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc, sanitizeHtml: sanitizeHtml,
       tiles: tiles, card: card, cardTable: cardTable, kv: kv, metricTable: metricTable, timeline: timeline, relatedTable: relatedTable,
       imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
       stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader,
@@ -921,6 +1043,6 @@
 
   // CommonJS export for node-based unit tests of the pure helpers.
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Num: Num, badge: badge, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid, repeatRows: repeatRows, validate: validate, sanitizeHtml: sanitizeHtml, _safeUrl: safeUrl, _sanitizeAllowed: SANITIZE_ALLOWED, debounce: debounce, bindInstant: bindInstant, colorInput: colorInput, swatchGrid: swatchGrid };
+    module.exports = { Num: Num, badge: badge, statusBadge: statusBadge, emptyState: emptyState, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid, repeatRows: repeatRows, validate: validate, sanitizeHtml: sanitizeHtml, _safeUrl: safeUrl, _sanitizeAllowed: SANITIZE_ALLOWED, debounce: debounce, bindInstant: bindInstant, colorInput: colorInput, swatchGrid: swatchGrid };
   }
 })();
