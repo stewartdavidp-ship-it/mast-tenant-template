@@ -117,6 +117,22 @@ if (booted) {
     if (fresh.length) (routeBugs[route] ||= []).push(...fresh);
   }
 
+  // Settings → Develop ("maker") sub-view lazy-loads modules/maker-settings.js via
+  // switchSettingsSubView (recipe A, Track 1). It's a settings SUB-view, not a
+  // top-level route, so it can't live in ROUTES — exercise it explicitly so a
+  // broken maker-settings lazy-load (parse error / missing dependency) fails CI.
+  {
+    const before = pageErrors.length;
+    await page.evaluate(() => window.navigateTo('settings')).catch(() => {});
+    await page.waitForTimeout(300);
+    await page.evaluate(() => window.switchSettingsSubView && window.switchSettingsSubView('maker')).catch(e => {
+      if (isRealBug(e.message)) (routeBugs['settings>maker'] ||= []).push('navThrow: ' + e.message);
+    });
+    await page.waitForTimeout(800);
+    const fresh = pageErrors.slice(before).filter(isRealBug);
+    if (fresh.length) (routeBugs['settings>maker'] ||= []).push(...fresh);
+  }
+
   const bad = Object.entries(routeBugs);
   if (bad.length) {
     fail(bad.length + ' route(s) threw an uncaught code error:');

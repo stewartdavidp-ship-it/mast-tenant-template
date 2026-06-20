@@ -115,6 +115,9 @@
     "rogueOverlays": 7,
     "hardcodedHex": 106
   },
+  "app/modules/maker-settings.js": {
+    "hardcodedHex": 6
+  },
   "app/modules/mapping.js": {
     "rogueOverlays": 2,
     "hardcodedHex": 1
