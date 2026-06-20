@@ -18,6 +18,19 @@
   if (!flagOn()) return;
 
   var STATUS_TONE = { active: 'success', lapsed: 'danger', lead: 'info', vip: 'amber' };
+  // Revoke-reason vocabulary — the same option set + labels as V1 customers.js
+  // (customersRevokeCert / _revokeReasonLabel), so a revoked cert's history reads
+  // identically across the V1→V2 retirement.
+  var REVOKE_REASONS = [
+    { v: 'mistake', l: 'Granted in error' },
+    { v: 'violation', l: 'Policy violation' },
+    { v: 'expired-by-policy', l: 'Expired by policy' },
+    { v: 'other', l: 'Other' }
+  ];
+  function revokeReasonLabel(reason) {
+    var hit = REVOKE_REASONS.filter(function (o) { return o.v === reason; })[0];
+    return hit ? hit.l : (reason || 'Revoked');
+  }
   // Customer stats live under `stats.*` (nested), but some records also carry
   // flattened "stats.x" keys — read nested first, fall back to dotted (doc 17).
   function stat(c, k) { return (c && c.stats && c.stats[k] != null) ? c.stats[k] : (c ? c['stats.' + k] : undefined); }
@@ -81,6 +94,21 @@
           jobs.push(Promise.resolve(MastDB.get('public/accounts/' + uid + '/wallet'))
             .then(function (w) { c._wallet = w || null; }).catch(function () {}));
         }
+        // Certifications facet — hydrate _certs / _certTypes LAZILY (on record
+        // open, never the list load()). Read through the shared core helper
+        // (CustomersBridge.loadCerts); ensure-load customers-core if it isn't yet.
+        jobs.push(
+          (window.CustomersBridge && CustomersBridge.loadCerts
+            ? Promise.resolve(window.CustomersBridge)
+            : MastAdmin.loadModule('customers-core').then(function () { return window.CustomersBridge; })
+          ).then(function (b) {
+            if (!b || !b.loadCerts) { c._certs = []; c._certTypes = {}; return; }
+            return Promise.resolve(b.loadCerts(id)).then(function (res) {
+              c._certs = (res && res.certs) || [];
+              c._certTypes = (res && res.certTypes) || {};
+            });
+          }).catch(function () { c._certs = []; c._certTypes = {}; })
+        );
         return Promise.all(jobs).then(function () { return c; });
       });
     },
@@ -164,6 +192,53 @@
           var when = e.sessionDate || e.sessionStartAt || e.scheduledFor || e.createdAt;
           return { name: e.className || e.classTitle || e.classId || '—', session: when ? N.date(when) : '', status: st, tone: tone };
         });
+      },
+      // Certifications facet (PR2) — SHAPED data for the engine's cert pane (an
+      // active-cert table + a collapsible revoked/expired group). RBAC lives HERE:
+      // the Grant affordance + each row's Revoke button are emitted ONLY when the
+      // viewer can('customers','edit') (the handlers re-check — defense-in-depth).
+      // V1's grant/revoke had NO gate at all; this is the security win the rebuild
+      // adds. Active/inactive split + attestor/expires labels mirror V1 verbatim.
+      certifications: function (r) {
+        var N = window.MastUI.Num, esc2 = window.MastUI._esc;
+        var id = r._key || r.id;
+        var types = r._certTypes || {};
+        var canEdit = !(typeof window.can === 'function' && !window.can('customers', 'edit'));
+        var now = new Date().toISOString();
+        function isActive(cert) {
+          if (!cert) return false;
+          if (cert.revokedAt) return false;
+          if (cert.expiresAt && cert.expiresAt < now) return false;
+          return true;
+        }
+        function shape(cert) {
+          var revoked = !!cert.revokedAt;
+          var expired = !revoked && cert.expiresAt && cert.expiresAt < now;
+          var typeName = (types[cert.typeId] && types[cert.typeId].name) || cert.typeId;
+          var attestor = (cert.instructorOfRecord && cert.instructorOfRecord.displayName)
+            ? cert.instructorOfRecord.displayName : (cert.grantedBy || '—');
+          return {
+            name: typeName,
+            status: revoked ? 'Revoked' : (expired ? 'Expired' : 'Active'),
+            tone: revoked ? 'danger' : (expired ? 'neutral' : 'teal'),
+            attestor: 'Attested by ' + attestor,
+            granted: cert.grantedAt ? N.date(cert.grantedAt) : '—',
+            expires: cert.expiresAt ? N.date(cert.expiresAt) : 'Lifetime',
+            reason: revoked ? revokeReasonLabel(cert.revokeReason) : '',
+            note: cert.revokeNote || '',
+            action: canEdit
+              ? '<button class="btn btn-link" onclick="CustomersV2.revokeCert(\'' + esc2(id) + '\',\'' + esc2(cert.id) + '\')">Revoke</button>'
+              : ''
+          };
+        }
+        var certs = r._certs || [];
+        return {
+          active: certs.filter(isActive).map(shape),
+          revoked: certs.filter(function (x) { return x && !isActive(x); }).map(shape),
+          grant: canEdit
+            ? '<button class="btn btn-link" onclick="CustomersV2.grantCert(\'' + esc2(id) + '\')">+ Grant cert</button>'
+            : ''
+        };
       },
       activity: function (r) {
         var N = window.MastUI.Num, ev = [];
@@ -471,6 +546,111 @@
       MastAdmin.loadModule('customers-core').then(function () {
         if (window.customersOpenWalletAdjust) customersOpenWalletAdjust(kind, id, uid);
         else if (window.showToast) showToast('Wallet tools still loading — try again', true);
+      });
+    },
+    // ── Certifications (PR2) ────────────────────────────────────────────────
+    // Grant delegates to book.js _bookGrantCert (THE single source of grant
+    // logic — idempotent re-grant, instructor snapshot, expiry calc — zero
+    // reimplementation); revoke goes through CustomersBridge.revokeCert. BOTH
+    // re-check can('customers','edit') at the handler: the affordances are already
+    // hidden for non-editors, but a hidden control must not be console-drivable.
+    // V1's grant/revoke had no can() gate at all — this is the security win.
+    grantCert: function (id) {
+      if (typeof window.can === 'function' && !window.can('customers', 'edit')) {
+        if (window.showToast) showToast('You don’t have permission', true); return;
+      }
+      Promise.resolve(MastDB.get('admin/certTypes')).then(function (types) {
+        types = types || {};
+        var activeIds = Object.keys(types).filter(function (t) { return !types[t].archivedAt; });
+        if (!activeIds.length) { if (window.showToast) showToast('No cert types defined. Add one in Book → Settings.', true); return; }
+        var esc2 = window.MastUI._esc;
+        var options = activeIds.map(function (tid) {
+          return '<option value="' + esc2(tid) + '">' + esc2(types[tid].name || tid) + '</option>';
+        }).join('');
+        var html =
+          '<div class="modal-header"><h3>Grant certification</h3></div>' +
+          '<div class="modal-body">' +
+            '<div class="form-group"><label class="form-label">Certification type</label>' +
+              '<select id="custV2GrantType" class="form-input" style="width:100%;">' + options + '</select></div>' +
+          '</div>' +
+          '<div class="modal-footer">' +
+            '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+            '<button class="btn btn-primary" id="custV2GrantBtn" onclick="CustomersV2.grantCertConfirm(\'' + esc2(id) + '\')">Grant</button>' +
+          '</div>';
+        if (typeof openModal === 'function') openModal(html);
+      }).catch(function (e) { if (window.showToast) showToast('Could not load cert types: ' + (e && e.message || e), true); });
+    },
+    grantCertConfirm: function (id) {
+      if (typeof window.can === 'function' && !window.can('customers', 'edit')) {
+        if (window.showToast) showToast('You don’t have permission', true); return;
+      }
+      var sel = document.getElementById('custV2GrantType');
+      if (!sel || !sel.value) return;
+      var typeId = sel.value;
+      var btn = document.getElementById('custV2GrantBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Granting…'; }
+      var ensure = window._bookGrantCert ? Promise.resolve() : MastAdmin.loadModule('book');
+      ensure.then(function () {
+        if (!window._bookGrantCert) throw new Error('Cert grant helper unavailable');
+        return window._bookGrantCert({ typeId: typeId, customerId: id, sourceClassId: null, sourceEnrollmentId: null });
+      }).then(function (result) {
+        if (typeof closeModal === 'function') closeModal();
+        // _bookGrantCert toasts its own success ("Certification granted"/"re-granted").
+        if (result) refreshOpen(id);
+      }).catch(function (e) {
+        if (btn) { btn.disabled = false; btn.textContent = 'Grant'; }
+        if (window.showToast) showToast('Grant failed: ' + (e && e.message || e), true);
+      });
+    },
+    revokeCert: function (id, certId) {
+      if (typeof window.can === 'function' && !window.can('customers', 'edit')) {
+        if (window.showToast) showToast('You don’t have permission', true); return;
+      }
+      var esc2 = window.MastUI._esc;
+      // Prefer the OPEN record (fetched, has _certs/_certTypes) for the type name;
+      // fall back to the list row. Either way the modal works.
+      var cur = (window.MastEntity && MastEntity.getCurrent && MastEntity.getCurrent()) || {};
+      var rec = (cur.record && (cur.record._key || cur.record.id) === id) ? cur.record : (V2.byId[id] || {});
+      var cert = (rec._certs || []).filter(function (x) { return x && x.id === certId; })[0];
+      var types = rec._certTypes || {};
+      var typeName = (cert && types[cert.typeId] && types[cert.typeId].name) || (cert && cert.typeId) || 'this certification';
+      var optsHtml = REVOKE_REASONS.map(function (o) {
+        return '<option value="' + esc2(o.v) + '">' + esc2(o.l) + '</option>';
+      }).join('');
+      var html =
+        '<div class="modal-header"><h3>Revoke certification</h3></div>' +
+        '<div class="modal-body">' +
+          '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px;">' + esc2(typeName) + '</p>' +
+          '<div class="form-group"><label class="form-label">Reason</label>' +
+            '<select id="custV2RevokeReason" class="form-input" style="width:100%;">' + optsHtml + '</select></div>' +
+          '<div class="form-group" style="margin-top:10px;"><label class="form-label">Note (optional)</label>' +
+            '<textarea id="custV2RevokeNote" class="form-input" rows="2" style="width:100%;resize:vertical;" placeholder="Visible in the cert history"></textarea></div>' +
+          '<p style="color:var(--warm-gray);font-size:0.78rem;margin-top:10px;">The certification stays on the record as <strong>revoked</strong> — it is not deleted, so the history is preserved.</p>' +
+        '</div>' +
+        '<div class="modal-footer">' +
+          '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+          '<button class="btn btn-danger" id="custV2RevokeBtn" onclick="CustomersV2.revokeCertConfirm(\'' + esc2(id) + '\',\'' + esc2(certId) + '\')">Revoke</button>' +
+        '</div>';
+      if (typeof openModal === 'function') openModal(html);
+    },
+    revokeCertConfirm: function (id, certId) {
+      if (typeof window.can === 'function' && !window.can('customers', 'edit')) {
+        if (window.showToast) showToast('You don’t have permission', true); return;
+      }
+      var reason = (document.getElementById('custV2RevokeReason') || {}).value || 'other';
+      var note = (document.getElementById('custV2RevokeNote') || {}).value || '';
+      var btn = document.getElementById('custV2RevokeBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Revoking…'; }
+      withBridge(function (b) {
+        if (!b.revokeCert) { if (window.showToast) showToast('Revoke unavailable', true); if (btn) { btn.disabled = false; btn.textContent = 'Revoke'; } return; }
+        Promise.resolve(b.revokeCert(id, certId, { reason: reason, note: note })).then(function () {
+          if (typeof closeModal === 'function') closeModal();
+          if (window.showToast) showToast('Certification revoked');
+          refreshOpen(id);
+        }).catch(function (e) {
+          if (btn) { btn.disabled = false; btn.textContent = 'Revoke'; }
+          if (window.showToast) showToast('Revoke failed: ' + (e && e.message || e), true);
+        });
       });
     },
     open: function (id) {

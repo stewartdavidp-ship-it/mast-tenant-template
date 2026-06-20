@@ -318,6 +318,57 @@
       '<div class="mu-pane" data-pane="ful" hidden>' + U.card('Fulfillment', fulHtml) + '</div>' +
       '<div class="mu-pane" data-pane="act" hidden>' + U.card('Timeline', U.timeline(d.timeline ? d.timeline(r) : [])) + '</div>';
   }
+  // Pure facet-tab derivation (unit-tested): the ordered tab list for a party
+  // record. Overview + Orders are always present; Activity / Classes /
+  // Certifications / Wallet appear only when the schema supplies that facet's
+  // data fn (so a sparse party record stays simple); Notes is always last.
+  // renderParty builds the matching panes in the SAME order — keep them in sync.
+  function partyTabs(d) {
+    d = d || {};
+    var tabs = [{ key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders' }];
+    if (typeof d.activity === 'function') tabs.push({ key: 'activity', label: 'Activity' });
+    if (typeof d.classes === 'function') tabs.push({ key: 'classes', label: 'Classes' });
+    if (typeof d.certifications === 'function') tabs.push({ key: 'certifications', label: 'Certifications' });
+    if (typeof d.wallet === 'function') tabs.push({ key: 'wallet', label: 'Wallet' });
+    tabs.push({ key: 'notes', label: 'Notes' });
+    return tabs;
+  }
+
+  // Certifications facet (optional party pane). Composes the same primitives the
+  // other facets use — an active-cert table, a native <details> revoked/expired
+  // group, and an optional Grant affordance — so it cannot drift from a bespoke
+  // template (no new template; standard-record-ui §1). The schema's
+  // detail.certifications(r) returns the SHAPED data, and OWNS the RBAC decision
+  // of whether to emit `grant` / each row `action`; the engine only renders what
+  // it is handed:
+  //   { active:  [{ name, status, tone, attestor, granted, expires, action }],
+  //     revoked: [{ name, status, tone, attestor, granted, expires, reason, note }],
+  //     grant:   '<button…>'  // '' when the viewer can't edit
+  //   }
+  function renderCertsFacet(U, data) {
+    data = data || {};
+    var active = data.active || [], revoked = data.revoked || [];
+    var baseCols = [
+      { label: 'Certification', render: function (c) { return '<strong>' + esc(c.name) + '</strong>'; } },
+      { label: 'Status', render: function (c) { return U.badge(c.status, c.tone); } },
+      { label: 'Attestor', render: function (c) { return '<span class="mu-sub">' + esc(c.attestor) + '</span>'; } },
+      { label: 'Granted', render: function (c) { return esc(c.granted); } },
+      { label: 'Expires', render: function (c) { return esc(c.expires); } }
+    ];
+    var activeCols = baseCols.concat([{ label: '', align: 'right', render: function (c) { return c.action || ''; } }]);
+    var revokedCols = baseCols.concat([{ label: 'Reason', align: 'right', render: function (c) {
+      return '<span class="mu-sub"' + (c.note ? ' title="' + esc(c.note) + '"' : '') + '>' + esc(c.reason || 'Revoked') + '</span>';
+    } }]);
+    var grantRow = data.grant ? '<div style="margin-bottom:10px;">' + data.grant + '</div>' : '';
+    var activeBody = active.length
+      ? U.relatedTable(activeCols, active)
+      : '<div class="mu-sub" style="padding:8px 0;">No active certifications.</div>';
+    var revokedGroup = revoked.length
+      ? '<details style="margin-top:10px;"><summary style="cursor:pointer;font-size:0.78rem;color:var(--warm-gray);">Show ' + revoked.length + ' revoked/expired</summary>' + U.relatedTable(revokedCols, revoked) + '</details>'
+      : '';
+    return U.cardTable('Certifications', grantRow + activeBody + revokedGroup);
+  }
+
   function renderParty(U, d, r) {
     var c = (d.contact ? d.contact(r) : {}) || {};
     var loc = c.location ? (c.contactId ? drillLink(d.contactEntity || 'contacts-v2', c.contactId, c.location) : esc(c.location)) : '—';
@@ -332,10 +383,9 @@
     ], orders);
     var notes = (d.notes ? d.notes(r) : '') || '';
 
-    // Base facets: Overview + Orders. Optional facets (Activity/Classes/Wallet)
-    // render only when the schema supplies their data fn — so a sparse party
-    // record stays simple. Notes is always last.
-    var tabs = [{ key: 'ov', label: 'Overview' }, { key: 'orders', label: 'Orders' }];
+    // Tab list comes from the pure partyTabs(d) derivation (unit-tested); the
+    // panes below are built in the SAME order for each optional facet present.
+    var tabs = partyTabs(d);
     // Optional per-pane action hooks (operations classic burn-down Wave E):
     // schemas append write affordances (tag/notes editors, wallet adjustments)
     // without forking the template.
@@ -345,13 +395,11 @@
 
     if (typeof d.activity === 'function') {
       var acts = d.activity(r) || [];
-      tabs.push({ key: 'activity', label: 'Activity' });
       panes += '<div class="mu-pane" data-pane="activity" hidden>' +
         U.card('Activity', acts.length ? U.timeline(acts) : '<span class="mu-sub">No activity yet</span>') + '</div>';
     }
     if (typeof d.classes === 'function') {
       var cls = d.classes(r) || [];
-      tabs.push({ key: 'classes', label: 'Classes' });
       var clsBody = cls.length ? U.cardTable('Enrollments (' + cls.length + ')', U.relatedTable([
         { label: 'Class', render: function (e) { return esc(e.name || '—'); } },
         { label: 'Session', render: function (e) { return '<span class="mu-sub">' + esc(e.session || '') + '</span>'; } },
@@ -359,9 +407,11 @@
       ], cls)) : U.card('Enrollments', '<span class="mu-sub">No enrollments</span>');
       panes += '<div class="mu-pane" data-pane="classes" hidden>' + clsBody + '</div>';
     }
+    if (typeof d.certifications === 'function') {
+      panes += '<div class="mu-pane" data-pane="certifications" hidden>' + renderCertsFacet(U, d.certifications(r) || {}) + '</div>';
+    }
     if (typeof d.wallet === 'function') {
       var w = d.wallet(r) || {};
-      tabs.push({ key: 'wallet', label: 'Wallet' });
       var walletInner = w.linked
         ? U.kv([{ k: 'Store credit', v: w.credit }, { k: 'Passes', v: w.passes }, { k: 'Membership', v: w.membership }, { k: 'Loyalty points', v: w.loyalty }])
         : '<span class="mu-sub">No linked account — wallet, passes, membership and loyalty live on a customer-facing account. This customer hasn\'t signed in yet.</span>';
@@ -369,7 +419,6 @@
       panes += '<div class="mu-pane" data-pane="wallet" hidden>' + U.card('Wallet', walletInner) + '</div>';
     }
 
-    tabs.push({ key: 'notes', label: 'Notes' });
     panes += '<div class="mu-pane" data-pane="notes" hidden>' + U.card('Notes', notes ? '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' + esc(notes) + '</div>' : '<span class="mu-sub">No notes</span>') + '</div>';
 
     return U.stickyHead(U.tiles(d.tiles ? d.tiles(r) : []), U.paneTabsBar(tabs, 'ov')) + panes;
@@ -672,6 +721,6 @@
   };
   if (typeof window !== 'undefined') window.MastEntity = api;
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { define: define, get: get, listColumns: listColumns, exportColumns: exportColumns, canonicalGet: canonicalGet, validate: validate, recordTitle: recordTitle, statusBadge: statusBadge };
+    module.exports = { define: define, get: get, listColumns: listColumns, exportColumns: exportColumns, canonicalGet: canonicalGet, validate: validate, recordTitle: recordTitle, statusBadge: statusBadge, partyTabs: partyTabs };
   }
 })();
