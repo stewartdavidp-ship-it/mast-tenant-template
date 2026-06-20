@@ -11393,6 +11393,7 @@
     <!-- brandV2Tab + homepageV2Tab static divs removed (PR8): the brand-v2/homepage-v2
          twins are retired — #brand and #homepage now resolve to the unified builder below. -->
     <div id="websiteV2Tab" class="tab-content" style="display:none;"></div><!-- "Your website" consolidated builder (absorbs page builder + homepage-v2 + brand-v2 into one scrolling page) -->
+    <div id="websiteImportTab" class="tab-content" style="display:none;"><div id="websiteImportRoot"></div></div><!-- T6 rip-and-replace PR2: AI catalog-import wizard host (modules/website-import.js) — relocated out of website.js; reached via navigateTo('website-import') from the 3 import doors -->
     <div id="commissionsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Process surface: commissions -->
     <div id="productsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign Process surface: products -->
     <div id="giftCardsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: gift cards -->
@@ -19499,7 +19500,7 @@ var ROUTE_ALIASES = {
   'consignment': 'galleries'
 };
 
-var ALL_TAB_IDS = ['mappingTab', 'inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'auditTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'auditSuppressionsTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab', 'financeOverviewTab', 'financePeriodCloseTab', 'financeAmendmentsTab',
+var ALL_TAB_IDS = ['mappingTab', 'inquiriesTab', 'scheduleTab', 'galleryTab', 'homepageTab', 'brandTab', 'productsTab', 'ordersTab', 'salesTab', 'salesEventsTab', 'productionTab', 'forecastTab', 'couponsTab', 'analyticsTab', 'settingsTab', 'imagesTab', 'auditLogTab', 'auditTab', 'employeesTab', 'contactsTab', 'customersTab', 'packTab', 'shipTab', 'commissionsTab', 'rmaTab', 'socialMediaTab', 'blogTab', 'newsletterTab', 'placeholderTab', 'inventoryTab', 'auditSuppressionsTab', 'storiesTab', 'dashboardTab', 'tripsTab', 'wholesaleTab', 'financialsTab', 'eventsAdminTab', 'websiteTab', 'websiteImportTab', 'emailLogTab', 'materialsTab', 'piecesTab', 'galleriesTab', 'bookTab', 'subscriptionTab', 'coinsTab', 'askAiTab', 'aboutTab', 'walletTab', 'giftCardsTab', 'loyaltyTab', 'membershipTab', 'termsTab', 'studioTab', 'teamTab', 'studentsTab', 'migrationDashTab', 'migrationConfirmTab', 'migrationPlanTab', 'migrationImportTab', 'historicalOrdersTab', 'channelsTab', 'businessTab', 'myFeedbackTab', 'procurementTab', 'csInboxTab', 'csTicketsTab', 'csSurveysTab', 'csReviewsTab', 'csFaqsTab', 'csMembersTab', 'financeRevenueTab', 'financeExpensesTab', 'financePlTab', 'financeCashFlowTab', 'financeArTab', 'financeApTab', 'financeTaxTab', 'financeReportsTab', 'customerPortfolioTab', 'financeOverviewTab', 'financePeriodCloseTab', 'financeAmendmentsTab',
 // M3 + M6 (Idea -OtADygKA_JhRmk1wUqN): Mast modes tabs — must be in this list
 // so applyRoute correctly hides them when navigating away.
 // W1.8: Sales by Product (PM/Operator doorway) — same reason.
@@ -20926,7 +20927,7 @@ var MODULE_MANIFEST = {
   // no longer load. The legacy host modules (brand / homepage / website) still load
   // — they own the bridges (BrandBridge / HomepageBridge / WebsiteBridge) + writers
   // the builder delegates to (hp*, hpToggleTestimonialVisible).
-  'website-v2': { src: 'modules/website-v2.js', v: 'cbcdc2f71c97', routes: ['website-v2'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2) (flag-gated)
+  'website-v2': { src: 'modules/website-v2.js', v: 'd250c75bbb9b', routes: ['website-v2'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2) (flag-gated)
   'commissions-v2': { src: 'modules/commissions-v2.js', v: '5286f474b932', routes: ['commissions-v2', 'commissions'] }, // UI-redesign Process surface: commissions lifecycle. orders.js (V1) commission slice RETIRED (T6 PR2): its CommissionsBridge + write cores were absorbed here; the bare #commissions route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'products-v2': { src: 'modules/products-v2.js', v: '0d6846f3e487', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: '82492c030beb', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
@@ -20975,6 +20976,7 @@ var MODULE_MANIFEST = {
   eventsAdmin: { src: 'modules/events.js', v: 'd599d372978f', routes: ['events-shows', 'events-settings'] },
   website: { src: 'modules/website.js', v: '52a78f238f03', routes: ['website'] },
   'website-core': { src: 'modules/website-core.js', v: '7e614803931f', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module website write layer (WebsiteBridge + the destructive template-switch cascade wpConfirmSwitch/computeGalleryMigration/executeGalleryMigration + category manager openManageCategoriesDialog/wpCat* + markUnpublished) lifted out of website.js so V2 consumers (website-v2, index.html category dialogs, gallery-metadata-modal) load this, not the 3.5K-line V1 UI. Non-routed lazy core.
+  'website-import': { src: 'modules/website-import.js', v: '5cd479d73730', routes: ['website-import'] }, // T6 rip-and-replace PR2: AI catalog-import wizard (analyze→crawl→cherry-pick→import→enrich→review/publish→draft templates) relocated VERBATIM out of website.js into its own lazy module (MastEntity does not fit an async multi-step job flow). The 3 import doors (setup-wizard, "View Report", website-v2 Card 3) route here; backend CFs (analyzeExistingSite/runEnrichment/processImportJob) unchanged. Wires a real listener detach (the V1 leak).
 homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] },
   emailLog: { src: 'modules/email-log.js', v: '7b49b10cdd0b', routes: ['email-log'] },
   maker: { src: 'modules/maker.js', v: '9d0ea5e3e739', routes: ['materials', 'products'] },
@@ -21066,7 +21068,7 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   // Setup wizard — first-login onboarding flow; no route, lazy-loaded via the
   // eager MastAdmin.loadModule('setupWizard') call in the auth funnel, gated on
   // tenantStatus === 'onboarding' (Track 1, recipe A).
-  setupWizard: { src: 'modules/setup-wizard.js', v: '3de2f0172a9f', routes: [] },
+  setupWizard: { src: 'modules/setup-wizard.js', v: 'eb62877274fb', routes: [] },
   // Shopify dev/test harness — no route; lazy-loaded via the eager
   // runShopifyHarness / runShopifySeed / runShopifyCleanup / runShopifyPhase2..8
   // shims (the static "Run …" buttons on the Shopify settings page) (Track 1).
@@ -45970,7 +45972,7 @@ function renderImportStatusBanner() {
       html = '<div style="background:var(--teal);color:white;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
       html += '<div><strong>Import complete!</strong> ' + summaryText + '</div>';
       html += '<div style="display:flex;gap:8px;align-items:center;">';
-      html += '<button class="btn btn-secondary" onclick="navigateToClassic(\'website\', { tab: \'import\', importOnly: \'1\' });" style="font-size:0.78rem;padding:6px 14px;font-weight:600;">View Report</button>';
+      html += '<button class="btn btn-secondary" onclick="navigateTo(\'website-import\');" style="font-size:0.78rem;padding:6px 14px;font-weight:600;">View Report</button>';
       html += '<button onclick="_importBannerDismissed[\'' + job._id + '\']=true;document.getElementById(\'importStatusBanner\').style.display=\'none\';" style="background:none;border:none;color:white;font-size:1.15rem;cursor:pointer;padding:4px 8px;opacity:0.8;" title="Dismiss">&times;</button>';
       html += '</div>';
       html += '</div>';

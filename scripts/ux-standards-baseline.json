@@ -191,6 +191,9 @@
   "app/modules/website.js": {
     "hardcodedHex": 48
   },
+  "app/modules/website-import.js": {
+    "hardcodedHex": 26
+  },
   "app/modules/website-core.js": {
     "rogueOverlays": 1,
     "hardcodedHex": 7

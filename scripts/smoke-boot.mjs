@@ -50,7 +50,9 @@ const ROUTES = [
   'finance-revenue','finance-expenses','finance-ap','finance-ar','settings','subscription',
   'business', // lazy-loads modules/business-view.js via the route setup (recipe A, Track 1)
   'coupons','promotions','galleries','lookbooks','advisor','marketing-calendar','blog',
-  'newsletter','social','campaigns','website','procurement','team','channels','wholesale',
+  'newsletter','social','campaigns','website',
+  'website-import', // lazy-loads modules/website-import.js (T6 PR2: AI catalog-import wizard relocated out of website.js)
+  'procurement','team','channels','wholesale',
   'commissions','rma','jobs','production','materials','book','trips','studio','students',
   'cs-inbox','cs-tickets','auditlog','migration','commission-terms','products-v2','orders-v2','customers-v2',
   // Shows lifecycle — shows.js (V1) retired (T6); the bare #show* routes now
