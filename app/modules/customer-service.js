@@ -74,17 +74,13 @@
 
   function fmtDate(iso) {
     if (!iso) return '—';
-    try { return new Date(iso).toLocaleDateString(); } catch (e) { return iso; }
+    return MastFormat.date(iso) || '—';
   }
 
-  // Status → badge inline style
-  var STATUS_STYLES = {
-    open:        { bg: 'rgba(30,64,175,0.2)',  color: '#64B5F6', border: 'rgba(30,64,175,0.35)' },
-    in_progress: { bg: 'rgba(146,64,14,0.2)',  color: '#FFD54F', border: 'rgba(146,64,14,0.35)' },
-    waiting:     { bg: 'rgba(91,33,182,0.2)',  color: '#CE93D8', border: 'rgba(91,33,182,0.35)' },
-    resolved:    { bg: 'rgba(6,95,70,0.25)',   color: '#4DB6AC', border: 'rgba(6,95,70,0.4)' },
-    closed:      { bg: 'rgba(80,80,80,0.2)',   color: '#9E9E9E', border: 'rgba(80,80,80,0.3)' }
-  };
+  // Ticket-status label map — feeds the status filter/select dropdowns and the
+  // "Status updated" toast. The status BADGE colors now live in the canonical
+  // MastUI.statusBadge(status, 'ticket') registry (Track 5; shared/mast-ui.js),
+  // captured verbatim from the former STATUS_STYLES map.
   var STATUS_LABELS = {
     open: 'Open', in_progress: 'In Progress', waiting: 'Waiting',
     resolved: 'Resolved', closed: 'Closed'
@@ -116,12 +112,6 @@
   }
 
   var SOURCE_ICONS = { email: '✉', web: '🌐', phone: '☎', chat: '💬', manual: '✏' };
-
-  function statusBadge(status) {
-    var s = STATUS_STYLES[status] || STATUS_STYLES.closed;
-    return '<span class="status-badge" style="background:' + s.bg + ';color:' + s.color +
-      ';border:1px solid ' + s.border + ';">' + _esc(STATUS_LABELS[status] || status || '—') + '</span>';
-  }
 
   function priorityBadge(priority) {
     var s = PRIORITY_STYLES[priority] || PRIORITY_STYLES.normal;
@@ -323,7 +313,7 @@
 
       // Badges
       '<div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">' +
-        statusBadge(t.status) +
+        MastUI.statusBadge(t.status, 'ticket') +
         priorityBadge(t.priority) +
         // Build 8 — category chip when present
         (t.category ? '<span style="font-size:0.72rem;padding:2px 8px;border-radius:10px;background:rgba(99,102,241,0.20);color:#a5a8f5;">' + _esc(csCategoryLabel(t.category)) + '</span>' : '') +
@@ -771,7 +761,7 @@
             '</span>';
           }
           if (st.lastOrderAt) {
-            var lastAbs = new Date(st.lastOrderAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            var lastAbs = MastFormat.date(st.lastOrderAt);
             var lastRel = relativeTime(st.lastOrderAt) || lastAbs;
             html += '<span class="status-badge pill" title="' + _esc(lastAbs) + '" style="background:rgba(42,124,111,0.08);color:var(--teal);font-size:0.72rem;">' +
               'Last bought ' + _esc(lastRel) +
