@@ -19576,12 +19576,12 @@ var MAST_V2_ROUTE_MAP = {
   trips: 'trips-v2', procurement: 'procurement-v2',
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', 'cs-surveys': 'cs-surveys-v2', terms: 'terms-v2', wallet: 'wallet-v2',
-  // "Your website" capstone: #website, #brand, and #homepage all resolve to the
-  // single unified builder (website-v2). brand-v2/homepage-v2 twins retired —
-  // their surface (logo/colors/fonts, sections/content, testimonials) is absorbed
-  // into the 4-card builder. `website` is listed FIRST so the reverse-lookup
-  // (set-active-nav baseRoute) resolves the consolidated "Your Website" nav item.
-  website: 'website-v2', brand: 'website-v2', homepage: 'website-v2', products: 'products-v2',
+  // "Your website" capstone: #brand and #homepage resolve to the single unified
+  // builder (website-v2); brand-v2/homepage-v2 twins retired. #website is NOT
+  // remapped: website.js (V1) is RETIRED (T6 rip-and-replace PR3) and website-v2
+  // owns the bare `website` route directly in its manifest (rma-admin precedent),
+  // so it resolves to the builder for ALL users (V2 + Legacy) without a remap.
+  brand: 'website-v2', homepage: 'website-v2', products: 'products-v2',
   wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
   contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
   resources: 'classes-rooms-v2',
@@ -20924,10 +20924,10 @@ var MODULE_MANIFEST = {
   // fully absorbed by the unified "Your website" builder (website-v2 — Card 1
   // logo/colors/fonts/name/tagline, Card 2 sections/content/testimonials). The
   // route map now points #brand and #homepage at website-v2, so these twin modules
-  // no longer load. The legacy host modules (brand / homepage / website) still load
-  // — they own the bridges (BrandBridge / HomepageBridge / WebsiteBridge) + writers
-  // the builder delegates to (hp*, hpToggleTestimonialVisible).
-  'website-v2': { src: 'modules/website-v2.js', v: 'd250c75bbb9b', routes: ['website-v2'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2) (flag-gated)
+  // no longer load. The legacy host modules brand / homepage still load — they own
+  // BrandBridge / HomepageBridge + writers the builder delegates to (hp*,
+  // hpToggleTestimonialVisible). website.js (V1) is RETIRED (T6 PR3): its WebsiteBridge write layer moved to the lazy website-core.
+  'website-v2': { src: 'modules/website-v2.js', v: '491770df8699', routes: ['website-v2', 'website'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js (V1) RETIRED (T6 rip-and-replace PR3): write layer → website-core (PR1), AI import wizard → website-import (PR2); the bare #website route now resolves here directly, un-gated, for ALL users (no MAST_V2_ROUTE_MAP remap).
   'commissions-v2': { src: 'modules/commissions-v2.js', v: '5286f474b932', routes: ['commissions-v2', 'commissions'] }, // UI-redesign Process surface: commissions lifecycle. orders.js (V1) commission slice RETIRED (T6 PR2): its CommissionsBridge + write cores were absorbed here; the bare #commissions route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'products-v2': { src: 'modules/products-v2.js', v: '0d6846f3e487', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: '82492c030beb', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
@@ -20974,7 +20974,6 @@ var MODULE_MANIFEST = {
   sales: { src: 'modules/sales.js', v: 'cc9154861404', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', v: '6a74ff57b700', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', v: 'd599d372978f', routes: ['events-shows', 'events-settings'] },
-  website: { src: 'modules/website.js', v: '52a78f238f03', routes: ['website'] },
   'website-core': { src: 'modules/website-core.js', v: '7e614803931f', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module website write layer (WebsiteBridge + the destructive template-switch cascade wpConfirmSwitch/computeGalleryMigration/executeGalleryMigration + category manager openManageCategoriesDialog/wpCat* + markUnpublished) lifted out of website.js so V2 consumers (website-v2, index.html category dialogs, gallery-metadata-modal) load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'website-import': { src: 'modules/website-import.js', v: '5cd479d73730', routes: ['website-import'] }, // T6 rip-and-replace PR2: AI catalog-import wizard (analyze→crawl→cherry-pick→import→enrich→review/publish→draft templates) relocated VERBATIM out of website.js into its own lazy module (MastEntity does not fit an async multi-step job flow). The 3 import doors (setup-wizard, "View Report", website-v2 Card 3) route here; backend CFs (analyzeExistingSite/runEnrichment/processImportJob) unchanged. Wires a real listener detach (the V1 leak).
 homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] },

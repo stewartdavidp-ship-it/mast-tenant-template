@@ -71,11 +71,13 @@ const UNGATED_ALLOWLIST = new Set([
 // prints a "stale baseline" nudge — delete it from this set then. A new ungated
 // write-module that is NOT listed here FAILS the build (see CHECK C above).
 const MODULE_GATE_BASELINE = new Set([
-  // The canonical 6 the original RBAC-gap audit named:
-  'production.js', 'students.js', 'studio.js', 'trips.js', 'website.js', 'show-light.js',
-  // website-import.js: AI catalog-import wizard relocated VERBATIM out of website.js
-  // (T6 PR2). It inherits website.js's ungated posture (no fix-in-place during a
-  // verbatim move); gating the import write/delete handlers is a follow-up.
+  // The canonical 5 the original RBAC-gap audit named (website.js was the 6th —
+  // RETIRED in the T6 rip-and-replace, PR3 — so dropped from this baseline):
+  'production.js', 'students.js', 'studio.js', 'trips.js', 'show-light.js',
+  // website-import.js: AI catalog-import wizard relocated VERBATIM out of the
+  // now-retired website.js (T6 PR2). It kept website.js's ungated posture (no
+  // fix-in-place during a verbatim move); gating the import write/delete handlers
+  // is a follow-up.
   'website-import.js',
   // Other legacy feature modules with the same gap (routed, write, 0 gates):
   'audit-feedback.js', 'audit.js', 'blog.js', 'book.js', 'brand.js', 'campaigns.js',

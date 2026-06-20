@@ -188,9 +188,6 @@
   "app/modules/variant-detail-tabs.js": {
     "hardcodedHex": 138
   },
-  "app/modules/website.js": {
-    "hardcodedHex": 48
-  },
   "app/modules/website-import.js": {
     "hardcodedHex": 26
   },

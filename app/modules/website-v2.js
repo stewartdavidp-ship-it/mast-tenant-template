@@ -18,14 +18,15 @@
  * the 4 empty card placeholders. The cards are filled in PR3–PR6; each lands its
  * controls inside the card body element this shell mounts (see CARD_MOUNTS below).
  *
- * The legacy website.js / homepage-v2.js / brand-v2.js are NOT touched here — they
- * stay as the fallback and behind the future "Advanced (classic)" door; later PRs
- * retire them once their surface is absorbed.
+ * The legacy homepage-v2.js / brand-v2.js are NOT touched here — they stay as the
+ * fallback behind the "Advanced (classic)" door until their surface is absorbed.
+ * (website.js itself has since been RETIRED — T6 rip-and-replace PR3 — see below.)
  *
  * Cold-safe: every config read is lazy + guarded (Promise.resolve(...).catch),
  * so the route boots correctly even as the FIRST route visited (no assumption that
- * another route warmed a cache). Flag-gated (?ui=1 / mastUiRedesign) like the other
- * twins, side-by-side with legacy #website.
+ * another route warmed a cache). After the website.js rip-and-replace (T6 PR3)
+ * this builder owns the bare #website route for ALL users — un-gated, no longer
+ * flag-gated or side-by-side with a legacy fallback (which is now deleted).
  *
  * RBAC: editing the live site is gated via can('homepage','edit') — the same area
  * homepage-v2 uses (brand writes will later route through BrandBridge under the
@@ -34,15 +35,12 @@
  */
 (function () {
   'use strict';
-  function flagOn() {
-    try {
-      if (/[?&#]ui=1\b/.test(location.href)) { localStorage.setItem('mastUiRedesign', '1'); return true; }
-      if (localStorage.getItem('mastUiRedesign') === '1') return true;
-    } catch (e) {}
-    return !!(window.MAST_FEATURE_FLAGS && window.MAST_FEATURE_FLAGS.uiRedesign);
-  }
+  // T6 rip-and-replace PR3: website.js (V1) is RETIRED and this builder now owns
+  // the bare #website route directly (manifest routes: ['website-v2','website']),
+  // so it must render for ALL users — the old `if (!flagOn()) return;` flag gate
+  // is dropped (rma-admin/team-v2 precedent). Keeping it would blank-screen an
+  // explicit-Legacy user at #website now that the legacy fallback is deleted.
   if (!window.MastAdmin || !window.MastUI) return;
-  if (!flagOn()) return;
 
   var U = window.MastUI, esc = U._esc;
 
@@ -677,9 +675,9 @@
       });
     });
   }
-  // Guarded WebsiteBridge call — WebsiteBridge lives in website.js (loaded at
-  // setup). If a write fires before it's ready, kick a load + toast and reject so
-  // withSave surfaces it (never a silent no-op).
+  // Guarded WebsiteBridge call — WebsiteBridge lives in the lazy website-core
+  // (loaded on demand). If a write fires before it's ready, kick a load + toast and
+  // reject so withSave surfaces it (never a silent no-op).
   function WebsiteBridgeCall(method) {
     var args = Array.prototype.slice.call(arguments, 1);
     if (window.WebsiteBridge && typeof window.WebsiteBridge[method] === 'function') {
@@ -2521,7 +2519,7 @@
   // switch (so the "current" flag + checked tile reflect the new template).
   function loadLooks() {
     if (!window.WebsiteBridge || typeof window.WebsiteBridge.getTemplates !== 'function') {
-      // host not ready yet — ensureHostModules warms website.js, retry shortly
+      // host not ready yet — ensureHostModules warms website-core, retry shortly
       try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('website-core'); } catch (e) {}
       setTimeout(function () {
         if (window.WebsiteBridge && typeof window.WebsiteBridge.getTemplates === 'function') loadLooks();
@@ -2573,7 +2571,7 @@
   // delegates to: homepage.js (window.HomepageBridge: getThemeOptions / setColorScheme,
   // and it loads the template manifest), brand.js (window.BrandBridge: setLogoFromUrl).
   // MastBrandSync + WebsiteBridge are the other writers (brand-sync.js loads eagerly;
-  // WebsiteBridge is defined in website.js, this module's own host). Load them at
+  // WebsiteBridge is defined in the lazy website-core, this builder's host). Load them at
   // route setup so the first write isn't a cold no-op.
   function ensureHostModules() {
     if (!window.MastAdmin || typeof MastAdmin.loadModule !== 'function') return;
@@ -2591,12 +2589,21 @@
     try { MastAdmin.loadModule('website-core'); } catch (e) {} // owns WebsiteBridge.setThemeField
   }
 
+  function routeSetup() {
+    ensureHostModules();
+    ensureTab();
+    render();   // paint the shell immediately (header + placeholders) — cold-safe
+    load();     // then hydrate the header + Card 1 from config
+  }
   MastAdmin.registerModule('website-v2', {
-    routes: { 'website-v2': { tab: 'websiteV2Tab', setup: function () {
-      ensureHostModules();
-      ensureTab();
-      render();   // paint the shell immediately (header + placeholders) — cold-safe
-      load();     // then hydrate the header + Card 1 from config
-    } } }
+    routes: {
+      'website-v2': { tab: 'websiteV2Tab', setup: routeSetup },
+      // Legacy #website route ABSORBED (T6 rip-and-replace PR3): website.js is
+      // deleted, so this builder owns the bare route directly (manifest routes:
+      // ['website-v2','website'], no MAST_V2_ROUTE_MAP remap, un-gated for ALL
+      // users). Without this key ROUTE_MAP['website'] is unset and applyRoute()
+      // silently no-ops. Write layer → website-core; AI import → website-import.
+      'website': { tab: 'websiteV2Tab', setup: routeSetup }
+    }
   });
 })();
