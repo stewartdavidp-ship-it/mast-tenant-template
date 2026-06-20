@@ -6492,8 +6492,12 @@ function portfolioOpenCustomer(cid) {
     });
   }
   if (typeof navigateTo === 'function') navigateTo('customers');
-  if (typeof window.customersOpenDetail === 'function') {
-    setTimeout(function() { window.customersOpenDetail(cid); }, 50);
+  // PR1: customersOpenDetail moved to the lazy customers-core; ensure it's
+  // loaded (in default V2 mode the V1 module isn't) before opening.
+  if (window.MastAdmin && MastAdmin.loadModule) {
+    MastAdmin.loadModule('customers-core').then(function() {
+      setTimeout(function() { if (typeof window.customersOpenDetail === 'function') window.customersOpenDetail(cid); }, 50);
+    });
   }
 }
 
