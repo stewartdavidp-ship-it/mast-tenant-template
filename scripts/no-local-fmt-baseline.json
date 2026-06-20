@@ -28,11 +28,7 @@
     "localeDate": 1
   },
   "app/modules/blog-v2.js": {
-    "moneyToFixed": 2
-  },
-  "app/modules/blog.js": {
-    "moneyToFixed": 3,
-    "localeDate": 6
+    "moneyToFixed": 3
   },
   "app/modules/book.js": {
     "centsDiv": 11,
