@@ -2445,7 +2445,7 @@ function _dcRenderCheckRows() {
   var totEl = document.getElementById('dcCheckTotal');
   if (totEl) {
     var tot = checks.reduce(function(s, c) { return s + (parseFloat(c.amount) || 0); }, 0);
-    totEl.textContent = 'Total checks: $' + tot.toFixed(2);
+    totEl.textContent = 'Total checks: $' + MastFormat.moneyRaw(tot);
   }
 }
 function _dcUpdateVariance() {
@@ -2466,7 +2466,7 @@ function _dcUpdateVariance() {
   var diff = close - open - checkTotal;
   var sign = diff >= 0 ? '+' : '−';
   var color = diff === 0 ? 'var(--warm-gray,#888)' : (Math.abs(diff) < 5 ? '#22c55e' : '#eab308');
-  vEl.innerHTML = '<span style="color:' + color + ';font-weight:600;">Variance: ' + sign + '$' + Math.abs(diff).toFixed(2) + ' (closing − opening − checks)</span>';
+  vEl.innerHTML = '<span style="color:' + color + ';font-weight:600;">Variance: ' + sign + '$' + MastFormat.moneyRaw(Math.abs(diff)) + ' (closing − opening − checks)</span>';
 }
 window.finDayCloseAddCheck = function() {
   var arr = _dcChecks();
@@ -2491,7 +2491,7 @@ window.finDayCloseUpdateCheck = function(idx, field, value) {
   var totEl = document.getElementById('dcCheckTotal');
   if (totEl) {
     var tot = checks.reduce(function(s, c) { return s + (parseFloat(c.amount) || 0); }, 0);
-    totEl.textContent = 'Total checks: $' + tot.toFixed(2);
+    totEl.textContent = 'Total checks: $' + MastFormat.moneyRaw(tot);
   }
 };
 window.finDayCloseChangeDate = function(date) {
@@ -2995,7 +2995,7 @@ function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDueHoriz
   var hasBank = bankAccounts.length > 0;
   h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
   if (hasBank) {
-    h += statCard('Cash on Hand', '$' + bankTotal.toFixed(2), '#22c55e', bankAccounts.length + ' account' + (bankAccounts.length !== 1 ? 's' : ''));
+    h += statCard('Cash on Hand', '$' + MastFormat.moneyRaw(bankTotal), '#22c55e', bankAccounts.length + ' account' + (bankAccounts.length !== 1 ? 's' : ''));
   } else {
     h += statCard('Cash on Hand', '—', 'var(--warm-gray,#888)', 'Connect a bank to track');
   }
@@ -3018,7 +3018,7 @@ function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDueHoriz
       h += '<div style="font-size:0.85rem;font-weight:600;">' + e(acct.institution || '') + ' ' + e(acct.name) + (acct.mask ? ' ••' + e(acct.mask) : '') + '</div>';
       if (acct.lastSync) h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">Last synced ' + toDate(acct.lastSync) + '</div>';
       h += '</div>';
-      h += '<div style="font-weight:700;font-size:1rem;color:#22c55e;">$' + acct.balance.toFixed(2) + '</div>';
+      h += '<div style="font-weight:700;font-size:1rem;color:#22c55e;">$' + MastFormat.moneyRaw(acct.balance) + '</div>';
       h += '</div>';
     });
     h += '</div>';
@@ -3058,7 +3058,7 @@ function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDueHoriz
   h += '<div style="flex:1;min-width:200px;">';
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:4px;">Projected Net Position</div>';
   var projColor = netProjected >= 0 ? '#22c55e' : '#ef4444';
-  h += '<div style="font-size:1.15rem;font-weight:700;color:' + projColor + ';">$' + Math.abs(netProjected).toFixed(2) + (netProjected < 0 ? ' deficit' : '') + '</div>';
+  h += '<div style="font-size:1.15rem;font-weight:700;color:' + projColor + ';">$' + MastFormat.moneyRaw(Math.abs(netProjected)) + (netProjected < 0 ? ' deficit' : '') + '</div>';
   h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);">cash + AR in − AP out</div>';
   h += '</div>';
 
@@ -5581,7 +5581,7 @@ function renderLoanReport(monthly, bankTotal, startDate, endDate) {
     'Net Margin: ' + (netMarginPct!==null ? netMarginPct+'%' : '—'),
     'Avg Monthly Revenue: ' + fmt$(avgMonthlyRev),
     'Net Profit: ' + fmt$(totalNP),
-    bankTotal>0 ? 'Cash on Hand: $'+bankTotal.toFixed(2) : null
+    bankTotal>0 ? 'Cash on Hand: $'+MastFormat.moneyRaw(bankTotal) : null
   ].filter(Boolean).join('\n');
 
   var h = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">';
@@ -5607,7 +5607,7 @@ function renderLoanReport(monthly, bankTotal, startDate, endDate) {
   h += statCard('Net Margin', netMarginPct!==null?netMarginPct+'%':'—', totalNP>=0?'#22c55e':'#ef4444');
   if (yoyPct!==null) h += statCard('H2 vs H1', (parseFloat(yoyPct)>=0?'+':'')+yoyPct+'%', parseFloat(yoyPct)>=0?'#22c55e':'#ef4444');
   h += statCard('Avg Monthly Rev', fmt$(avgMonthlyRev), '#3b82f6');
-  if (bankTotal>0) h += statCard('Cash on Hand', '$'+bankTotal.toFixed(2), '#8b5cf6');
+  if (bankTotal>0) h += statCard('Cash on Hand', '$'+MastFormat.moneyRaw(bankTotal), '#8b5cf6');
   h += '</div></div>';
 
   // 12-month revenue trend (bar table)
@@ -5647,7 +5647,7 @@ function renderLoanReport(monthly, bankTotal, startDate, endDate) {
   if (bankTotal > 0) {
     h += '<div style="margin-bottom:22px;">';
     h += '<div style="font-size:0.78rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Cash Position</div>';
-    h += '<div style="font-size:1.6rem;font-weight:700;color:#22c55e;">$' + bankTotal.toFixed(2) + '</div>';
+    h += '<div style="font-size:1.6rem;font-weight:700;color:#22c55e;">$' + MastFormat.moneyRaw(bankTotal) + '</div>';
     h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">Current cash on hand · via connected bank accounts</div>';
     h += '</div>';
   }
@@ -5800,8 +5800,8 @@ function renderYearEndReport(pnlData, taxData, contractors, mileage, year) {
     h += '<div style="font-size:0.9rem;font-weight:700;margin-bottom:10px;">Mileage Summary · ' + year + '</div>';
     h += '<div style="display:flex;gap:12px;flex-wrap:wrap;">';
     h += statCard('Total Miles', mileage.totalMiles.toFixed(1), 'var(--text,#fff)', mileage.tripCount + ' trip' + (mileage.tripCount!==1?'s':''));
-    h += statCard('IRS Rate', '$'+IRS_RATE.toFixed(2)+'/mi', 'var(--warm-gray,#888)', 'verify at irs.gov');
-    h += statCard('Deductible Amount', '$'+deductible.toFixed(2), '#16a34a');
+    h += statCard('IRS Rate', '$'+MastFormat.moneyRaw(IRS_RATE)+'/mi', 'var(--warm-gray,#888)', 'verify at irs.gov');
+    h += statCard('Deductible Amount', '$'+MastFormat.moneyRaw(deductible), '#16a34a');
     h += '</div></div>';
   }
 
@@ -6027,7 +6027,7 @@ function portfolioQuadrantStyle(q) {
 function portfolioFmtMoney(cents) {
   if (typeof cents !== 'number') return '—';
   var sign = cents < 0 ? '-' : '';
-  return sign + '$' + (Math.abs(cents) / 100).toFixed(2);
+  return sign + '$' + MastFormat.moneyRaw(Math.abs(cents), { cents: true });
 }
 
 // Sam G — compute trailing N-month portfolio trend (client-side mirror of
@@ -6745,7 +6745,7 @@ async function _loadFinanceOverview() {
     if (!bankConnected) {
       cashVal = '—'; cashSub = 'Connect a bank in Expenses'; cashColor = 'var(--warm-gray,#888)';
     } else {
-      cashVal = '$' + bankTotal.toFixed(2); cashSub = 'Across active accounts'; cashColor = '#22c55e';
+      cashVal = '$' + MastFormat.moneyRaw(bankTotal); cashSub = 'Across active accounts'; cashColor = '#22c55e';
     }
 
     // W2 R2-F1: card labels + sub-text template-bound to the active period
