@@ -302,11 +302,6 @@
     "moneyToFixed": 1,
     "localeDate": 1
   },
-  "app/modules/website.js": {
-    "centsDiv": 1,
-    "moneyToFixed": 1,
-    "localeDate": 2
-  },
   "app/modules/wholesale-v2.js": {
     "centsDiv": 3,
     "moneyToFixed": 1
