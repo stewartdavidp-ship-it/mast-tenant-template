@@ -17,8 +17,5 @@
   },
   "app/modules/image-library.js": {
     "unboundedList": 9
-  },
-  "app/modules/marketing-calendar.js": {
-    "unboundedList": 3
   }
 }

@@ -13,10 +13,6 @@
     "centsDiv": 1,
     "localeDate": 1
   },
-  "app/modules/advisor.js": {
-    "centsDiv": 1,
-    "localeDate": 1
-  },
   "app/modules/analytics-v2.js": {
     "centsDiv": 2,
     "moneyToFixed": 2,
@@ -55,11 +51,6 @@
     "centsDiv": 5,
     "moneyToFixed": 6
   },
-  "app/modules/channels.js": {
-    "centsDiv": 8,
-    "moneyToFixed": 1,
-    "localeDate": 2
-  },
   "app/modules/classes-v2.js": {
     "centsDiv": 7,
     "moneyToFixed": 4
@@ -67,9 +58,6 @@
   "app/modules/coin-wallet-modal.js": {
     "centsDiv": 1,
     "localeDate": 4
-  },
-  "app/modules/commission-terms.js": {
-    "localeDate": 3
   },
   "app/modules/commissions-v2.js": {
     "centsDiv": 1
@@ -191,9 +179,6 @@
   "app/modules/lookbooks-v2.js": {
     "localeDate": 1
   },
-  "app/modules/lookbooks.js": {
-    "localeDate": 1
-  },
   "app/modules/maker.js": {
     "centsDiv": 18,
     "moneyToFixed": 39,
@@ -202,14 +187,6 @@
   "app/modules/mapping.js": {
     "centsDiv": 1,
     "moneyToFixed": 1
-  },
-  "app/modules/marketing-calendar.js": {
-    "localeDate": 2
-  },
-  "app/modules/newsletter.js": {
-    "centsDiv": 3,
-    "moneyToFixed": 2,
-    "localeDate": 7
   },
   "app/modules/orders-v2.js": {
     "centsDiv": 6,
@@ -248,11 +225,6 @@
   "app/modules/promotions-v2.js": {
     "centsDiv": 3
   },
-  "app/modules/promotions.js": {
-    "centsDiv": 2,
-    "moneyToFixed": 1,
-    "localeDate": 1
-  },
   "app/modules/receipts-v2.js": {
     "centsDiv": 13,
     "localeDate": 4
@@ -280,17 +252,8 @@
     "moneyToFixed": 2,
     "localeDate": 6
   },
-  "app/modules/shows.js": {
-    "centsDiv": 29,
-    "moneyToFixed": 22,
-    "localeDate": 8
-  },
   "app/modules/social-v2.js": {
     "moneyToFixed": 2
-  },
-  "app/modules/social.js": {
-    "moneyToFixed": 2,
-    "localeDate": 1
   },
   "app/modules/studio-v2.js": {
     "centsDiv": 2,

@@ -15,11 +15,6 @@
   "app/modules/add-variant-dialog.js": {
     "hardcodedHex": 1
   },
-  "app/modules/advisor.js": {
-    "nativeDialogs": 4,
-    "rogueOverlays": 1,
-    "hardcodedHex": 94
-  },
   "app/modules/audit-feedback.js": {
     "nativeDialogs": 2
   },
@@ -44,19 +39,11 @@
   "app/modules/cart.js": {
     "hardcodedHex": 54
   },
-  "app/modules/channels.js": {
-    "nativeDialogs": 2,
-    "rogueOverlays": 1,
-    "hardcodedHex": 273
-  },
   "app/modules/channels-v2.js": {
     "hardcodedHex": 12
   },
   "app/modules/coin-wallet-modal.js": {
     "hardcodedHex": 8
-  },
-  "app/modules/commission-terms.js": {
-    "hardcodedHex": 9
   },
   "app/modules/composer.js": {
     "nativeDialogs": 1
@@ -94,9 +81,6 @@
     "rogueOverlays": 5,
     "hardcodedHex": 560
   },
-  "app/modules/financials.js": {
-    "hardcodedHex": 38
-  },
   "app/modules/fulfillment.js": {
     "rogueOverlays": 1,
     "hardcodedHex": 37
@@ -123,9 +107,6 @@
   "app/modules/link-recipe-dialog.js": {
     "hardcodedHex": 2
   },
-  "app/modules/lookbooks.js": {
-    "hardcodedHex": 15
-  },
   "app/modules/maker.js": {
     "nativeDialogs": 2,
     "rogueOverlays": 7,
@@ -135,19 +116,12 @@
     "rogueOverlays": 2,
     "hardcodedHex": 1
   },
-  "app/modules/marketing-calendar.js": {
-    "hardcodedHex": 8
-  },
   "app/modules/match-confirm-modal.js": {
     "rogueOverlays": 1,
     "hardcodedHex": 9
   },
   "app/modules/migration-plan.js": {
     "hardcodedHex": 48
-  },
-  "app/modules/newsletter.js": {
-    "nativeDialogs": 1,
-    "hardcodedHex": 36
   },
   "app/modules/rma-admin.js": {
     "rogueOverlays": 1,
@@ -166,9 +140,6 @@
     "hardcodedHex": 74,
     "rogueOverlays": 1
   },
-  "app/modules/promotions.js": {
-    "hardcodedHex": 12
-  },
   "app/modules/publish-to-channel-dialog.js": {
     "hardcodedHex": 2
   },
@@ -185,16 +156,6 @@
   },
   "app/modules/shopify-harness.js": {
     "hardcodedHex": 26
-  },
-  "app/modules/show-light.js": {
-    "hardcodedHex": 2
-  },
-  "app/modules/shows.js": {
-    "rogueOverlays": 7,
-    "hardcodedHex": 395
-  },
-  "app/modules/social.js": {
-    "hardcodedHex": 28
   },
   "app/modules/students.js": {
     "rogueOverlays": 1,
