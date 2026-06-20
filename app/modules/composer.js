@@ -314,7 +314,7 @@
       var channel = ch[i];
       try {
         if (channel === 'blog') {
-          await _ensureModule('blog');
+          await _ensureModule('blog-v2'); // V1 blog.js retired (T6); blog-v2 owns blogOpenFromContent
           if (typeof window.blogOpenFromContent === 'function') await window.blogOpenFromContent(c.id);
           done.push('blog');
         } else if (channel === 'social') {

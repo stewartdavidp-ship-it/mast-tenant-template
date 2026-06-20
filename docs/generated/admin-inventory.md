@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **47,831** lines
-- **Feature modules:** **139** files in `app/modules/` (**100** routed), **145,161** lines combined
+- **Core shell:** `app/index.html` — **47,830** lines
+- **Feature modules:** **138** files in `app/modules/` (**99** routed), **143,156** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -21,8 +21,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit-v2.js` | 414 | audit-v2, audit-muted-v2 |
 | `modules/audit.js` | 1,721 | audit |
 | `modules/auditlog-v2.js` | 243 | auditlog-v2 |
-| `modules/blog-v2.js` | 1,242 | blog-v2 |
-| `modules/blog.js` | 2,663 | blog |
+| `modules/blog-v2.js` | 1,900 | blog-v2, blog |
 | `modules/book.js` | 6,676 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/brand.js` | 668 | brand |
 | `modules/calendar-v2.js` | 108 | calendar-v2 |

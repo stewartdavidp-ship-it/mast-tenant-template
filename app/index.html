@@ -19589,7 +19589,7 @@ var MAST_V2_ROUTE_MAP = {
   // `events` is sales.js's alias route for the sales-events tab (the dashboard
   // "view-events" quick action targets it); map it to the same V2 twin as
   // `salesEvents` so V2 users land on sales-events-v2, not the V1 tab.
-  blog: 'blog-v2', salesEvents: 'sales-events-v2', events: 'sales-events-v2', inquiries: 'inquiries-v2', jobs: 'jobs-v2',
+  salesEvents: 'sales-events-v2', events: 'sales-events-v2', inquiries: 'inquiries-v2', jobs: 'jobs-v2',
   // suppressions → the audit queue's Muted-rules lens (audit-suppressions-v2
   // was retired into audit-v2 — one audit pipeline, admin-v2-build-plan.md Q1).
   // 'channels' is NOT remapped: channels.js (V1) is RETIRED (T6) and channels-v2
@@ -20881,7 +20881,6 @@ var MAST_MODULES_V = '20260618-202331-1353a6aa';
 // Routes listed here will be lazy-loaded when first navigated to.
 // Populated as modules are extracted in future sessions.
 var MODULE_MANIFEST = {
-  blog: { src: 'modules/blog.js', v: '7471223ca16f', routes: ['blog'] },
   trips: { src: 'modules/trips.js', v: '6cefe29d9994', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', v: '0675eb5aa646', routes: ['wholesale'] },
   finance: { src: 'modules/finance.js', v: '91f388f1e1f0', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
@@ -20940,7 +20939,7 @@ var MODULE_MANIFEST = {
   'stories-v2': { src: 'modules/stories-v2.js', v: '9fc8b7bf3fc6', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
   'jobs-v2': { src: 'modules/jobs-v2.js', v: '0fc65a643e5a', routes: ['jobs-v2'] }, // UI-redesign conversion: Jobs (production) B1 scaffold — list + read-only detail (flag-gated, side-by-side)
   'cs-members-v2': { src: 'modules/cs-members-v2.js', v: '0d444b855147', routes: ['cs-members-v2'] }, // UI-redesign conversion: CS members read detail (flag-gated)
-  'blog-v2': { src: 'modules/blog-v2.js', v: '9eb94b39b020', routes: ['blog-v2'] }, // UI-redesign conversion: blog posts read detail (flag-gated)
+  'blog-v2': { src: 'modules/blog-v2.js', v: '30f877867cd4', routes: ['blog-v2', 'blog'] }, // Blog authoring hub (posts list + read detail + native rich-body editor). blog.js (V1) RETIRED (T6): its BlogBridge + blogOpenFromContent + write-core/sanitizer closure were absorbed here, so the bare #blog route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'sales-events-v2': { src: 'modules/sales-events-v2.js', v: '058614e335dd', routes: ['sales-events-v2'] }, // UI-redesign conversion: sales events read detail (flag-gated)
   'consignments-v2': { src: 'modules/consignments-v2.js', v: 'ea535cfa9490', routes: ['consignments-v2'] }, // UI-redesign conversion: consignment placements read detail (flag-gated)
   'sessions-v2': { src: 'modules/sessions-v2.js', v: '401940e1fe7a', routes: ['sessions-v2'] }, // UI-redesign conversion: class sessions read detail (flag-gated)
@@ -20987,7 +20986,7 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   // W2 marketing-suite modules
   campaigns: { src: 'modules/campaigns.js', v: '9d866794259c', routes: ['campaigns'] },
   engagementInbox: { src: 'modules/engagement-inbox.js', v: 'a6665c778030', routes: ['engagement-inbox'] },
-  composer: { src: 'modules/composer.js', v: 'bd69d41344d9', routes: ['composer'] },
+  composer: { src: 'modules/composer.js', v: '0ce35c381082', routes: ['composer'] },
   // W2.3 — Commission terms editor (admin-side; storefront accept flow is
   // separate and lives on the public side).
   // J12 — Tenant feedback on Mast audit findings (suppression management page;

@@ -21,8 +21,8 @@
   "app/modules/audit.js": {
     "hardcodedHex": 7
   },
-  "app/modules/blog.js": {
-    "hardcodedHex": 24
+  "app/modules/blog-v2.js": {
+    "hardcodedHex": 1
   },
   "app/modules/book.js": {
     "nativeDialogs": 3,
