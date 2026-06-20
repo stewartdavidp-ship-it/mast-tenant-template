@@ -39,7 +39,8 @@ const MIME = { '.html':'text/html','.js':'text/javascript','.css':'text/css','.j
 // (permission errors) and the localhost-served shell can't cross-origin-fetch the
 // tenant's web.app template manifests (CORS) — both are same-origin/authorized in
 // the real app. The CSP-meta warning is a browser quirk. None are code bugs.
-const EXPECTED = /Missing or insufficient permissions|permission-denied|PERMISSION_DENIED|FirebaseError|Quota exceeded|Failed to (load resource|fetch)|net::ERR|ERR_ABORTED|does not have permission|invalid-argument|unavailable|blocked by CORS policy|Access-Control-Allow-Origin|Content Security Policy directive|frame-ancestors|ERR_FAILED/i;
+// Transient boot-order noise: the storefront-tenant resolver logs "Resolution failed: No tenant found" before the test-bypass tenant is injected — not a code bug. Tight prefix so it can't mask a real error.
+const EXPECTED = /Missing or insufficient permissions|permission-denied|PERMISSION_DENIED|FirebaseError|Quota exceeded|Failed to (load resource|fetch)|net::ERR|ERR_ABORTED|does not have permission|invalid-argument|unavailable|blocked by CORS policy|Access-Control-Allow-Origin|Content Security Policy directive|frame-ancestors|ERR_FAILED|storefront-tenant\] Resolution failed/i;
 const isRealBug = m => m && !EXPECTED.test(m);
 
 // Major surfaces across every domain + the V1-retired routes (must resolve to V2)

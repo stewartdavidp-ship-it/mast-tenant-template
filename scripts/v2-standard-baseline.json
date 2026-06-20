@@ -1,7 +1,4 @@
 {
-  "audit-suppressions-v2.js": {
-    "handRolledHeader": 1
-  },
   "calendar-v2.js": {
     "handRolledHeader": 1
   },
