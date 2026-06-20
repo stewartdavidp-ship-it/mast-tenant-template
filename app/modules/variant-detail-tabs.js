@@ -203,8 +203,8 @@ function renderVariantListRow(product, variant, recipe, idx, isSelected, totalCo
   var pricing = variantCostAndPrice(product, variant, recipe);
   var channels = variantChannelNames(product, variant);
 
-  var costTxt = pricing.cost != null ? '$' + pricing.cost.toFixed(2) : '—';
-  var retailTxt = pricing.retail != null ? '$' + pricing.retail.toFixed(2) : '—';
+  var costTxt = pricing.cost != null ? '$' + MastFormat.moneyRaw(pricing.cost) : '—';
+  var retailTxt = pricing.retail != null ? '$' + MastFormat.moneyRaw(pricing.retail) : '—';
   var channelsTxt = channels.length
     ? channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.18);color:var(--teal,#2a7c6f);padding:3px 10px;border-radius:10px;font-size:0.9rem;font-weight:500;margin-right:4px;">' + esc(n) + '</span>'; }).join('')
     : '<span class="pd-row-label" style="font-style:italic;">No channels</span>';
@@ -248,7 +248,7 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
   html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px;flex-wrap:wrap;">';
   html += '<div style="font-size:0.9rem;color:var(--text,#2a2a2a);">';
   if (costNum != null) {
-    html += '<span style="font-weight:600;">Cost</span> <span style="font-family:monospace;font-weight:600;">$' + costNum.toFixed(2) + '</span>';
+    html += '<span style="font-weight:600;">Cost</span> <span style="font-family:monospace;font-weight:600;">$' + MastFormat.moneyRaw(costNum) + '</span>';
     if (costSource) {
       html += ' <span style="opacity:0.7;font-size:0.85rem;">from recipe ' + esc(costSource) + '</span>';
       html += ' <button class="btn btn-secondary btn-small" style="margin-left:8px;font-size:0.78rem;padding:3px 10px;" onclick="window.makerOpenRecipeBuilder && window.makerOpenRecipeBuilder(\'' + esc(recipe.recipeId) + '\',\'' + esc(variant.id) + '\')">Open Recipe →</button>';
@@ -286,7 +286,7 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
     function _ccChip(label, value, sub) {
       return '<div style="flex:1;min-width:140px;padding:12px 14px;border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;background:rgba(255,255,255,0.02);">' +
         '<div class="pd-tier-label" style="color:var(--text,#2a2a2a);text-transform:uppercase;font-weight:600;margin-bottom:6px;">' + label + '</div>' +
-        '<div style="font-family:monospace;font-size:1.15rem;font-weight:600;color:var(--text,#2a2a2a);">$' + value.toFixed(2) + '</div>' +
+        '<div style="font-family:monospace;font-size:1.15rem;font-weight:600;color:var(--text,#2a2a2a);">$' + MastFormat.moneyRaw(value) + '</div>' +
         (sub ? '<div style="font-size:0.85rem;color:var(--text,#2a2a2a);opacity:0.75;margin-top:4px;">' + sub + '</div>' : '') +
       '</div>';
     }
@@ -294,11 +294,11 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
     html += _ccChip('Materials', materialsCost, lineCount + (lineCount === 1 ? ' BOM line' : ' BOM lines'));
     html += _ccChip('Labor', laborCost,
       laborMin > 0 && laborRate > 0
-        ? laborMin + ' min @ $' + laborRate.toFixed(2) + '/hr'
+        ? laborMin + ' min @ $' + MastFormat.moneyRaw(laborRate) + '/hr'
         : (laborMin > 0 ? laborMin + ' min · no rate set' : 'no labor logged'));
     var ovSub = [];
-    if (otherCost > 0) ovSub.push('other $' + otherCost.toFixed(2));
-    if (perUnitSetup > 0) ovSub.push('setup $' + perUnitSetup.toFixed(2));
+    if (otherCost > 0) ovSub.push('other $' + MastFormat.moneyRaw(otherCost));
+    if (perUnitSetup > 0) ovSub.push('setup $' + MastFormat.moneyRaw(perUnitSetup));
     html += _ccChip('Overhead', overhead, ovSub.length ? ovSub.join(' · ') : 'none');
     html += '</div>';
 
@@ -360,7 +360,7 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
     html += '<div style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);border-radius:8px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">';
     html += '<div style="font-size:0.9rem;color:var(--text,#2a2a2a);">' +
       '<strong>Cost ' + dirArrow + ' ' + Math.abs(pctDelta).toFixed(1) + '%</strong>' +
-      ' since prices were last set ($' + baseline.toFixed(2) + ' &rarr; $' + costNum.toFixed(2) + '). ' +
+      ' since prices were last set ($' + MastFormat.moneyRaw(baseline) + ' &rarr; $' + MastFormat.moneyRaw(costNum) + '). ' +
       'Re-derive prices from the new cost using the current markups, or accept the drift.' +
     '</div>';
     html += '<div style="display:flex;gap:6px;">';
@@ -371,7 +371,7 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
   }
 
   if (isEditingPricing) {
-    function _val(v) { return (v != null) ? v.toFixed(2) : ''; }
+    function _val(v) { return (v != null) ? MastFormat.moneyRaw(v) : ''; }
     function _mval(v) { return (v != null && v > 0) ? v.toFixed(2) : ''; }
     function _editTier(key, label, price, fallbackMarkup) {
       var markup = _markup(price);
@@ -419,7 +419,7 @@ function renderVariantPricingTab(product, variant, recipe, pricing) {
       var lc = isActive ? 'var(--teal,#2a7c6f)' : 'var(--text,#2a2a2a)';
       var vc = isActive ? 'var(--teal,#2a7c6f)' : 'var(--text,#2a2a2a)';
       var w = isActive ? '700' : '600';
-      var priceTxt = (price != null) ? '$' + price.toFixed(2) : '—';
+      var priceTxt = (price != null) ? '$' + MastFormat.moneyRaw(price) : '—';
       var markup = _markup(price);
       var margin = _margin(price);
       var markupTxt = (markup != null) ? markup.toFixed(2) + '× cost' : '—';
@@ -517,19 +517,19 @@ function renderVariantRecipeTab(product, variant, recipe) {
     '</div>';
   }
   html += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
-  html += _stat('Total Cost', totalCost != null ? '$' + totalCost.toFixed(2) : '—',
+  html += _stat('Total Cost', totalCost != null ? '$' + MastFormat.moneyRaw(totalCost) : '—',
     batchSize && batchSize > 1 ? 'per unit · batch of ' + batchSize : null);
   html += _stat('Materials', lineItemCount + (lineItemCount === 1 ? ' item' : ' items'),
     lineItemCount > 0 ? 'BOM lines on recipe' : 'No materials added');
   if (laborMins != null) {
     html += _stat('Labor', laborMins + ' min',
-      laborCost != null ? '$' + laborCost.toFixed(2) + (laborRate ? ' @ $' + laborRate.toFixed(2) + '/hr' : '') : null);
+      laborCost != null ? '$' + MastFormat.moneyRaw(laborCost) + (laborRate ? ' @ $' + MastFormat.moneyRaw(laborRate) + '/hr' : '') : null);
   }
   if (otherCost || setupCost) {
-    var extraVal = '$' + ((otherCost || 0) + (setupCost || 0)).toFixed(2);
+    var extraVal = '$' + MastFormat.moneyRaw((otherCost || 0) + (setupCost || 0));
     var extraSub = [];
-    if (otherCost) extraSub.push('other $' + otherCost.toFixed(2));
-    if (setupCost) extraSub.push('setup $' + setupCost.toFixed(2));
+    if (otherCost) extraSub.push('other $' + MastFormat.moneyRaw(otherCost));
+    if (setupCost) extraSub.push('setup $' + MastFormat.moneyRaw(setupCost));
     html += _stat('Other', extraVal, extraSub.join(' · '));
   }
   html += '</div>';
@@ -770,8 +770,8 @@ function renderVariantRow(product, variant, recipe, idx) {
   var isExpanded = false;
   try { isExpanded = sessionStorage.getItem(_expandedVariantKey(pid, variant.id)) === '1'; } catch (e) {}
 
-  var costTxt = pricing.cost != null ? '$' + pricing.cost.toFixed(2) : '—';
-  var retailTxt = pricing.retail != null ? '$' + pricing.retail.toFixed(2) : '—';
+  var costTxt = pricing.cost != null ? '$' + MastFormat.moneyRaw(pricing.cost) : '—';
+  var retailTxt = pricing.retail != null ? '$' + MastFormat.moneyRaw(pricing.retail) : '—';
   var channelsTxt = channels.length
     ? channels.map(function(n) { return '<span style="background:rgba(42,124,111,0.12);color:var(--teal,#2a7c6f);padding:3px 10px;border-radius:11px;font-size:0.72rem;font-weight:500;margin-right:4px;">' + esc(n) + '</span>'; }).join('')
     : '<span style="color:var(--warm-gray-light,#aaa);font-size:0.85rem;font-style:italic;">No channels</span>';
@@ -854,7 +854,7 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
   html += _label('Pricing', pricingAction);
 
   if (isEditingPricing) {
-    function _val(v) { return (v != null) ? v.toFixed(2) : ''; }
+    function _val(v) { return (v != null) ? MastFormat.moneyRaw(v) : ''; }
     html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:8px;font-family:monospace;">';
     html += '<label style="display:flex;flex-direction:column;gap:4px;">' +
       '<span style="font-size:0.72rem;color:var(--warm-gray);font-family:\'DM Sans\',sans-serif;">Wholesale ($)</span>' +
@@ -884,7 +884,7 @@ function renderVariantExpanded(product, variant, recipe, pricing, channels) {
     html += '</div>';
   } else {
     function tier(label, value, isActive) {
-      var v = (value != null) ? '$' + value.toFixed(2) : '—';
+      var v = (value != null) ? '$' + MastFormat.moneyRaw(value) : '—';
       var bg = isActive ? 'background:rgba(42,124,111,0.10);border:1px solid rgba(42,124,111,0.25);' : 'background:transparent;border:1px solid var(--cream-dark,#e8e0d4);';
       var labelColor = isActive ? 'var(--teal,#2a7c6f)' : 'var(--warm-gray,#888)';
       var valColor = isActive ? 'var(--teal,#2a7c6f)' : 'var(--text,#2a2a2a)';
