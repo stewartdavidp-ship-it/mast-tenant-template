@@ -195,7 +195,7 @@
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
   <script src="../shared/mast-ui.js?v=bf2d535c68da"></script>
   <script src="../shared/mast-io.js?v=84d9249da0cb"></script>
-  <script src="../shared/mast-entity.js?v=d0486317901a"></script>
+  <script src="../shared/mast-entity.js?v=0d1534ffb1d1"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
        Byte-identical to mast-tenant-mcp-server/src/shared/product-readiness.core.js so the
        AI publish gate and the maker.js UI gate cannot drift; maker.js delegates to
@@ -20902,10 +20902,10 @@ var MODULE_MANIFEST = {
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
   contacts: { src: 'modules/contacts.js', v: 'cf4b8c58276c', routes: ['contacts'] },
   customers: { src: 'modules/customers.js', v: 'ab65bad9ace0', routes: ['customers'] },
-  'customers-core': { src: 'modules/customers-core.js', v: '305cd957b1a2', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module customer write layer (CustomersBridge, wallet-adjust, merge, add-contact, open-detail) lifted out of customers.js so V2 consumers load this, not the 3.5K-line V1 UI. Non-routed lazy core.
+  'customers-core': { src: 'modules/customers-core.js', v: 'd806bab581e4', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module customer write layer (CustomersBridge, wallet-adjust, merge, add-contact, open-detail) lifted out of customers.js so V2 consumers load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'rma-admin': { src: 'modules/rma-admin.js', v: 'eb0662c15cd7', routes: ['rma'] }, // RMA/Returns lifecycle admin (admin/rma records via the transitionRma CF). orders.js (V1) RETIRED (T6 PR4b): the orders route went to orders-v2 (PR3), commissions to commissions-v2 (PR2), and this RMA lifecycle UI was relocated here VERBATIM and un-gated, so the bare #rma route resolves here directly for ALL users (no MAST_V2_ROUTE_MAP remap). rma-v2.js (#rma-v2) is a separate flag-gated returns lens over orders/{id} return_* statuses.
   'orders-v2': { src: 'modules/orders-v2.js', v: '6e4fcc19ce9d', routes: ['orders-v2', 'orders'] }, // Orders surface (UI-redesign). Owns the bare #orders route (T6 PR3 — absorbed OrdersBridge from orders.js).
-  'customers-v2': { src: 'modules/customers-v2.js', v: 'ccd9ef05de60', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
+  'customers-v2': { src: 'modules/customers-v2.js', v: '1f3e799ae261', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: 'a8e6475587d6', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
   'calendar-v2': { src: 'modules/calendar-v2.js', v: '37194dc1a8b0', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
   'promotions-v2': { src: 'modules/promotions-v2.js', v: '233ee7a804eb', routes: ['promotions-v2', 'promotions'] }, // promotions; owns the legacy 'promotions' route too (V1 promotions.js retired, T6)

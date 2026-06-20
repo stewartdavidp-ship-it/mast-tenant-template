@@ -266,6 +266,30 @@ t('recordTitle: create mode → "New Label"', () => {
   assert.strictEqual(E.recordTitle(TS, { id: 'x1' }, 'create', 'titled'), 'New Account');
 });
 
+// ── renderParty facet-tab derivation (pure): the optional party facets appear
+//    only when the schema supplies that facet's data fn. Overview + Orders always
+//    lead; Notes is always last. Mirrors the activity/classes/wallet opt-in
+//    pattern + the new certifications facet (cut-plan PR2). ──
+function tabKeys(d) { return E.partyTabs(d).map(function (t) { return t.key; }); }
+t('partyTabs: a sparse party record = Overview + Orders + Notes only', () => {
+  assert.deepStrictEqual(tabKeys({}), ['ov', 'orders', 'notes']);
+});
+t('partyTabs: each optional facet adds its tab only when its data fn is present', () => {
+  assert.deepStrictEqual(tabKeys({ activity: () => [] }), ['ov', 'orders', 'activity', 'notes']);
+  assert.deepStrictEqual(tabKeys({ classes: () => [] }), ['ov', 'orders', 'classes', 'notes']);
+  assert.deepStrictEqual(tabKeys({ wallet: () => ({}) }), ['ov', 'orders', 'wallet', 'notes']);
+});
+t('partyTabs: certifications facet adds a Certifications tab between Classes and Wallet', () => {
+  assert.deepStrictEqual(tabKeys({ certifications: () => ({}) }), ['ov', 'orders', 'certifications', 'notes']);
+  const all = E.partyTabs({ activity: () => [], classes: () => [], certifications: () => ({}), wallet: () => ({}) });
+  assert.deepStrictEqual(all.map(t => t.key), ['ov', 'orders', 'activity', 'classes', 'certifications', 'wallet', 'notes']);
+  assert.strictEqual(all.find(t => t.key === 'certifications').label, 'Certifications');
+});
+t('partyTabs: a non-function facet value does NOT add a tab (typeof guard) + null-safe', () => {
+  assert.deepStrictEqual(tabKeys({ certifications: true }), ['ov', 'orders', 'notes']);
+  assert.deepStrictEqual(tabKeys(null), ['ov', 'orders', 'notes']);
+});
+
 console.log('\n' + pass + ' passed');
 
 // header badge honors the status field's get() (channels-v2 "• true" bug)

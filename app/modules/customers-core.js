@@ -34,9 +34,11 @@
  * just makes a dormant call gracefully skip instead of throwing a ReferenceError
  * after a successful write. Nothing else changed from the originals.
  *
- * Certs (loadCustomerCerts + revoke) are NOT here — they are tightly coupled to
- * the V1 cert detail UI, have no cross-module consumer yet, and land with the
- * V2 certifications facet (cut-plan PR1b/PR2). Vanilla ES5-ish (var/IIFE).
+ * Certs (loadCerts + revokeCert) landed here in cut-plan PR2 alongside the V2
+ * certifications facet — they are the pure cert read + revoke write cores
+ * (rebuilt on the engine, not the V1 cert detail UI). GRANT is NOT here: it stays
+ * single-sourced in book.js (window._bookGrantCert), which the twin delegates to.
+ * Vanilla ES5-ish (var/IIFE).
  */
 (function () {
   'use strict';
@@ -456,6 +458,47 @@
     }
   }
 
+  // ── Certifications (cut-plan PR2; deferred from PR1) ──────────────────────
+  // The customer-cert read + revoke write, lifted out of V1 customers.js for the
+  // V2 certifications facet. Grant is NOT here — it is owned by book.js
+  // (window._bookGrantCert, the single source of grant logic the twin delegates
+  // to). RBAC is enforced at the V2 affordance + handler (CustomersV2.grantCert /
+  // revokeCert key on can('customers','edit')); these are the pure data cores.
+
+  // Read a customer's certifications + the cert-type registry. Returns the V1
+  // loadCustomerCerts shape: { certs:[…with .id=key], certTypes:{…} }. Read-only;
+  // called LAZILY from customers-v2.fetch (on record open), never the list load().
+  function loadCustomerCerts(customerId) {
+    return Promise.all([
+      MastDB.get('admin/customers/' + customerId + '/certifications'),
+      MastDB.get('admin/certTypes')
+    ]).then(function (results) {
+      var data = results[0] || {};
+      var types = results[1] || {};
+      var certs = Object.keys(data).map(function (k) {
+        var c = data[k] || {};
+        c.id = k;
+        return c;
+      });
+      return { certs: certs, certTypes: types };
+    });
+  }
+
+  // Revoke a certification — byte-faithful to V1's customersRevokeCertConfirm
+  // write (customers.js): a field-scoped MastDB.update that sets revokedAt/By/
+  // Reason/Note. The cert STAYS on the record as revoked (history preserved), it
+  // is never deleted. note is trimmed → null when empty (matches legacy).
+  function revokeCert(customerId, certId, opts) {
+    opts = opts || {};
+    var note = (opts.note || '').trim();
+    return MastDB.update('admin/customers/' + customerId + '/certifications/' + certId, {
+      revokedAt: new Date().toISOString(),
+      revokedBy: (window.MastAdmin && MastAdmin.currentUser && MastAdmin.currentUser.uid) || 'admin',
+      revokeReason: opts.reason || 'other',
+      revokeNote: note || null
+    });
+  }
+
   // ── V2 bridge (classic burn-down Wave E) — state-free cores shared with
   // customers-v2; the twin never re-implements a write. Merge stays
   // single-sourced on mergeCustomers (already consumed by duplicates-v2).
@@ -522,7 +565,11 @@
       return data;
     },
     merge: mergeCustomers,
-    isWholesale: isWholesaleCustomer
+    isWholesale: isWholesaleCustomer,
+    // Certifications (PR2): read the cert list + types (lazy on record open) and
+    // revoke a cert. Grant is delegated to book.js _bookGrantCert (single source).
+    loadCerts: loadCustomerCerts,
+    revokeCert: revokeCert
   };
   window.customersMerge = mergeCustomers;
   window.customersOpenWalletAdjust = openWalletAdjustModal;
