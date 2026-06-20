@@ -757,9 +757,9 @@ function renderProductionJobDetail(jobId) {
       (job.description ? '<p style="margin-top:8px;font-size:0.85rem;color:var(--warm-gray);">' + esc(job.description) + '</p>' : '') +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px;font-size:0.85rem;color:var(--warm-gray);">' +
         (job.workType ? '<span><strong style="color:var(--text-secondary);">Type:</strong> ' + esc(job.workType.charAt(0).toUpperCase() + job.workType.slice(1)) + '</span>' : '') +
-        (job.createdAt ? '<span><strong style="color:var(--text-secondary);">Created:</strong> ' + new Date(job.createdAt).toLocaleDateString() + '</span>' : '') +
-        (job.startedAt ? '<span><strong style="color:var(--text-secondary);">Started:</strong> ' + new Date(job.startedAt).toLocaleDateString() + '</span>' : '') +
-        (job.completedAt ? '<span><strong style="color:var(--text-secondary);">Completed:</strong> ' + new Date(job.completedAt).toLocaleDateString() + '</span>' : '') +
+        (job.createdAt ? '<span><strong style="color:var(--text-secondary);">Created:</strong> ' + MastFormat.date(job.createdAt) + '</span>' : '') +
+        (job.startedAt ? '<span><strong style="color:var(--text-secondary);">Started:</strong> ' + MastFormat.date(job.startedAt) + '</span>' : '') +
+        (job.completedAt ? '<span><strong style="color:var(--text-secondary);">Completed:</strong> ' + MastFormat.date(job.completedAt) + '</span>' : '') +
       '</div>' +
       (progress.total > 0 ? '<div class="prod-progress-bar" style="margin-top:12px;height:8px;"><div class="prod-progress-fill" style="width:' + progress.pct + '%;"></div></div>' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + progress.completed + ' / ' + progress.total + ' (' + Math.round(progress.pct) + '%)</div>' : '') +
@@ -1192,22 +1192,22 @@ function renderCostTracking(jobId, job) {
 
     rows += '<tr>' +
       '<td style="padding:6px 8px;font-size:0.85rem;">' + esc(li.productName || '') + '<div style="font-size:0.72rem;color:var(--warm-gray-light);">' + completed + '/' + target + ' done</div></td>' +
-      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;">$' + (budMatCents / 100).toFixed(2) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;">$' + MastFormat.moneyRaw(budMatCents, { cents: true }) + '</td>' +
       '<td style="text-align:right;padding:6px 8px;">' +
-        '<input type="number" step="0.01" min="0" value="' + (actMatCents / 100).toFixed(2) + '" ' + actMatOverride +
+        '<input type="number" step="0.01" min="0" value="' + MastFormat.moneyRaw(actMatCents, { cents: true }) + '" ' + actMatOverride +
         ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.85rem;background:var(--cream);color:var(--text-primary);"' +
         ' onchange="setLineItemActual(\'' + esc(jobId) + '\',\'' + esc(k) + '\',\'material\',this.value)"' +
         ' title="Actual material cost. Defaults to forecast × completed; type to override.">' +
       '</td>' +
-      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;">$' + (budLabCents / 100).toFixed(2) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;">$' + MastFormat.moneyRaw(budLabCents, { cents: true }) + '</td>' +
       '<td style="text-align:right;padding:6px 8px;">' +
-        '<input type="number" step="0.01" min="0" value="' + (actLabCents / 100).toFixed(2) + '" ' + actLabOverride +
+        '<input type="number" step="0.01" min="0" value="' + MastFormat.moneyRaw(actLabCents, { cents: true }) + '" ' + actLabOverride +
         ' style="width:80px;text-align:right;padding:3px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-family:monospace;font-size:0.85rem;background:var(--cream);color:var(--text-primary);"' +
         ' onchange="setLineItemActual(\'' + esc(jobId) + '\',\'' + esc(k) + '\',\'labor\',this.value)"' +
         ' title="Actual labor cost. Defaults to forecast × completed; type to override.">' +
       '</td>' +
-      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + ((budMatCents + budLabCents) / 100).toFixed(2) + '</td>' +
-      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + ((actMatCents + actLabCents) / 100).toFixed(2) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + MastFormat.moneyRaw(budMatCents + budLabCents, { cents: true }) + '</td>' +
+      '<td style="text-align:right;padding:6px 8px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + MastFormat.moneyRaw(actMatCents + actLabCents, { cents: true }) + '</td>' +
     '</tr>';
   });
 
@@ -1237,17 +1237,17 @@ function renderCostTracking(jobId, job) {
         '<tbody>' + rows + '</tbody>' +
         '<tfoot><tr style="border-top:2px solid var(--charcoal);font-weight:700;">' +
           '<td style="padding:8px;">Job Total</td>' +
-          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalBudgetMaterialCents / 100).toFixed(2) + '</td>' +
-          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalActualMaterialCents / 100).toFixed(2) + '</td>' +
-          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalBudgetLaborCents / 100).toFixed(2) + '</td>' +
-          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalActualLaborCents / 100).toFixed(2) + '</td>' +
-          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalBudget / 100).toFixed(2) + '</td>' +
-          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + (totalActual / 100).toFixed(2) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + MastFormat.moneyRaw(totalBudgetMaterialCents, { cents: true }) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + MastFormat.moneyRaw(totalActualMaterialCents, { cents: true }) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + MastFormat.moneyRaw(totalBudgetLaborCents, { cents: true }) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + MastFormat.moneyRaw(totalActualLaborCents, { cents: true }) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + MastFormat.moneyRaw(totalBudget, { cents: true }) + '</td>' +
+          '<td style="text-align:right;padding:8px;font-family:monospace;">$' + MastFormat.moneyRaw(totalActual, { cents: true }) + '</td>' +
         '</tr></tfoot>' +
       '</table>' +
     '</div>' +
     '<div style="margin-top:10px;text-align:right;font-size:0.85rem;color:' + varColor + ';font-weight:600;">' +
-      'Variance: ' + varSign + '$' + (variance / 100).toFixed(2) + ' (' + varSign + varPct.toFixed(1) + '%)' +
+      'Variance: ' + varSign + '$' + MastFormat.moneyRaw(variance, { cents: true }) + ' (' + varSign + varPct.toFixed(1) + '%)' +
     '</div>' +
   '</div>';
 }
@@ -1314,7 +1314,7 @@ async function doAddLineItem(jobId) {
     var bomForecast = res && res.bomForecast;
     closeModal();
     showToast(bomForecast
-      ? 'Line item added with BOM forecast ($' + (bomForecast.totalCostPerUnitCents / 100).toFixed(2) + '/unit)'
+      ? 'Line item added with BOM forecast ($' + MastFormat.moneyRaw(bomForecast.totalCostPerUnitCents, { cents: true }) + '/unit)'
       : 'Line item added');
   } catch (err) {
     showToast('Error adding line item: ' + err.message, true);
