@@ -141,4 +141,35 @@ t('coerceDate: epoch-ms number → Date (not null)', () =>
 t('date: epoch-ms number → formatted (no regression vs Num)', () =>
   assert.strictEqual(F.date(MIDDAY_2026_06_07 * 1000), 'Jun 7, 2026'));
 
+// ── dateShort / dateLong — no-year + long-month variants SHARE date()'s local-
+// midnight calendar handling, so a bare 'YYYY-MM-DD' does NOT render a day early in
+// behind-UTC zones (TZ is pinned to America/New_York above — exactly where the
+// off-by-one bites). The naive `new Date('2026-06-30')`/`+ 'T00:00:00Z'` these
+// replace would yield "Jun 6" / "June 29, 2026" here.
+t('dateShort: bare calendar "2026-06-07" → "Jun 7" (no year, no off-by-one)', () =>
+  assert.strictEqual(F.dateShort('2026-06-07'), 'Jun 7'));
+t('dateShort: midnight-UTC calendar string → same calendar day', () =>
+  assert.strictEqual(F.dateShort('2026-06-07T00:00:00.000Z'), 'Jun 7'));
+t('dateShort: a real Date → "May 1" (no year)', () =>
+  assert.strictEqual(F.dateShort(new Date(2026, 4, 1, 13, 0, 0)), 'May 1'));
+t('dateShort: {seconds} Timestamp → coerced → "Jun 7"', () =>
+  assert.strictEqual(F.dateShort({ seconds: MIDDAY_2026_06_07, nanoseconds: 0 }), 'Jun 7'));
+t('dateShort: null/empty/garbage → "" (caller renders an em-dash)', () => {
+  assert.strictEqual(F.dateShort(null), '');
+  assert.strictEqual(F.dateShort(''), '');
+  assert.strictEqual(F.dateShort('xyz'), '');
+});
+t('dateLong: bare calendar "2026-06-30" → "June 30, 2026" (long month, no off-by-one)', () =>
+  assert.strictEqual(F.dateLong('2026-06-30'), 'June 30, 2026'));
+t('dateLong: midnight-UTC calendar string → same calendar day', () =>
+  assert.strictEqual(F.dateLong('2026-06-30T00:00:00.000Z'), 'June 30, 2026'));
+t('dateLong: a real Date → "May 1, 2026"', () =>
+  assert.strictEqual(F.dateLong(new Date(2026, 4, 1, 13, 0, 0)), 'May 1, 2026'));
+t('dateLong: {seconds} Timestamp → coerced → "June 7, 2026"', () =>
+  assert.strictEqual(F.dateLong({ seconds: MIDDAY_2026_06_07, nanoseconds: 0 }), 'June 7, 2026'));
+t('dateLong: null/garbage → "" (AR reminder then falls back to "as soon as possible")', () => {
+  assert.strictEqual(F.dateLong(null), '');
+  assert.strictEqual(F.dateLong('xyz'), '');
+});
+
 console.log(`\n${pass} mast-format assertions passed.`);

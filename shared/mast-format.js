@@ -11,10 +11,15 @@
  * This module is a small, pure, dependency-free home for those formatters so any
  * module (UI or not) can depend on them without pulling in the UI engine. The
  * money/date logic is COPIED VERBATIM from `MastUI.Num` (the characterization
- * goldens in test/format-goldens.test.js pin that behavior), with ONE intended
- * addition: `coerceDate(tsOrStr)` — the Firestore-Timestamp defuser that closes
- * the goldens-pinned gap where `date(<Timestamp object>)` returned '' today.
- * `date()` / `dateRaw()` route through `coerceDate`, so a Timestamp now renders.
+ * goldens in test/format-goldens.test.js pin that behavior), with these intended
+ * additions:
+ *   - `coerceDate(tsOrStr)` — the Firestore-Timestamp defuser that closes the
+ *     goldens-pinned gap where `date(<Timestamp object>)` returned '' today.
+ *     `date()` / `dateRaw()` route through `coerceDate`, so a Timestamp now renders.
+ *   - `dateShort()` / `dateLong()` — no-year ("Jun 1") and long-month-with-year
+ *     ("June 30, 2026") variants that SHARE date()'s calendar-date local-midnight
+ *     handling, so modules can drop their own off-by-one `toLocaleDateString` calls
+ *     (the same UTC-midnight-renders-a-day-early bug, in date-only labels + emails).
  *
  * Adoption (repointing modules off `MastUI.Num` onto `MastFormat`) is a separate
  * later step — this module just lands the standalone core + tests.
@@ -109,14 +114,14 @@
     return null;
   }
 
-  // date display: ISO/Date/Timestamp -> "May 1, 2026". Routes through coerceDate
-  // so a Firestore Timestamp (raw {seconds,nanoseconds} or .toDate()) renders
-  // correctly instead of '' (the Track 5 gap-closure). Keeps the calendar-date
-  // local-midnight handling so a bare 'YYYY-MM-DD' (or midnight-UTC) date renders
-  // the same day in behind-UTC timezones (no off-by-one).
-  function date(d) {
+  // ── _toLocalDate — calendar-aware coercion to a JS Date (SHARED by all the date
+  // formatters below, so they apply the off-by-one fix identically). Routes through
+  // coerceDate so a Firestore Timestamp (raw {seconds,nanoseconds} or .toDate())
+  // resolves instead of failing. Returns null for anything unparseable (callers
+  // render '' / an em-dash, never the Unix epoch or "Invalid Date").
+  function _toLocalDate(d) {
     var c = coerceDate(d);
-    if (c == null) return '';
+    if (c == null) return null;
     var dt, m;
     if (c instanceof Date) {
       dt = c;
@@ -129,8 +134,28 @@
     } else {
       dt = new Date(c);
     }
-    if (isNaN(dt.getTime())) return '';
-    return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // date display: ISO/Date/Timestamp -> "May 1, 2026" (short month, WITH year).
+  function date(d) {
+    var dt = _toLocalDate(d);
+    return dt == null ? '' : dt.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  }
+
+  // dateShort: ISO/Date/Timestamp -> "Jun 1" (short month, NO year). Same calendar-
+  // date local-midnight handling as date(); for compact range labels ("Jun 1 – Jun 30").
+  function dateShort(d) {
+    var dt = _toLocalDate(d);
+    return dt == null ? '' : dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  // dateLong: ISO/Date/Timestamp -> "June 30, 2026" (LONG month, WITH year). Same
+  // calendar-date local-midnight handling as date(); for prose like reminder emails,
+  // where rendering a day early is customer-visible.
+  function dateLong(d) {
+    var dt = _toLocalDate(d);
+    return dt == null ? '' : dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   }
 
   // dateRaw: ISO/Date/Timestamp -> "2026-05-01" (canonical for files/export).
@@ -148,6 +173,8 @@
     moneyVal: moneyVal,
     lineTotalVal: lineTotalVal,
     date: date,
+    dateShort: dateShort,
+    dateLong: dateLong,
     dateRaw: dateRaw,
     coerceDate: coerceDate
   };

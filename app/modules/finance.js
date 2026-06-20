@@ -322,7 +322,9 @@ function toDate(iso) {
 
 function toDateShort(iso) {
   if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); } catch(x) { return iso; }
+  // MastFormat.dateShort builds LOCAL midnight for a bare 'YYYY-MM-DD', so date-only
+  // period bounds don't render a day early in behind-UTC timezones (the off-by-one).
+  return MastFormat.dateShort(iso) || '—';
 }
 
 function todayStr() { return new Date().toISOString().split('T')[0]; }
@@ -3735,7 +3737,11 @@ async function _arQueueReminderCore(orderId, row) {
     var idempotencyKey = await _finSha1Hex(idemSeed);
 
     var amountDueStr = fmt$(row.amtDue);
-    var dueDateStr = row.dueDate ? new Date(row.dueDate + 'T00:00:00Z').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'as soon as possible';
+    // MastFormat.dateLong builds LOCAL midnight for a bare 'YYYY-MM-DD' due date, so
+    // the date the CUSTOMER sees in the reminder ("was due on June 30, 2026") is the
+    // real due date — not a day early, as `+ 'T00:00:00Z'` (UTC midnight) rendered in
+    // behind-UTC timezones. Empty/unparseable falls back to "as soon as possible".
+    var dueDateStr = MastFormat.dateLong(row.dueDate) || 'as soon as possible';
     var invoiceLabel = row.invoiceNumber ? ('Invoice #' + row.invoiceNumber) : ('Order ' + orderId.slice(-8));
     var ageStr = row.daysOverdue > 0 ? (' (' + row.daysOverdue + ' day' + (row.daysOverdue === 1 ? '' : 's') + ' overdue)') : '';
 
