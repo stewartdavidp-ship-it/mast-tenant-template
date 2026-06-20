@@ -312,9 +312,12 @@ function pct(num, denom) {
   return (num / denom * 100).toFixed(1) + '%';
 }
 
+// Calendar-date display (date-only invoice/sync dates). Routes through
+// MastFormat.date so a bare 'YYYY-MM-DD' renders as LOCAL midnight (no behind-UTC
+// off-by-one) and a Firestore Timestamp renders instead of "Invalid Date".
 function toDate(iso) {
   if (!iso) return '—';
-  try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); } catch(x) { return iso; }
+  return MastFormat.date(iso);
 }
 
 function toDateShort(iso) {
@@ -3477,7 +3480,7 @@ function renderArContent() {
     h += '<td style="padding:10px;font-size:0.78rem;color:var(--warm-gray,#888);">' + e(r.invoiceNumber || '—') + '</td>';
     h += '<td style="padding:10px;font-size:0.78rem;"><a href="#" style="color:var(--teal,#2a9d8f);" onclick="event.preventDefault();navigateTo(\'orders\')">' + e(r.orderId.slice(-8)) + '</a></td>';
     h += '<td style="padding:10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
-    h += '<td style="padding:10px;font-size:0.78rem;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
+    h += '<td style="padding:10px;font-size:0.78rem;">' + e(r.dueDate ? MastFormat.date(r.dueDate) : '—') + '</td>';
     h += '<td style="padding:10px;">' + agingBadge(r.daysOverdue) + '</td>';
     // W2b.3 — inline [Conflict] chip when this invoice has an unresolved QBO
     // conflict. Clicking opens the resolution modal directly. Chip is hidden
@@ -4052,7 +4055,7 @@ function renderApFlat(filtered) {
     h += '<td style="padding:10px;">' + fmt$(r.totalCents) + '</td>';
     h += '<td style="padding:10px;color:#22c55e;">' + fmt$(r.paidCents) + '</td>';
     h += '<td style="padding:10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
-    h += '<td style="padding:10px;font-size:0.78rem;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
+    h += '<td style="padding:10px;font-size:0.78rem;">' + e(r.dueDate ? MastFormat.date(r.dueDate) : '—') + '</td>';
     h += '<td style="padding:10px;">' + agingBadge(r.daysOverdue) + '</td>';
     // W2b.3 — inline [Conflict] chip when this bill has an unresolved QBO
     // conflict (entityType='bill'). receiptId is the mast-side id.
@@ -4099,7 +4102,7 @@ function renderApGrouped(filtered) {
     var g = groups[k];
     var isExpanded = !!_apExpandedVendors[k];
     var worstColor = bucketColor(g.worstBucket);
-    var dueDateStr = g.oldestDueDate ? new Date(g.oldestDueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—';
+    var dueDateStr = g.oldestDueDate ? MastFormat.date(g.oldestDueDate) : '—';
 
     h += '<div style="border:1px solid rgba(255,255,255,0.1);border-radius:8px;overflow:hidden;">';
 
@@ -4134,7 +4137,7 @@ function renderApGrouped(filtered) {
         h += '<td style="padding:8px 10px;">' + fmt$(r.totalCents) + '</td>';
         h += '<td style="padding:8px 10px;color:#22c55e;">' + fmt$(r.paidCents) + '</td>';
         h += '<td style="padding:8px 10px;font-weight:700;color:' + bucketColor(r.bucket) + ';">' + fmt$(r.amtDue) + '</td>';
-        h += '<td style="padding:8px 10px;">' + e(r.dueDate ? new Date(r.dueDate).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '—') + '</td>';
+        h += '<td style="padding:8px 10px;">' + e(r.dueDate ? MastFormat.date(r.dueDate) : '—') + '</td>';
         h += '<td style="padding:8px 10px;">' + agingBadge(r.daysOverdue) + '</td>';
         h += '<td style="padding:8px 10px;"><span style="background:' + (r.paymentStatus === 'partial' ? 'rgba(234,179,8,0.15)' : 'rgba(239,68,68,0.12)') + ';color:' + (r.paymentStatus === 'partial' ? '#eab308' : '#ef4444') + ';padding:2px 6px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(r.paymentStatus) + '</span></td>';
         h += '<td style="padding:8px 10px;white-space:nowrap;display:flex;gap:4px;">';
