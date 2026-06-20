@@ -50,7 +50,27 @@
         options: ['active', 'lapsed', 'lead', 'vip'],
         tone: function (v) { return STATUS_TONE[String(v || '').toLowerCase()] || 'neutral'; } },
       { name: 'phone', label: 'Phone', type: 'text', group: 'Contact' },
-      { name: 'createdAt', label: 'Created', type: 'date', group: 'Identity', readOnly: true }
+      { name: 'createdAt', label: 'Created', type: 'date', group: 'Identity', readOnly: true },
+      // ── Advanced sorts (Gap 3) — stat-derived, NON-list (list:false) sort
+      // dimensions. They are real schema fields so the sort control + the engine's
+      // mastSortRows resolve them via field.get (no bespoke comparators); list:false
+      // keeps them out of the table columns. They DO surface in CSV export
+      // (exportColumns includes every field) — a useful add. All three sort DESC =
+      // V1 SORT_OPTIONS direction. Missing-value handling matches V1's tie-break,
+      // verified row-for-row against live sgtest15 data:
+      //   lastOrder  recent→old — raw ISO (undefined→absent rows sink last, like
+      //              V1's (sb.lastOrderAt||'').localeCompare(sa…) where '' sorts last).
+      //   lapseScore most-overdue→on-rhythm — raw number; absent rows sink last,
+      //              which equals V1's missing→-1 sentinel because real scores are ≥0.
+      //   grossMargin high→low — absent COALESCED to 0 (mirrors V1's
+      //              (…||0)-(…||0)); the 0 sentinel is load-bearing here because real
+      //              gross margin can be 0 or negative, so null-sink would diverge.
+      { name: 'lastOrderAt', label: 'Last order', type: 'date', list: false, group: 'Activity',
+        get: function (c) { return stat(c, 'lastOrderAt'); } },
+      { name: 'lapseScore', label: 'Lapse score', type: 'number', list: false, group: 'Activity',
+        get: function (c) { var v = stat(c, 'lapseScore'); return (typeof v === 'number') ? v : undefined; } },
+      { name: 'grossMargin12m', label: 'Gross margin 12m', type: 'money', list: false, group: 'Activity',
+        get: function (c) { var v = stat(c, 'trailing12mGrossMarginCents'); return window.MastUI.Num.moneyVal({ cents: (typeof v === 'number') ? v : 0 }, 'cents', null); } }
     ],
     // Drill target + restorer source; fetch loads the customer + linked-contact
     // location + recent orders so the Party detail has real data.
@@ -304,7 +324,37 @@
     });
   }
 
-  var V2 = { rows: [], byId: {}, sortKey: 'displayName', sortDir: 'asc', off: null, q: '', segments: [], segmentId: null };
+  // Sort vocabulary (Gap 3) — mirrors V1 customers.js SORT_OPTIONS. Each entry
+  // carries the schema field key + the V1 direction, so picking one sets BOTH
+  // V2.sortKey and V2.sortDir (the engine sorts via field.get). updatedAt has no
+  // schema field → the resolver falls back to r.updatedAt (string ISO); createdAt
+  // is a field with no get → resolver returns r.createdAt. Both sort desc = newest.
+  var SORT_OPTIONS = [
+    { key: 'updatedAt', dir: 'desc', label: 'Recently updated' },
+    { key: 'createdAt', dir: 'desc', label: 'Newest' },
+    { key: 'displayName', dir: 'asc', label: 'Name (A–Z)' },
+    { key: 'primaryEmail', dir: 'asc', label: 'Email (A–Z)' },
+    { key: 'totalSpend', dir: 'desc', label: 'Lifetime spend (high → low)' },
+    { key: 'orderCount', dir: 'desc', label: 'Orders (most → least)' },
+    { key: 'lastOrderAt', dir: 'desc', label: 'Last order (recent → old)' },
+    { key: 'lapseScore', dir: 'desc', label: 'Lapse score (most overdue → on rhythm)' },
+    { key: 'grossMargin12m', dir: 'desc', label: 'Gross margin 12m (high → low)' }
+  ];
+  // Filter-bar source vocabulary — same set + labels as V1 SOURCE_OPTIONS.
+  var SOURCE_OPTIONS = [
+    { v: 'all', l: 'All sources' }, { v: 'order', l: 'Order' }, { v: 'enrollment', l: 'Enrollment' },
+    { v: 'contact', l: 'Contact' }, { v: 'newsletter', l: 'Newsletter' }, { v: 'account', l: 'Account' },
+    { v: 'manual', l: 'Manual' }, { v: 'import', l: 'Import' }
+  ];
+  var WHOLESALE_OPTIONS = [
+    { v: 'all', l: 'All customers' }, { v: 'retail', l: 'Retail only' }, { v: 'wholesale', l: 'Wholesale only' }
+  ];
+  function defaultFilters() {
+    return { source: 'all', wholesale: 'all', tag: '', lastOrderBefore: '', minSpend: '', newsletterOnly: false, leadsOnly: false };
+  }
+
+  var V2 = { rows: [], byId: {}, sortKey: 'displayName', sortDir: 'asc', off: null, q: '', segments: [], segmentId: null,
+    filters: defaultFilters(), segmentExtras: null, wsResolver: null };
 
   // Bridge gate + post-write SO refresh (mirror contacts-v2 Wave A).
   function withBridge(fn) {
@@ -346,29 +396,103 @@
     withBridge(function (b) {
       Promise.resolve(b.listSegments()).then(function (segs) { V2.segments = segs || []; render(); }).catch(function () {});
     });
+    // Wholesale resolver — built from admin/wholesaleAuthorized the SAME way the CS
+    // bulk-survey-send builds it (customer-service.js), so a `wholesale`/`retail`
+    // segment resolves identical membership in the V2 list and the CS send. Seed a
+    // fail-safe empty resolver first so a wholesale filter never over-includes
+    // before the map loads (matcher fails safe to exclude without a resolver).
+    if (window.MastCustomerFilters && MastCustomerFilters.makeWholesaleResolver) {
+      if (!V2.wsResolver) V2.wsResolver = MastCustomerFilters.makeWholesaleResolver({});
+      if (window.MastDB && MastDB.get) {
+        Promise.resolve(MastDB.get('admin/wholesaleAuthorized')).then(function (ws) {
+          V2.wsResolver = MastCustomerFilters.makeWholesaleResolver(ws || {});
+          render();
+        }).catch(function () {});
+      }
+    }
+  }
+
+  // Author the filter-bar state as the SHARED persisted filter shape
+  // (shared/customer-filters.js / V1 readFilterSnapshot): defaults omitted, spend
+  // as `minSpendCents`, search trimmed+lowercased (the matcher compares f.search
+  // case-sensitively against lowercased fields). The SAME object drives the live
+  // list filter AND the saved segment — so a segment's membership is identical to
+  // what the bar previews and to what the CS bulk-send resolves (cross-surface
+  // integrity, the D4-005 bug class).
+  function snapshotFilters() {
+    var fl = V2.filters || defaultFilters();
+    var snap = {};
+    if (fl.source && fl.source !== 'all') snap.source = fl.source;
+    if (fl.wholesale && fl.wholesale !== 'all') snap.wholesale = fl.wholesale;
+    if (fl.tag) snap.tag = fl.tag;
+    if (fl.lastOrderBefore) snap.lastOrderBefore = fl.lastOrderBefore;
+    if (fl.minSpend !== '' && fl.minSpend != null) {
+      var n = Math.round(parseFloat(fl.minSpend) * 100);
+      if (!isNaN(n)) snap.minSpendCents = n;
+    }
+    var q = (V2.q || '').trim().toLowerCase();
+    if (q) snap.search = q;
+    if (fl.newsletterOnly) snap.newsletterOnly = true;
+    if (fl.leadsOnly) snap.leadsOnly = true;
+    return snap;
+  }
+  // Load a persisted segment snapshot back INTO the bar controls (round-trip), so
+  // applying a segment shows its filters AND re-saving reproduces it. Any keys the
+  // bar can't author (built-in flags like _newThisWeek) are stashed in
+  // segmentExtras and carried back through the matcher unchanged.
+  function restoreFilters(snap) {
+    snap = snap || {};
+    V2.filters = {
+      source: snap.source || 'all',
+      wholesale: snap.wholesale || 'all',
+      tag: snap.tag || '',
+      lastOrderBefore: snap.lastOrderBefore || '',
+      minSpend: (typeof snap.minSpendCents === 'number') ? window.MastUI.Num.moneyRaw(snap.minSpendCents, { cents: true }) : '',
+      newsletterOnly: !!snap.newsletterOnly,
+      leadsOnly: !!snap.leadsOnly
+    };
+    V2.q = snap.search || '';
+    var known = { source: 1, wholesale: 1, tag: 1, lastOrderBefore: 1, minSpendCents: 1, search: 1, newsletterOnly: 1, leadsOnly: 1 };
+    var extras = {};
+    Object.keys(snap).forEach(function (k) { if (!known[k]) extras[k] = snap[k]; });
+    V2.segmentExtras = Object.keys(extras).length ? extras : null;
+  }
+  // Distinct tags across the loaded customers (V1 allKnownTags) for the tag select.
+  function knownTags() {
+    var seen = {};
+    V2.rows.forEach(function (c) { (c && c.tags || []).forEach(function (t) { if (t) seen[t] = 1; }); });
+    return Object.keys(seen).sort();
+  }
+  // The wholesale resolver for the matcher — ALWAYS a function (the matcher fails
+  // safe and EXCLUDES when a wholesale filter is set but no resolver is supplied).
+  // Built in load() from admin/wholesaleAuthorized exactly as the CS bulk-send does
+  // (NOT CustomersBridge.isWholesale, whose backing map is unpopulated in V2 mode →
+  // always false → would silently disagree with CS on every wholesale segment).
+  function wsResolver() {
+    if (V2.wsResolver) return V2.wsResolver;
+    return (window.MastCustomerFilters && MastCustomerFilters.makeWholesaleResolver)
+      ? MastCustomerFilters.makeWholesaleResolver({})
+      : function () { return false; };
   }
 
   function visibleRows() {
     var rows = V2.rows;
-    // Active saved segment — the SHARED matcher (customer-filters.js), the
-    // same one legacy list/export and the CS survey bulk-send use.
-    if (V2.segmentId && window.MastCustomerFilters) {
-      var seg = V2.segments.filter(function (g) { return g.id === V2.segmentId; })[0];
-      if (seg && seg.filters) {
-        var isWs = (window.CustomersBridge && CustomersBridge.isWholesale) || function () { return false; };
-        rows = rows.filter(function (r) { return MastCustomerFilters.matches(r, seg.filters, { isWholesale: isWs }); });
-      }
-    }
-    if (V2.q) {
-      var q = V2.q.toLowerCase();
-      rows = rows.filter(function (r) {
-        return String(r.displayName || '').toLowerCase().indexOf(q) >= 0 ||
-               String(r.primaryEmail || '').toLowerCase().indexOf(q) >= 0;
-      });
+    // Author the bar as the shared filter object (search folded in). The matcher
+    // (shared/customer-filters.js) is the SAME predicate legacy list/export and the
+    // CS survey bulk-send use, so the live list, a saved segment, and a survey all
+    // resolve identical membership.
+    var f = snapshotFilters();
+    if (V2.segmentExtras) Object.keys(V2.segmentExtras).forEach(function (k) { if (!(k in f)) f[k] = V2.segmentExtras[k]; });
+    // Run the matcher whenever any filter/search is set OR a segment is applied
+    // (an applied segment always filters — and the matcher drops merged records,
+    // matching V1). With nothing active, show all rows (preserves current behavior).
+    if ((V2.segmentId || Object.keys(f).length) && window.MastCustomerFilters) {
+      var isWs = wsResolver();
+      rows = rows.filter(function (r) { return MastCustomerFilters.matches(r, f, { isWholesale: isWs }); });
     }
     return window.mastSortRows(rows, V2.sortKey, V2.sortDir, function (r, k) {
-      var f = MastEntity.get('customers-v2').fields.filter(function (x) { return x.name === k; })[0];
-      return (f && f.get) ? f.get(r) : r[k];
+      var fld = MastEntity.get('customers-v2').fields.filter(function (x) { return x.name === k; })[0];
+      return (fld && fld.get) ? fld.get(r) : r[k];
     });
   }
 
@@ -380,12 +504,57 @@
     return el;
   }
 
+  // Interactive filter bar (Gap 2) — compact controls that AUTHOR the shared
+  // filter object (snapshotFilters → MastCustomerFilters.matches). Selects/checks
+  // use onchange (no per-keystroke re-render); editing any control diverges from an
+  // applied segment, so it clears the segment selection (the bar is the single
+  // live filter state, V1-style). The prominent search box above stays the
+  // `search` term.
+  function filterBar() {
+    var esc = window.MastUI._esc, fl = V2.filters || defaultFilters();
+    function opts(list, cur) {
+      return list.map(function (o) {
+        var v = (o.v != null) ? o.v : o, l = (o.l != null) ? o.l : o;
+        return '<option value="' + esc(v) + '"' + (String(cur) === String(v) ? ' selected' : '') + '>' + esc(l) + '</option>';
+      }).join('');
+    }
+    var inputCss = 'font-size:0.85rem;padding:7px 10px;';
+    var sortMatch = SORT_OPTIONS.filter(function (o) { return o.key === V2.sortKey && o.dir === V2.sortDir; })[0];
+    var sortSel = '<select class="form-input" title="Sort" style="' + inputCss + 'max-width:230px;" onchange="CustomersV2.setSort(this.value)">' +
+      '<option value=""' + (sortMatch ? '' : ' selected') + ' disabled>Sort by…</option>' +
+      SORT_OPTIONS.map(function (o) {
+        return '<option value="' + esc(o.key) + '"' + (sortMatch && sortMatch.key === o.key ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+      }).join('') + '</select>';
+    var tagOpts = '<option value="">All tags</option>' + knownTags().map(function (t) {
+      return '<option value="' + esc(t) + '"' + (fl.tag === t ? ' selected' : '') + '>' + esc(t) + '</option>';
+    }).join('');
+    var hasFilters = JSON.stringify(snapshotFilters()) !== '{}';
+    return '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">' +
+      sortSel +
+      '<select class="form-input" title="Source" style="' + inputCss + '" onchange="CustomersV2.setFilter(\'source\',this.value)">' + opts(SOURCE_OPTIONS, fl.source) + '</select>' +
+      '<select class="form-input" title="Wholesale" style="' + inputCss + '" onchange="CustomersV2.setFilter(\'wholesale\',this.value)">' + opts(WHOLESALE_OPTIONS, fl.wholesale) + '</select>' +
+      '<select class="form-input" title="Tag" style="' + inputCss + '" onchange="CustomersV2.setFilter(\'tag\',this.value)">' + tagOpts + '</select>' +
+      '<input type="date" class="form-input" title="Last order before…" value="' + esc(fl.lastOrderBefore) + '" style="' + inputCss + '" onchange="CustomersV2.setFilter(\'lastOrderBefore\',this.value)">' +
+      '<input type="number" min="0" step="1" class="form-input" placeholder="Min spend $" value="' + esc(fl.minSpend) + '" style="' + inputCss + 'width:120px;" onchange="CustomersV2.setFilter(\'minSpend\',this.value)">' +
+      '<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--warm-gray);cursor:pointer;">' +
+        '<input type="checkbox"' + (fl.newsletterOnly ? ' checked' : '') + ' onchange="CustomersV2.setFilterBool(\'newsletterOnly\',this.checked)"> Newsletter</label>' +
+      '<label style="display:inline-flex;align-items:center;gap:5px;font-size:0.78rem;color:var(--warm-gray);cursor:pointer;">' +
+        '<input type="checkbox"' + (fl.leadsOnly ? ' checked' : '') + ' onchange="CustomersV2.setFilterBool(\'leadsOnly\',this.checked)"> Leads</label>' +
+      (hasFilters ? '<button class="btn btn-secondary btn-small" onclick="CustomersV2.clearFilters()">Clear filters</button>' : '') +
+    '</div>';
+  }
+
   function render() {
     var tab = ensureTab();
+    var vis = visibleRows();
+    var total = V2.rows.length;
+    var countLabel = (vis.length === total)
+      ? (window.MastUI.Num.count(total) + ' total')
+      : (window.MastUI.Num.count(vis.length) + ' of ' + window.MastUI.Num.count(total));
     tab.innerHTML =
       '<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:6px;flex-wrap:wrap;">' +
         '<h1 style="font-size:1.6rem;margin:0;">Customers</h1>' +
-        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + window.MastUI.Num.count(V2.rows.length) + ' total</span>' +
+        '<span style="color:var(--warm-gray);font-size:0.9rem;">' + countLabel + '</span>' +
         '<span style="margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
           '<select class="form-input" style="font-size:0.85rem;max-width:200px;" onchange="CustomersV2.applySegment(this.value)">' +
             '<option value="">All customers</option>' +
@@ -401,33 +570,75 @@
           '<button class="btn btn-secondary" onclick="CustomersV2.exportCsv()">↓ Export</button>' +
         '</span>' +
       '</div>' +
-      '<div style="margin:14px 0;"><input class="form-input" placeholder="Search name or email…" value="' +
+      '<div style="margin:14px 0 10px;"><input class="form-input" placeholder="Search name or email…" value="' +
         (window.MastUI._esc(V2.q)) + '" oninput="CustomersV2.search(this.value)" style="max-width:340px;font-size:0.9rem;"></div>' +
+      filterBar() +
       window.MastEntity.renderList('customers-v2', {
-        rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
+        rows: vis, sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'CustomersV2.sort', onRowClickFnName: 'CustomersV2.open',
-        empty: { title: 'No customers match', message: 'Try a different search.' }
+        empty: { title: 'No customers match', message: 'Try a different search or clear the filters.' }
       });
   }
 
   window.CustomersV2 = {
+    // Column-header sort (toggles asc/desc). Sorting never changes membership, so
+    // it does NOT clear an applied segment.
     sort: function (key) {
       if (V2.sortKey === key) V2.sortDir = (V2.sortDir === 'asc' ? 'desc' : 'asc');
       else { V2.sortKey = key; V2.sortDir = 'asc'; }
       render();
     },
-    search: function (v) { V2.q = v || ''; render(); },
+    // Sort-control (Gap 3) — sets BOTH key + the V1 direction from SORT_OPTIONS.
+    setSort: function (key) {
+      var opt = SORT_OPTIONS.filter(function (o) { return o.key === key; })[0];
+      if (!opt) return;
+      V2.sortKey = opt.key; V2.sortDir = opt.dir;
+      render();
+    },
+    // Search is part of the shared filter vocabulary (matcher's f.search), so
+    // editing it diverges from any applied segment → clear the selection.
+    search: function (v) { V2.q = v || ''; V2.segmentId = null; V2.segmentExtras = null; render(); },
+    // ── Interactive filters (Gap 2) ─────────────────────────────────────────
+    // Each control edit clears the applied segment (the bar is the single live
+    // filter state; you've diverged from the saved preset — Save to persist anew).
+    setFilter: function (k, v) {
+      if (!V2.filters) V2.filters = defaultFilters();
+      V2.filters[k] = (v == null ? '' : v);
+      V2.segmentId = null; V2.segmentExtras = null;
+      render();
+    },
+    setFilterBool: function (k, v) {
+      if (!V2.filters) V2.filters = defaultFilters();
+      V2.filters[k] = !!v;
+      V2.segmentId = null; V2.segmentExtras = null;
+      render();
+    },
+    clearFilters: function () {
+      V2.filters = defaultFilters(); V2.q = '';
+      V2.segmentId = null; V2.segmentExtras = null;
+      render();
+    },
     // ── Classic burn-down Wave E: segments / tags / notes / wallet / stats ──
-    applySegment: function (segId) { V2.segmentId = segId || null; render(); },
+    // Applying a segment LOADS its persisted filters into the bar (round-trip), so
+    // the controls reflect what's applied and re-saving reproduces it exactly.
+    applySegment: function (segId) {
+      V2.segmentId = segId || null;
+      var seg = V2.segments.filter(function (g) { return g.id === segId; })[0];
+      restoreFilters(seg && seg.filters);
+      render();
+    },
     saveSegment: function () {
       withBridge(function (b) {
         Promise.resolve(window.mastPrompt ? mastPrompt('Name this segment:', { title: 'Save segment', confirmLabel: 'Save' }) : null).then(function (name) {
           if (!name || !name.trim()) return;
-          // V2's list filter vocabulary today is the search box; segments saved
-          // here capture it in the SHARED filter schema (customer-filters.js),
-          // so legacy + CS bulk-send read them identically.
-          var filters = {};
-          if (V2.q) filters.search = V2.q;
+          // Capture the FULL filter vocabulary in the SHARED persisted shape
+          // (shared/customer-filters.js / V1 readFilterSnapshot): source, wholesale,
+          // tag, lastOrderBefore, minSpendCents, search, newsletterOnly, leadsOnly —
+          // so a saved segment round-trips identically across V2, legacy, and the CS
+          // bulk-survey send. snapshotFilters() is the SAME object the live list is
+          // filtered by, so the segment's membership equals the previewed set.
+          var filters = snapshotFilters();
+          if (V2.segmentExtras) Object.keys(V2.segmentExtras).forEach(function (k) { if (!(k in filters)) filters[k] = V2.segmentExtras[k]; });
           return Promise.resolve(b.saveSegment(name, filters)).then(function (rec) {
             V2.segments.push(rec); V2.segmentId = rec.id;
             if (window.showToast) showToast('Segment saved');
