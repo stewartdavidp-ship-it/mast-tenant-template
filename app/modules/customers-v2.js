@@ -89,6 +89,7 @@
             Object.keys(m || {}).forEach(function (k) { var o = m[k]; if (o && o.customerId === id) arr.push(Object.assign({ _key: k }, o)); });
             arr.sort(function (a, b) { return String(b.placedAt || '').localeCompare(String(a.placedAt || '')); });
             c._recentOrders = arr.slice(0, 8);
+            c._activityOrders = arr;   // full set (cancelled filtered in the Activity facet) — already in memory, no extra read
           }).catch(function () {}));
         }
         var cid = c.linkedIds && c.linkedIds.contactIds && c.linkedIds.contactIds[0];
@@ -129,6 +130,56 @@
             });
           }).catch(function () { c._certs = []; c._certTypes = {}; })
         );
+        // Activity facet (PR4) — hydrate the richer touchpoint feed V1's activity
+        // tab aggregated but V2 lacked: CS tickets / reviews / survey-responses
+        // (matched by customerId with email/contact/uid fallback, mirroring V1's
+        // getCustomerActivityTimeline so pre-FK-backfill records still surface) +
+        // each linked contact's interactions. Orders + enrollments are already
+        // loaded above and reused by activity(r) (no duplicate read). LAZY on
+        // record-open (the _certs precedent), never the list load().
+        if (window.MastDB && typeof MastDB.query === 'function') {
+          var emailSet = {};
+          var pe = String(c.primaryEmail || '').toLowerCase(); if (pe) emailSet[pe] = true;
+          (c.emails || []).forEach(function (e) { if (e) emailSet[String(e).toLowerCase()] = true; });
+          var linkedC = c.linkedIds || {};
+          var contactSet = {}; (linkedC.contactIds || []).forEach(function (x) { contactSet[x] = true; });
+          var uidSet = {}; (linkedC.uids || []).forEach(function (u) { uidSet[u] = true; });
+          var csMatch = function (rec, uidField) {
+            if (!rec) return false;
+            if (rec.customerId === id) return true;
+            var em = String(rec.contactEmail || rec.authorEmail || rec.email || '').toLowerCase();
+            if (em && emailSet[em]) return true;
+            if (rec.contactId && contactSet[rec.contactId]) return true;
+            if (uidField && rec[uidField] && uidSet[rec[uidField]]) return true;
+            return false;
+          };
+          var matchedArr = function (map, uidField) {
+            var out = []; Object.keys(map || {}).forEach(function (k) { var v = map[k]; if (v && typeof v === 'object' && csMatch(v, uidField)) out.push(Object.assign({ _key: k }, v)); });
+            return out;
+          };
+          var q500 = function (path) {
+            return Promise.resolve(MastDB.query(path).limitToLast(500).once('value'))
+              .then(function (s) { return (s && typeof s.val === 'function') ? (s.val() || {}) : (s || {}); })
+              .catch(function () { return {}; });
+          };
+          jobs.push(Promise.all([q500('cs_tickets'), q500('cs_reviews'), q500('cs_survey_responses')]).then(function (res) {
+            c._activityTickets = matchedArr(res[0]);
+            c._activityReviews = matchedArr(res[1], 'authorUid');
+            c._activitySurveys = matchedArr(res[2]);
+          }).catch(function () { c._activityTickets = []; c._activityReviews = []; c._activitySurveys = []; }));
+          var cids = (linkedC.contactIds || []);
+          if (cids.length) {
+            jobs.push(Promise.all(cids.map(function (cid) {
+              return Promise.resolve(MastDB.get('admin/contacts/' + cid + '/interactions'))
+                .then(function (s) { var v = (s && typeof s.val === 'function') ? s.val() : s; return { cid: cid, ix: v || {} }; })
+                .catch(function () { return { cid: cid, ix: {} }; });
+            })).then(function (pairs) {
+              var out = [];
+              pairs.forEach(function (p) { Object.keys(p.ix || {}).forEach(function (k) { var raw = p.ix[k]; if (raw && typeof raw === 'object') out.push(Object.assign({ _key: k, _contactId: p.cid }, raw)); }); });
+              c._activityInteractions = out;
+            }).catch(function () { c._activityInteractions = []; }));
+          }
+        }
         return Promise.all(jobs).then(function () { return c; });
       });
     },
@@ -260,18 +311,73 @@
             : ''
         };
       },
+      // Activity facet (PR4) — the rich, recency-sorted touchpoint feed V1's
+      // activity tab showed (orders + enrollments + CS tickets/reviews/surveys +
+      // linked-contact interactions + a notes entry), shaped for the engine's
+      // renderActivityFacet (badge + relatedTable + type-filter pills). Each event
+      // carries its OWN drill `click` (built here, ids escaped) routed through
+      // CustomersV2.openActivity: orders/contacts drill IN-PANEL via MastEntity.drill
+      // (no navigate-then-setTimeout race like V1); CS surfaces fall back to a route
+      // nav + guarded deep-open. Order money via MastUI.Num.money/moneyVal (not
+      // hand-rolled cents math), dates via MastUI.Num.date (not the locale date/time
+      // formatter — the off-by-one ratchet). Reuses the orders + enrollments already
+      // loaded in fetch + the CS/interaction arrays it hydrated.
       activity: function (r) {
-        var N = window.MastUI.Num, ev = [];
-        (r._recentOrders || []).forEach(function (o) {
-          ev.push({ label: 'Order ' + (o.orderNumber || o._key) + ' · ' + (N.money(N.moneyVal(o, 'totalCents', 'total')) || ''), at: N.date(o.placedAt), _t: o.placedAt });
+        var N = window.MastUI.Num, esc2 = window.MastUI._esc, ev = [];
+        function clk(type, id) { return id ? "CustomersV2.openActivity('" + type + "','" + esc2(String(id)) + "')" : ''; }
+        function trunc(s) { s = String(s || ''); return s.length > 140 ? s.slice(0, 137) + '…' : s; }
+        (r._activityOrders || []).forEach(function (o) {
+          if (o.status === 'cancelled') return;
+          var money = N.money(N.moneyVal(o, 'totalCents', 'total'));
+          ev.push({ type: 'order', typeLabel: 'Orders', tone: 'teal', _t: o.placedAt || o.createdAt,
+            summary: 'Order ' + (o.orderNumber || o._key) + (money ? ' (' + money + ')' : '') + ' · ' + (o.status || 'placed'),
+            click: clk('order', o._key) });
         });
         (r._enrollments || []).forEach(function (e) {
-          var when = e.sessionDate || e.createdAt;
-          ev.push({ label: 'Enrolled — ' + (e.className || e.classTitle || 'class'), at: when ? N.date(when) : '', _t: when });
+          if (e.status === 'cancelled' || e.enrollmentStatus === 'cancelled') return;
+          ev.push({ type: 'enrollment', typeLabel: 'Enrollments', tone: 'amber', _t: e.sessionDate || e.createdAt,
+            summary: 'Enrolled · ' + (e.className || e.classTitle || '(class)'),
+            click: clk('enrollment', e.classId) });
         });
-        if (r.notes) ev.push({ label: 'Note on file', at: r.updatedAt ? N.date(r.updatedAt) : '', _t: r.updatedAt });
+        (r._activityTickets || []).forEach(function (t) {
+          ev.push({ type: 'ticket', typeLabel: 'Tickets', tone: 'danger', _t: t.updatedAt || t.createdAt,
+            summary: (t.ticketNumber || t._key) + (t.subject ? ' · ' + t.subject : '') + (t.status ? ' [' + t.status + ']' : ''),
+            click: clk('ticket', t._key) });
+        });
+        (r._activityReviews || []).forEach(function (rv) {
+          var stars = (typeof rv.rating === 'number' ? '★'.repeat(rv.rating) : '');
+          ev.push({ type: 'review', typeLabel: 'Reviews', tone: 'amber', _t: rv.createdAt,
+            summary: (stars ? stars + ' · ' : '') + (rv.productName || rv.productId || '') + (rv.title ? ' · ' + rv.title : ''),
+            click: clk('review', rv._key) });
+        });
+        (r._activitySurveys || []).forEach(function (s) {
+          var ans = (s.answers && s.answers.length) ? s.answers.length + ' answer(s)' : '';
+          ev.push({ type: 'survey-response', typeLabel: 'Surveys', tone: 'info', _t: s.completedAt || s.createdAt,
+            summary: 'Survey response · ' + (s.status || 'pending') + (ans ? ' · ' + ans : ''),
+            click: clk('survey-response', s._key) });
+        });
+        (r._activityInteractions || []).forEach(function (ix) {
+          var short = trunc(ix.notes || ix.body || ix.summary || '');
+          ev.push({ type: 'contact-interaction', typeLabel: 'Contacts', tone: 'info', _t: ix.date || ix.createdAt,
+            summary: (ix.type || 'note') + (short ? ' · ' + short : ''),
+            click: clk('contact-interaction', ix._contactId) });
+        });
+        if (r.notes && r.notes.trim()) {
+          ev.push({ type: 'note', typeLabel: 'Notes', tone: 'neutral', _t: r.updatedAt || r.createdAt, summary: trunc(r.notes), click: '' });
+        }
         ev.sort(function (a, b) { return String(b._t || '').localeCompare(String(a._t || '')); });
-        return ev.map(function (x) { return { label: x.label, at: x.at, done: true }; });
+        var events = ev.map(function (e) {
+          return { type: e.type, typeLabel: e.typeLabel, tone: e.tone, summary: e.summary, at: e._t ? N.date(e._t) : '', click: e.click };
+        });
+        // Type-filter pills — counts over the FULL population (V1 order), only for
+        // types actually present, with 'All' first. ≤1 type → renderActivityFacet
+        // omits the pill row.
+        var order = ['order', 'enrollment', 'ticket', 'review', 'survey-response', 'contact-interaction', 'note'];
+        var labels = { order: 'Orders', enrollment: 'Enrollments', ticket: 'Tickets', review: 'Reviews', 'survey-response': 'Surveys', 'contact-interaction': 'Contacts', note: 'Notes' };
+        var counts = {}; events.forEach(function (e) { counts[e.type] = (counts[e.type] || 0) + 1; });
+        var filters = [{ key: 'all', label: 'All', n: events.length }];
+        order.forEach(function (k) { if (counts[k]) filters.push({ key: k, label: labels[k], n: counts[k] }); });
+        return { events: events, filters: filters };
       },
       wallet: function (r) {
         if (!r._walletUid) return { linked: false };
@@ -871,7 +977,32 @@
         if (rec) window.MastEntity.openRecord('customers-v2', rec, 'read');
       });
     },
-    exportCsv: function () { return window.MastEntity.exportRows('customers-v2', visibleRows(), 'all'); }
+    exportCsv: function () { return window.MastEntity.exportRows('customers-v2', visibleRows(), 'all'); },
+    // Activity drill dispatcher (PR4) — the V2 successor to V1's
+    // customersOpenActivityDrillIn. Orders + contact-interactions drill IN-PANEL via
+    // MastEntity.drill (the engine re-renders the open slide-out with the target and
+    // pushes a panel-local Back — no route swap, no navigate-then-setTimeout race).
+    // Enrollments + CS surfaces have no entity twin yet, so they fall back to a route
+    // nav + a guarded deep-open (csOpenThread exists; csOpenReview/csOpenSurveyResponse
+    // don't yet — the typeof guard degrades to a plain route nav, exactly as V1).
+    openActivity: function (type, id, extra) {
+      if (!type) return;
+      if (type === 'order') { window.MastEntity.drill('orders-v2', id); return; }
+      if (type === 'contact-interaction') { if (id) window.MastEntity.drill('contacts-v2', id); return; }
+      if (type === 'enrollment') { if (typeof window.navigateTo === 'function' && id) window.navigateTo('book-detail', { id: id }); return; }
+      var route = type === 'ticket' ? 'cs-tickets' : type === 'review' ? 'cs-reviews' : type === 'survey-response' ? 'cs-surveys' : null;
+      if (!route) return;
+      if (typeof window.navigateTo === 'function') window.navigateTo(route);
+      if (!id) return;
+      var open = function () {
+        if (type === 'ticket' && typeof window.csOpenThread === 'function') window.csOpenThread(id);
+        else if (type === 'review' && typeof window.csOpenReview === 'function') window.csOpenReview(id);
+        else if (type === 'survey-response' && typeof window.csOpenSurveyResponse === 'function') window.csOpenSurveyResponse(id);
+      };
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
+        MastAdmin.loadModule('customer-service').then(function () { setTimeout(open, 100); }).catch(function () { setTimeout(open, 200); });
+      } else { setTimeout(open, 200); }
+    }
   };
 
   MastAdmin.registerModule('customers-v2', {

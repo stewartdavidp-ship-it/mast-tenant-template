@@ -992,6 +992,9 @@
       '.mu-pane[hidden]{display:none;} .mu-grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;} @media(max-width:720px){.mu-grid2{grid-template-columns:1fr;}}',
       '.mu-crumb{margin:-4px -4px 14px;padding:9px 4px;border-bottom:1px solid var(--border,rgba(127,127,127,.2));} .mu-crumb button{background:transparent;border:0;color:var(--teal,#2A7C6F);font:inherit;font-size:0.85rem;cursor:pointer;font-weight:500;}',
       '.mu-link{display:inline;color:var(--teal,#2A7C6F);background:none;border:0;padding:0;font:inherit;cursor:pointer;font-weight:500;} .mu-link:hover{text-decoration:underline;}',
+      // Activity facet type-filter pills (mast-entity renderActivityFacet, PR4).
+      '.mu-actfilters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}',
+      '.mu-actfilter{background:transparent;border:1px solid var(--border,rgba(127,127,127,.2));border-radius:999px;color:var(--warm-gray);font:inherit;font-size:0.78rem;padding:4px 12px;cursor:pointer;white-space:nowrap;} .mu-actfilter.on{border-color:var(--amber,#C4853C);color:var(--text-primary);font-weight:600;} .mu-actfilter .mu-sub{font-size:0.72rem;}',
       // Edit-mode affordance bar (designed edit form): "EDITING — update …".
       '.mu-editbar{display:flex;align-items:center;gap:9px;font-size:0.85rem;color:var(--warm-gray);margin:2px 2px 14px;}',
       '.mu-editpill{font-size:0.68rem;font-weight:600;letter-spacing:.04em;padding:2px 9px;border-radius:999px;background:color-mix(in srgb,var(--amber,#C4853C) 16%,transparent);color:var(--amber,#C4853C);border:1px solid color-mix(in srgb,var(--amber,#C4853C) 30%,transparent);}',

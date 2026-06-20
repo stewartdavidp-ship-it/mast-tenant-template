@@ -369,6 +369,42 @@
     return U.cardTable('Certifications', grantRow + activeBody + revokedGroup);
   }
 
+  // Activity facet (optional party pane; cut-plan PR4). The schema's
+  // detail.activity(r) returns SHAPED data — a recency-sorted touchpoint feed plus
+  // the type-filter pills — and the engine composes the SAME primitives the other
+  // facets use (badge + relatedTable + cardTable), so it can't drift from a bespoke
+  // template (standard-record-ui §1). Each event carries its own drill: `click` is a
+  // JS expression the MODULE built (e.g. "CustomersV2.openActivity('order','<id>')",
+  // ids already escaped) — '' = not drillable, rendered as plain text. Type filtering
+  // is a pure client-side row toggle (MastEntity.filterActivity) keyed on each row's
+  // data-act tag — no re-render, read-only, scoped to this card.
+  //   { events:  [{ type, typeLabel, tone, summary, at, click }],
+  //     filters: [{ key, label, n }]   // first is { key:'all', … }; omit when ≤1 type
+  //   }
+  function renderActivityFacet(U, data) {
+    data = data || {};
+    var events = data.events || [], filters = data.filters || [];
+    if (!events.length) return U.cardTable('Activity', '<span class="mu-sub">No activity yet</span>');
+    var pills = (filters.length > 1)
+      ? '<div class="mu-actfilters">' + filters.map(function (f) {
+          return '<button type="button" class="mu-actfilter' + (f.key === 'all' ? ' on' : '') + '" data-act-filter="' + esc(f.key) +
+            '" onclick="MastEntity.filterActivity(this,\'' + esc(f.key) + '\')">' + esc(f.label) +
+            ' <span class="mu-sub">(' + esc(String(f.n)) + ')</span></button>';
+        }).join('') + '</div>'
+      : '';
+    var countRow = '<div class="mu-sub" data-act-count style="margin-bottom:8px;">' + events.length + ' event' + (events.length === 1 ? '' : 's') + '</div>';
+    var table = U.relatedTable([
+      { label: 'Type', render: function (e) { return '<span data-act="' + esc(e.type) + '">' + U.badge(e.typeLabel, e.tone) + '</span>'; } },
+      { label: 'Activity', render: function (e) {
+          return e.click
+            ? '<button type="button" class="mu-link" onclick="' + e.click + '">' + esc(e.summary) + '</button>'
+            : esc(e.summary);
+        } },
+      { label: 'When', align: 'right', render: function (e) { return '<span class="mu-sub">' + esc(e.at) + '</span>'; } }
+    ], events);
+    return U.cardTable('Activity', pills + countRow + table);
+  }
+
   function renderParty(U, d, r) {
     var c = (d.contact ? d.contact(r) : {}) || {};
     var loc = c.location ? (c.contactId ? drillLink(d.contactEntity || 'contacts-v2', c.contactId, c.location) : esc(c.location)) : '—';
@@ -394,9 +430,7 @@
       '<div class="mu-pane" data-pane="orders" hidden>' + U.cardTable('Orders (' + orders.length + ')', ordersTable) + '</div>';
 
     if (typeof d.activity === 'function') {
-      var acts = d.activity(r) || [];
-      panes += '<div class="mu-pane" data-pane="activity" hidden>' +
-        U.card('Activity', acts.length ? U.timeline(acts) : '<span class="mu-sub">No activity yet</span>') + '</div>';
+      panes += '<div class="mu-pane" data-pane="activity" hidden>' + renderActivityFacet(U, d.activity(r)) + '</div>';
     }
     if (typeof d.classes === 'function') {
       var cls = d.classes(r) || [];
@@ -713,11 +747,34 @@
   // always matches the record actually visible.
   function getCurrent() { return _current; }
 
+  // Activity type-filter (cut-plan PR4): a pure client-side row toggle over the
+  // activity facet's relatedTable — no re-render, read-only. Flips the active pill,
+  // then shows only rows whose first-cell data-act tag matches `key` ('all' = every
+  // row) and refreshes the live count. Scoped to the clicked pill's own .mu-card so
+  // two facets on one screen can't cross-talk. Called from inline onclick on the
+  // engine-rendered pills (renderActivityFacet).
+  function filterActivity(btn, key) {
+    var card = (btn && btn.closest) ? btn.closest('.mu-card') : null;
+    if (!card) return;
+    var pills = card.querySelectorAll('[data-act-filter]');
+    for (var i = 0; i < pills.length; i++) pills[i].classList.toggle('on', pills[i] === btn);
+    var rows = card.querySelectorAll('.mu-rel tbody tr'), shown = 0;
+    for (var j = 0; j < rows.length; j++) {
+      var tag = rows[j].querySelector('[data-act]');
+      var t = tag ? tag.getAttribute('data-act') : '';
+      var vis = (key === 'all' || t === key);
+      rows[j].hidden = !vis; if (vis) shown++;
+    }
+    var cnt = card.querySelector('[data-act-count]');
+    if (cnt) cnt.textContent = shown + ' event' + (shown === 1 ? '' : 's');
+  }
+
   var api = {
     define: define, get: get, listColumns: listColumns, exportColumns: exportColumns,
     canonicalGet: canonicalGet, validate: validate,
     renderList: renderList, openRecord: openRecord, exportRows: exportRows,
-    drill: drill, drillLink: drillLink, back: back, getCurrent: getCurrent
+    drill: drill, drillLink: drillLink, back: back, getCurrent: getCurrent,
+    filterActivity: filterActivity
   };
   if (typeof window !== 'undefined') window.MastEntity = api;
   if (typeof module !== 'undefined' && module.exports) {
