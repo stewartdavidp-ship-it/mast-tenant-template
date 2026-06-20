@@ -179,3 +179,93 @@ t('sanitizeHtml escapes (never emits raw markup) in a non-DOM context', () => {
   const y = sanitizeHtml('<img src=x onerror=alert(1)>');
   assert.ok(!/<img/.test(y) && /&lt;img/.test(y));            // no live tag; escaped text is harmless
 });
+
+// ── statusBadge — flat per-domain registry (Track 5; master plan §7 + §12.3) ──
+// Goldens for the canonical status pill. Colors + labels are captured VERBATIM
+// from the source maps (order/invoice = orders-core.js, rma = rma-admin.js,
+// ticket = customer-service.js, product/material = maker.js). These pin the
+// build so later per-module adoption is a checkable swap, not a guess.
+const { statusBadge, emptyState } = require('../shared/mast-ui.js');
+t('statusBadge order: captured color + de-underscored label, soft-tint pill', () => {
+  const h = statusBadge('packed', 'order');
+  assert.ok(h.includes('class="mast-badge"'));                 // canonical pill markup (same as badge())
+  assert.ok(h.includes('#66BB6A'));                            // ORDER_STATUS_BADGE_COLORS.packed.color
+  assert.ok(h.includes('>packed</span>'));
+  assert.ok(h.includes('color-mix(in srgb,#66BB6A 16%,transparent)')); // bg derived from the one color
+});
+t('statusBadge order de-underscores the label (replace(/_/g," "))', () => {
+  const h = statusBadge('pending_payment', 'order');
+  assert.ok(h.includes('#FFB74D') && h.includes('>pending payment</span>'));
+});
+t('statusBadge invoice: Title-Case label + captured color', () => {
+  const h = statusBadge('paid', 'invoice');
+  assert.ok(h.includes('#4ade80') && h.includes('>Paid</span>'));
+});
+t('statusBadge rma de-hyphenates the label (replace(/-/g," "))', () => {
+  const h = statusBadge('shipped-back', 'rma');
+  assert.ok(h.includes('#CE93D8') && h.includes('>shipped back</span>'));
+});
+t('statusBadge ticket: STATUS_LABELS label + captured color', () => {
+  const h = statusBadge('in_progress', 'ticket');
+  assert.ok(h.includes('#FFD54F') && h.includes('>In Progress</span>'));
+});
+t('statusBadge product label can diverge from status (ready → "Review")', () => {
+  const h = statusBadge('ready', 'product');
+  assert.ok(h.includes('#b45309') && h.includes('>Review</span>'));
+});
+t('statusBadge material uses a token color where the source did (var(--amber))', () => {
+  const h = statusBadge('draft', 'material');
+  assert.ok(h.includes('var(--amber)') && h.includes('>draft</span>'));
+});
+// per-domain registry: the SAME status word resolves differently by domain
+// ("open" is a real ticket status; it is NOT an order status → neutral). This is
+// the whole reason the registry is per-domain, not one global map (§12.3).
+t('statusBadge is per-domain — "open" is a ticket status but not an order status', () => {
+  assert.ok(statusBadge('open', 'ticket').includes('#64B5F6'));        // ticket.open
+  const order = statusBadge('open', 'order');
+  assert.ok(order.includes('var(--warm-gray)') && !order.includes('#64B5F6')); // unknown in order → neutral
+});
+t('statusBadge unknown domain → neutral, humanized label', () => {
+  const h = statusBadge('whatever_now', 'no-such-domain');
+  assert.ok(h.includes('var(--warm-gray)') && h.includes('>whatever now</span>'));
+});
+t('statusBadge unknown status → neutral, humanizes underscores AND hyphens', () => {
+  const h = statusBadge('a_b-c', 'order');
+  assert.ok(h.includes('var(--warm-gray)') && h.includes('>a b c</span>'));
+});
+t('statusBadge empty/null/undefined status → em-dash neutral, never throws', () => {
+  assert.ok(statusBadge('', 'order').includes('>—</span>'));
+  assert.ok(statusBadge(null, 'order').includes('>—</span>'));
+  assert.doesNotThrow(() => statusBadge(undefined, undefined));
+  assert.ok(statusBadge(undefined, undefined).includes('class="mast-badge"'));
+});
+t('statusBadge escapes the fallback label (XSS-safe)', () => {
+  const h = statusBadge('<img src=x>', 'bogus');
+  assert.ok(!h.includes('<img src=x>') && h.includes('&lt;img src=x&gt;'));
+});
+
+// ── emptyState — one canonical "no X yet" (replaces ~60 hand-rolled) ──────────
+// Reuses the existing .empty-state / .empty-icon / .empty-title CSS in index.html.
+t('emptyState renders icon + title + hint with the canonical classes', () => {
+  const h = emptyState({ icon: '📦', title: 'No orders yet', hint: 'They show up here once placed.' });
+  assert.ok(h.includes('class="empty-state"'));
+  assert.ok(h.includes('class="empty-icon">📦</div>'));
+  assert.ok(h.includes('class="empty-title">No orders yet</div>'));
+  assert.ok(h.includes('<p>They show up here once placed.</p>'));
+});
+t('emptyState omits icon + hint when not given (title only)', () => {
+  const h = emptyState({ title: 'Nothing here' });
+  assert.ok(h.includes('class="empty-title">Nothing here</div>'));
+  assert.ok(!h.includes('empty-icon') && !h.includes('<p>'));
+});
+t('emptyState with no opts is the bare wrapper (never throws)', () => {
+  assert.strictEqual(emptyState(), '<div class="empty-state"></div>');
+  assert.strictEqual(emptyState({}), '<div class="empty-state"></div>');
+});
+t('emptyState escapes icon, title AND hint (XSS-safe)', () => {
+  const h = emptyState({ icon: '<x>', title: '<b>t</b>', hint: '<i>h</i>' });
+  assert.ok(h.includes('&lt;x&gt;') && h.includes('&lt;b&gt;t&lt;/b&gt;') && h.includes('&lt;i&gt;h&lt;/i&gt;'));
+  assert.ok(!h.includes('<b>t</b>') && !h.includes('<i>h</i>'));
+});
+
+console.log('\n' + pass + ' passed (incl. statusBadge + emptyState)');
