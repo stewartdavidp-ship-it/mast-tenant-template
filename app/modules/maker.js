@@ -1706,8 +1706,8 @@
         html += '<tr>';
         html += '<td style="padding:8px;font-size:0.85rem;font-weight:500;border-bottom:1px solid var(--cream-dark);">' + esc(ch.name || '') + '</td>';
         html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">' + (ch.percentFee || 0).toFixed(2) + '%</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + ((ch.fixedFeePerOrderCents || 0) / 100).toFixed(2) + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + ((ch.monthlyFixedCents || 0) / 100).toFixed(2) + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw((ch.fixedFeePerOrderCents || 0), {cents:true}) + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw((ch.monthlyFixedCents || 0), {cents:true}) + '</td>';
         html += '<td style="padding:8px;font-size:0.78rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + ((ch.autoMatchSources || []).join(', ') || '—') + '</td>';
         html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);">';
         html += '<button style="background:none;border:none;color:var(--teal);cursor:pointer;font-size:0.78rem;font-family:\'DM Sans\';" onclick="makerEditChannelPrompt(\'' + esc(cid) + '\')">Edit</button> ';
@@ -2102,7 +2102,7 @@
       html += '<td style="font-weight:500;">' + esc(m.name) + spotChip + '</td>';
       html += '<td>' + esc(m.category || '') + '</td>';
       html += '<td>' + esc(getUomShort(m.unitOfMeasure)) + '</td>';
-      html += '<td style="text-align:right;font-family:monospace;">$' + (m.unitCost || 0).toFixed(2) + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;">$' + MastFormat.moneyRaw((m.unitCost || 0)) + '</td>';
       // W2.3: Δ 90d chip — finds the costHistory entry closest to 90d ago
       // and shows %-change. "—" when no history. Resolves OPEN
       // -OtEObAwxnUpFmiLp-30 (partial — MCP tool tracked separately).
@@ -2148,10 +2148,10 @@
         var statusBg = l.liveStatus === 'active' ? 'rgba(34,197,94,0.12)' : (l.liveStatus === 'expired' ? 'rgba(220,38,38,0.12)' : 'rgba(107,114,128,0.12)');
         html += '<tr>';
         html += '<td style="font-weight:500;">' + esc(matName) + '</td>';
-        html += '<td style="font-family:monospace;">$' + (l.lockedUnitCost || 0).toFixed(2) + '</td>';
+        html += '<td style="font-family:monospace;">$' + MastFormat.moneyRaw((l.lockedUnitCost || 0)) + '</td>';
         html += '<td>' + esc(l.supplierName || '') + '</td>';
         html += '<td><div style="display:flex;align-items:center;gap:6px;"><div style="background:#e5e7eb;width:80px;height:6px;border-radius:3px;overflow:hidden;"><div style="background:var(--teal);height:100%;width:' + pctUsed + '%;"></div></div><span style="font-size:0.72rem;font-family:monospace;">' + (l.qtyConsumed || 0) + '/' + (l.qtyLocked || 0) + '</span></div></td>';
-        html += '<td style="font-size:0.78rem;">' + (l.expiresAt ? new Date(l.expiresAt).toLocaleDateString() : '—') + (daysLeft != null && daysLeft >= 0 && l.liveStatus === 'active' ? ' <span style="color:var(--warm-gray-light);">(' + daysLeft + 'd)</span>' : '') + '</td>';
+        html += '<td style="font-size:0.78rem;">' + (l.expiresAt ? MastFormat.date(l.expiresAt) : '—') + (daysLeft != null && daysLeft >= 0 && l.liveStatus === 'active' ? ' <span style="color:var(--warm-gray-light);">(' + daysLeft + 'd)</span>' : '') + '</td>';
         html += '<td><span class="status-badge" style="background:' + statusBg + ';color:' + statusColor + ';font-size:0.72rem;padding:2px 7px;">' + l.liveStatus + '</span></td>';
         html += '<td style="text-align:right;">';
         html += '<button data-lid="' + esc(l.lockId) + '" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.78rem;font-family:\'DM Sans\';" onclick="makerDeletePriceLockConfirm(this.dataset.lid)">Delete</button>';
@@ -2287,8 +2287,8 @@
         html += '<div style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.15);border-radius:6px;padding:10px 12px;margin-bottom:16px;font-size:0.78rem;color:var(--warm-gray);">';
         html += '<div style="font-weight:600;margin-bottom:6px;color:var(--text-primary);">Cost History <span style="font-weight:400;color:var(--warm-gray-light);">(most recent ' + recent.length + ' of ' + history.length + ')</span></div>';
         recent.forEach(function(h) {
-          var when = h.changedAt ? new Date(h.changedAt).toLocaleDateString() : '—';
-          html += '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>' + when + '</span><span style="font-family:monospace;">$' + (h.cost || 0).toFixed(2) + '</span></div>';
+          var when = h.changedAt ? MastFormat.date(h.changedAt) : '—';
+          html += '<div style="display:flex;justify-content:space-between;padding:2px 0;"><span>' + when + '</span><span style="font-family:monospace;">$' + MastFormat.moneyRaw((h.cost || 0)) + '</span></div>';
         });
         html += '</div>';
       }
@@ -2958,7 +2958,7 @@
         html += '<td style="text-align:right;"><input type="number" step="0.01" min="0" value="' + unit + '" oninput="makerVarSetComponentField(' + i + ',\'unitCost\',this.value)" style="width:90px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
         html += '<td style="text-align:right;"><input type="number" step="0.01" min="0" value="' + qty + '" oninput="makerVarSetComponentField(' + i + ',\'quantity\',this.value)" style="width:80px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
         html += '<td style="text-align:right;"><input type="number" step="0.1" min="0" value="' + scrap + '" oninput="makerVarSetComponentField(' + i + ',\'scrapPercent\',this.value)" style="width:70px;text-align:right;padding:4px 6px;font-size:0.85rem;"></td>';
-        html += '<td style="text-align:right;font-family:monospace;">$' + sub.toFixed(2) + '</td>';
+        html += '<td style="text-align:right;font-family:monospace;">$' + MastFormat.moneyRaw(sub) + '</td>';
         html += '<td style="text-align:right;"><button class="btn btn-danger btn-small" onclick="makerVarRemoveComponent(' + i + ')" style="font-size:0.72rem;">Remove</button></td>';
         html += '</tr>';
       });
@@ -3079,7 +3079,7 @@
   }
 
   function renderCostShapeSummary(costShape) {
-    function fmt(c) { return '$' + ((c || 0) / 100).toFixed(2); }
+    function fmt(c) { return '$' + MastFormat.moneyRaw((c || 0), {cents:true}); }
     var html = '';
     html += '<div style="background:rgba(42,124,111,0.06);border:1px solid rgba(42,124,111,0.2);border-radius:8px;padding:14px 16px;margin-bottom:16px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">';
@@ -3275,7 +3275,7 @@
     try {
       await persistCostShape(defineProductId, costShape);
       try { await recomputeAndPersistReadiness(defineProductId); } catch (e) {}
-      MastAdmin.showToast('Cost recalculated: $' + (costShape.totalCost / 100).toFixed(2));
+      MastAdmin.showToast('Cost recalculated: $' + MastFormat.moneyRaw(costShape.totalCost, {cents:true}));
       renderDefineView();
     } catch (err) {
       MastAdmin.showToast('Recalc failed: ' + err.message, true);
@@ -5235,7 +5235,7 @@
         }
       });
       if (moves.length > 0) {
-        var savedAt = bs.spotSnapshotAt ? new Date(bs.spotSnapshotAt).toLocaleDateString() : 'last save';
+        var savedAt = bs.spotSnapshotAt ? MastFormat.date(bs.spotSnapshotAt) : 'last save';
         html += '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.30);border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:0.9rem;color:var(--text,#2a2a2a);display:flex;align-items:center;gap:14px;flex-wrap:wrap;">';
         html += '<span style="font-weight:600;">Spot prices moved since ' + esc(savedAt) + ':</span>';
         moves.forEach(function(m) {
@@ -5246,7 +5246,7 @@
             ' ' + (m.pct > 0 ? '+' : '') + m.pct.toFixed(1) + '%' +
           '</span>' +
           '<span style="opacity:0.7;font-family:monospace;font-size:0.85rem;">' +
-            '$' + m.was.toFixed(2) + '→$' + m.now.toFixed(2) + '/oz' +
+            '$' + MastFormat.moneyRaw(m.was) + '→$' + MastFormat.moneyRaw(m.now) + '/oz' +
           '</span>';
         });
         html += '<span style="opacity:0.7;font-size:0.85rem;flex-basis:100%;">Material costs are recomputed live; save to acknowledge.</span>';
@@ -5340,8 +5340,8 @@
         html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="0.01" min="0" value="' + (li.quantity || 0) + '" style="width:90px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;background:var(--cream);color:var(--text-primary);" onchange="makerUpdateLineItemQty(\'' + esc(liId) + '\', this.value)">' + (scrapPct > 0 ? '<div style="font-size:0.72rem;color:var(--warm-gray);text-align:right;margin-top:2px;">eff: ' + effQty.toFixed(2) + '</div>' : '') + '</td>';
         html += '<td style="text-align:right;padding:8px;border-bottom:1px solid var(--cream-dark);"><input type="number" step="1" min="0" max="200" value="' + scrapPct + '" style="width:80px;text-align:right;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-size:0.9rem;font-family:monospace;background:var(--cream);color:var(--text-primary);" onchange="makerUpdateLineItemScrap(\'' + esc(liId) + '\', this.value)"></td>';
         html += '<td style="text-align:center;padding:8px;font-size:0.85rem;color:var(--warm-gray);border-bottom:1px solid var(--cream-dark);">' + esc(li.unitOfMeasure || '') + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + (li.unitCost || 0).toFixed(2) + '</td>';
-        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;font-weight:600;border-bottom:1px solid var(--cream-dark);">$' + ext.toFixed(2) + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw((li.unitCost || 0)) + '</td>';
+        html += '<td style="text-align:right;padding:8px;font-family:monospace;font-size:0.85rem;font-weight:600;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw(ext) + '</td>';
         html += '<td style="text-align:center;padding:8px;border-bottom:1px solid var(--cream-dark);"><button style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:0.9rem;" onclick="makerRemoveLineItemUI(\'' + esc(liId) + '\')" title="Remove">✕</button></td>';
         html += '</tr>';
       });
@@ -5350,7 +5350,7 @@
     }
 
     // Materials subtotal
-    html += '<div style="text-align:right;padding:8px;font-size:0.85rem;font-weight:600;margin-top:4px;">Total Materials: <span style="font-family:monospace;">$' + calc.totalMaterialCost.toFixed(2) + '</span></div>';
+    html += '<div style="text-align:right;padding:8px;font-size:0.85rem;font-weight:600;margin-top:4px;">Total Materials: <span style="font-family:monospace;">$' + MastFormat.moneyRaw(calc.totalMaterialCost) + '</span></div>';
     html += '</div>';
 
     // ---- STEP 2: LABOR ----
@@ -5370,7 +5370,7 @@
 
     html += '<div style="flex:1;text-align:right;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Labor Cost</label>';
-    html += '<div style="padding:8px 10px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + calc.laborCost.toFixed(2) + '</div>';
+    html += '<div style="padding:8px 10px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + MastFormat.moneyRaw(calc.laborCost) + '</div>';
     html += '</div>';
 
     html += '</div></div>';
@@ -5404,7 +5404,7 @@
     html += '</div>';
     html += '<div style="flex:1;text-align:right;">';
     html += '<label style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:4px;">Per Unit</label>';
-    html += '<div style="padding:8px 10px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + (calc.perUnitSetup || 0).toFixed(2) + '</div>';
+    html += '<div style="padding:8px 10px;font-family:monospace;font-size:0.85rem;font-weight:600;">$' + MastFormat.moneyRaw((calc.perUnitSetup || 0)) + '</div>';
     html += '</div>';
     html += '</div></div>';
 
@@ -5413,14 +5413,14 @@
     html += '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:24px;flex-wrap:wrap;">';
     html += '<div>';
     html += '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;opacity:0.7;font-weight:600;margin-bottom:4px;">Total Cost Per Unit</div>';
-    html += '<div style="font-family:monospace;font-size:1.6rem;font-weight:700;line-height:1;">$' + calc.totalCost.toFixed(2) + '</div>';
+    html += '<div style="font-family:monospace;font-size:1.6rem;font-weight:700;line-height:1;">$' + MastFormat.moneyRaw(calc.totalCost) + '</div>';
     html += '</div>';
     html += '<div style="font-size:0.85rem;opacity:0.85;display:flex;gap:16px;flex-wrap:wrap;">';
-    html += '<span>Materials <span style="font-family:monospace;font-weight:600;">$' + calc.totalMaterialCost.toFixed(2) + '</span></span>';
-    html += '<span>Labor <span style="font-family:monospace;font-weight:600;">$' + calc.laborCost.toFixed(2) + '</span></span>';
+    html += '<span>Materials <span style="font-family:monospace;font-weight:600;">$' + MastFormat.moneyRaw(calc.totalMaterialCost) + '</span></span>';
+    html += '<span>Labor <span style="font-family:monospace;font-weight:600;">$' + MastFormat.moneyRaw(calc.laborCost) + '</span></span>';
     var overhead = (bs.otherCost || 0) + (calc.perUnitSetup || 0);
     if (overhead > 0) {
-      html += '<span>Overhead <span style="font-family:monospace;font-weight:600;">$' + overhead.toFixed(2) + '</span></span>';
+      html += '<span>Overhead <span style="font-family:monospace;font-weight:600;">$' + MastFormat.moneyRaw(overhead) + '</span></span>';
     }
     html += '</div>';
     html += '</div>';
@@ -5809,7 +5809,7 @@
         html += '<div style="flex:1;">';
         html += '<label style="display:block;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:var(--warm-gray);margin-bottom:4px;">' + metal.charAt(0).toUpperCase() + metal.slice(1) + ' shift %</label>';
         html += '<input id="whatIf_' + metal + '" type="number" step="1" value="0" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:6px;font-family:monospace;background:var(--cream);color:var(--text-primary);box-sizing:border-box;" oninput="makerRunWhatIf()">';
-        html += '<div style="font-size:0.72rem;color:var(--warm-gray-light);margin-top:2px;">spot $' + (spotPricesCurrent[metal] || 0).toFixed(2) + '/oz</div>';
+        html += '<div style="font-size:0.72rem;color:var(--warm-gray-light);margin-top:2px;">spot $' + MastFormat.moneyRaw((spotPricesCurrent[metal] || 0)) + '/oz</div>';
         html += '</div>';
       });
       html += '</div>';
@@ -5844,9 +5844,9 @@
       var floorWarn = r.breachesFloor ? ' ⚠' : '';
       html += '<tr>';
       html += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.name || '') + '</td>';
-      html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + r.currentTotalCost.toFixed(2) + '</td>';
-      html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + r.simulatedTotalCost.toFixed(2) + '</td>';
-      html += '<td style="text-align:right;font-family:monospace;color:' + deltaColor + ';padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (r.costDelta >= 0 ? '+' : '') + '$' + r.costDelta.toFixed(2) + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw(r.currentTotalCost) + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw(r.simulatedTotalCost) + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;color:' + deltaColor + ';padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (r.costDelta >= 0 ? '+' : '') + '$' + MastFormat.moneyRaw(r.costDelta) + '</td>';
       html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + r.currentMarginPct.toFixed(1) + '% → ' + r.simulatedMarginPct.toFixed(1) + '%' + floorWarn + '</td>';
       html += '</tr>';
     });
@@ -5892,8 +5892,8 @@
         html += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.name || '') + '</td>';
         html += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.activePriceTier || 'direct') + '</td>';
         html += '<td style="text-align:right;font-family:monospace;color:#b45309;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (r.currentDriftPct > 0 ? '+' : '') + r.currentDriftPct.toFixed(1) + '%</td>';
-        html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + (r.driftBaseline || 0).toFixed(2) + '</td>';
-        html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + (r.totalCost || 0).toFixed(2) + '</td>';
+        html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw((r.driftBaseline || 0)) + '</td>';
+        html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw((r.totalCost || 0)) + '</td>';
         html += '</tr>';
       });
       html += '</tbody></table></div>';
@@ -5997,7 +5997,7 @@
       var fresh = await MastDB.recipes.get(editingRecipeId);
       if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
       renderRecipeBuilder();
-      MastAdmin.showToast('Staged v' + result.version + ' \u2014 Wholesale $' + result.prices.wholesale.toFixed(2) + ', Direct $' + result.prices.direct.toFixed(2) + ', Retail $' + result.prices.retail.toFixed(2) + '. Open product to apply.');
+      MastAdmin.showToast('Staged v' + result.version + ' \u2014 Wholesale $' + MastFormat.moneyRaw(result.prices.wholesale) + ', Direct $' + MastFormat.moneyRaw(result.prices.direct) + ', Retail $' + MastFormat.moneyRaw(result.prices.retail) + '. Open product to apply.');
     } catch (err) {
       MastAdmin.showToast('Stage failed: ' + (err.message || err), true);
     }
@@ -6014,7 +6014,7 @@
     builderState.overridePrice = ov;
     try {
       await MastDB.recipes.update(editingRecipeId, { overridePrice: ov, updatedAt: new Date().toISOString() });
-      MastAdmin.showToast(num ? (tier + ' override set to $' + num.toFixed(2)) : (tier + ' override cleared'));
+      MastAdmin.showToast(num ? (tier + ' override set to $' + MastFormat.moneyRaw(num)) : (tier + ' override cleared'));
       renderRecipeBuilder();
     } catch (err) {
       MastAdmin.showToast('Override save failed: ' + (err.message || err), true);
@@ -6078,7 +6078,7 @@
         html += '<select id="addPartMaterialId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">';
         html += '<option value="">Select material...</option>';
         activeMaterials.forEach(function(m) {
-          html += '<option value="' + esc(m.materialId) + '">' + esc(m.name) + ' (' + esc(m.unitOfMeasure) + ' @ $' + (m.unitCost || 0).toFixed(2) + ')</option>';
+          html += '<option value="' + esc(m.materialId) + '">' + esc(m.name) + ' (' + esc(m.unitOfMeasure) + ' @ $' + MastFormat.moneyRaw((m.unitCost || 0)) + ')</option>';
         });
         html += '</select>';
         html += '</div>';
@@ -6097,7 +6097,7 @@
         html += '<select id="addPartRecipeId" style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:var(--cream);color:var(--text-primary);font-family:\'DM Sans\';font-size:0.9rem;">';
         html += '<option value="">Select recipe...</option>';
         eligibleRecipes.forEach(function(r) {
-          html += '<option value="' + esc(r.recipeId) + '">' + esc(r.name || 'Untitled') + ' (cost $' + (r.totalCost || 0).toFixed(2) + ')</option>';
+          html += '<option value="' + esc(r.recipeId) + '">' + esc(r.name || 'Untitled') + ' (cost $' + MastFormat.moneyRaw((r.totalCost || 0)) + ')</option>';
         });
         html += '</select>';
         html += '</div>';
@@ -6825,7 +6825,7 @@
       description: record.description || '',
       categories: record.category ? [record.category] : [],
       priceCents: priceCents,
-      price: priceCents > 0 ? '$' + (priceCents / 100).toFixed(2) : '',
+      price: priceCents > 0 ? '$' + MastFormat.moneyRaw(priceCents, {cents:true}) : '',
       status: record.status || 'draft',
       availability: 'available',
       images: [],
