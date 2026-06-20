@@ -24358,7 +24358,7 @@ function _autoFingerprint(screen, type, msg) {
   return screen + '|' + type + '|' + String(msg || '').slice(0, 60);
 }
 
-function _submitAutoReport(type, message) {
+function _submitAutoReport(type, message, detail) {
   if (!_autoReportEnabled()) return;
   if (_autoReportCount >= _AUTO_REPORT_CAP) return;
   if (_autoIgnore(message)) return;
@@ -24371,6 +24371,9 @@ function _submitAutoReport(type, message) {
 
   var now = Date.now();
   var cutoff = now - 60000;
+  // Optional low-level detail (source:line:col + stack) threaded from the
+  // error handlers. Bounded so a runaway stack can't bloat the report doc.
+  var detailStr = detail ? String(detail).slice(0, 2000) : '';
   var report = {
     appId: MastDB.tenantId(),
     source: 'auto',
@@ -24378,7 +24381,8 @@ function _submitAutoReport(type, message) {
     screenLabel: (typeof getScreenLabel === 'function') ? getScreenLabel() : screen,
     type: 'bug',
     severity: 'medium',
-    description: '[Auto-detected] ' + type + ' on ' + screen + ' screen\nError: ' + String(message || '').slice(0, 200),
+    description: '[Auto-detected] ' + type + ' on ' + screen + ' screen\nError: ' + String(message || '').slice(0, 200) + (detailStr ? '\nDetail: ' + detailStr : ''),
+    detail: detailStr,
     email: null,
     userId: currentUser ? currentUser.uid : null,
     userName: currentUser ? (currentUser.displayName || currentUser.email || '') : null,
@@ -24401,20 +24405,20 @@ function _submitAutoReport(type, message) {
   });
 }
 
-function fireAutoReport(type, message) {
+function fireAutoReport(type, message, detail) {
   if (window._wizardAnalyzing) return;
   if (!_autoReportEnabled()) return;
   if (_autoIgnore(message)) return;
 
   if (!_autoReportConsented()) {
     // First-run: show confirmation dialog before submitting
-    _showAutoReportConsent(type, message);
+    _showAutoReportConsent(type, message, detail);
   } else {
-    _submitAutoReport(type, message);
+    _submitAutoReport(type, message, detail);
   }
 }
 
-function _showAutoReportConsent(pendingType, pendingMessage) {
+function _showAutoReportConsent(pendingType, pendingMessage, pendingDetail) {
   if (document.getElementById('autoReportConsentOverlay')) return; // already showing
   var overlay = document.createElement('div');
   overlay.id = 'autoReportConsentOverlay';
@@ -24436,13 +24440,14 @@ function _showAutoReportConsent(pendingType, pendingMessage) {
 
   window._pendingAutoType = pendingType;
   window._pendingAutoMsg = pendingMessage;
+  window._pendingAutoDetail = pendingDetail;
 }
 
 function _confirmAutoReport() {
   try { localStorage.setItem(_AUTO_REPORT_CONSENTED_KEY, '1'); } catch(e) {}
   var overlay = document.getElementById('autoReportConsentOverlay');
   if (overlay) overlay.parentNode.removeChild(overlay);
-  _submitAutoReport(window._pendingAutoType, window._pendingAutoMsg);
+  _submitAutoReport(window._pendingAutoType, window._pendingAutoMsg, window._pendingAutoDetail);
   var toggle = document.getElementById('autoReportToggle');
   if (toggle) toggle.checked = true;
 }
@@ -24495,14 +24500,16 @@ function installAutoDetection() {
   // 1. Unhandled JS exceptions
   var _prevOnError = window.onerror;
   window.onerror = function(msg, src, line, col, err) {
-    fireAutoReport('unhandled-error', msg);
+    var detail = src + ':' + line + ':' + col + (err && err.stack ? '\n' + err.stack : '');
+    fireAutoReport('unhandled-error', msg, detail);
     return _prevOnError ? _prevOnError.apply(this, arguments) : false;
   };
 
   // 2. Unhandled promise rejections
   window.addEventListener('unhandledrejection', function(e) {
     var msg = (e.reason && (e.reason.message || String(e.reason))) || 'Unhandled promise rejection';
-    fireAutoReport('unhandled-rejection', msg);
+    var detail = e.reason && e.reason.stack;
+    fireAutoReport('unhandled-rejection', msg, detail);
   });
 
   // 3. Stalled spinner detection — poll every 2s for visible .loading elements.
