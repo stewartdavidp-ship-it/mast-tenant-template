@@ -137,7 +137,7 @@
   "app/modules/finance.js": {
     "centsDiv": 63,
     "moneyToFixed": 77,
-    "localeDate": 9
+    "localeDate": 7
   },
   "app/modules/fulfillment-v2.js": {
     "moneyToFixed": 1
