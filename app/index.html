@@ -15788,7 +15788,8 @@ var FUNCTION_PERMISSIONS = [
   { entity: 'giftCards', action: 'issue',            module: 'gift-cards',        label: 'Issue gift card',            description: 'Manually issue a gift card (compensation, promotions).', roleDefaults: { admin: true, manager: true,  user: false, guest: false } },
   { entity: 'wallet',    action: 'grantCredit',      module: 'wallet',            label: 'Grant store / promo credit', description: 'Grant or adjust customer store credit.',                 roleDefaults: { admin: true, manager: false, user: false, guest: false } },
   { entity: 'rma',       action: 'approve',          module: 'rma',               label: 'Approve RMA / return',       description: 'Approve a customer return request (RMA).',               roleDefaults: { admin: true, manager: true,  user: false, guest: false } },
-  { entity: 'finance',   action: 'approveAmendment', module: 'finance-amendments', label: 'Approve finance amendment',  description: 'Approve an amendment in the Day-Close amendments queue.', roleDefaults: { admin: true, manager: false, user: false, guest: false } }
+  { entity: 'finance',   action: 'approveAmendment', module: 'finance-amendments', label: 'Approve finance amendment',  description: 'Approve an amendment in the Day-Close amendments queue.', roleDefaults: { admin: true, manager: false, user: false, guest: false } },
+  { entity: 'pos',       action: 'overridePrice',    module: 'pos',               label: 'Override item price (POS)',  description: 'Set a custom per-item price at the register, overriding the catalog or sale price.', roleDefaults: { admin: true, manager: true, user: false, guest: false } }
 ];
 function _sensitiveKey(entity, action) { return entity + '.' + action; }
 // Default sensitive-action grants for a role (used by seed + resolver fallback).
@@ -20886,7 +20887,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260618-202331-1353a6aa';
+var MAST_MODULES_V = '20260621-041500-pos0ride';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
