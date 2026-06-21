@@ -603,15 +603,13 @@
     return status || null;
   }
 
-  function invoiceStatusBadgeStyle(status) {
-    var m = {
-      draft:   'background:rgba(107,114,128,0.2);color:#9ca3af;border:1px solid rgba(107,114,128,0.35);',
-      sent:    'background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);',
-      paid:    'background:rgba(34,197,94,0.2);color:#4ade80;border:1px solid rgba(34,197,94,0.35);',
-      overdue: 'background:rgba(220,38,38,0.2);color:#f87171;border:1px solid rgba(220,38,38,0.35);'
-    };
-    return m[status] || m.draft;
-  }
+  // Invoice status badges now render via the canonical MastUI.statusBadge(status,
+  // 'invoice') engine (Track 5 / Wave 2; shared/mast-ui.js _statusRegistry.invoice).
+  // The text colors were captured verbatim from the former invoiceStatusBadgeStyle
+  // map when the registry was built, so the rendered hue is identical; labels are
+  // the registry's Title-Case (Draft/Sent/Paid/Overdue). The draft view already
+  // rendered "Draft"; the summary view's previously raw-lowercase label now matches
+  // it. invoiceStatusBadgeStyle had no cross-module consumer, so it is removed.
 
   async function generateInvoice(orderId) {
     // Allow callers outside the orders module (e.g. wholesale.js viewWholesaleOrder)
@@ -785,7 +783,7 @@
       h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Issue Date: ' + formatOrderDate(o.invoiceIssuedAt || new Date().toISOString()) + '</div>';
       h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);">Due Date: ' + esc(o.invoiceDueDate || '—') + '</div>';
       h += '</div>';
-      h += '<span class="status-badge pill" style="' + invoiceStatusBadgeStyle('draft') + '">Draft</span>';
+      h += window.MastUI.statusBadge('draft', 'invoice');
       h += '</div>';
 
       // Bill To
@@ -841,7 +839,7 @@
       // Summary for sent / overdue / paid
       var rows = '';
       rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Invoice #</span><span style="font-weight:600;">' + esc(o.invoiceNumber || '—') + '</span></div>';
-      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Status</span><span class="status-badge pill" style="' + invoiceStatusBadgeStyle(effectiveStatus) + '">' + effectiveStatus + '</span></div>';
+      rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Status</span>' + window.MastUI.statusBadge(effectiveStatus, 'invoice') + '</div>';
       if (o.invoiceIssuedAt) rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Issued</span><span>' + formatOrderDate(o.invoiceIssuedAt) + '</span></div>';
       if (o.invoiceSentAt)  rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Sent</span><span>' + formatOrderDate(o.invoiceSentAt) + '</span></div>';
       if (o.invoiceDueDate) rows += '<div style="display:flex;justify-content:space-between;padding:4px 0;"><span style="color:var(--warm-gray-light);">Due Date</span><span>' + esc(o.invoiceDueDate) + '</span></div>';
@@ -1246,7 +1244,6 @@
     transitionOrder: transitionOrder,
     isOrderInvoiceable: isOrderInvoiceable,
     getEffectiveInvoiceStatus: getEffectiveInvoiceStatus,
-    invoiceStatusBadgeStyle: invoiceStatusBadgeStyle,
     generateInvoice: generateInvoice,
     sendInvoice: sendInvoice,
     markOrderInvoicePaid: markOrderInvoicePaid,
@@ -1299,7 +1296,6 @@
     window.transitionOrder = transitionOrder;
     window.isOrderInvoiceable = isOrderInvoiceable;
     window.getEffectiveInvoiceStatus = getEffectiveInvoiceStatus;
-    window.invoiceStatusBadgeStyle = invoiceStatusBadgeStyle;
     window.generateInvoice = generateInvoice;
     window.sendInvoice = sendInvoice;
     window.markOrderInvoicePaid = markOrderInvoicePaid;
