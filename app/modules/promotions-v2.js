@@ -43,8 +43,21 @@
   }
   function formatDiscount(s) {
     if (!s) return '';
+    if (s.discountType === 'quantity-tier') {
+      return (s.tiers || []).slice().sort(function (a, b) { return a.qty - b.qty; })
+        .map(function (t) { return t.qty + ' for ' + (N.money(t.totalCents, { cents: true }) || '$0'); }).join(', ') || 'Quantity tier';
+    }
     if (s.discountType === 'percent') return s.discountValue + '% off';
     return (N.money((s.discountValue || 0) / 100) || '$0.00') + ' off';
+  }
+  // One editable tier row (qty → total $) for the quantity-tier editor.
+  function tierRowHtml(qty, totalCents) {
+    return '<div class="promo-v2-tier" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">' +
+      '<input class="form-input promo-v2-tier-qty" type="number" min="1" value="' + (qty != null && qty !== '' ? esc(qty) : '') + '" placeholder="Qty" style="width:80px;">' +
+      '<span style="color:var(--warm-gray);font-size:0.85rem;">for</span>' +
+      '<input class="form-input promo-v2-tier-total" type="number" min="0" step="0.01" value="' + (totalCents != null && totalCents !== '' ? esc(N.moneyRaw(totalCents, { cents: true })) : '') + '" placeholder="Total $" style="flex:1;min-width:90px;">' +
+      '<button type="button" onclick="PromotionsV2.removeTierRow(this)" style="background:none;border:none;color:var(--warm-gray);font-size:1.15rem;cursor:pointer;line-height:1;">×</button>' +
+    '</div>';
   }
   function windowText(s) {
     if (!s) return '';
@@ -143,10 +156,14 @@
               '<select class="form-input" id="promoV2Type" onchange="PromotionsV2.typeChanged()" style="width:100%;">' +
                 '<option value="percent"' + (s && s.discountType === 'percent' ? ' selected' : '') + '>Percent off</option>' +
                 '<option value="fixed"' + (s && s.discountType === 'fixed' ? ' selected' : '') + '>Fixed amount off</option>' +
+                '<option value="quantity-tier"' + (s && s.discountType === 'quantity-tier' ? ' selected' : '') + '>Quantity tier (X for $Y)</option>' +
               '</select></div>' +
-            '<div class="form-group" style="flex:1;min-width:160px;"><label class="form-label">Discount value</label>' +
+            '<div class="form-group" id="promoV2ValueGroup" style="flex:1;min-width:160px;display:' + (s && s.discountType === 'quantity-tier' ? 'none' : '') + ';"><label class="form-label">Discount value</label>' +
               '<input class="form-input" type="number" id="promoV2Value" min="0" value="' + (s && s.discountValue != null ? esc(s.discountValue) : '') + '" placeholder="' + (s && s.discountType === 'fixed' ? 'Amount in cents' : '0-100') + '" style="width:100%;"></div>' +
           '</div>' +
+          '<div class="form-group" id="promoV2TierGroup" style="display:' + (s && s.discountType === 'quantity-tier' ? 'block' : 'none') + ';"><label class="form-label">Quantity tiers <span style="color:var(--warm-gray);font-size:0.78rem;">(total price for N items)</span></label>' +
+            '<div id="promoV2Tiers">' + ((s && s.discountType === 'quantity-tier' && s.tiers && s.tiers.length) ? s.tiers.slice().sort(function (a, b) { return a.qty - b.qty; }).map(function (t) { return tierRowHtml(t.qty, t.totalCents); }).join('') : (tierRowHtml(1, '') + tierRowHtml(2, ''))) + '</div>' +
+            '<button type="button" class="btn btn-secondary" onclick="PromotionsV2.addTierRow()" style="font-size:0.85rem;margin-top:6px;">+ Add tier</button></div>' +
           '<div style="display:flex;gap:12px;flex-wrap:wrap;">' +
             '<div class="form-group" style="flex:1;min-width:160px;"><label class="form-label">Start date</label>' +
               '<input class="form-input" type="datetime-local" id="promoV2Start" value="' + (s && s.startDate ? esc(s.startDate.slice(0, 16)) : nowLocal) + '" style="width:100%;"></div>' +
@@ -176,15 +193,29 @@
       var name = (document.getElementById('promoV2Name') || {}).value;
       name = (name || '').trim();
       var type = (document.getElementById('promoV2Type') || {}).value || 'percent';
-      var value = parseFloat((document.getElementById('promoV2Value') || {}).value);
       var start = (document.getElementById('promoV2Start') || {}).value;
       var end = (document.getElementById('promoV2End') || {}).value || null;
       var keep = !!(document.getElementById('promoV2Keep') || {}).checked;
 
       if (!name) { showToast('Sale name is required', true); return false; }
-      if (isNaN(value) || value <= 0) { showToast('Discount value must be greater than 0', true); return false; }
-      if (type === 'percent' && value > 100) { showToast('Percent cannot exceed 100', true); return false; }
       if (!start) { showToast('Start date is required', true); return false; }
+
+      // Discount: percent/fixed use a single value; quantity-tier uses tier rows.
+      var value = null, tiers = null;
+      if (type === 'quantity-tier') {
+        tiers = [];
+        document.querySelectorAll('#promoV2Tiers .promo-v2-tier').forEach(function (row) {
+          var q = parseInt((row.querySelector('.promo-v2-tier-qty') || {}).value, 10);
+          var t = parseFloat((row.querySelector('.promo-v2-tier-total') || {}).value);
+          if (q > 0 && !isNaN(t) && t >= 0) tiers.push({ qty: q, totalCents: Math.round(t * 100) });
+        });
+        tiers.sort(function (a, b) { return a.qty - b.qty; });
+        if (!tiers.length) { showToast('Add at least one quantity tier', true); return false; }
+      } else {
+        value = parseFloat((document.getElementById('promoV2Value') || {}).value);
+        if (isNaN(value) || value <= 0) { showToast('Discount value must be greater than 0', true); return false; }
+        if (type === 'percent' && value > 100) { showToast('Percent cannot exceed 100', true); return false; }
+      }
 
       var pids = [];
       document.querySelectorAll('#promoV2Picker .promo-v2-cb:checked').forEach(function (cb) { pids.push(cb.getAttribute('data-pid')); });
@@ -195,8 +226,9 @@
       if (endISO && endISO < startISO) { showToast('End date must be after start date', true); return false; }
 
       var now = new Date().toISOString();
-      var data = { name: name, discountType: type, discountValue: value, products: pids,
-        startDate: startISO, endDate: endISO, keepAfterEnd: keep, updatedAt: now };
+      var data = { name: name, discountType: type, products: pids,
+        startDate: startISO, endDate: endISO, keepAfterEnd: keep, updatedAt: now,
+        discountValue: (type === 'quantity-tier' ? null : value), tiers: (type === 'quantity-tier' ? tiers : null) };
 
       var id = rec._key || rec.id;
       var op;
@@ -336,8 +368,19 @@
     },
     typeChanged: function () {
       var type = (document.getElementById('promoV2Type') || {}).value;
+      var isTier = type === 'quantity-tier';
+      var vg = document.getElementById('promoV2ValueGroup'); if (vg) vg.style.display = isTier ? 'none' : '';
+      var tg = document.getElementById('promoV2TierGroup'); if (tg) tg.style.display = isTier ? 'block' : 'none';
       var v = document.getElementById('promoV2Value');
       if (v) v.placeholder = type === 'fixed' ? 'Amount in cents (e.g., 500 = $5)' : '0-100';
+    },
+    addTierRow: function () {
+      var c = document.getElementById('promoV2Tiers');
+      if (c) c.insertAdjacentHTML('beforeend', tierRowHtml('', ''));
+    },
+    removeTierRow: function (btn) {
+      var row = btn && btn.closest ? btn.closest('.promo-v2-tier') : null;
+      if (row) row.remove();
     },
     filterProducts: function () {
       var picker = document.getElementById('promoV2Picker'); if (!picker) return;
