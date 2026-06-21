@@ -76,7 +76,10 @@
     if (!isoStr) return null;
     var d = new Date(isoStr);
     if (isNaN(d.getTime())) return null;
-    var opts = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false };
+    // hourCycle:'h23' pins hours to 0-23 across ICU versions. (Plain hour12:false
+    // is h24 in older ICU — it renders tz-local midnight as '24', which then trips
+    // the 12-hour AM/PM math in formatOrderDateTime into "12:00 PM".)
+    var opts = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
     if (_tenantTz) opts.timeZone = _tenantTz;
     var fmt = new Intl.DateTimeFormat('en-CA', opts);
     var parts = fmt.formatToParts(d).reduce(function(acc, p) { acc[p.type] = p.value; return acc; }, {});
@@ -96,7 +99,7 @@
     var p = tzPartsFromIso(isoStr);
     if (!p) return isoStr;
     var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    var hours = parseInt(p.hour, 10);
+    var hours = parseInt(p.hour, 10) % 24; // defensively fold a stray 24 (older ICU midnight) → 0
     var ampm = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12 || 12;
     return months[parseInt(p.month, 10) - 1] + ' ' + parseInt(p.day, 10) + ', ' + hours + ':' + p.minute + ' ' + ampm;
