@@ -302,7 +302,7 @@ body {
   <div style="display:flex;align-items:center;gap:8px;">
     <span class="mode-badge" id="modeBadge">POS</span>
     <span id="outboxBadge" onclick="_flushOutbox()" style="display:none;align-items:center;gap:4px;font-size:0.72rem;background:var(--yellow);color:#000;padding:2px 8px;border-radius:10px;font-weight:600;cursor:pointer;" title="Tap to sync now"></span>
-    <button id="eventSettingsBtn" onclick="showEventSettings()" style="display:none;background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-size:16px;cursor:pointer;color:var(--text);">⚙</button>
+    <button id="accountBtn" onclick="openAccountMenu()" style="display:none;width:34px;height:34px;border-radius:50%;background:var(--gold);color:#000;border:none;font-size:13px;font-weight:700;cursor:pointer;" title="Account &amp; settings">☰</button>
   </div>
 </div>
 
@@ -518,7 +518,7 @@ function detectLocation() {
     var eventKeys = Object.keys(activeEvents);
 
     // Show gear icon now that detection is running
-    document.getElementById('eventSettingsBtn').style.display = '';
+    showAccountBtn();
 
     if (!navigator.geolocation) {
       // No geolocation — show event picker if events exist, else skip
@@ -648,7 +648,7 @@ function linkToEvent(evId) {
   eventId = evId;
   loadEventContext();
   dismissEventModal();
-  document.getElementById('eventSettingsBtn').style.display = '';
+  showAccountBtn();
   showToast('Linked to event!');
 }
 
@@ -657,57 +657,132 @@ function dismissEventModal() {
   if (el) el.remove();
 }
 
-function showEventSettings() {
-  var existing = document.getElementById('eventSettingsModal');
-  if (existing) existing.remove();
+// Show + populate the top-bar account button (initials avatar) once signed in.
+function showAccountBtn() {
+  var btn = document.getElementById('accountBtn');
+  if (!btn) return;
+  btn.style.display = '';
+  var label = (currentUser && (currentUser.displayName || currentUser.email)) || '';
+  var initials = label
+    ? label.trim().split(/\s+/).map(function(w) { return w[0]; }).slice(0, 2).join('').toUpperCase()
+    : '\u2630';
+  btn.textContent = initials || '\u2630';
+}
 
-  // Fetch fresh active events
+// ============================================================
+// Account menu \u2014 one sheet: identity + sign out, theme, event/fair, feedback.
+// ============================================================
+function openAccountMenu() {
+  var existing = document.getElementById('accountMenu');
+  if (existing) existing.remove();
+  var name = (currentUser && currentUser.displayName) || '';
+  var email = (currentUser && currentUser.email) || '';
+  var initials = (name || email)
+    ? (name || email).trim().split(/\s+/).map(function(w) { return w[0]; }).slice(0, 2).join('').toUpperCase()
+    : '\u2630';
+  var theme = document.documentElement.classList.contains('light') ? 'light' : 'dark';
+  function themeBtn(mode, label) {
+    var on = theme === mode;
+    return '<button id="theme_' + mode + '" onclick="setPosTheme(\'' + mode + '\')" style="flex:1;padding:10px;border-radius:8px;border:1px solid ' +
+      (on ? 'var(--gold)' : 'var(--border)') + ';background:' + (on ? 'rgba(196,148,74,0.15)' : 'transparent') +
+      ';color:var(--text);font-size:14px;cursor:pointer;">' + label + '</button>';
+  }
+  function section(t) { return '<div style="font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);margin:18px 0 8px;">' + t + '</div>'; }
+  var html = '<div id="accountMenu" onclick="if(event.target===this)closeAccountMenu()" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:flex-end;justify-content:center;">' +
+    '<div style="background:var(--card);border-radius:12px 12px 0 0;padding:20px;max-width:440px;width:100%;max-height:85vh;overflow-y:auto;">' +
+      '<div style="display:flex;align-items:center;gap:12px;">' +
+        '<div style="width:44px;height:44px;border-radius:50%;background:var(--gold);color:#000;display:flex;align-items:center;justify-content:center;font-weight:700;">' + esc(initials) + '</div>' +
+        '<div style="flex:1;min-width:0;"><div style="font-weight:600;color:var(--text);">' + esc(name || 'Signed in') + '</div>' +
+          '<div style="font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(email) + '</div></div>' +
+        '<button onclick="closeAccountMenu()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">\u2715</button>' +
+      '</div>' +
+      section('Appearance') +
+      '<div style="display:flex;gap:8px;">' + themeBtn('light', '\u2600\ufe0f Light') + themeBtn('dark', '\ud83c\udf19 Dark') + '</div>' +
+      section('Event / Fair') +
+      '<div id="acctEvents" style="color:var(--muted);font-size:14px;">Loading\u2026</div>' +
+      section('Send feedback') +
+      '<textarea id="posFeedbackText" rows="3" placeholder="Tell us what\u2019s working or what\u2019s broken\u2026" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;box-sizing:border-box;resize:vertical;"></textarea>' +
+      '<button onclick="submitPosFeedback()" style="margin-top:8px;width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">Send feedback</button>' +
+      '<button onclick="posSignOut()" style="margin-top:18px;width:100%;padding:12px;border-radius:8px;border:none;background:transparent;color:var(--red);font-size:15px;font-weight:600;cursor:pointer;">Sign out</button>' +
+      '<div style="margin-top:14px;text-align:center;color:var(--muted);font-size:12px;">' + esc(TENANT_ID || '') + ' \u00b7 POS</div>' +
+    '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+  _fillAccountEvents();
+}
+
+// Event/fair section of the account menu (folds in the former Event Settings).
+function _fillAccountEvents() {
   MastDB.query(SALES_EVENTS_PATH).orderByChild('status').equalTo('active').once().then(function(activeEvents) {
     activeEvents = activeEvents || {};
-    var eventKeys = Object.keys(activeEvents);
-
-    var html = '<div id="eventSettingsModal" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:200;display:flex;align-items:flex-end;justify-content:center;padding:0;">' +
-      '<div style="background:var(--card);border-radius:12px 12px 0 0;padding:24px;max-width:400px;width:100%;max-height:70vh;overflow-y:auto;">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">' +
-          '<h3 style="margin:0;font-size:16px;">Event Settings</h3>' +
-          '<button onclick="closeEventSettings()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">\u2715</button>' +
-        '</div>' +
-        '<p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Current: <strong>' + esc(eventData ? (eventData.name || 'Event') : 'No event linked') + '</strong></p>';
-
-    if (eventKeys.length > 0) {
-      html += '<div style="margin-bottom:12px;">';
-      eventKeys.forEach(function(eid) {
-        var ev = activeEvents[eid];
-        var evDate = ev.date ? new Date(ev.date).toLocaleDateString() : '';
-        var isCurrent = eid === eventId;
-        html += '<button onclick="switchEvent(\'' + eid + '\')" style="display:block;width:100%;padding:12px 16px;margin-bottom:8px;border-radius:8px;border:1px solid ' + (isCurrent ? 'var(--green)' : 'var(--border)') + ';background:' + (isCurrent ? 'rgba(76,175,80,0.1)' : 'transparent') + ';color:var(--text);font-size:14px;cursor:pointer;text-align:left;">' +
-          (isCurrent ? '\u2713 ' : '') + '<strong>' + esc(ev.name || 'Event') + '</strong>' + (evDate ? ' <span style="color:var(--muted);">\u00b7 ' + esc(evDate) + '</span>' : '') +
-          '</button>';
-      });
-      html += '</div>';
-    } else {
-      html += '<p style="color:var(--muted);font-size:14px;">No active events found.</p>';
-    }
-
-    if (eventId) {
-      html += '<button onclick="unlinkEvent()" style="display:block;width:100%;padding:12px 16px;border-radius:8px;border:none;background:transparent;color:#C62828;font-size:14px;cursor:pointer;text-align:center;">Unlink event</button>';
-    }
-
-    html += '</div></div>';
-    document.body.insertAdjacentHTML('beforeend', html);
+    var el = document.getElementById('acctEvents');
+    if (!el) return;
+    var keys = Object.keys(activeEvents);
+    var html = '<div style="font-size:13px;color:var(--muted);margin-bottom:8px;">Current: <strong style="color:var(--text);">' +
+      esc(eventData ? (eventData.name || 'Event') : 'Not at an event') + '</strong></div>';
+    keys.forEach(function(eid) {
+      var ev = activeEvents[eid];
+      var d = ev.date ? new Date(ev.date).toLocaleDateString() : '';
+      var cur = eid === eventId;
+      html += '<button onclick="switchEvent(\'' + eid + '\')" style="display:block;width:100%;padding:10px 14px;margin-bottom:6px;border-radius:8px;border:1px solid ' +
+        (cur ? 'var(--green)' : 'var(--border)') + ';background:' + (cur ? 'rgba(76,175,80,0.1)' : 'transparent') +
+        ';color:var(--text);font-size:14px;cursor:pointer;text-align:left;">' + (cur ? '\u2713 ' : '') +
+        '<strong>' + esc(ev.name || 'Event') + '</strong>' + (d ? ' <span style="color:var(--muted);">\u00b7 ' + esc(d) + '</span>' : '') + '</button>';
+    });
+    if (!keys.length) html += '<div style="font-size:13px;color:var(--muted);">No active events.</div>';
+    if (eventId) html += '<button onclick="unlinkEvent()" style="display:block;width:100%;padding:8px;border-radius:8px;border:none;background:transparent;color:var(--red);font-size:13px;cursor:pointer;text-align:center;">Unlink event</button>';
+    el.innerHTML = html;
+  }).catch(function() {
+    var el = document.getElementById('acctEvents');
+    if (el) el.innerHTML = '<div style="font-size:13px;color:var(--muted);">Couldn\u2019t load events.</div>';
   });
+}
+
+// Live theme toggle \u2014 flips the shared 'mast-theme' the inline loader reads.
+function setPosTheme(mode) {
+  try { localStorage.setItem('mast-theme', mode); } catch (e) {}
+  var h = document.documentElement;
+  h.classList.remove('dark', 'light');
+  h.classList.add(mode);
+  ['light', 'dark'].forEach(function(m) {
+    var b = document.getElementById('theme_' + m);
+    if (!b) return;
+    var on = m === mode;
+    b.style.borderColor = on ? 'var(--gold)' : 'var(--border)';
+    b.style.background = on ? 'rgba(196,148,74,0.15)' : 'transparent';
+  });
+}
+
+// Feedback \u2192 feedbackReports (same path the admin Engagement Inbox reads).
+function submitPosFeedback() {
+  var ta = document.getElementById('posFeedbackText');
+  var msg = (ta && ta.value || '').trim();
+  if (!msg) { showToast('Enter some feedback first', true); return; }
+  MastDB.push('feedbackReports', {
+    message: msg, source: 'pos',
+    email: (currentUser && currentUser.email) || null,
+    url: location.href, userAgent: navigator.userAgent,
+    status: 'new', createdAt: new Date().toISOString()
+  }).then(function() {
+    showToast('Thanks for the feedback!');
+    closeAccountMenu();
+  }).catch(function(e) { showToast('Could not send: ' + (e.message || e), true); });
+}
+
+function posSignOut() {
+  closeAccountMenu();
+  if (auth) auth.signOut();   // onAuthStateChanged(null) \u2192 authScreen + hides the button
 }
 
 function switchEvent(evId) {
   if (evId === eventId) {
-    closeEventSettings();
+    closeAccountMenu();
     return;
   }
   // Detach old listener
   if (eventContextUnsub) { eventContextUnsub(); eventContextUnsub = null; }
   eventId = evId;
   loadEventContext();
-  closeEventSettings();
+  closeAccountMenu();
   showToast('Switched to event!');
 }
 
@@ -718,12 +793,12 @@ function unlinkEvent() {
   document.getElementById('modeBadge').textContent = 'POS';
   document.getElementById('modeBadge').style.background = '';
   document.getElementById('eventBanner').style.display = 'none';
-  closeEventSettings();
+  closeAccountMenu();
   showToast('Event unlinked');
 }
 
-function closeEventSettings() {
-  var el = document.getElementById('eventSettingsModal');
+function closeAccountMenu() {
+  var el = document.getElementById('accountMenu');
   if (el) el.remove();
 }
 
@@ -781,16 +856,18 @@ window.TENANT_READY.then(function() {
         loadPermissions();
         if (eventId) {
           loadEventContext();
-          document.getElementById('eventSettingsBtn').style.display = '';
+          showAccountBtn();
         } else {
           detectLocation(); // GPS check if no event pre-linked
         }
         showScreen('catalogScreen');
+        showAccountBtn();
         _resumeSquareCharge();
       });
     } else {
       currentUser = null;
       authToken = null;
+      var _ab = document.getElementById('accountBtn'); if (_ab) _ab.style.display = 'none';
       showScreen('authScreen');
     }
   });
