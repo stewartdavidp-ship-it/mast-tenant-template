@@ -445,6 +445,17 @@ function haversineDistance(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// ── Tax jurisdiction (origin-based sourcing for in-person sales) ──
+// In-person POS sales have no shipping address, so without this they reach
+// submitOrder with no taxState and get silently dropped from sales-tax + nexus
+// reporting. posStudioState is set when GPS places the register inside a
+// configured studio location; posHomeState is the seller's registered state
+// (config/tax.state), used as the fallback. Resolved into the order's taxState.
+var posStudioState = '';
+var posHomeState = '';
+// Pure + single-line so the test harness can extract it (test/pos-tax-jurisdiction.test.js).
+function resolvePosTaxState(locState, homeState) { var s = String(locState || homeState || '').trim().toUpperCase(); return /^[A-Z]{2}$/.test(s) ? s : ''; }
+
 function detectLocation() {
   if (eventId) return; // Already linked via URL param
 
@@ -477,7 +488,11 @@ function detectLocation() {
         Object.keys(locations).forEach(function(k) {
           var loc = locations[k];
           var dist = haversineDistance(lat, lng, loc.lat, loc.lng);
-          if (dist <= (loc.radius || STUDIO_RADIUS_METERS)) nearStudio = true;
+          if (dist <= (loc.radius || STUDIO_RADIUS_METERS)) {
+            nearStudio = true;
+            // Capture the jurisdiction of the studio we're standing in (first match wins).
+            if (loc.state && !posStudioState) posStudioState = resolvePosTaxState(loc.state, '');
+          }
         });
 
         if (!nearStudio) {
@@ -673,6 +688,11 @@ window.TENANT_READY.then(function() {
   SALES_PATH = 'admin/sales';
   SALES_EVENTS_PATH = 'admin/salesEvents';
   STUDIO_LOCATIONS_PATH = 'config/studioLocations';
+
+  // Seller home state — fallback tax jurisdiction when GPS can't place the sale at
+  // a configured studio (craft fairs, GPS off). config/tax.state is set by the
+  // onboarding wizard.
+  MastDB.get('config/tax').then(function(taxCfg) { posHomeState = resolvePosTaxState((taxCfg && taxCfg.state) || '', ''); }).catch(function() {});
 
   auth.onAuthStateChanged(function(user) {
     if (user) {
@@ -1110,6 +1130,8 @@ function _createPosOrder(saleRecord) {
   });
   var payload = { data: {
     channel: 'pos',
+    // Origin jurisdiction for sales-tax + nexus (server persists it as order.taxState).
+    taxState: saleRecord.taxState || '',
     items: orderItems,
     posPayment: { method: saleRecord.paymentType || 'cash', tenderedCents: saleRecord.amount || 0 },
     customerContact: saleRecord.customerContact || null
@@ -1165,6 +1187,9 @@ function saveSale() {
     status: 'captured',
     notes: document.getElementById('saleNotes').value || null,
     recordedBy: currentUser ? currentUser.uid : null,
+    // Origin tax jurisdiction (studio GPS → seller home state). Stamped at sale
+    // time so it survives offline queueing; submitOrder persists it on the order.
+    taxState: resolvePosTaxState(posStudioState, posHomeState),
     // Transient fields stripped before persist:
     __capturedImageBase64: capturedImageBase64 || null,
     __authToken: authToken || null

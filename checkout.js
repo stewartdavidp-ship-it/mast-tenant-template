@@ -2277,6 +2277,10 @@
       resaleCertNumber: checkoutData.resaleCertNumber || '',
       taxExempt: true,
       taxCents: 0,
+      // Record the jurisdiction even though tax-exempt — economic-nexus thresholds
+      // count gross sales by state regardless of tax collected, so wholesale orders
+      // must not be dropped from nexus (mirrors retail taxState capture above).
+      taxState: (checkoutData.shipping && checkoutData.shipping.state) || '',
       placedAt: new Date().toISOString(),
       createdAt: new Date().toISOString()
     };
