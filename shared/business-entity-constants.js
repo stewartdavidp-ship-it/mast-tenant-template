@@ -792,6 +792,7 @@
     'employees':          { alwaysOn: true },
     'analytics':          { alwaysOn: true },
     'auditlog':           { alwaysOn: true },
+    'diagnostics':        { alwaysOn: true, systemManaged: true },  // L3 self-diagnosis surface (system tooling, not Add-to-Mast); page is can('settings','view')-gated
     'subscription':       { alwaysOn: true },  // SaaS billing, not "subscription billing" in matrix
     'about':              { alwaysOn: true },  // sidebar item folded into Plan & Billing (Q3); route stays hash-reachable
     'email-log':          { alwaysOn: true },

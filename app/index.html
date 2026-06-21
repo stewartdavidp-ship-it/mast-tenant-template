@@ -176,7 +176,7 @@
   <!-- Diagnostics L1: load FIRST so the data layer + every engine can call MastError.capture. -->
   <script src="../shared/mast-error.js?v=0ce22dda04cf"></script>
   <script src="../shared/mastdb.js?v=75498bac3aaa"></script>
-  <script src="../shared/business-entity-constants.js?v=5"></script>
+  <script src="../shared/business-entity-constants.js?v=6"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
        Eager-loaded — module labels are referenced by sidebar rendering at boot, not just on the Add-to-Mast page. -->
   <script src="data/mode-module-info.schema.js?v=1"></script>
@@ -7008,6 +7008,7 @@
         <div class="sidebar-item" data-route="employees" onclick="navigateTo('employees')">Team Access</div>
         <div class="sidebar-item" data-route="analytics" onclick="navigateTo('analytics')">Site Traffic</div>
         <div class="sidebar-item" data-route="auditlog" onclick="navigateTo('auditlog')">Activity History</div>
+        <div class="sidebar-item" data-route="diagnostics" onclick="navigateTo('diagnostics')">Diagnostics</div>
         <!-- Ratified 2026-06-10 (admin-v2-build-plan.md §5): Audit Suppressions
              item removed (Q1 — suppression rules are the audit queue's Muted-rules
              lens; the item was already soft-hidden); Coins folded into Plan &
@@ -11447,6 +11448,7 @@
     <div id="teamV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: team -->
     <div id="procurementV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: procurement -->
     <div id="lotsV2Tab" class="tab-content" style="display:none;"></div><!-- Tier 1.5 P2: inventory lots -->
+    <div id="diagnosticsTab" class="tab-content" style="display:none;"></div><!-- diagnostics L3 self-diagnosis surface -->
     <div id="materialsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: maker materials -->
     <div id="csSupportV2Tab" class="tab-content" style="display:none;"></div><!-- ONE support hub (cs-inbox-v2 + cs-tickets-v2 routes) -->
     <div id="csSurveysV2Tab" class="tab-content" style="display:none;"></div><!-- CS Wave 3: surveys hub -->
@@ -19514,7 +19516,7 @@ var SECTION_ROUTES = {
   'customer-service':  ['cs-inbox', 'cs-tickets', 'cs-surveys',
                         'cs-reviews', 'cs-faqs', 'cs-members'],
   'admin':             ['products', 'employees', 'analytics',
-                        'auditlog', 'settings', 'subscription',
+                        'auditlog', 'diagnostics', 'settings', 'subscription',
                         'about', 'email-log'],
   'migration':         ['migration', 'migration-confirm',
                         'migration-plan', 'migration-import',
@@ -21077,6 +21079,7 @@ var MODULE_MANIFEST = {
   'studio-v2': { src: 'modules/studio-v2.js', v: 'd86109156816', routes: ['studio-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'employees-v2': { src: 'modules/employees-v2.js', v: 'aa0b23b87631', routes: ['employees-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'auditlog-v2': { src: 'modules/auditlog-v2.js', v: 'adccbb8d3337', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'diagnostics': { src: 'modules/diagnostics.js', v: '5f27b405ce77', routes: ['diagnostics'] }, // L3 self-diagnosis surface (admin-gated)
   'subscription-v2': { src: 'modules/subscription-v2.js', v: '4fe160832575', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
   'analytics-v2': { src: 'modules/analytics-v2.js', v: 'b4e95e781311', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'advisor-v2': { src: 'modules/advisor-v2.js', v: '52e14fe7a4dd', routes: ['advisor-v2', 'advisor'] }, // Business-Plan advisor; owns the legacy 'advisor' route too (V1 advisor.js retired, T6). Entity writes via MastDB.businessEntity.* — no bridge.
