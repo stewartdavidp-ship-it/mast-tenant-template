@@ -3,7 +3,8 @@
     "handRolledHeader": 1
   },
   "customers-v2.js": {
-    "handRolledHeader": 1
+    "handRolledHeader": 1,
+    "missingFlagGate": 1
   },
   "duplicates-v2.js": {
     "handRolledHeader": 1

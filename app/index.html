@@ -11351,7 +11351,9 @@
       </div>
     </div>
 
-    <!-- Admin: Customers Tab — rendered entirely from app/modules/customers.js -->
+    <!-- Admin: Customers Tab (legacy mount) — vestige of the retired customers.js (T6 PR5);
+         the live Customers surface is customers-v2's self-created #customersV2Tab. Kept (empty,
+         hidden) like other retired-module mounts; still listed in ALL_TAB_IDS for hide-on-nav. -->
     <div id="customersTab" style="display:none;"></div>
     <div id="ordersV2Tab" class="tab-content" style="display:none;"></div>
     <div id="analyticsV2Tab" class="tab-content" style="display:none;"></div><!-- analytics-v2 (scaffolded) -->
@@ -19329,7 +19331,7 @@ var ROUTE_MAP = {
   // #forecastDemandOverview and #salesByProductOverview so this tab
   // shows the same table without the maker-facing Suggested Builds.
   'sales-by-product': { tab: 'salesByProductTab', setup: function() { loadAndRenderForecast(); } },
-  'customers':   { tab: null, placeholder: { name: 'Customers', desc: 'Contacts, collectors, purchase history.', badge: 'new' } },
+  // 'customers' route is manifest-driven now (T6 PR5): customers.js RETIRED; the old "coming soon" placeholder is gone — customers-v2 serves the bare #customers route.
   'images':      { tab: 'imagesTab', setup: function() {
     // W2.4 — render tag-filter chip strip on every images-tab open.
     if (typeof renderImagesTagChipStrip === 'function') renderImagesTagChipStrip();
@@ -19572,7 +19574,7 @@ window.getRouteParams = function() { return currentRouteParams || {}; };
 // localStorage so it survives reloads; flipping reloads the page so the
 // flag-gated v2 modules (which read mastUiRedesign at load) register cleanly.
 var MAST_V2_ROUTE_MAP = {
-  customers: 'customers-v2',
+  // 'customers' NOT remapped (T6 PR5): customers.js RETIRED — customers-v2 owns the bare #customers route via its manifest entry (resolves to the twin for ALL users).
   trips: 'trips-v2', procurement: 'procurement-v2',
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', 'cs-surveys': 'cs-surveys-v2', terms: 'terms-v2', wallet: 'wallet-v2',
@@ -20902,11 +20904,11 @@ var MODULE_MANIFEST = {
   production: { src: 'modules/production.js', v: '69ab19210c64', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
   contacts: { src: 'modules/contacts.js', v: 'cf4b8c58276c', routes: ['contacts'] },
-  customers: { src: 'modules/customers.js', v: 'ab65bad9ace0', routes: ['customers'] },
+  // customers.js (V1) manifest row REMOVED (T6 PR5): the 3.5K-line V1 Customers UI is deleted; the bare #customers route is now owned by the customers-v2 row below.
   'customers-core': { src: 'modules/customers-core.js', v: 'd806bab581e4', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module customer write layer (CustomersBridge, wallet-adjust, merge, add-contact, open-detail) lifted out of customers.js so V2 consumers load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'rma-admin': { src: 'modules/rma-admin.js', v: 'eb0662c15cd7', routes: ['rma'] }, // RMA/Returns lifecycle admin (admin/rma records via the transitionRma CF). orders.js (V1) RETIRED (T6 PR4b): the orders route went to orders-v2 (PR3), commissions to commissions-v2 (PR2), and this RMA lifecycle UI was relocated here VERBATIM and un-gated, so the bare #rma route resolves here directly for ALL users (no MAST_V2_ROUTE_MAP remap). rma-v2.js (#rma-v2) is a separate flag-gated returns lens over orders/{id} return_* statuses.
   'orders-v2': { src: 'modules/orders-v2.js', v: '6e4fcc19ce9d', routes: ['orders-v2', 'orders'] }, // Orders surface (UI-redesign). Owns the bare #orders route (T6 PR3 — absorbed OrdersBridge from orders.js).
-  'customers-v2': { src: 'modules/customers-v2.js', v: '741601ade966', routes: ['customers-v2'] }, // UI-redesign proof (flag-gated, side-by-side)
+  'customers-v2': { src: 'modules/customers-v2.js', v: 'b76a3ca3aa7e', routes: ['customers-v2', 'customers'] }, // Customers surface (MastEntity engine). customers.js (V1) RETIRED (T6 rip-and-replace PR1-PR5): the write layer moved to customers-core, certs/filters/sorts/activity were rebuilt on the engine, and this twin now owns the bare #customers route directly for ALL users (un-gated, no MAST_V2_ROUTE_MAP remap).
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: 'a8e6475587d6', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
   'calendar-v2': { src: 'modules/calendar-v2.js', v: '37194dc1a8b0', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
   'promotions-v2': { src: 'modules/promotions-v2.js', v: '233ee7a804eb', routes: ['promotions-v2', 'promotions'] }, // promotions; owns the legacy 'promotions' route too (V1 promotions.js retired, T6)

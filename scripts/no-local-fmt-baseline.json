@@ -91,11 +91,6 @@
     "centsDiv": 4,
     "moneyToFixed": 2
   },
-  "app/modules/customers.js": {
-    "centsDiv": 8,
-    "moneyToFixed": 9,
-    "localeDate": 3
-  },
   "app/modules/duplicates-v2.js": {
     "centsDiv": 1
   },

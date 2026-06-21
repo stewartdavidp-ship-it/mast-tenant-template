@@ -1,21 +1,21 @@
 /**
- * customers-v2.js — PROOF module #2 (Phase 1). The Customers screen as a
- * MastEntity schema, exercising the read→edit paradigm at the `md` tier
- * (vs orders-v2's `lg`/expand). Flag-gated (`uiRedesign`), self-mounting on the
- * side-by-side route `#customers-v2`. Same engine, different record — proves the
- * schema model generalizes. Verify on a dev pod (both modes, edit→dirty→save).
+ * customers-v2.js — the Customers screen as a MastEntity schema, exercising the
+ * read→edit paradigm at the `md` tier (vs orders-v2's `lg`/expand). After the
+ * T6 rip-and-replace (PR1 core-extract → PR2 certs → PR3 filters/sorts → PR4
+ * activity → PR5 cutover), this is the SOLE Customers surface: customers.js (V1)
+ * is deleted and this twin owns the bare #customers route directly for ALL users
+ * (no flag gate, no MAST_V2_ROUTE_MAP remap). The cross-module write layer
+ * (CustomersBridge / merge / wallet-adjust / open-detail) lives in the lazy
+ * app/modules/customers-core.js. Verify on a dev pod (list, record-open, edit→dirty→save).
  */
 (function () {
   'use strict';
-  function flagOn() {
-    try {
-      if (/[?&#]ui=1\b/.test(location.href)) { localStorage.setItem('mastUiRedesign', '1'); return true; }
-      if (localStorage.getItem('mastUiRedesign') === '1') return true;
-    } catch (e) {}
-    return !!(window.MAST_FEATURE_FLAGS && window.MAST_FEATURE_FLAGS.uiRedesign);
-  }
+  // customers.js (V1) RETIRED (T6 rip-and-replace PR5): customers-v2 is now the
+  // SOLE Customers surface and owns the bare #customers route (manifest +
+  // registerModule below), so it serves ALL users regardless of the Legacy-UI
+  // flag — the flagOn() gate is removed (rma-admin precedent). The dependency
+  // guard stays: MastAdmin/MastEntity are shared/eager, so it holds in any mode.
   if (!window.MastAdmin || !window.MastEntity) return;
-  if (!flagOn()) return;
 
   var STATUS_TONE = { active: 'success', lapsed: 'danger', lead: 'info', vip: 'amber' };
   // Revoke-reason vocabulary — the same option set + labels as V1 customers.js
@@ -1006,7 +1006,14 @@
   };
 
   MastAdmin.registerModule('customers-v2', {
-    routes: { 'customers-v2': { tab: 'customersV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: {
+      'customers-v2': { tab: 'customersV2Tab', setup: function () { ensureTab(); render(); load(); } },
+      // Bare #customers route ABSORBED (T6 PR5): customers.js (V1) is deleted, so
+      // the twin owns the bare route directly for ALL users (no MAST_V2_ROUTE_MAP
+      // remap). Same tab + setup keep it flag-independent (blog-v2/channels-v2/
+      // rma-admin precedent).
+      'customers': { tab: 'customersV2Tab', setup: function () { ensureTab(); render(); load(); } }
+    }
   });
 
   // ── Ask AI: hydrate the open customer record ─────────────────────────────────
