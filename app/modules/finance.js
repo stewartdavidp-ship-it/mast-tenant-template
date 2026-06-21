@@ -4684,7 +4684,7 @@ async function loadTaxSalesTaxData() {
   el.innerHTML = skeletonTable(5,4);
   try {
     var tax = await _computeTaxByState(start, end);
-    el.innerHTML = renderTaxSalesTax(tax.byState, tax.nexus, start, end);
+    el.innerHTML = renderTaxSalesTax(tax.byState, tax.nexus, start, end, tax.missingStateOrders);
   } catch (err) {
     el.innerHTML = '<div style="color:var(--danger,#dc2626);padding:12px;">' + e(err.message) + '</div>';
     showToast('Tax load failed: ' + err.message, true);
@@ -4701,17 +4701,75 @@ async function _computeTaxByState(start, end) {
     MastDB.get('admin/nexusRegistrations')
   ]);
   var byState = {};
-  Object.values(ordersRaw || {}).forEach(function(o) {
+  var missingStateOrders = [];
+  var ordersObj = ordersRaw || {};
+  Object.keys(ordersObj).forEach(function(id) {
+    var o = ordersObj[id]; if (!o) return;
     if (o.status === 'cancelled') return;
-    var state = o.taxState || o.shippingState; if (!state) return;
+    var state = o.taxState || o.shippingState;
+    if (!state) {
+      // Don't silently drop: a stateless taxable order is an under-reported
+      // sales-tax + nexus liability. Surface it for operator backfill instead.
+      missingStateOrders.push({ id: id, order: o });
+      return;
+    }
     if (!byState[state]) byState[state] = { taxCollected: 0, orderCount: 0 };
     byState[state].taxCollected += (o.taxCents || Math.round((o.tax || 0) * 100));
     byState[state].orderCount++;
   });
-  return { byState: byState, nexus: nexusRaw || {} };
+  return { byState: byState, nexus: nexusRaw || {}, missingStateOrders: missingStateOrders };
 }
 
-function renderTaxSalesTax(byState, nexus, start, end) {
+// W6 F5: stateless-order triage. Lists orders excluded from sales-tax/nexus for
+// lack of a jurisdiction, with an inline backfill. POS now captures this at sale
+// time; this catches historical + phone/manual/import orders.
+function _renderMissingStateTriage(missingStateOrders) {
+  var list = missingStateOrders || [];
+  if (!list.length) return '';
+  function _cents(o) { return (typeof _orderRevenueCents === 'function') ? _orderRevenueCents(o) : (o.totalCents || Math.round((o.total || 0) * 100)); }
+  var total = 0;
+  var rows = list.map(function(m) {
+    var o = m.order || {};
+    total += _cents(o);
+    var num = window.getOrderDisplayNumber ? window.getOrderDisplayNumber(o) : (o.orderNumber || m.id);
+    var chLabel = (window.MastChannels && o.source) ? window.MastChannels.label(window.MastChannels.normalize(o.source)) : (o.source || '—');
+    var when = o.placedAt ? toDateShort(String(o.placedAt).slice(0, 10)) : '—';
+    var inputId = 'finBackfillState_' + m.id;
+    return '<tr>' +
+      '<td style="padding:6px 8px;">' + e(String(num)) + '</td>' +
+      '<td style="padding:6px 8px;">' + e(chLabel) + '</td>' +
+      '<td style="padding:6px 8px;color:var(--warm-gray);">' + e(when) + '</td>' +
+      '<td style="padding:6px 8px;text-align:right;">' + fmt$(_cents(o)) + '</td>' +
+      '<td style="padding:6px 8px;white-space:nowrap;">' +
+        '<input id="' + inputId + '" maxlength="2" placeholder="ST" oninput="this.value=this.value.toUpperCase()" style="width:46px;padding:4px 6px;border:1px solid var(--cream-dark);border-radius:4px;font-size:0.78rem;">' +
+        '<button class="btn btn-secondary" style="font-size:0.78rem;padding:3px 10px;" onclick="finBackfillOrderState(\'' + e(m.id) + '\',\'' + inputId + '\')">Save</button>' +
+      '</td>' +
+    '</tr>';
+  }).join('');
+  return '<div style="border:1px solid var(--amber);background:rgba(196,133,60,0.10);border-radius:10px;padding:14px 16px;margin-bottom:20px;">' +
+    '<div style="font-weight:600;color:var(--amber);margin-bottom:4px;">⚠️ ' + list.length + ' order' + (list.length === 1 ? '' : 's') + ' missing a tax jurisdiction (' + fmt$(total) + ')</div>' +
+    '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:10px;">Excluded from the sales-tax and nexus figures above — set the state where each sale occurred to include it. POS sales now capture this automatically.</div>' +
+    '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.78rem;">' +
+      '<thead><tr style="text-align:left;color:var(--warm-gray);"><th style="padding:6px 8px;">Order</th><th style="padding:6px 8px;">Channel</th><th style="padding:6px 8px;">Date</th><th style="padding:6px 8px;text-align:right;">Total</th><th style="padding:6px 8px;">Jurisdiction</th></tr></thead>' +
+      '<tbody>' + rows + '</tbody>' +
+    '</table></div>' +
+  '</div>';
+}
+
+// Backfill a missing jurisdiction onto an order, then refresh the view.
+window.finBackfillOrderState = function(orderId, inputId) {
+  var el = document.getElementById(inputId);
+  var st = el ? String(el.value || '').trim().toUpperCase() : '';
+  if (!/^[A-Z]{2}$/.test(st)) { showToast('Enter a 2-letter state code (e.g. MA)', true); return; }
+  MastDB.update('orders/' + orderId, { taxState: st }).then(function() {
+    showToast('Jurisdiction set to ' + st);
+    if (typeof loadTaxSalesTaxData === 'function') loadTaxSalesTaxData();
+  }).catch(function(err) {
+    showToast('Backfill failed: ' + (err && err.message ? err.message : err), true);
+  });
+};
+
+function renderTaxSalesTax(byState, nexus, start, end, missingStateOrders) {
   var states = Object.keys(byState).sort(function(a,b) { return byState[b].taxCollected - byState[a].taxCollected; });
   var totalTax = states.reduce(function(sum,s) { return sum + byState[s].taxCollected; }, 0);
   var h = renderFilingDeadlineBanner();
@@ -4723,6 +4781,9 @@ function renderTaxSalesTax(byState, nexus, start, end) {
   h += statCard('Registered States', String(regCount), regCount > 0 && regCount === states.length ? '#22c55e' : '#eab308');
   h += statCard('Period', toDateShort(start) + ' – ' + toDateShort(end), 'var(--warm-gray,#888)');
   h += '</div>';
+
+  // W6 F5: stateless orders are excluded from every figure above — surface them.
+  h += _renderMissingStateTriage(missingStateOrders);
 
   // W1 R2-F3: register exporter early so footer button works even on empty state.
   _finExporters['finance-tax-sales'] = function() {
