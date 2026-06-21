@@ -1,0 +1,94 @@
+{
+  "workflow": "W3",
+  "title": "In-person POS sale → books (money canary)",
+  "tenant": "sgtest15",
+  "date": "2026-06-20",
+  "fixture": {
+    "pid": "qa-w3-widget",
+    "priceCents": 2500,
+    "qty": 1,
+    "saleTotalCents": 2500,
+    "startStock": 100,
+    "seeded": "seeded then torn down (catalog restored to pre-pilot state)",
+    "note": "Dedicated finished-goods fixture; confirmed onHand 100 / committed 0 on seed."
+  },
+  "proxyValidation": {
+    "method": "mast_orders create_test (online-order proxy for the UI POS write, which has no MCP tool)",
+    "executed": true,
+    "orderId": "3xGtrgL7gQn5snwGAOBB",
+    "orderNumber": "SGTE-0219",
+    "tornDown": true,
+    "baselineRestored": true,
+    "note": "Proxy validates the before/after scorecard MECHANICS on real data. It exercises the online-order path + the protected-action handshake, NOT the true direct-pos channel or the inventory side-effect pipeline."
+  },
+  "surfaces": {
+    "agent": {
+      "runnable": true,
+      "executed": true,
+      "role": "oracle (no MCP POS-create tool — UI-only finding)",
+      "lens1": {
+        "passAt1": true,
+        "passAt1Note": "A1/A2/A4/A5 pass exactly on the proxy; A3 (inventory) not exercised by create_test.",
+        "passHatK": { "k": 5, "passes": null, "note": "repeat-reliability not run this session" },
+        "collateral": "clean — only a 'test' channel bucket appeared; no real channel or other product changed; removed on teardown"
+      },
+      "lens2": {
+        "toolCallsPerSnapshot": 3,
+        "toolCallsFullLoop": 6,
+        "responseBytesPerSnapshot": 2752,
+        "approxTokensFullLoop": 1400,
+        "costUsd": null
+      },
+      "oracle": {
+        "before": {
+          "revenueTotalCents": 9285856,
+          "pnlRevenueCents": 9285856,
+          "byChannelCents": { "online": 202256, "Online Store": 13600, "pos": 460000, "phone": 4800000, "manual": 3750000, "direct-pos": 60000 },
+          "fixtureOnHand": 100,
+          "fixtureCommitted": 0
+        },
+        "after": {
+          "revenueTotalCents": 9288356,
+          "pnlRevenueCents": 9288356,
+          "byChannelCents": { "online": 202256, "Online Store": 13600, "pos": 460000, "phone": 4800000, "manual": 3750000, "test": 2500, "direct-pos": 60000 },
+          "fixtureOnHand": 100,
+          "fixtureCommitted": 0,
+          "pnl": { "cogsCents": 116930, "grossProfitCents": 9171426, "operatingExpensesCents": 741048, "netProfitCents": 8430378 }
+        },
+        "assertions": [
+          { "name": "A1 revenue +saleTotal exact", "expected": "+2500", "actual": "+2500 (9285856 → 9288356)", "pass": true },
+          { "name": "A2 single channel +saleTotal", "expected": "exactly one channel +2500", "actual": "new 'test' bucket +2500; all real channels unchanged", "pass": true, "note": "proxy lands in 'test'; a true POS sale would target pos/direct-pos" },
+          { "name": "A3 inventory -qty", "expected": "onHand -1", "actual": "100 → 100, committed 0 → 0 (no change)", "pass": null, "note": "NOT EXERCISED: create_test skips the inventory side-effect pipeline; requires the real UI POS path" },
+          { "name": "A4 revenue==pnl reconciliation", "expected": "equal", "actual": "9288356 == 9288356", "pass": true },
+          { "name": "A5 no collateral change", "expected": "nothing else moved", "actual": "only 'test' channel added; fixture + all other products unchanged", "pass": true }
+        ]
+      }
+    },
+    "ui": {
+      "runnable": true,
+      "executed": false,
+      "blockedOn": "writable automated session (testmode is write-denied; no stored auth)",
+      "runner": "scripts/qa-spine/w3-pos-ui.mjs",
+      "lens1": { "passAt1": null, "collateral": null },
+      "lens2": { "taskSuccess": null, "steps": null, "timeMs": null, "errorCount": null, "seq": null }
+    }
+  },
+  "findings": [
+    {
+      "severity": "medium",
+      "title": "Channel-key fragmentation in revenue byChannel",
+      "detail": "byChannel splits POS across 'pos' (460000) + 'direct-pos' (60000) and online across 'online' (202256) + 'Online Store' (13600). Total reconciles with P&L (not a money error) but per-channel reporting is unreliable. Root cause: revenue grouped on raw o.source/s.source with ad-hoc defaults and no canonical normalization (finance.js:541/551/603/621/1783/1795; channels.js:2466 default 'direct-pos'; dtc_online label 'Online Store' at channels.js:51/156). Flagged: task_f0d1c0e4.",
+      "shapesAssertion": "A2"
+    },
+    {
+      "severity": "info",
+      "title": "create_test orders are correctly segregated into a 'test' revenue channel",
+      "detail": "The proxy order landed in a new 'test' byChannel bucket, not in a real channel — good platform hygiene; test orders do not pollute real-channel revenue. (Positive finding.)"
+    },
+    {
+      "severity": "low",
+      "title": "mast_orders reads are protected (Lens-2 agent friction)",
+      "detail": "Every mast_orders action — including get and list — returns the two-call confirmation handshake, so order READS cost an agent double the calls/tokens. Reasonable for PII safety, but worth noting as an agent ease-of-use cost; consider a read-only unprotected projection for low-sensitivity order reads."
+    }
+  ]
+}
