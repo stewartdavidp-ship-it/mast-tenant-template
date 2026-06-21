@@ -165,7 +165,9 @@ jobs:
           node test/mast-entity.test.js &&
           node test/finance-order-money.test.js &&
           node test/finance-pos-dedup.test.js &&
+          node test/pos-tax-jurisdiction.test.js &&
           node test/customer-filters.test.js &&
+          node test/customer-resolver.test.js &&
           node test/variant-reconcile.test.js &&
           node test/jobs-transitions.test.js &&
           node test/guided-header-branch.test.js &&
@@ -177,6 +179,8 @@ jobs:
           node test/mastdb-fieldpath.test.js &&
           node test/mastdb-push-fieldpath.test.js &&
           node test/mastdb-core.test.js &&
+          node test/mastdb-missing-index.test.js &&
+          node test/mastdb-listener-missing-index.test.js &&
           node test/lint-ratchet.test.js &&
           node test/lint-conflict-markers.test.js &&
           node test/lint-manifest-integrity.test.js &&
@@ -186,7 +190,8 @@ jobs:
           node test/mast-export.test.js &&
           node test/mast-sanitize.test.js &&
           node test/orders-core.test.js &&
-          node test/mast-intake.test.js
+          node test/mast-intake.test.js &&
+          node test/product-readiness.test.js
 
   # Track-0 runtime safety net: boot the real admin shell headless (the localhost
   # `?testmode=1` auth bypass), navigate every major surface, and FAIL on any
