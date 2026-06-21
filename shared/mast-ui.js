@@ -1031,10 +1031,49 @@
     var s = document.createElement('style'); s.id = 'mast-ui-styles'; s.textContent = css; document.head.appendChild(s);
   }
 
+  // ── prompt — a themed, self-contained input dialog. The engine replacement for
+  // window.prompt (which renders in the OS style and ignores the theme). Built from
+  // inline var(--…) tokens only — no shell globals, no .mu-* CSS dependency — so it
+  // works anywhere the token set resolves (the admin natively; the POS via token
+  // aliases). Returns a Promise<string|null> (null = cancelled). opts: { title,
+  // value?, placeholder?, confirmLabel?, cancelLabel?, inputmode? }.
+  function prompt(opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      var prev = document.getElementById('mu-prompt'); if (prev) prev.remove();
+      var ov = document.createElement('div');
+      ov.id = 'mu-prompt';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+      ov.innerHTML =
+        '<div role="dialog" aria-modal="true" style="background:var(--surface-card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:380px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,0.35);">' +
+          '<h3 style="margin:0 0 14px;font-size:1rem;font-weight:600;color:var(--text-primary);">' + esc(opts.title || '') + '</h3>' +
+          '<input id="mu-prompt-field" type="text" inputmode="' + esc(opts.inputmode || 'text') + '" ' +
+            'value="' + esc(opts.value || '') + '" placeholder="' + esc(opts.placeholder || '') + '" ' +
+            'style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-secondary);color:var(--text-primary);font-size:16px;box-sizing:border-box;">' +
+          '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+            '<button type="button" id="mu-prompt-cancel" style="padding:10px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-primary);font-size:14px;cursor:pointer;">' + esc(opts.cancelLabel || 'Cancel') + '</button>' +
+            '<button type="button" id="mu-prompt-ok" style="padding:10px 18px;border-radius:8px;border:none;background:var(--amber);color:var(--amber-ink,#fff);font-weight:600;font-size:14px;cursor:pointer;">' + esc(opts.confirmLabel || 'OK') + '</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(ov);
+      var field = ov.querySelector('#mu-prompt-field');
+      var done = false;
+      function close(val) { if (done) return; done = true; ov.remove(); resolve(val); }
+      ov.querySelector('#mu-prompt-cancel').onclick = function () { close(null); };
+      ov.querySelector('#mu-prompt-ok').onclick = function () { close(field.value); };
+      field.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); close(field.value); }
+        else if (e.key === 'Escape') { e.preventDefault(); close(null); }
+      });
+      ov.addEventListener('click', function (e) { if (e.target === ov) close(null); });
+      setTimeout(function () { field.focus(); field.select(); }, 0);
+    });
+  }
+
   if (typeof window !== 'undefined') {
     injectStyles(); wireDelegates();
     window.MastUI = {
-      Num: Num, badge: badge, statusBadge: statusBadge, emptyState: emptyState, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, _esc: esc, sanitizeHtml: sanitizeHtml,
+      Num: Num, badge: badge, statusBadge: statusBadge, emptyState: emptyState, tabs: tabs, list: list, slideOut: slideOut, deepLink: deepLink, prompt: prompt, _esc: esc, sanitizeHtml: sanitizeHtml,
       tiles: tiles, card: card, cardTable: cardTable, kv: kv, metricTable: metricTable, timeline: timeline, relatedTable: relatedTable,
       imageThumb: imageThumb, openImg: openImg, panelTab: panelTab, paneTabsBar: paneTabsBar,
       stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader,
