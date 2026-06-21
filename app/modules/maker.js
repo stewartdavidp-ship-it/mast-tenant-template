@@ -1869,16 +1869,13 @@
   var materialsCategoryFilter = 'all';
   var editingMaterialId = null;
 
-  var MATERIAL_STATUS_COLORS = {
-    active:   { bg: 'rgba(22,163,74,0.15)', color: '#16a34a', border: 'rgba(22,163,74,0.3)' },
-    draft:    { bg: 'rgba(196,133,60,0.15)', color: 'var(--amber)', border: 'rgba(196,133,60,0.3)' },
-    archived: { bg: 'rgba(156,163,175,0.15)', color: '#9ca3af', border: 'rgba(156,163,175,0.3)' }
-  };
-
-  function materialStatusBadgeStyle(status) {
-    var c = MATERIAL_STATUS_COLORS[status] || MATERIAL_STATUS_COLORS.draft;
-    return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
-  }
+  // Material status badges now render via the canonical MastUI.statusBadge(status,
+  // 'material') engine (Track 5 / Wave 2; shared/mast-ui.js _statusRegistry.material).
+  // Colors (active/draft/archived) + raw-status labels were captured verbatim from
+  // the former MATERIAL_STATUS_COLORS map when the registry was built, so hue + label
+  // are identical; the pill becomes the unified soft-tint style. The call site passes
+  // (m.status || 'draft') to preserve the missing-status -> draft fallback. No cross-
+  // module consumer, so the map + style fn are removed.
 
   function getUomLabel(uom) {
     var match = UOM_OPTIONS.find(function(o) { return o.value === uom; });
@@ -2108,7 +2105,7 @@
       // -OtEObAwxnUpFmiLp-30 (partial — MCP tool tracked separately).
       html += '<td style="text-align:right;font-family:monospace;font-size:0.78rem;">' + cost90dDeltaChip(m) + '</td>';
       html += '<td style="text-align:right;">' + (m.onHandQty || 0) + '</td>';
-      html += '<td><span class="status-badge" style="' + materialStatusBadgeStyle(m.status) + '">' + esc(m.status || 'draft') + '</span></td>';
+      html += '<td>' + MastUI.statusBadge(m.status || 'draft', 'material') + '</td>';
       html += '<td style="text-align:right;white-space:nowrap;" onclick="event.stopPropagation()">';
       html += '<button class="btn-icon" data-mid="' + esc(id) + '" onclick="event.stopPropagation();makerEditMaterial(this.dataset.mid)" title="Edit">\u270E</button>';
       if (m.status !== 'archived') {
@@ -3576,19 +3573,19 @@
 
   // ----- Status badge -------------------------------------------------------
 
+  // Product status badge — now delegates to the canonical MastUI.statusBadge(status,
+  // 'product') engine (Track 5 / Wave 2; shared/mast-ui.js _statusRegistry.product).
+  // The text color + label (incl. the deliberate ready->"Review" remap) were captured
+  // verbatim from this fn's former styles map when the registry was built, so hue +
+  // label are identical; the pill becomes the unified soft-tint style (the former
+  // UPPERCASE text-transform + decorative product-status-* classes, unreferenced in
+  // any CSS/JS, give way to the engine's Title-Case canonical pill). Kept as a thin
+  // adapter (NOT inlined) because products-engine.js consumes window.productStatusBadgeHtml;
+  // it preserves the missing/falsy-status -> 'draft' fallback + case-insensitive
+  // lookup. Unknown-but-truthy status -> the engine's neutral badge (was 'draft');
+  // product status is a controlled enum, so that path is inert.
   function productStatusBadgeHtml(status) {
-    var s = (status || 'draft').toLowerCase();
-    var styles = {
-      draft:    { bg: 'rgba(120,120,120,0.15)', color: '#525252', label: 'Draft' },
-      ready:    { bg: 'rgba(217,119,6,0.15)',   color: '#b45309', label: 'Review' },
-      active:   { bg: 'rgba(42,124,111,0.15)',  color: 'var(--teal,#2a7c6f)', label: 'Active' },
-      archived: { bg: 'rgba(180,83,9,0.18)',    color: '#9a3412', label: 'Archived' }
-    };
-    var st = styles[s] || styles.draft;
-    return '<span class="status-badge product-status-badge product-status-' + s +
-      '" style="background:' + st.bg + ';color:' + st.color +
-      ';font-size:0.72rem;padding:3px 8px;border-radius:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;">' +
-      st.label + '</span>';
+    return MastUI.statusBadge((status || 'draft').toLowerCase(), 'product');
   }
 
   // ----- Readiness Checklist UI panel --------------------------------------
