@@ -1698,18 +1698,59 @@ function loadPermissions() {
     }).catch(function() { apply(role === 'manager'); });
   }).catch(function() {});
 }
+// Themed in-app input dialog. Replaces window.prompt (which renders in the OS
+// light style and ignores the POS theme). Mirrors the existing POS modal pattern
+// (commission / event modals): var(--card) surface, var(--bg) field, var(--text)
+// / var(--border) — so it tracks the active theme in both dark and light mode.
+function posInputModal(opts) {
+  opts = opts || {};
+  var prev = document.getElementById('posInputModal');
+  if (prev) prev.remove();
+  var modal = document.createElement('div');
+  modal.id = 'posInputModal';
+  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
+  modal.innerHTML =
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:380px;width:100%;">' +
+      '<h3 style="margin:0 0 14px;font-size:1rem;color:var(--text);">' + esc(opts.title || '') + '</h3>' +
+      '<input id="posInputModalField" type="text" inputmode="' + (opts.inputmode || 'text') + '" ' +
+        'value="' + esc(opts.value || '') + '" placeholder="' + esc(opts.placeholder || '') + '" ' +
+        'style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;box-sizing:border-box;">' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
+        '<button type="button" id="posInputModalCancel" style="padding:10px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">Cancel</button>' +
+        '<button type="button" id="posInputModalOk" style="padding:10px 18px;border-radius:8px;border:none;background:var(--gold);color:#000;font-weight:600;font-size:14px;cursor:pointer;">' + esc(opts.confirmLabel || 'OK') + '</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+  var field = document.getElementById('posInputModalField');
+  function close() { modal.remove(); }
+  function submit() { var v = field.value; close(); if (opts.onConfirm) opts.onConfirm(v); }
+  document.getElementById('posInputModalCancel').onclick = close;
+  document.getElementById('posInputModalOk').onclick = submit;
+  field.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); }
+  });
+  modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
+  setTimeout(function() { field.focus(); field.select(); }, 0);
+}
+
 function overrideLinePrice(idx) {
   if (!canOverridePrice) { showToast('You don’t have permission to override prices', true); return; }
   var it = saleItems[idx];
   if (!it) return;
-  var cur = ((it.priceCents || 0) / 100).toFixed(2);
-  var input = window.prompt('Override price for “' + it.productName + '” (per item):', cur);
-  if (input == null) return;
-  var v = parseFloat(String(input).replace(/[^0-9.]/g, ''));
-  if (isNaN(v) || v < 0) { showToast('Enter a valid price', true); return; }
-  it.overridePriceCents = Math.round(v * 100);
-  recomputeLinePrice(it);
-  refreshCartUI();
+  posInputModal({
+    title: 'Override price for “' + it.productName + '” (per item)',
+    value: ((it.priceCents || 0) / 100).toFixed(2),
+    inputmode: 'decimal',
+    confirmLabel: 'Set price',
+    onConfirm: function(input) {
+      var v = parseFloat(String(input).replace(/[^0-9.]/g, ''));
+      if (isNaN(v) || v < 0) { showToast('Enter a valid price', true); return; }
+      it.overridePriceCents = Math.round(v * 100);
+      recomputeLinePrice(it);
+      refreshCartUI();
+    }
+  });
 }
 function clearLineOverride(idx) {
   var it = saleItems[idx];
@@ -1741,10 +1782,15 @@ function couponDiscountCents() {
 }
 function openCoupon() {
   if (appliedCoupon) { removeCoupon(); return; }
-  var code = window.prompt('Enter coupon code');
-  if (code == null) return;
-  code = String(code).trim();
-  if (code) applyCoupon(code);
+  posInputModal({
+    title: 'Add coupon',
+    placeholder: 'Coupon code',
+    confirmLabel: 'Apply',
+    onConfirm: function(code) {
+      code = String(code || '').trim();
+      if (code) applyCoupon(code);
+    }
+  });
 }
 function applyCoupon(code) {
   if (!navigator.onLine) { showToast('Coupon needs a connection', true); return; }
