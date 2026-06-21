@@ -232,14 +232,14 @@
        ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
   <script src="../shared/mast-sanitize.js?v=38018e684f41"></script>
   <!-- Shared order display/format helpers (T6 orders.js-retirement keystone, PR1).
-       window.OrdersCore + back-compat window.<name> aliases (orderStatusBadgeStyle,
-       getOrderDisplayNumber, formatOrderDate/Time, getOrderItemsLabel,
+       window.OrdersCore + back-compat window.<name> aliases (getOrderDisplayNumber,
+       formatOrderDate/Time, getOrderItemsLabel,
        renderOrderProgress, ensureTenantTz/tzPartsFromIso) lifted VERBATIM out of
        the lazy orders.js IIFE. Eager so the cross-module consumers that bare-call
        them (fulfillment.js, the shell's order tables + dashboard cards) always
        resolve — closing the load-order fragility of the old lazy-only home.
        ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
-  <script src="../shared/orders-core.js?v=b89154c5ed67"></script>
+  <script src="../shared/orders-core.js?v=262e219c77e8"></script>
   <!-- Lazy CDN loaders (Track 3). window.ensurePapa()/ensureXlsx() inject
        papaparse@5 / xlsx@0.18.5 on FIRST import/export use instead of eagerly on
        every admin boot (xlsx@0.18.5 carries known CVEs; both are import/export-only).
@@ -20974,7 +20974,7 @@ var MODULE_MANIFEST = {
   'resources-v2': { src: 'modules/resources-v2.js', v: '817832f43559', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
   'newsletter-v2': { src: 'modules/newsletter-v2.js', v: '39ce447d358d', routes: ['newsletter-v2', 'newsletter'] }, // Newsletter hub (issues + subscribers + native composer). newsletter.js (V1) RETIRED (T6): its NewsletterBridge + rich-text helpers + newsletterOpenFromContent were absorbed here; the bare #newsletter route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   sales: { src: 'modules/sales.js', v: 'cc9154861404', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
-  fulfillment: { src: 'modules/fulfillment.js', v: '6a74ff57b700', routes: ['pack', 'ship', 'fulfillment'] },
+  fulfillment: { src: 'modules/fulfillment.js', v: '02e45afaf96f', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', v: 'd599d372978f', routes: ['events-shows', 'events-settings'] },
   'website-core': { src: 'modules/website-core.js', v: '7e614803931f', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module website write layer (WebsiteBridge + the destructive template-switch cascade wpConfirmSwitch/computeGalleryMigration/executeGalleryMigration + category manager openManageCategoriesDialog/wpCat* + markUnpublished) lifted out of website.js so V2 consumers (website-v2, index.html category dialogs, gallery-metadata-modal) load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'website-import': { src: 'modules/website-import.js', v: '5cd479d73730', routes: ['website-import'] }, // T6 rip-and-replace PR2: AI catalog-import wizard (analyze→crawl→cherry-pick→import→enrich→review/publish→draft templates) relocated VERBATIM out of website.js into its own lazy module (MastEntity does not fit an async multi-step job flow). The 3 import doors (setup-wizard, "View Report", website-v2 Card 3) route here; backend CFs (analyzeExistingSite/runEnrichment/processImportJob) unchanged. Wires a real listener detach (the V1 leak).

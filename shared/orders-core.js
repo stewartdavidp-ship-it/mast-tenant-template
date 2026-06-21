@@ -35,32 +35,16 @@
   // Badge Style Helpers (inline colors per style guide)
   // ============================================================
 
-  var ORDER_STATUS_BADGE_COLORS = {
-    pending_payment: { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
-    payment_failed:  { bg: 'rgba(198,40,40,0.2)', color: '#EF5350', border: 'rgba(198,40,40,0.35)' },
-    placed:          { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
-    confirmed:       { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
-    building:        { bg: 'rgba(123,31,162,0.2)', color: '#CE93D8', border: 'rgba(123,31,162,0.35)' },
-    ready:           { bg: 'rgba(27,92,82,0.25)', color: '#4DB6AC', border: 'rgba(27,92,82,0.4)' },
-    pack:            { bg: 'rgba(27,92,82,0.25)', color: '#4DB6AC', border: 'rgba(27,92,82,0.4)' },
-    packing:         { bg: 'rgba(249,168,37,0.2)', color: '#FFD54F', border: 'rgba(249,168,37,0.35)' },
-    packed:          { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
-    handed_to_carrier: { bg: 'rgba(69,39,160,0.2)', color: '#B39DDB', border: 'rgba(69,39,160,0.35)' },
-    shipped:         { bg: 'rgba(40,53,147,0.2)', color: '#7986CB', border: 'rgba(40,53,147,0.35)' },
-    delivered:       { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
-    cancelled:       { bg: 'rgba(155,35,53,0.2)', color: '#EF5350', border: 'rgba(155,35,53,0.35)' },
-    return_requested:    { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
-    return_approved:     { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
-    return_shipped:      { bg: 'rgba(69,39,160,0.2)', color: '#B39DDB', border: 'rgba(69,39,160,0.35)' },
-    return_received:     { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
-    partially_returned:  { bg: 'rgba(230,81,0,0.2)', color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
-    refunded:            { bg: 'rgba(155,35,53,0.2)', color: '#EF5350', border: 'rgba(155,35,53,0.35)' }
-  };
-
-  function orderStatusBadgeStyle(status) {
-    var c = ORDER_STATUS_BADGE_COLORS[status] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
-    return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
-  }
+  // Order status badges now render via the canonical MastUI.statusBadge(status,
+  // 'order') engine (Track 5 / Wave 2; shared/mast-ui.js _statusRegistry.order). The
+  // text colors (19 statuses) + label (status with underscores -> spaces) were
+  // captured verbatim from the former ORDER_STATUS_BADGE_COLORS map when the registry
+  // was built, so hue + label are identical; the pill becomes the unified soft-tint
+  // style. The one non-order reuse — the fulfillment.js drop-off-BUNDLE badge, which
+  // borrowed the 'packing'/'delivered' hues while labelling with the bundle's own
+  // status — moved to the tone-driven MastUI.badge(label, 'teal'|'neutral') (open ->
+  // teal, closed -> neutral, matching the bundle card's border). With no consumer
+  // left, orderStatusBadgeStyle + its OrdersCore export + window alias are removed.
 
   function etsySourceBadgeStyle() {
     return 'background:#F1641E;color:white;';
@@ -1149,7 +1133,7 @@
         contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
           '<div class="dash-queue-row">' +
             '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
-            '<span class="status-badge pill" style="font-size:0.72rem;padding:2px 8px;' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span>' +
+            window.MastUI.statusBadge(status, 'order') +
           '</div>' +
           (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
           '<div class="dash-queue-meta">' +
@@ -1194,7 +1178,7 @@
         contentHtml += '<div class="dash-queue-item" onclick="viewOrder(\'' + esc(key) + '\')">' +
           '<div class="dash-queue-row">' +
             '<span class="dash-queue-order-num">' + num + sourceBadge + '</span>' +
-            '<span class="status-badge pill" style="font-size:0.72rem;padding:2px 8px;' + orderStatusBadgeStyle('packed') + '">packed</span>' +
+            window.MastUI.statusBadge('packed', 'order') +
           '</div>' +
           (customer ? '<div class="dash-queue-customer">' + esc(customer) + '</div>' : '') +
           '<div class="dash-queue-meta">' +
@@ -1220,7 +1204,6 @@
   // window.* call sites across modules + the shell are untouched).
   // ============================================================
   var OrdersCore = {
-    orderStatusBadgeStyle: orderStatusBadgeStyle,
     etsySourceBadgeStyle: etsySourceBadgeStyle,
     getOrderDisplayNumber: getOrderDisplayNumber,
     getOrderItemsLabel: getOrderItemsLabel,
@@ -1262,7 +1245,6 @@
 
   if (typeof window !== 'undefined') {
     window.OrdersCore = OrdersCore;
-    window.orderStatusBadgeStyle = orderStatusBadgeStyle;
     window.etsySourceBadgeStyle = etsySourceBadgeStyle;
     window.getOrderDisplayNumber = getOrderDisplayNumber;
     window.getOrderItemsLabel = getOrderItemsLabel;
