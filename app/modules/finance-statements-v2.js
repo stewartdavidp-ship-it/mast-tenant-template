@@ -31,6 +31,10 @@
 
   var U = window.MastUI, N = U.Num, esc = U._esc || function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
   function m(cents) { return N.money(cents, { cents: true }); }
+  // Canonical channel label via the shared parity-locked normalizer. The
+  // FinanceBridge aggregates already return canonical channel KEYS (finance.js
+  // normalizes at grouping time); here we render their friendly labels.
+  function chanLabel(key) { return (window.MastChannels && window.MastChannels.label(key)) || String(key == null ? '' : key); }
   function canView(route) { return (typeof window.can === 'function') ? window.can(route, 'view') : true; }
 
   var LENSES = [
@@ -105,7 +109,7 @@
   function channelTable(byChannel, totalCents) {
     var keys = Object.keys(byChannel || {}).sort(function (a, b) { return byChannel[b] - byChannel[a]; });
     return table([
-      { label: 'Channel', render: function (r) { return esc(r); } },
+      { label: 'Channel', render: function (r) { return esc(chanLabel(r)); } },
       { label: 'Revenue', align: 'right', render: function (r) { return m(byChannel[r]); } },
       { label: 'Share', align: 'right', render: function (r) { return totalCents > 0 ? (byChannel[r] / totalCents * 100).toFixed(1) + '%' : '—'; } }
     ], keys);
@@ -193,11 +197,11 @@
         U.card('Transactions' + (d.rows.length > 200 ? ' (first 200)' : ''), table([
           { label: 'Date', render: function (r) { return esc(String(r.date).slice(0, 10)); } },
           { label: 'Ref', render: function (r) { return esc(r.label) + (r.party ? ' <span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(r.party) + '</span>' : ''); } },
-          { label: 'Channel', render: function (r) { return esc(r.channel); } },
+          { label: 'Channel', render: function (r) { return esc(chanLabel(r.channel)); } },
           { label: 'Amount', align: 'right', render: function (r) { return m(r.cents); } }
         ], shown), { fill: true }) +
         '</div>';
-      V2.csv = [['Date', 'Ref', 'Kind', 'Channel', 'AmountCents']].concat(d.rows.map(function (r) { return [String(r.date).slice(0, 10), r.label, r.kind, r.channel, r.cents]; }));
+      V2.csv = [['Date', 'Ref', 'Kind', 'Channel', 'AmountCents']].concat(d.rows.map(function (r) { return [String(r.date).slice(0, 10), r.label, r.kind, chanLabel(r.channel), r.cents]; }));
     });
   }
 
