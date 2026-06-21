@@ -299,12 +299,11 @@ body {
       <input type="text" id="catalogSearch" placeholder="Search products..." oninput="filterCatalog(this.value)">
       <button class="scan-btn" onclick="openScanner()" title="Identify a product with the camera">📷 Scan</button>
     </div>
-    <div class="category-strip" id="categoryStrip"></div>
-    <div class="variant-back-bar" id="variantBackBar" onclick="exitVariants()" style="display:none;">
+    <div class="variant-back-bar" id="backBar" onclick="onBackBar()" style="display:none;">
       <span class="variant-back-arrow">‹</span>
-      <span>All products</span>
+      <span id="backBarLabel">Categories</span>
       <span class="variant-back-sep">·</span>
-      <strong id="variantBackName"></strong>
+      <strong id="backBarTitle"></strong>
     </div>
     <div id="catalogGrid"></div>
   </div>
@@ -438,7 +437,7 @@ var capturedPreviewUrl = null;
 var paymentType = 'cash';
 
 // Catalog browse state
-var currentCategory = 'all';
+var currentCategory = null;  // null = at the category grid (landing); 'all' or a label = product view
 var currentFilter = '';
 var _catList = [];
 var variantParent = null; // pid whose variants are currently shown (2-step drill-in), else null
@@ -791,7 +790,7 @@ function loadProducts() {
     productsList = Object.values(products)
       .filter(function(p) { return !p.availability || p.availability === 'available'; })
       .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
-    renderCategoryStrip();
+    buildCategoryList();
     renderCatalog();
     refreshCartUI();
   });
@@ -1345,8 +1344,10 @@ function titleCase(s) {
   return String(s || '').replace(/\b\w/g, function(m) { return m.toUpperCase(); });
 }
 
-function renderCategoryStrip() {
-  // normalized key -> display label (Title Case of the key, for a clean chip)
+// Derive the category list from the catalog (normalized key -> Title-Case label),
+// deduping "Bowls"/"bowls"/"home-decor" into one button. No DOM — the categories
+// render as their own grid of buttons in renderCatalog (level 1).
+function buildCategoryList() {
   var seen = {};
   function add(c) {
     var k = catKey(c);
@@ -1357,23 +1358,15 @@ function renderCategoryStrip() {
     if (Array.isArray(p.categories)) p.categories.forEach(add);
   });
   _catList = Object.keys(seen).sort().map(function(k) { return seen[k]; });
-
-  var html = '<div class="cat-chip ' + (currentCategory === 'all' ? 'active' : '') + '" onclick="selectCategory(-1)">All</div>';
-  _catList.forEach(function(label, i) {
-    var active = currentCategory !== 'all' && catKey(currentCategory) === catKey(label);
-    html += '<div class="cat-chip ' + (active ? 'active' : '') + '" onclick="selectCategory(' + i + ')">' + esc(label) + '</div>';
-  });
-
-  var strip = document.getElementById('categoryStrip');
-  strip.innerHTML = html;
-  // Hide the strip entirely when there are no categories to browse by
-  strip.style.display = _catList.length ? 'flex' : 'none';
 }
 
+// Tap a category button → drill into that category's products. -1 = "All products".
 function selectCategory(i) {
   currentCategory = i < 0 ? 'all' : _catList[i];
-  variantParent = null;            // leave variant view when changing category
-  renderCategoryStrip();
+  variantParent = null;
+  currentFilter = '';
+  var sb = document.getElementById('catalogSearch');
+  if (sb) sb.value = '';
   updateCatalogChrome();
   renderCatalog();
 }
@@ -1493,40 +1486,67 @@ function tileHtml(onclickAttr, imgUrl, name, priceHtml, badge) {
   '</div>';
 }
 
+// The catalog is a 3-level button drill-down: categories → products → variants.
+// All three render as the same large tiles into #catalogGrid.
 function renderCatalog() {
-  // Variant view — drilled into one product, showing each of its variants.
+  var grid = document.getElementById('catalogGrid');
+  var f = (currentFilter || '').toLowerCase();
+
+  // Search overrides the drill — show matching products across every category.
+  if (f) {
+    grid.innerHTML = productTilesHtml(productsList.filter(function(p) {
+      return (p.name || '').toLowerCase().indexOf(f) !== -1;
+    }));
+    return;
+  }
+
+  // Level 3 — variants of the tapped product.
   if (variantParent) {
     var parent = products[variantParent];
-    if (!parent || !hasVariants(parent)) {
-      variantParent = null;                        // stale parent — fall through to product list
-    } else {
+    if (parent && hasVariants(parent)) {
       var vhtml = '';
       productVariants(parent).forEach(function(v) {
         var price = variantPriceCents(parent, v);
         vhtml += tileHtml(
           'onclick="pickVariant(\'' + parent.pid + '\',\'' + esc(String(v.id)) + '\')"',
-          variantImg(parent, v),
-          variantLabel(v),
-          price > 0 ? fmtCents(price) : '',
-          ''
-        );
+          variantImg(parent, v), variantLabel(v), price > 0 ? fmtCents(price) : '', '');
       });
-      document.getElementById('catalogGrid').innerHTML = vhtml ||
+      grid.innerHTML = vhtml ||
         '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">No variants</div>';
       return;
     }
+    variantParent = null;                            // stale parent — fall through
   }
 
-  // Product view — default products only (one tile per product).
-  var f = (currentFilter || '').toLowerCase();
-  var filtered = productsList.filter(function(p) {
-    if (!productInCategory(p, currentCategory)) return false;
-    if (f && (p.name || '').toLowerCase().indexOf(f) === -1) return false;
-    return true;
-  });
+  // Level 1 — categories as buttons (the landing). Skipped when none exist.
+  if (_catList.length && currentCategory == null) {
+    var chtml = tileHtml('onclick="selectCategory(-1)"', '', 'All products', productsList.length + ' items', '');
+    _catList.forEach(function(label, i) {
+      var inCat = productsList.filter(function(p) { return productInCategory(p, label); });
+      var img = '';
+      for (var k = 0; k < inCat.length; k++) { var im = productImg(inCat[k]); if (im) { img = im; break; } }
+      chtml += tileHtml('onclick="selectCategory(' + i + ')"', img, label,
+        inCat.length + ' item' + (inCat.length !== 1 ? 's' : ''), '');
+    });
+    grid.innerHTML = chtml;
+    return;
+  }
 
+  // Level 2 — products in the selected category (or all products).
+  var list = (currentCategory && currentCategory !== 'all')
+    ? productsList.filter(function(p) { return productInCategory(p, currentCategory); })
+    : productsList;
+  grid.innerHTML = productTilesHtml(list);
+}
+
+// Product tiles (shared by the category drill + search). A variant product shows
+// "from $X" + an options badge and drills into its variants on tap.
+function productTilesHtml(list) {
+  if (!list.length) {
+    return '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">No products found</div>';
+  }
   var html = '';
-  filtered.forEach(function(p) {
+  list.forEach(function(p) {
     var priceHtml, badge = '';
     if (hasVariants(p)) {
       var min = minVariantPriceCents(p);
@@ -1537,10 +1557,7 @@ function renderCatalog() {
     }
     html += tileHtml('onclick="onProductTap(\'' + p.pid + '\')"', productImg(p), p.name || '', priceHtml, badge);
   });
-  if (!filtered.length) {
-    html = '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">No products found</div>';
-  }
-  document.getElementById('catalogGrid').innerHTML = html;
+  return html;
 }
 
 function filterCatalog(val) {
@@ -1569,17 +1586,35 @@ function exitVariants() {
   renderCatalog();
 }
 
-// Swap the category strip for a "‹ All products · ProductName" bar in variant view.
+// Back bar — drives the drill-up. Hidden at the category landing (and during a
+// search); "‹ Categories · {Category}" at the product level; "‹ {Category} ·
+// {Product}" at the variant level.
+function onBackBar() {
+  if (variantParent) exitVariants();
+  else exitToCategories();
+}
+function exitToCategories() {
+  currentCategory = null;
+  variantParent = null;
+  updateCatalogChrome();
+  renderCatalog();
+}
 function updateCatalogChrome() {
-  var strip = document.getElementById('categoryStrip');
-  var back = document.getElementById('variantBackBar');
+  var back = document.getElementById('backBar');
+  if (!back) return;
+  var label = document.getElementById('backBarLabel');
+  var title = document.getElementById('backBarTitle');
+  if (currentFilter) { back.style.display = 'none'; return; }   // search is a flat overlay
   if (variantParent && products[variantParent]) {
-    if (strip) strip.style.display = 'none';
     back.style.display = 'flex';
-    document.getElementById('variantBackName').textContent = products[variantParent].name || 'Product';
+    label.textContent = (currentCategory && currentCategory !== 'all') ? currentCategory : 'All products';
+    title.textContent = products[variantParent].name || 'Product';
+  } else if (_catList.length && currentCategory != null) {
+    back.style.display = 'flex';
+    label.textContent = 'Categories';
+    title.textContent = (currentCategory === 'all') ? 'All products' : currentCategory;
   } else {
     back.style.display = 'none';
-    if (strip) strip.style.display = _catList.length ? 'flex' : 'none';
   }
 }
 
@@ -2041,14 +2076,14 @@ function newSale() {
   document.getElementById('posContact').value = '';
   document.getElementById('cashBtn').classList.add('selected');
   document.getElementById('squareBtn').classList.remove('selected');
-  // Reset catalog browse state and return to the home grid
-  currentCategory = 'all';
+  // Reset catalog browse state and return to the category grid (landing)
+  currentCategory = null;
   currentFilter = '';
   variantParent = null;
   var search = document.getElementById('catalogSearch');
   if (search) search.value = '';
   if (camera && camera.isActive()) camera.stop();
-  renderCategoryStrip();
+  buildCategoryList();
   updateCatalogChrome();
   renderCatalog();
   refreshCartUI();
