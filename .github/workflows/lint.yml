@@ -181,6 +181,7 @@ jobs:
           node test/mastdb-core.test.js &&
           node test/mastdb-missing-index.test.js &&
           node test/mastdb-listener-missing-index.test.js &&
+          node test/mastdb-slow-read.test.js &&
           node test/mast-error.test.js &&
           node test/lint-ratchet.test.js &&
           node test/lint-conflict-markers.test.js &&

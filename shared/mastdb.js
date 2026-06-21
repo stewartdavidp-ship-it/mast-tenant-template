@@ -350,10 +350,37 @@ var MastDB = (function() {
     };
   }
 
+  // --- read-timing helper (diagnostics L2): flag slow reads via MastError ---
+  function _nowMs() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  }
+  // A slow SUCCESSFUL read → ring it (>=800ms) / capture the worst (>=1500ms), tagged by
+  // path so the operator can localize the offending query. The message omits the varying
+  // ms (it lives in ctx) so reports dedup per-path. No-op unless MastError is present.
+  function _reportReadTiming(ref, ms) {
+    if (ms < 800) return;
+    var path = (ref && ref.path) || '(query)';
+    try {
+      if (ms >= 1500) {
+        window.MastError.capture(new Error('slow read: ' + path),
+          { where: 'mastdb._fsGet', kind: 'slow-read', path: path, ms: Math.round(ms) });
+      } else {
+        window.MastError.breadcrumb('slow-read', { path: path, ms: Math.round(ms) });
+      }
+    } catch (_e) { /* timing must never disturb the read */ }
+  }
+
   // --- Firestore retry helper (handles cold-start connection failures) ---
   function _fsGet(ref, opts, attempt) {
     attempt = attempt || 0;
-    return ref.get(opts).catch(function(err) {
+    // Time only the top-level attempt (retries are the conn/missing-index path, already
+    // handled) and only when MastError is present (browser) — keeps the read path clean.
+    var _timed = attempt === 0 && typeof window !== 'undefined' && !!window.MastError;
+    var _t0 = _timed ? _nowMs() : 0; // NB: _t0 can legitimately be 0 (perf clock origin) — gate on _timed, not _t0
+    return ref.get(opts).then(function(snap) {
+      if (_timed) _reportReadTiming(ref, _nowMs() - _t0);
+      return snap;
+    }).catch(function(err) {
       // Missing composite index: Firestore returns `failed-precondition` carrying a
       // "create it here: https://console.firebase.google.com/…" URL. This is PERMANENT
       // (the index will not appear on retry), so the connection-retry below would burn
