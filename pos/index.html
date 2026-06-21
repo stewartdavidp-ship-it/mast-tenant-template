@@ -271,6 +271,9 @@ body {
 .coupon-btn:active { background: var(--card); }
 .coupon-applied { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(76,175,80,0.12); border: 1px solid var(--green); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
 .coupon-applied .x { color: var(--red); cursor: pointer; font-size: 18px; padding: 0 4px; }
+.tier-badges { position: absolute; top: 8px; left: 8px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; z-index: 2; }
+.tier-badge { background: var(--gold); color: #000; border: none; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
+.tier-tag { background: var(--gold); color: #000; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
 .override-tag { background: var(--blue); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-left: 6px; text-transform: uppercase; }
 .cart-line-total { color: var(--muted); }
 .line-controls { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
@@ -472,7 +475,8 @@ var variantParent = null; // pid whose variants are currently shown (2-step dril
 // Discount layer — active sales (read from public/sales-promotions) + an optional
 // order-level coupon. The server (submitOrder) is authoritative; these only drive
 // the register display and the per-line flags / coupon code sent at checkout.
-var saleLookup = {};       // pid -> { saleName, discountType, discountValue, variants|null }
+var saleLookup = {};       // pid -> { saleName, discountType, discountValue, variants|null } (auto %/$ sales)
+var tierRules = {};        // pid -> [{ saleId, name, tiers, variants|null }] (manual "X for $Y" deals)
 var appliedCoupon = null;  // { code, type, value, excludeSaleItems } once validated
 var canOverridePrice = false; // pos.overridePrice — resolved from the signed-in user's role
 
@@ -1034,6 +1038,18 @@ function cartItemHtml(item, idx) {
   var img = item.imageUrl
     ? '<img src="' + item.imageUrl + '" alt="">'
     : '<div style="width:50px;height:50px;background:var(--border);border-radius:6px;"></div>';
+  // Tier-rule line: priced as part of its bundle (marginal); shows the rule badge
+  // + its share, no qty/sale/override controls (each tap is one unit).
+  if (item.pricingRuleId) {
+    return '<div class="sale-item">' + img +
+      '<div class="sale-item-info">' +
+        '<div class="sale-item-name">' + esc(item.productName) + '</div>' +
+        '<div class="sale-item-meta"><span class="cart-line-sale">' + fmtCents(item.priceCents || 0) + '</span>' +
+          '<span class="tier-tag">🏷️ ' + esc(item.pricingRuleName || 'Deal') + '</span></div>' +
+      '</div>' +
+      '<span class="remove-btn" onclick="removeItem(' + idx + ')">&times;</span>' +
+    '</div>';
+  }
   var unit = item.priceCents || 0;
   var overridden = item.overridePriceCents != null;
   var onSale = item.saleCents != null && !item.skipSale && !overridden;
@@ -1418,6 +1434,7 @@ function _createPosOrder(saleRecord) {
     // this the order/receipt line label is blank. Price is still server-repriced.
     var o = { pid: it.productId, variantId: it.variantId || null, qty: it.quantity, name: it.productName || '', skipSale: it.skipSale === true };
     if (it.overridePriceCents != null) o.overridePriceCents = it.overridePriceCents;
+    if (it.pricingRuleId) o.pricingRuleId = it.pricingRuleId;
     return o;
   });
   var payload = { data: {
@@ -1480,7 +1497,7 @@ function saveSale() {
     amount: amountCents,
     squareRef: window._pendingSquareRef || null,
     items: saleItems.map(function(item) {
-      return { productId: item.productId, variantId: item.variantId || null, productName: item.productName, quantity: item.quantity, priceCents: item.priceCents || 0, skipSale: item.skipSale === true, overridePriceCents: (item.overridePriceCents != null ? item.overridePriceCents : null), confidence: item.confidence };
+      return { productId: item.productId, variantId: item.variantId || null, productName: item.productName, quantity: item.quantity, priceCents: item.priceCents || 0, skipSale: item.skipSale === true, overridePriceCents: (item.overridePriceCents != null ? item.overridePriceCents : null), pricingRuleId: item.pricingRuleId || null, confidence: item.confidence };
     }),
     couponCode: appliedCoupon ? appliedCoupon.code : null,
     imageId: null,
@@ -1670,7 +1687,7 @@ function minVariantPriceCents(p) {
 // so the register shows the same numbers the server will charge.
 // ============================================================
 function buildSaleLookup(salesData) {
-  saleLookup = {};
+  saleLookup = {}; tierRules = {};
   var data = salesData || {};
   var now = new Date().toISOString();
   Object.keys(data).forEach(function(sid) {
@@ -1681,12 +1698,19 @@ function buildSaleLookup(salesData) {
     (sale.products || []).forEach(function(entry) {
       var pid = typeof entry === 'string' ? entry : (entry && entry.pid);
       if (!pid) return;
-      saleLookup[pid] = {
-        saleName: sale.name || 'Sale',
-        discountType: sale.discountType,
-        discountValue: sale.discountValue,
-        variants: (entry && typeof entry === 'object' && entry.variants) ? entry.variants : null
-      };
+      var variants = (entry && typeof entry === 'object' && entry.variants) ? entry.variants : null;
+      if (sale.discountType === 'quantity-tier') {
+        // Manual "X for $Y" deal — surfaced as a badge, not auto-applied.
+        if (!Array.isArray(sale.tiers) || !sale.tiers.length) return;
+        (tierRules[pid] = tierRules[pid] || []).push({ saleId: sid, name: sale.name || 'Deal', tiers: sale.tiers, variants: variants });
+      } else {
+        saleLookup[pid] = {
+          saleName: sale.name || 'Sale',
+          discountType: sale.discountType,
+          discountValue: sale.discountValue,
+          variants: variants
+        };
+      }
     });
   });
 }
@@ -1708,6 +1732,67 @@ function lineSale(productId, variantId, fullCents) {
 }
 // Whether a cart line is currently being charged at its sale price.
 function lineOnSale(it) { return !!(it && it.saleCents != null && !it.skipSale); }
+
+// ── Quantity-tier deals ("X for $Y") — manual, badge-applied, priced on-device.
+// Group total for n units, cycling beyond the top tier ("3 for $50" → 4 = $75).
+// Mirrors the server's computeOrderBreakdown tier pass.
+function bundleTotalCents(tiers, n) {
+  if (!tiers || !tiers.length || n <= 0) return 0;
+  var sorted = tiers.slice().sort(function(a, b) { return a.qty - b.qty; });
+  var top = sorted[sorted.length - 1];
+  var cycles = Math.floor(n / top.qty), rem = n % top.qty, remTotal = 0;
+  if (rem > 0) {
+    var exact = null, below = null;
+    sorted.forEach(function(t) { if (t.qty === rem) exact = t; if (t.qty <= rem) below = t; });
+    remTotal = exact ? exact.totalCents : (below ? below.totalCents : sorted[0].totalCents);
+  }
+  return cycles * top.totalCents + remTotal;
+}
+// Active tier rules for a product/variant (drives the badges).
+function tierRulesFor(productId, variantId) {
+  var rules = tierRules[productId];
+  if (!rules) return [];
+  return rules.filter(function(r) { return !(r.variants && variantId && r.variants.indexOf(String(variantId)) === -1); });
+}
+// Reprice every tier-tagged line: each rule's lines (in cart order) get the
+// marginal price = bundle(units so far) − bundle(units before).
+function recomputeTierGroups() {
+  var counts = {};
+  saleItems.forEach(function(it) {
+    if (!it.pricingRuleId || !it._tierDef) return;
+    var prev = counts[it.pricingRuleId] || 0;
+    var nowN = prev + (it.quantity || 1);
+    counts[it.pricingRuleId] = nowN;
+    it.priceCents = bundleTotalCents(it._tierDef.tiers, nowN) - bundleTotalCents(it._tierDef.tiers, prev);
+  });
+}
+function tierBadges(productId, variantId) {
+  var rules = tierRulesFor(productId, variantId);
+  if (!rules.length) return '';
+  return '<div class="tier-badges">' + rules.map(function(r) {
+    return '<button class="tier-badge" onclick="event.stopPropagation();addTierItem(\'' + productId + '\',' +
+      (variantId ? '\'' + esc(String(variantId)) + '\'' : 'null') + ',\'' + esc(String(r.saleId)) + '\')">🏷️ ' + esc(r.name) + '</button>';
+  }).join('') + '</div>';
+}
+// Add one unit of a product/variant under a tier rule (each tap = a unit).
+function addTierItem(productId, variantId, saleId) {
+  var prod = products[productId]; if (!prod) return;
+  var rule = (tierRules[productId] || []).filter(function(r) { return String(r.saleId) === String(saleId); })[0];
+  if (!rule) return;
+  var name = prod.name, img = productImg(prod), full = prod.priceCents || 0;
+  if (variantId) {
+    var v = productVariants(prod).filter(function(x) { return String(x.id) === String(variantId); })[0];
+    if (v) { name = prod.name + ' — ' + variantLabel(v); img = variantImg(prod, v); full = variantPriceCents(prod, v); }
+  }
+  saleItems.push({
+    productId: productId, variantId: variantId || null, productName: name, imageUrl: img,
+    quantity: 1, confidence: 100, fullPriceCents: full,
+    saleName: null, saleCents: null, skipSale: false, overridePriceCents: null,
+    pricingRuleId: saleId, pricingRuleName: rule.name, _tierDef: rule, priceCents: 0
+  });
+  refreshCartUI();   // recomputeTierGroups prices the new unit
+  showToast('Added: ' + name + ' (' + rule.name + ')');
+}
 
 function tileHtml(onclickAttr, imgUrl, name, priceHtml, badge) {
   if (imgUrl) {
@@ -1751,7 +1836,7 @@ function renderCatalog() {
         var price = variantPriceCents(parent, v);
         vhtml += tileHtml(
           'onclick="pickVariant(\'' + parent.pid + '\',\'' + esc(String(v.id)) + '\')"',
-          variantImg(parent, v), variantLabel(v), price > 0 ? fmtCents(price) : '', '');
+          variantImg(parent, v), variantLabel(v), price > 0 ? fmtCents(price) : '', tierBadges(parent.pid, v.id));
       });
       grid.innerHTML = vhtml ||
         '<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">No variants</div>';
@@ -1797,6 +1882,7 @@ function productTilesHtml(list) {
     } else {
       priceHtml = (typeof p.priceCents === 'number' && p.priceCents > 0) ? fmtCents(p.priceCents) : '';
     }
+    if (!hasVariants(p)) badge += tierBadges(p.pid, null);   // deal badges on add-to-cart tiles
     html += tileHtml('onclick="onProductTap(\'' + p.pid + '\')"', productImg(p), p.name || '', priceHtml, badge);
   });
   return html;
@@ -1914,6 +2000,7 @@ function toggleLineSale(idx) {
 // Resolve a line's charged price: a manual override wins, else the sale price
 // (unless the staff toggled full price), else the full catalog price.
 function recomputeLinePrice(it) {
+  if (it.pricingRuleId) return;   // tier-rule lines are priced by recomputeTierGroups
   if (it.overridePriceCents != null) it.priceCents = it.overridePriceCents;
   else if (it.saleCents != null && !it.skipSale) it.priceCents = it.saleCents;
   else it.priceCents = it.fullPriceCents;
@@ -2101,6 +2188,7 @@ function renderCart() {
 
 // Keep every cart surface (panel, checkout list, amount field) in sync
 function refreshCartUI() {
+  recomputeTierGroups();   // tier-rule lines reprice on any cart change
   renderCart();
   if (document.getElementById('resultScreen').classList.contains('active')) {
     renderItems();
