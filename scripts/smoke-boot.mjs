@@ -54,7 +54,7 @@ const ROUTES = [
   'website-import', // lazy-loads modules/website-import.js (T6 PR2: AI catalog-import wizard relocated out of website.js)
   'procurement','team','channels','wholesale',
   'commissions','rma','jobs','production','materials','book','trips','studio','students',
-  'cs-inbox','cs-tickets','auditlog','migration','commission-terms','products-v2','orders-v2','customers-v2',
+  'cs-inbox','cs-tickets','auditlog','diagnostics','migration','commission-terms','products-v2','orders-v2','customers-v2',
   // Shows lifecycle — shows.js (V1) retired (T6); the bare #show* routes now
   // resolve directly to the shows-v2 twin (Find/Apply/Prep/Execute/History).
   'show','show-find','show-apply','show-prep','show-execute','show-history',
