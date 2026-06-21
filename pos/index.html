@@ -245,6 +245,9 @@ body {
 .coupon-btn:active { background: var(--card); }
 .coupon-applied { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(76,175,80,0.12); border: 1px solid var(--green); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
 .coupon-applied .x { color: var(--red); cursor: pointer; font-size: 18px; padding: 0 4px; }
+.override-tag { background: var(--blue); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-left: 6px; text-transform: uppercase; }
+.cart-line-total { color: var(--muted); }
+.line-controls { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 
 @media (min-width: 768px) {
   #catalogScreen.active { flex-direction: row; }
@@ -445,6 +448,7 @@ var variantParent = null; // pid whose variants are currently shown (2-step dril
 // the register display and the per-line flags / coupon code sent at checkout.
 var saleLookup = {};       // pid -> { saleName, discountType, discountValue, variants|null }
 var appliedCoupon = null;  // { code, type, value, excludeSaleItems } once validated
+var canOverridePrice = false; // pos.overridePrice — resolved from the signed-in user's role
 
 // Event context (from URL param or GPS detection)
 var eventId = null;
@@ -724,6 +728,7 @@ window.TENANT_READY.then(function() {
       user.getIdToken().then(function(token) {
         authToken = token;
         loadProducts();
+        loadPermissions();
         if (eventId) {
           loadEventContext();
           document.getElementById('eventSettingsBtn').style.display = '';
@@ -901,23 +906,37 @@ function cartItemHtml(item, idx) {
   var img = item.imageUrl
     ? '<img src="' + item.imageUrl + '" alt="">'
     : '<div style="width:50px;height:50px;background:var(--border);border-radius:6px;"></div>';
-  var onSale = item.saleCents != null;
-  var priceLine;
-  if (onSale && !item.skipSale) {
-    priceLine = '<span class="cart-line-orig">' + fmtCents(item.fullPriceCents) + '</span>' +
-                '<span class="cart-line-sale">' + fmtCents(item.saleCents) + '</span>';
+  var unit = item.priceCents || 0;
+  var overridden = item.overridePriceCents != null;
+  var onSale = item.saleCents != null && !item.skipSale && !overridden;
+  // Per-item charged price (always shown). Struck full price when sale/override applies.
+  var unitLine;
+  if (overridden) {
+    unitLine = '<span class="cart-line-orig">' + fmtCents(item.fullPriceCents) + '</span>' +
+               '<span class="cart-line-sale">' + fmtCents(unit) + ' ea</span>' +
+               '<span class="override-tag">override</span>';
+  } else if (onSale) {
+    unitLine = '<span class="cart-line-orig">' + fmtCents(item.fullPriceCents) + '</span>' +
+               '<span class="cart-line-sale">' + fmtCents(unit) + ' ea</span>';
   } else {
-    priceLine = item.priceCents > 0 ? fmtCents(item.priceCents) : '';
+    unitLine = '<span>' + fmtCents(unit) + ' ea</span>';
   }
-  var toggle = onSale
-    ? '<button class="line-sale-toggle" onclick="toggleLineSale(' + idx + ')">' +
-        (item.skipSale ? 'Apply ' + esc(item.saleName || 'sale') : 'Charge full price') + '</button>'
-    : '';
+  var lineTotal = item.quantity > 1 ? '<span class="cart-line-total"> · ' + fmtCents(unit * item.quantity) + '</span>' : '';
+  var controls = '';
+  if (item.saleCents != null && !overridden) {
+    controls += '<button class="line-sale-toggle" onclick="toggleLineSale(' + idx + ')">' +
+      (item.skipSale ? 'Apply ' + esc(item.saleName || 'sale') : 'Charge full price') + '</button>';
+  }
+  if (canOverridePrice) {
+    controls += overridden
+      ? '<button class="line-sale-toggle" onclick="clearLineOverride(' + idx + ')">Reset price</button>'
+      : '<button class="line-sale-toggle" onclick="overrideLinePrice(' + idx + ')">Override price</button>';
+  }
   return '<div class="sale-item">' + img +
     '<div class="sale-item-info">' +
       '<div class="sale-item-name">' + esc(item.productName) + '</div>' +
-      (priceLine ? '<div class="sale-item-meta">' + priceLine + '</div>' : '') +
-      toggle +
+      '<div class="sale-item-meta">' + unitLine + lineTotal + '</div>' +
+      (controls ? '<div class="line-controls">' + controls + '</div>' : '') +
     '</div>' +
     '<div class="sale-item-qty">' +
       '<button class="qty-btn" onclick="adjustQty(' + idx + ',-1)">-</button>' +
@@ -1167,7 +1186,9 @@ function _createPosOrder(saleRecord) {
     // Pass the variant-aware display name (e.g. "Hollow Bird — Blue"); submitOrder
     // stores item.name verbatim and doesn't backfill it from the catalog, so without
     // this the order/receipt line label is blank. Price is still server-repriced.
-    return { pid: it.productId, variantId: it.variantId || null, qty: it.quantity, name: it.productName || '', skipSale: it.skipSale === true };
+    var o = { pid: it.productId, variantId: it.variantId || null, qty: it.quantity, name: it.productName || '', skipSale: it.skipSale === true };
+    if (it.overridePriceCents != null) o.overridePriceCents = it.overridePriceCents;
+    return o;
   });
   var payload = { data: {
     channel: 'pos',
@@ -1219,7 +1240,7 @@ function saveSale() {
     paymentType: paymentType,
     amount: amountCents,
     items: saleItems.map(function(item) {
-      return { productId: item.productId, variantId: item.variantId || null, productName: item.productName, quantity: item.quantity, priceCents: item.priceCents || 0, skipSale: item.skipSale === true, confidence: item.confidence };
+      return { productId: item.productId, variantId: item.variantId || null, productName: item.productName, quantity: item.quantity, priceCents: item.priceCents || 0, skipSale: item.skipSale === true, overridePriceCents: (item.overridePriceCents != null ? item.overridePriceCents : null), confidence: item.confidence };
     }),
     couponCode: appliedCoupon ? appliedCoupon.code : null,
     imageId: null,
@@ -1597,7 +1618,8 @@ function addToCart(item) {
     item.saleName = s ? s.saleName : null;
     item.saleCents = s ? s.saleCents : null;
     item.skipSale = false;
-    item.priceCents = (item.saleCents != null) ? item.saleCents : item.fullPriceCents;
+    item.overridePriceCents = null;
+    recomputeLinePrice(item);
     saleItems.push(item);
   }
   refreshCartUI();
@@ -1606,9 +1628,59 @@ function addToCart(item) {
 // Staff toggle on a line: charge full price vs the active sale price.
 function toggleLineSale(idx) {
   var it = saleItems[idx];
-  if (!it || it.saleCents == null) return;
+  if (!it || it.saleCents == null || it.overridePriceCents != null) return;
   it.skipSale = !it.skipSale;
-  it.priceCents = it.skipSale ? it.fullPriceCents : it.saleCents;
+  recomputeLinePrice(it);
+  refreshCartUI();
+}
+
+// Resolve a line's charged price: a manual override wins, else the sale price
+// (unless the staff toggled full price), else the full catalog price.
+function recomputeLinePrice(it) {
+  if (it.overridePriceCents != null) it.priceCents = it.overridePriceCents;
+  else if (it.saleCents != null && !it.skipSale) it.priceCents = it.saleCents;
+  else it.priceCents = it.fullPriceCents;
+}
+
+// ── Manual price override (gated by the pos.overridePrice permission) ──
+// Resolve the signed-in user's permission, mirroring the admin app's
+// hasPermission() and the server's resolveSensitivePermission().
+function loadPermissions() {
+  canOverridePrice = false;
+  if (!currentUser) return;
+  var key = 'pos.overridePrice';
+  MastDB.get('admin/users/' + currentUser.uid).then(function(u) {
+    if (!u) return;
+    var role = u.role || 'guest';
+    var apply = function(val) { canOverridePrice = !!val; refreshCartUI(); };
+    if (role === 'admin') { apply(true); return; }
+    var ov = u.permissionOverrides || {};
+    if (ov[key] !== undefined) { apply(ov[key] === true); return; }
+    MastDB.get('admin/roles/' + role).then(function(r) {
+      var sa = r && r.sensitiveActions;
+      if (sa && sa[key] !== undefined) apply(sa[key] === true);
+      else apply(role === 'manager');   // default mirrors server (admin + manager)
+    }).catch(function() { apply(role === 'manager'); });
+  }).catch(function() {});
+}
+function overrideLinePrice(idx) {
+  if (!canOverridePrice) { showToast('You don’t have permission to override prices', true); return; }
+  var it = saleItems[idx];
+  if (!it) return;
+  var cur = ((it.priceCents || 0) / 100).toFixed(2);
+  var input = window.prompt('Override price for “' + it.productName + '” (per item):', cur);
+  if (input == null) return;
+  var v = parseFloat(String(input).replace(/[^0-9.]/g, ''));
+  if (isNaN(v) || v < 0) { showToast('Enter a valid price', true); return; }
+  it.overridePriceCents = Math.round(v * 100);
+  recomputeLinePrice(it);
+  refreshCartUI();
+}
+function clearLineOverride(idx) {
+  var it = saleItems[idx];
+  if (!it) return;
+  it.overridePriceCents = null;
+  recomputeLinePrice(it);
   refreshCartUI();
 }
 
