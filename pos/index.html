@@ -230,6 +230,21 @@ body {
 .cart-charge-btn { margin: 12px 16px 16px; padding: 16px; border-radius: 8px; border: none; background: var(--green); color: #fff; font-size: 18px; font-weight: 700; cursor: pointer; }
 .cart-charge-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .cart-charge-btn:active:not(:disabled) { opacity: 0.85; }
+/* Discount layer — sales + coupon */
+.sale-badge { position: absolute; top: 8px; left: 8px; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+.tile-orig { color: var(--muted); text-decoration: line-through; font-weight: 600; font-size: 14px; margin-right: 6px; }
+.cart-line-orig { color: var(--muted); text-decoration: line-through; margin-right: 6px; }
+.cart-line-sale { color: var(--red); font-weight: 700; }
+.line-sale-toggle { margin-top: 4px; background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 11px; padding: 2px 8px; border-radius: 999px; cursor: pointer; }
+.line-sale-toggle:active { background: var(--card); }
+.cart-totals { padding: 4px 16px 0; font-size: 14px; }
+.cart-totals .row { display: flex; justify-content: space-between; margin-bottom: 4px; color: var(--muted); }
+.cart-totals .row.discount { color: var(--red); }
+.coupon-bar { padding: 8px 16px 0; }
+.coupon-btn { width: 100%; background: transparent; border: 1px dashed var(--border); color: var(--muted); font-size: 14px; padding: 10px; border-radius: 8px; cursor: pointer; }
+.coupon-btn:active { background: var(--card); }
+.coupon-applied { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(76,175,80,0.12); border: 1px solid var(--green); border-radius: 8px; padding: 8px 12px; font-size: 14px; }
+.coupon-applied .x { color: var(--red); cursor: pointer; font-size: 18px; padding: 0 4px; }
 
 @media (min-width: 768px) {
   #catalogScreen.active { flex-direction: row; }
@@ -297,6 +312,8 @@ body {
     </div>
     <div class="cart-body">
       <div class="cart-items" id="cartItems"></div>
+      <div class="cart-totals" id="cartTotals" style="display:none;"></div>
+      <div class="coupon-bar" id="couponBar" style="display:none;"></div>
       <button class="cart-charge-btn" id="cartChargeBtn" onclick="goToCheckout()" disabled>Charge</button>
     </div>
   </div>
@@ -389,7 +406,7 @@ body {
 // ============================================================
 var firebaseApp, db, auth;
 var eventContextUnsub = null;
-var CLASSIFY_URL, UPLOAD_URL, PRODUCTS_PATH, SALES_PATH, SALES_EVENTS_PATH, STUDIO_LOCATIONS_PATH;
+var CLASSIFY_URL, UPLOAD_URL, PRODUCTS_PATH, SALES_PATH, SALES_EVENTS_PATH, STUDIO_LOCATIONS_PATH, SALES_PROMOS_PATH;
 
 function esc(s) { var d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
@@ -422,6 +439,12 @@ var currentCategory = 'all';
 var currentFilter = '';
 var _catList = [];
 var variantParent = null; // pid whose variants are currently shown (2-step drill-in), else null
+
+// Discount layer — active sales (read from public/sales-promotions) + an optional
+// order-level coupon. The server (submitOrder) is authoritative; these only drive
+// the register display and the per-line flags / coupon code sent at checkout.
+var saleLookup = {};       // pid -> { saleName, discountType, discountValue, variants|null }
+var appliedCoupon = null;  // { code, type, value, excludeSaleItems } once validated
 
 // Event context (from URL param or GPS detection)
 var eventId = null;
@@ -688,6 +711,7 @@ window.TENANT_READY.then(function() {
   SALES_PATH = 'admin/sales';
   SALES_EVENTS_PATH = 'admin/salesEvents';
   STUDIO_LOCATIONS_PATH = 'config/studioLocations';
+  SALES_PROMOS_PATH = 'public/sales-promotions';
 
   // Seller home state — fallback tax jurisdiction when GPS can't place the sale at
   // a configured studio (craft fairs, GPS off). config/tax.state is set by the
@@ -753,8 +777,12 @@ function signIn() {
 // Products
 // ============================================================
 function loadProducts() {
-  MastDB.get(PRODUCTS_PATH).then(function(val) {
-    products = val || {};
+  Promise.all([
+    MastDB.get(PRODUCTS_PATH),
+    MastDB.get(SALES_PROMOS_PATH).catch(function() { return null; })
+  ]).then(function(res) {
+    products = res[0] || {};
+    buildSaleLookup(res[1]);
     productsList = Object.values(products)
       .filter(function(p) { return !p.availability || p.availability === 'available'; })
       .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
@@ -873,11 +901,23 @@ function cartItemHtml(item, idx) {
   var img = item.imageUrl
     ? '<img src="' + item.imageUrl + '" alt="">'
     : '<div style="width:50px;height:50px;background:var(--border);border-radius:6px;"></div>';
-  var meta = item.priceCents > 0 && window.formatCents ? window.formatCents(item.priceCents) : '';
+  var onSale = item.saleCents != null;
+  var priceLine;
+  if (onSale && !item.skipSale) {
+    priceLine = '<span class="cart-line-orig">' + fmtCents(item.fullPriceCents) + '</span>' +
+                '<span class="cart-line-sale">' + fmtCents(item.saleCents) + '</span>';
+  } else {
+    priceLine = item.priceCents > 0 ? fmtCents(item.priceCents) : '';
+  }
+  var toggle = onSale
+    ? '<button class="line-sale-toggle" onclick="toggleLineSale(' + idx + ')">' +
+        (item.skipSale ? 'Apply ' + esc(item.saleName || 'sale') : 'Charge full price') + '</button>'
+    : '';
   return '<div class="sale-item">' + img +
     '<div class="sale-item-info">' +
       '<div class="sale-item-name">' + esc(item.productName) + '</div>' +
-      (meta ? '<div class="sale-item-meta">' + meta + '</div>' : '') +
+      (priceLine ? '<div class="sale-item-meta">' + priceLine + '</div>' : '') +
+      toggle +
     '</div>' +
     '<div class="sale-item-qty">' +
       '<button class="qty-btn" onclick="adjustQty(' + idx + ',-1)">-</button>' +
@@ -905,10 +945,7 @@ function removeItem(idx) {
 }
 
 function autoFillAmount() {
-  var total = 0;
-  saleItems.forEach(function(item) {
-    total += (item.priceCents || 0) * item.quantity;
-  });
+  var total = cartTotalCents();   // net of sales + coupon
   if (total > 0) {
     document.getElementById('amountInput').value = '$' + (total / 100).toFixed(2);
   } else {
@@ -1098,6 +1135,10 @@ function _writeSaleToServer(saleRecord) {
   }).then(function(orderResult) {
     saleRecord.orderId = orderResult.orderId || null;
     saleRecord.orderNumber = orderResult.orderNumber || null;
+    // The server reprices authoritatively (sales + coupon). Mirror its true total
+    // into admin/sales so reports match the order, and keep the coupon discount.
+    if (typeof orderResult.totalCents === 'number') saleRecord.amount = orderResult.totalCents;
+    if (typeof orderResult.couponDiscountCents === 'number') saleRecord.couponDiscountCents = orderResult.couponDiscountCents;
     // Persist the admin/sales mirror (kept for existing reports + Fair mode),
     // now linked to the order. Strip transient __ fields first.
     var persisted = {};
@@ -1126,13 +1167,14 @@ function _createPosOrder(saleRecord) {
     // Pass the variant-aware display name (e.g. "Hollow Bird — Blue"); submitOrder
     // stores item.name verbatim and doesn't backfill it from the catalog, so without
     // this the order/receipt line label is blank. Price is still server-repriced.
-    return { pid: it.productId, variantId: it.variantId || null, qty: it.quantity, name: it.productName || '' };
+    return { pid: it.productId, variantId: it.variantId || null, qty: it.quantity, name: it.productName || '', skipSale: it.skipSale === true };
   });
   var payload = { data: {
     channel: 'pos',
     // Origin jurisdiction for sales-tax + nexus (server persists it as order.taxState).
     taxState: saleRecord.taxState || '',
     items: orderItems,
+    couponCode: saleRecord.couponCode || null,
     posPayment: { method: saleRecord.paymentType || 'cash', tenderedCents: saleRecord.amount || 0 },
     customerContact: saleRecord.customerContact || null
   } };
@@ -1177,8 +1219,9 @@ function saveSale() {
     paymentType: paymentType,
     amount: amountCents,
     items: saleItems.map(function(item) {
-      return { productId: item.productId, variantId: item.variantId || null, productName: item.productName, quantity: item.quantity, priceCents: item.priceCents || 0, confidence: item.confidence };
+      return { productId: item.productId, variantId: item.variantId || null, productName: item.productName, quantity: item.quantity, priceCents: item.priceCents || 0, skipSale: item.skipSale === true, confidence: item.confidence };
     }),
+    couponCode: appliedCoupon ? appliedCoupon.code : null,
     imageId: null,
     receiptSent: false,
     customerContact: customerContact,
@@ -1197,11 +1240,13 @@ function saveSale() {
 
   function _onSaved(label) {
     lastSaleId = saleId;
-    lastSaleAmount = amountCents;
+    // saleRecord.amount is the server-authoritative total post sales+coupon
+    // (set in _writeSaleToServer); fall back to the entered amount offline.
+    lastSaleAmount = saleRecord.amount;
     lastSaleItems = saleItems.slice();
     btn.disabled = false;
     btn.textContent = 'Complete Sale';
-    var totalStr = '$' + (amountCents / 100).toFixed(2);
+    var totalStr = '$' + (saleRecord.amount / 100).toFixed(2);
     var itemNames = saleItems.map(function(i) { return i.productName; }).join(', ');
     var orderTag = saleRecord.orderNumber ? ('Order ' + saleRecord.orderNumber + ' · ') : '';
     document.getElementById('successSummary').textContent = orderTag + totalStr + ' ' + paymentType + ' — ' + itemNames;
@@ -1364,6 +1409,50 @@ function minVariantPriceCents(p) {
   return min === Infinity ? (p.priceCents || 0) : min;
 }
 
+// ============================================================
+// Discount layer — sales + coupon. Mirrors submitOrder's computeOrderBreakdown
+// so the register shows the same numbers the server will charge.
+// ============================================================
+function buildSaleLookup(salesData) {
+  saleLookup = {};
+  var data = salesData || {};
+  var now = new Date().toISOString();
+  Object.keys(data).forEach(function(sid) {
+    var sale = data[sid];
+    if (!sale || sale.archived) return;
+    if (sale.startDate && sale.startDate > now) return;
+    if (sale.endDate && sale.endDate < now) return;
+    (sale.products || []).forEach(function(entry) {
+      var pid = typeof entry === 'string' ? entry : (entry && entry.pid);
+      if (!pid) return;
+      saleLookup[pid] = {
+        saleName: sale.name || 'Sale',
+        discountType: sale.discountType,
+        discountValue: sale.discountValue,
+        variants: (entry && typeof entry === 'object' && entry.variants) ? entry.variants : null
+      };
+    });
+  });
+}
+function _saleCents(originalCents, sale) {
+  if (!sale || !(originalCents > 0)) return null;
+  var c = sale.discountType === 'percent'
+    ? Math.round(originalCents * (1 - (sale.discountValue || 0) / 100))
+    : Math.max(0, originalCents - Math.round(sale.discountValue || 0));
+  return (c < originalCents) ? c : null;        // only a "sale" if it actually reduces
+}
+// Active sale for a product/variant at its full price, or null. A variant-targeted
+// sale only applies to a matching variant id (mirrors the server's check).
+function lineSale(productId, variantId, fullCents) {
+  var sale = saleLookup[productId];
+  if (!sale) return null;
+  if (sale.variants && variantId && sale.variants.indexOf(String(variantId)) === -1) return null;
+  var sc = _saleCents(fullCents, sale);
+  return sc == null ? null : { saleName: sale.saleName, saleCents: sc };
+}
+// Whether a cart line is currently being charged at its sale price.
+function lineOnSale(it) { return !!(it && it.saleCents != null && !it.skipSale); }
+
 function tileHtml(onclickAttr, imgUrl, name, priceHtml, badge) {
   if (imgUrl) {
     return '<div class="picker-card" ' + onclickAttr + '>' +
@@ -1501,18 +1590,93 @@ function addToCart(item) {
   } else {
     item.quantity = 1;
     item.confidence = 100;                         // manual pick
+    // Discount layer: keep the full price, detect an active sale, default to the
+    // sale price (staff can override the line to full price via toggleLineSale).
+    item.fullPriceCents = (item.fullPriceCents != null) ? item.fullPriceCents : (item.priceCents || 0);
+    var s = lineSale(item.productId, item.variantId, item.fullPriceCents);
+    item.saleName = s ? s.saleName : null;
+    item.saleCents = s ? s.saleCents : null;
+    item.skipSale = false;
+    item.priceCents = (item.saleCents != null) ? item.saleCents : item.fullPriceCents;
     saleItems.push(item);
   }
+  refreshCartUI();
+}
+
+// Staff toggle on a line: charge full price vs the active sale price.
+function toggleLineSale(idx) {
+  var it = saleItems[idx];
+  if (!it || it.saleCents == null) return;
+  it.skipSale = !it.skipSale;
+  it.priceCents = it.skipSale ? it.fullPriceCents : it.saleCents;
+  refreshCartUI();
+}
+
+// ── Coupon ──
+// Subtotal eligible for the coupon: active line prices, optionally excluding
+// lines currently being charged at a sale price (mirrors the server).
+function couponEligibleCents() {
+  var c = 0;
+  saleItems.forEach(function(it) {
+    if (appliedCoupon && appliedCoupon.excludeSaleItems && lineOnSale(it)) return;
+    c += (it.priceCents || 0) * it.quantity;
+  });
+  return c;
+}
+function couponDiscountCents() {
+  if (!appliedCoupon) return 0;
+  var eligible = couponEligibleCents();
+  if (eligible <= 0) return 0;
+  var d = appliedCoupon.type === 'percent'
+    ? Math.round(eligible * (appliedCoupon.value || 0) / 100)
+    : Math.min(Math.round((appliedCoupon.value || 0) * 100), eligible);
+  return Math.max(0, d);
+}
+function openCoupon() {
+  if (appliedCoupon) { removeCoupon(); return; }
+  var code = window.prompt('Enter coupon code');
+  if (code == null) return;
+  code = String(code).trim();
+  if (code) applyCoupon(code);
+}
+function applyCoupon(code) {
+  if (!navigator.onLine) { showToast('Coupon needs a connection', true); return; }
+  showToast('Checking coupon…');
+  fetch(TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/validateCoupon', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken, 'X-Tenant-ID': TENANT_ID },
+    body: JSON.stringify({ data: {
+      code: code,
+      subtotal: cartSubtotalCents() / 100,
+      items: saleItems.map(function(it) { return { pid: it.productId, priceCents: it.priceCents || 0, qty: it.quantity }; })
+    } })
+  }).then(function(r) { return r.json(); }).then(function(resp) {
+    var result = resp && resp.result;
+    if (!result || !result.valid) { showToast((result && result.reason) || 'Coupon not valid', true); return; }
+    appliedCoupon = { code: code.toUpperCase(), type: result.type, value: result.value, excludeSaleItems: !!result.excludeSaleItems };
+    refreshCartUI();
+    showToast('Coupon applied');
+  }).catch(function(err) {
+    showToast('Coupon check failed: ' + (err.message || err), true);
+  });
+}
+function removeCoupon() {
+  appliedCoupon = null;
   refreshCartUI();
 }
 
 // ============================================================
 // Persistent cart panel
 // ============================================================
-function cartTotalCents() {
+// Post-sale subtotal (sum of each line's active price).
+function cartSubtotalCents() {
   var total = 0;
   saleItems.forEach(function(it) { total += (it.priceCents || 0) * it.quantity; });
   return total;
+}
+// What the customer pays: subtotal minus the coupon.
+function cartTotalCents() {
+  return Math.max(0, cartSubtotalCents() - couponDiscountCents());
 }
 
 function fmtCents(c) {
@@ -1522,7 +1686,11 @@ function fmtCents(c) {
 function renderCart() {
   var count = 0;
   saleItems.forEach(function(it) { count += it.quantity; });
-  var total = cartTotalCents();
+  var subtotal = cartSubtotalCents();
+  var coupon = couponDiscountCents();
+  var total = Math.max(0, subtotal - coupon);
+  var saleSavings = 0;
+  saleItems.forEach(function(it) { if (lineOnSale(it)) saleSavings += (it.fullPriceCents - it.saleCents) * it.quantity; });
 
   document.getElementById('cartSummary').innerHTML = count > 0
     ? '<strong>' + count + ' item' + (count !== 1 ? 's' : '') + '</strong> <span class="muted">· ' + fmtCents(total) + '</span>'
@@ -1535,6 +1703,33 @@ function renderCart() {
     var html = '';
     saleItems.forEach(function(item, idx) { html += cartItemHtml(item, idx); });
     container.innerHTML = html;
+  }
+
+  // Totals breakdown — shown only when a discount is in play.
+  var totalsEl = document.getElementById('cartTotals');
+  if (totalsEl) {
+    var rows = '';
+    if (saleSavings > 0 || coupon > 0) {
+      rows += '<div class="row"><span>Subtotal</span><span>' + fmtCents(subtotal + saleSavings) + '</span></div>';
+      if (saleSavings > 0) rows += '<div class="row discount"><span>Sale savings</span><span>−' + fmtCents(saleSavings) + '</span></div>';
+      if (coupon > 0) rows += '<div class="row discount"><span>Coupon ' + esc(appliedCoupon.code) + '</span><span>−' + fmtCents(coupon) + '</span></div>';
+      rows += '<div class="row" style="color:var(--text);font-weight:700;"><span>Total</span><span>' + fmtCents(total) + '</span></div>';
+    }
+    totalsEl.innerHTML = rows;
+    totalsEl.style.display = rows ? 'block' : 'none';
+  }
+
+  // Coupon bar — apply button, or the applied chip with a remove control.
+  var couponBar = document.getElementById('couponBar');
+  if (couponBar) {
+    if (appliedCoupon) {
+      couponBar.innerHTML = '<div class="coupon-applied"><span>🏷️ ' + esc(appliedCoupon.code) +
+        (coupon > 0 ? ' · −' + fmtCents(coupon) : ' · no discount') +
+        '</span><span class="x" onclick="removeCoupon()">×</span></div>';
+    } else {
+      couponBar.innerHTML = '<button class="coupon-btn" onclick="openCoupon()">＋ Add coupon</button>';
+    }
+    couponBar.style.display = saleItems.length ? 'block' : 'none';
   }
 
   var chargeBtn = document.getElementById('cartChargeBtn');
@@ -1762,6 +1957,7 @@ async function submitCommission(pid, pieceName) {
 // ============================================================
 function newSale() {
   saleItems = [];
+  appliedCoupon = null;
   capturedImageBase64 = null;
   capturedPreviewUrl = null;
   paymentType = 'cash';
