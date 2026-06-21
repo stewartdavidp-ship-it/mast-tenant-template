@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **46,909** lines
-- **Feature modules:** **141** files in `app/modules/` (**98** routed), **141,013** lines combined
+- **Feature modules:** **141** files in `app/modules/` (**98** routed), **141,022** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -72,12 +72,12 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance.js` | 8,635 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/forecast-job-modal.js` | 116 | — |
 | `modules/fulfillment-v2.js` | 614 | pack-v2, ship-v2 |
-| `modules/fulfillment.js` | 2,146 | pack, ship, fulfillment |
+| `modules/fulfillment.js` | 2,149 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 657 | galleries-v2 |
 | `modules/gallery-metadata-modal.js` | 169 | — |
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
 | `modules/hold-release-stock-modal.js` | 145 | — |
-| `modules/homepage.js` | 942 | homepage |
+| `modules/homepage.js` | 946 | homepage |
 | `modules/image-library.js` | 842 | — |
 | `modules/image-modal.js` | 465 | — |
 | `modules/inquiries-v2.js` | 380 | inquiries-v2 |
@@ -107,7 +107,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/procurement-v2.js` | 882 | procurement-v2 |
 | `modules/procurement.js` | 2,404 | procurement |
 | `modules/production.js` | 3,828 | jobs, production, stories, forecast |
-| `modules/products-engine.js` | 1,935 | — |
+| `modules/products-engine.js` | 1,937 | — |
 | `modules/products-v2.js` | 3,881 | products-v2 |
 | `modules/promotions-v2.js` | 393 | promotions-v2, promotions |
 | `modules/publish-to-channel-dialog.js` | 179 | — |

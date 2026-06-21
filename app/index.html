@@ -20982,11 +20982,11 @@ var MODULE_MANIFEST = {
   'resources-v2': { src: 'modules/resources-v2.js', v: '817832f43559', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
   'newsletter-v2': { src: 'modules/newsletter-v2.js', v: '39ce447d358d', routes: ['newsletter-v2', 'newsletter'] }, // Newsletter hub (issues + subscribers + native composer). newsletter.js (V1) RETIRED (T6): its NewsletterBridge + rich-text helpers + newsletterOpenFromContent were absorbed here; the bare #newsletter route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   sales: { src: 'modules/sales.js', v: 'cc9154861404', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
-  fulfillment: { src: 'modules/fulfillment.js', v: '02e45afaf96f', routes: ['pack', 'ship', 'fulfillment'] },
+  fulfillment: { src: 'modules/fulfillment.js', v: 'b124a5ac209e', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', v: 'd599d372978f', routes: ['events-shows', 'events-settings'] },
   'website-core': { src: 'modules/website-core.js', v: '7e614803931f', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module website write layer (WebsiteBridge + the destructive template-switch cascade wpConfirmSwitch/computeGalleryMigration/executeGalleryMigration + category manager openManageCategoriesDialog/wpCat* + markUnpublished) lifted out of website.js so V2 consumers (website-v2, index.html category dialogs, gallery-metadata-modal) load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'website-import': { src: 'modules/website-import.js', v: '5cd479d73730', routes: ['website-import'] }, // T6 rip-and-replace PR2: AI catalog-import wizard (analyze→crawl→cherry-pick→import→enrich→review/publish→draft templates) relocated VERBATIM out of website.js into its own lazy module (MastEntity does not fit an async multi-step job flow). The 3 import doors (setup-wizard, "View Report", website-v2 Card 3) route here; backend CFs (analyzeExistingSite/runEnrichment/processImportJob) unchanged. Wires a real listener detach (the V1 leak).
-homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] },
+homepage: { src: 'modules/homepage.js', v: '762c93e81341', routes: ['homepage'] },
   emailLog: { src: 'modules/email-log.js', v: '7b49b10cdd0b', routes: ['email-log'] },
   maker: { src: 'modules/maker.js', v: '8f97031c9d0b', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: 'c401d0269d99', routes: ['galleries'] },
@@ -21066,7 +21066,7 @@ homepage: { src: 'modules/homepage.js', v: '6b40ebe9fbea', routes: ['homepage'] 
   // renderers) — no route; lazy-loaded via the eager renderProducts /
   // renderInventoryOverview / switchProductTab / renderProductDetail shims
   // (decomposition Track 1, coupled-cluster tier, recipe B).
-  productsEngine: { src: 'modules/products-engine.js', v: 'ec978390b3e7', routes: [] },
+  productsEngine: { src: 'modules/products-engine.js', v: '3c21040c9ffa', routes: [] },
   // Coupon dialogs (add/edit / share / delete) — no route; lazy-loaded via the
   // eager openCouponModal / openCouponShareModal / confirmDeleteCoupon shims (Track 1).
   couponModals: { src: 'modules/coupon-modals.js', v: 'f4dfbb6333b8', routes: [] },

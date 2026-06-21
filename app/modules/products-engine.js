@@ -389,13 +389,15 @@ function renderProducts() {
   });
   html += '</tbody></table></div>';
 
+  // develop/review kept bespoke: two-paragraph layout (a styled second <p>, and
+  // develop's contains inline <strong> HTML) the single-hint emptyState engine can't reproduce.
   var emptyHtml = (statusFilter === 'develop')
     ? '<div class="empty-state"><div class="empty-icon">&#128736;&#65039;</div><p>No draft products.</p><p style="font-size:0.85rem;color:var(--warm-gray);">Click <strong>+ New Product</strong> to start one.</p></div>'
     : (statusFilter === 'review')
       ? '<div class="empty-state"><div class="empty-icon">&#128270;</div><p>No products in review.</p><p style="font-size:0.85rem;color:var(--warm-gray);">Promote a draft product when it\'s ready for QC.</p></div>'
       : (statusFilter === 'archived')
-        ? '<div class="empty-state"><div class="empty-icon">&#128230;</div><p>No archived products.</p></div>'
-        : '<div class="empty-state"><div class="empty-icon">&#127912;</div><p>No active products.</p></div>';
+        ? MastUI.emptyState({ icon: '📦', hint: 'No archived products.' })
+        : MastUI.emptyState({ icon: '🎨', hint: 'No active products.' });
   var _productsGridEl = document.getElementById('productsGrid');
   _productsGridEl.innerHTML = filtered.length ? html : emptyHtml;
   // DK3P6XFS — apply persisted density preference + sync the toggle button label.

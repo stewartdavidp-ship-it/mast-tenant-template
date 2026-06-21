@@ -139,6 +139,7 @@
     var selCount = Object.keys(_buyLabelsSelected).filter(function(k) { return _buyLabelsSelected[k]; }).length;
 
     if (rows.length === 0) {
+      // Kept bespoke: hint has inline <b> HTML the emptyState engine would escape.
       el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#127991;&#65039;</div><p>No orders ready to buy labels for. Orders in <b>pack</b> or <b>packed</b> without a tracking number will appear here.</p></div>';
       return;
     }
@@ -393,6 +394,8 @@
       var emptyMsg = packableAll.length === 0
         ? '<p>No orders ready for packing.</p>'
         : '<p>No orders match the current filters. <button class="btn btn-secondary btn-small" onclick="packQueueSetFilter(\'stage\',\'all\');packQueueSetFilter(\'channel\',\'all\');packQueueSetSearch(\'\');">Clear filters</button></p>';
+      // Kept bespoke: emptyMsg is raw HTML (the filtered variant embeds a <button>),
+      // and the markup prepends filterBarHtml — neither fits the plain-hint engine.
       el.innerHTML = filterBarHtml + '<div class="empty-state"><div class="empty-icon">&#128230;</div>' + emptyMsg + '</div>';
       return;
     }
@@ -800,7 +803,7 @@
     });
 
     if (keys.length === 0) {
-      el.innerHTML = '<div class="empty-state"><div class="empty-icon">&#128230;</div><p>No bundles yet. Bundles are created automatically when you scan packages.</p></div>';
+      el.innerHTML = MastUI.emptyState({ icon: '📦', hint: 'No bundles yet. Bundles are created automatically when you scan packages.' });
       return;
     }
 
@@ -1109,10 +1112,10 @@
       // Check for packed orders not in any bundle
       var packedOrders = _getOrdersArraySafe().filter(function(o) { return o.status === 'packed'; });
       if (packedOrders.length === 0) {
-        el.innerHTML = '<div class="empty-state" style="margin-top:12px;"><div class="empty-icon">&#128666;</div><p>No open bundles. Scan packages in Studio Scan first.</p></div>';
+        el.innerHTML = '<div style="margin-top:12px;">' + MastUI.emptyState({ icon: '🚚', hint: 'No open bundles. Scan packages in Studio Scan first.' }) + '</div>';
         return;
       }
-      el.innerHTML = '<div class="empty-state" style="margin-top:12px;"><div class="empty-icon">&#128666;</div><p>No open bundles but ' + packedOrders.length + ' packed order(s) found. Go to Studio Scan to create a bundle.</p></div>';
+      el.innerHTML = '<div style="margin-top:12px;">' + MastUI.emptyState({ icon: '🚚', hint: 'No open bundles but ' + packedOrders.length + ' packed order(s) found. Go to Studio Scan to create a bundle.' }) + '</div>';
       return;
     }
 
