@@ -466,6 +466,8 @@
     html += '</div>';
 
     if (entries.length === 0) {
+      // Kept bespoke: the wrapper's padding:20px overrides .empty-state's default
+      // 40px 20px (compact gallery context); the emptyState engine has no style hook.
       html += '<div class="empty-state" style="padding:20px;">' +
         '<p>No testimonials featured yet. Approve a review in Customer Service and click "Feature on site" to add one here.</p>' +
       '</div></div>';
@@ -515,6 +517,8 @@
   // --- Image grid for a section ---
   function renderSectionImageGrid(sectionId, items) {
     if (items.length === 0) {
+      // Kept bespoke: the wrapper's padding:20px overrides .empty-state's default
+      // 40px 20px (compact gallery context); the emptyState engine has no style hook.
       return '<div class="empty-state" style="padding:20px;"><p>No images yet. Click "+ Add from Library" to add one.</p></div>';
     }
 
