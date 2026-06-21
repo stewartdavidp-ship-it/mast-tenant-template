@@ -3260,6 +3260,8 @@
       // Checkpoint E — recompute readiness checklist on every save.
       try { await recomputeAndPersistReadiness(defineProductId); } catch (e) {}
       MastAdmin.showToast('Saved');
+      // W5 — demo_key_action (first meaningful demo action: edited a product).
+      if (typeof window.markDemoKeyAction === 'function') window.markDemoKeyAction('product_edit');
       renderDefineView();
     } catch (err) {
       MastAdmin.showToast('Save failed: ' + err.message, true);

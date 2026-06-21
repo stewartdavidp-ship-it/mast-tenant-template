@@ -107,6 +107,55 @@
   }
 
   /**
+   * Inject the demo-mode banner (W2) above the nav when this is a demo sandbox.
+   * window.DEMO_MODE / DEMO_RESET_AT are set by storefront-tenant.js setGlobals
+   * (loaded on every storefront page). Parallels injectPromoBanner. DISPLAY-ONLY
+   * — the real boundary is the server-side flags.demo. Persistent + idempotent,
+   * with a live reset countdown and a CTA into the convert flow (W4).
+   */
+  function injectDemoBanner() {
+    if (!window.DEMO_MODE) return;
+    if (document.querySelector('.demo-banner')) return; // already shown
+    function countdown() {
+      var t = (window.MastDemo && window.DEMO_RESET_AT)
+        ? window.MastDemo.formatCountdown(window.DEMO_RESET_AT) : '';
+      return t || '—';
+    }
+    var banner = document.createElement('div');
+    banner.className = 'demo-banner';
+    banner.setAttribute('role', 'status');
+    banner.innerHTML =
+      '<span class="demo-banner-text">🧪 Demo store — resets in ' +
+      '<strong class="demo-banner-countdown">' + esc(countdown()) + '</strong></span>' +
+      '<button class="demo-banner-cta" type="button" aria-label="Make this demo your real store">' +
+      'Make this my real store</button>';
+    var btn = banner.querySelector('.demo-banner-cta');
+    if (btn) btn.addEventListener('click', function () {
+      if (typeof window.demoUpgradeFlow === 'function') window.demoUpgradeFlow('storefront_banner');
+    });
+    var nav = document.getElementById('mainNav');
+    if (nav && nav.parentNode) nav.parentNode.insertBefore(banner, nav);
+    else if (document.body) document.body.insertBefore(banner, document.body.firstChild);
+    // Live countdown — update the single span, never re-paint (keeps the button).
+    setInterval(function () {
+      var el = banner.querySelector('.demo-banner-countdown');
+      if (el) el.textContent = countdown();
+    }, 1000);
+  }
+
+  // Storefront convert CTA (W4). The actual conversion is an authenticated admin
+  // action that the public storefront can't run directly, so we route into the
+  // admin app, which auto-opens demoUpgradeFlow() on ?demo_convert=1 and fires the
+  // CTA + converted telemetry there (single, reliable source). Don't clobber an
+  // admin-defined demoUpgradeFlow if this ever runs in a shared context.
+  if (typeof window.demoUpgradeFlow !== 'function') {
+    window.demoUpgradeFlow = function (/* source */) {
+      try { window.location.href = '/app/?demo_convert=1'; }
+      catch (_e) { window.location.href = 'https://' + window.location.host + '/app/?demo_convert=1'; }
+    };
+  }
+
+  /**
    * Build the nav and mobile menu HTML, insert into DOM, wire up behaviors.
    */
   // Sections that belong under Shop context (shown only on shop pages)
@@ -427,9 +476,12 @@
         populateHeroLogo(config, brandLogo);
         // Inject promo banner if configured
         injectPromoBanner(bannerConfig);
+        // Demo sandbox marker (no-op unless window.DEMO_MODE)
+        injectDemoBanner();
       }).catch(function (err) {
         console.warn('[storefront-nav] Failed to load nav config:', err.message);
         buildNav(DEFAULT_SECTIONS, {});
+        injectDemoBanner();
       });
   }
 

@@ -519,6 +519,8 @@
     try {
       var result = await firebase.functions().httpsCallable('sendTestEmail')({ toEmail: email.to });
       showToast('Email resent to ' + result.data.sentTo);
+      // W5 — demo_key_action (first meaningful demo action: sent an email).
+      if (typeof window.markDemoKeyAction === 'function') window.markDemoKeyAction('email_sent');
       // Reload to show the new log entry
       setTimeout(function() { refreshEmails(); }, 1000);
     } catch (err) {

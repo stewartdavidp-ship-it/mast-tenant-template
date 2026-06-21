@@ -260,8 +260,13 @@
        storefront-tenant.js routes registry lookups to the correct pod's
        Firestore. Substituted per pod at deploy time. -->
   <script src="../pod-config.js"></script>
-  <script src="../storefront-tenant.js?v=1773887711"></script>
+  <script src="../storefront-tenant.js?v=1773887712"></script>
   <script src="../tenant-brand.js?v=2"></script>
+  <!-- Demo-sandbox admin surface (W1–W5). Eager + deferred; no-ops for non-demo
+       tenants. Lives in a module (not inline shell JS) per the shell-size ratchet.
+       Hand-versioned ?v= (not a MODULE_MANIFEST entry, so gen-cache-bust skips it;
+       bump on edit). -->
+  <script defer src="modules/demo-mode.js?v=1"></script>
   <style>
     /* Pre-paint dark mode on html element to prevent flash before body exists */
     html.dark-mode { background: var(--charcoal); }
@@ -3941,6 +3946,44 @@
     }
     #modesBannerSlot .modes-banner-message { flex: 1; line-height: 1.45; }
     #modesBannerSlot .modes-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+    /* Demo-mode banner (W2) — persistent sandbox marker + live reset countdown
+       + the "claim this as my real store" CTA. Amber accent so it reads as a
+       sandbox, distinct from the teal modes banner and red alert banners.
+       Rendered into its own #demoBannerSlot by app/modules/demo-mode.js,
+       independent of checkModeSetBanners (which owns #modesBannerSlot). */
+    #demoBannerSlot .demo-banner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 24px;
+      background: linear-gradient(90deg, rgba(245,158,11,0.18), rgba(245,158,11,0.10));
+      border-bottom: 1px solid rgba(245,158,11,0.38);
+      font-size: 0.85rem;
+      color: var(--text-primary);
+    }
+    #demoBannerSlot .demo-banner-message { flex: 1; line-height: 1.4; }
+    #demoBannerSlot .demo-banner-message strong { color: #F59E0B; }
+    #demoBannerSlot .demo-banner-countdown { font-variant-numeric: tabular-nums; font-weight: 600; }
+    #demoBannerSlot .demo-banner-sink { opacity: 0.72; font-size: 0.78rem; }
+    #demoBannerSlot .demo-banner-cta {
+      flex-shrink: 0;
+      background: #F59E0B;
+      color: #1a1a1a;
+      border: none;
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+    #demoBannerSlot .demo-banner-cta:hover { background: #FBBF24; }
+    @media (max-width: 640px) {
+      #demoBannerSlot .demo-banner { flex-wrap: wrap; gap: 8px; padding: 9px 16px; }
+      #demoBannerSlot .demo-banner-sink { display: block; width: 100%; }
+    }
     .sidebar-lock-icon { font-size: 0.72rem; margin-left: auto; flex-shrink: 0; opacity: 0.6; }
     .sidebar-upgrade-nudge {
       display: none;
@@ -6668,6 +6711,13 @@
       <div class="avatar-menu" id="avatarMenu" role="menu" aria-hidden="true"></div>
     </div>
   </header>
+
+  <!-- Demo-mode banner slot (W2) — persistent sandbox marker + reset countdown
+       + convert CTA, injected by app/modules/demo-mode.js. Own slot (not
+       #modesBannerSlot) so its live countdown isn't stomped by checkModeSetBanners().
+       Topmost so the "this is a sandbox" context is the first thing a demo
+       prospect sees. -->
+  <div id="demoBannerSlot" style="display:none;"></div>
 
   <!-- M7 (Idea -OtADygKA_JhRmk1wUqN): Mast modes banner slot — non-blocking
        suggestion/migration banners injected by checkModeSetBanners(). Sits
@@ -20984,13 +21034,13 @@ var MODULE_MANIFEST = {
   'passes-v2': { src: 'modules/passes-v2.js', v: '5f5a185fa4d3', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)
   'resources-v2': { src: 'modules/resources-v2.js', v: '817832f43559', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
   'newsletter-v2': { src: 'modules/newsletter-v2.js', v: '39ce447d358d', routes: ['newsletter-v2', 'newsletter'] }, // Newsletter hub (issues + subscribers + native composer). newsletter.js (V1) RETIRED (T6): its NewsletterBridge + rich-text helpers + newsletterOpenFromContent were absorbed here; the bare #newsletter route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
-  sales: { src: 'modules/sales.js', v: 'cc9154861404', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
-  fulfillment: { src: 'modules/fulfillment.js', v: 'b124a5ac209e', routes: ['pack', 'ship', 'fulfillment'] },
+  sales: { src: 'modules/sales.js', v: 'dbf72357eecb', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
+  fulfillment: { src: 'modules/fulfillment.js', v: '1889e0d1419e', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', v: 'd599d372978f', routes: ['events-shows', 'events-settings'] },
   'website-core': { src: 'modules/website-core.js', v: '7e614803931f', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module website write layer (WebsiteBridge + the destructive template-switch cascade wpConfirmSwitch/computeGalleryMigration/executeGalleryMigration + category manager openManageCategoriesDialog/wpCat* + markUnpublished) lifted out of website.js so V2 consumers (website-v2, index.html category dialogs, gallery-metadata-modal) load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'website-import': { src: 'modules/website-import.js', v: '5cd479d73730', routes: ['website-import'] }, // T6 rip-and-replace PR2: AI catalog-import wizard (analyze→crawl→cherry-pick→import→enrich→review/publish→draft templates) relocated VERBATIM out of website.js into its own lazy module (MastEntity does not fit an async multi-step job flow). The 3 import doors (setup-wizard, "View Report", website-v2 Card 3) route here; backend CFs (analyzeExistingSite/runEnrichment/processImportJob) unchanged. Wires a real listener detach (the V1 leak).
-  emailLog: { src: 'modules/email-log.js', v: '7b49b10cdd0b', routes: ['email-log'] },
-  maker: { src: 'modules/maker.js', v: '8f97031c9d0b', routes: ['materials', 'products'] },
+  emailLog: { src: 'modules/email-log.js', v: '56fd83804238', routes: ['email-log'] },
+  maker: { src: 'modules/maker.js', v: 'fbb166e77df5', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: 'c401d0269d99', routes: ['galleries'] },
   book: { src: 'modules/book.js', v: '6989b28f020b', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', v: '089b810a2bba', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },

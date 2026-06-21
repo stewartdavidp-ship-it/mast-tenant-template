@@ -1757,7 +1757,7 @@
 <!-- Storefront scripts first — use fetch() only, no Firebase SDK needed.
      Tenant resolution and parallel config reads start immediately while
      Firebase SDK downloads in the background (browser prefetch). -->
-<script src="storefront-tenant.js?v=2"></script>
+<script src="storefront-tenant.js?v=3"></script>
 <script src="storefront-theme.js?v=1"></script>
 <script src="storefront-nav.js"></script>
 <script src="tenant-brand.js?v=2"></script>
@@ -2428,7 +2428,7 @@ window.TENANT_READY.then(function() {
   if (window.MastSchema) MastSchema.inject(MastSchema.organization());
 });
 </script>
-<script defer src="checkout.js?v=2"></script>
+<script defer src="checkout.js?v=3"></script>
 
 <!-- Auth handled by cart.js (siteSignIn / siteSignOut / ensureCustomerAccount / nav UI) -->
 <script defer src="feedback-widget.js"></script>

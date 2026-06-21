@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **46,910** lines
-- **Feature modules:** **139** files in `app/modules/` (**96** routed), **141,108** lines combined
+- **Core shell:** `app/index.html` — **46,960** lines
+- **Feature modules:** **140** files in `app/modules/` (**96** routed), **141,411** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -53,9 +53,10 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/customer-service.js` | 3,624 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-core.js` | 611 | — |
 | `modules/customers-v2.js` | 1,070 | customers-v2, customers |
+| `modules/demo-mode.js` | 279 | — |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
 | `modules/email-log-v2.js` | 386 | email-log-v2 |
-| `modules/email-log.js` | 561 | email-log |
+| `modules/email-log.js` | 563 | email-log |
 | `modules/email-preview-drawer.js` | 123 | — |
 | `modules/employees-v2.js` | 581 | employees-v2 |
 | `modules/engagement-inbox-v2.js` | 383 | engagement-inbox-v2 |
@@ -71,7 +72,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance.js` | 8,696 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/forecast-job-modal.js` | 116 | — |
 | `modules/fulfillment-v2.js` | 614 | pack-v2, ship-v2 |
-| `modules/fulfillment.js` | 2,149 | pack, ship, fulfillment |
+| `modules/fulfillment.js` | 2,154 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 657 | galleries-v2 |
 | `modules/gallery-metadata-modal.js` | 169 | — |
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
@@ -89,7 +90,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/lots-v2.js` | 178 | lots-v2 |
 | `modules/loyalty-v2.js` | 500 | loyalty-v2 |
 | `modules/maker-settings.js` | 353 | — |
-| `modules/maker.js` | 7,885 | materials, products |
+| `modules/maker.js` | 7,887 | materials, products |
 | `modules/mapping-v2.js` | 382 | mapping-v2 |
 | `modules/mapping.js` | 1,812 | mapping |
 | `modules/marketing-calendar-v2.js` | 250 | marketing-calendar-v2, marketing-calendar |
@@ -114,7 +115,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/rma-admin.js` | 1,051 | rma |
 | `modules/rma-v2.js` | 219 | rma-v2 |
 | `modules/sales-events-v2.js` | 745 | sales-events-v2 |
-| `modules/sales.js` | 3,409 | pos, receipts, events, salesEvents, terms |
+| `modules/sales.js` | 3,424 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 706 | sessions-v2 |
 | `modules/settings-panels.js` | 645 | — |
 | `modules/setup-wizard.js` | 4,869 | — |

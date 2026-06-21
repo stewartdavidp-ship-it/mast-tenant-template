@@ -2094,6 +2094,10 @@
     callFunction('submitOrder', payload, function (result) {
       isSubmitting = false;
 
+      // W5 — demo_key_action: a demo prospect placed a test order (covers both
+      // the $0 wallet path and the payment-redirect path below). Deduped, fires once.
+      if (result && result.success) markDemoKeyAction('test_order');
+
       // $0 wallet-covered order: server handled everything (passes, enrollments, gift cards)
       if (result && result.success && result.zeroDollar) {
         window.MastCart.clear();
@@ -2400,6 +2404,18 @@
       if (hit.a && hit.a.length > 40) hit.a = hit.a.substring(0, 40);
       MastDB.push('analytics/hits', hit).catch(function () {});
     } catch (e) { /* silent */ }
+  }
+
+  // W5 — demo_key_action (storefront side: prospect placed a test order). Shares
+  // the localStorage dedup with the admin's markDemoKeyAction so the funnel logs
+  // exactly one key-action per sandbox across both surfaces (same origin).
+  function markDemoKeyAction(kind) {
+    if (!window.DEMO_MODE) return;
+    try {
+      if (localStorage.getItem('__mast_demo_key_action')) return;
+      localStorage.setItem('__mast_demo_key_action', kind || '1');
+    } catch (_e) {}
+    trackCheckoutEvent('demo_key_action');
   }
 
   // ── Cancel / Reset ──
