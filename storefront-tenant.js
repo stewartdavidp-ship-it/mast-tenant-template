@@ -175,6 +175,43 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       meta.content = 'noindex, nofollow';
       document.head.appendChild(meta);
     }
+
+    // ── Demo-mode markers (W1) ────────────────────────────────────────────────
+    // DISPLAY-ONLY. publicConfig.demoMode is the world-readable mirror of a demo
+    // sandbox; the real boundary is the platform-admin-only enforced flags.demo
+    // (server-side — every fleet cron, email path and cost path honors it).
+    // Flipping these markers changes ONLY the demo banner/affordances, never
+    // enforcement. Both the storefront AND the admin load this script, so setting
+    // them here is the single detection point for both surfaces. The admin also
+    // re-confirms from its own publicConfig read in loadTenantConfig().
+    window.DEMO_MODE = !!publicConfig.demoMode;
+    window.DEMO_RESET_AT = publicConfig.demoResetAt || null;       // epoch ms or ISO
+    window.DEMO_EMAIL_SINK = publicConfig.demoEmailSink || '';     // all email → here
+    if (!window.MastDemo) window.MastDemo = makeMastDemo();
+  }
+
+  // Shared demo helpers, available to both storefront and admin (both load this
+  // file). Countdown formatting lives here so the two banners stay consistent.
+  function makeMastDemo() {
+    return {
+      // Accepts epoch-ms (number) or an ISO/parseable string. Returns a compact
+      // human countdown ("2d 4h", "3h 12m", "8m 5s", "20s") or '' when unknown.
+      formatCountdown: function (resetAt) {
+        var ms = (typeof resetAt === 'number') ? resetAt : Date.parse(resetAt);
+        if (!ms || isNaN(ms)) return '';
+        var diff = ms - Date.now();
+        if (diff <= 0) return 'now';
+        var s = Math.floor(diff / 1000);
+        var d = Math.floor(s / 86400);
+        var h = Math.floor((s % 86400) / 3600);
+        var m = Math.floor((s % 3600) / 60);
+        var sec = s % 60;
+        if (d > 0) return d + 'd ' + h + 'h';
+        if (h > 0) return h + 'h ' + m + 'm';
+        if (m > 0) return m + 'm ' + sec + 's';
+        return sec + 's';
+      }
+    };
   }
 
   // ── Storefront signed-URL image upload (W2-C10) ──────────────────────────

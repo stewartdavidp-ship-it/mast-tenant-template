@@ -582,6 +582,21 @@ function renderSquarePayments() {
   var tbody = document.getElementById('squarePaymentsTableBody');
   var cardsEl = document.getElementById('squarePaymentsCards');
   var summaryEl = document.getElementById('squarePaymentsSummary');
+
+  // W3 — live payment sync (Square/Stripe) is switched off under the demo
+  // safety envelope; show the "full product" affordance instead of an empty
+  // "no payments" state. No-op for real tenants (gated on window.DEMO_MODE).
+  if (window.DEMO_MODE && emptyEl && window.demoStubHtml) {
+    if (summaryEl) summaryEl.innerHTML = '';
+    if (tableWrap) tableWrap.style.display = 'none';
+    if (cardsEl) cardsEl.innerHTML = '';
+    emptyEl.style.display = '';
+    emptyEl.innerHTML = window.demoStubHtml({ key: 'payments', icon: '💳',
+      title: 'Payment sync is in the full product',
+      body: 'Matching live Square & Stripe payments to sales is switched off in this demo — it works end-to-end in your own Mast store.' });
+    return;
+  }
+
   var filter = document.getElementById('squarePaymentsFilter').value;
 
   var all = getSquarePaymentsArray();

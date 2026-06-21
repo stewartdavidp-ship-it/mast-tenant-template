@@ -244,6 +244,11 @@
   async function buyLabelsSelected() {
     var ids = Object.keys(_buyLabelsSelected).filter(function(k) { return _buyLabelsSelected[k]; });
     if (ids.length === 0) return;
+    // W3 — buying real shipping labels is switched off under the demo safety
+    // envelope; show the "full product" affordance instead. No-op for real tenants.
+    if (window.demoBlockCapability && window.demoBlockCapability({ key: 'shipping', icon: '📦',
+      title: 'Buying shipping labels is in the full product',
+      body: 'Purchasing real carrier labels is switched off in this live demo — it works end-to-end in your own Mast store.' })) return;
     var btn = document.getElementById('buyLabelsBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Buying ' + ids.length + ' label(s)…'; }
     // Pre-check: bail with a friendly toast if Shippo isn't configured rather

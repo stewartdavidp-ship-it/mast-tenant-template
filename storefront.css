@@ -618,6 +618,42 @@ footer {
   border-bottom: 1px solid rgba(var(--primary-rgb, 196, 133, 60), 0.15);
 }
 
+/* ========= DEMO BANNER (W2) ========= */
+/* Persistent sandbox marker shown above the nav on demo storefronts. Amber so
+   it reads as a sandbox, distinct from the promo banner. Carries a live reset
+   countdown and a CTA into the convert flow (W4). */
+.demo-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  background: #1a1714;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.4);
+  padding: 8px 16px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #F5C97A;
+}
+.demo-banner-text { font-weight: 500; }
+.demo-banner-countdown { color: #FBBF24; font-variant-numeric: tabular-nums; }
+.demo-banner-cta {
+  background: #F59E0B;
+  color: #1a1714;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 14px;
+  font-family: inherit;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.demo-banner-cta:hover { background: #FBBF24; }
+
 /* ========= MOBILE MENU ========= */
 .nav-mobile-menu {
   position: fixed;
