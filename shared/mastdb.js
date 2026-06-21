@@ -344,7 +344,7 @@ var MastDB = (function() {
         // UNCAUGHT "cb is not a function" on the first snapshot (spams auto-feedback).
         // Warn (naming the path so the real caller is findable) and no-op instead.
         if (typeof cb !== 'function') { console.warn('[MastDB.query.subscribe] called without a callback' + (collectionRef && collectionRef.path ? ' (' + collectionRef.path + ')' : '') + ' — no-op; a .listen()/.on() is missing its handler.'); return function () {}; }
-        var errHandler = onErr || function(e) { console.warn('[MastDB.query.subscribe]:', e.message); };
+        var errHandler = onErr || _listenerErr('query.subscribe');
         return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); }, errHandler);
       }
     };
@@ -379,6 +379,27 @@ var MastDB = (function() {
       }
       throw err;
     });
+  }
+
+  // --- Unified onSnapshot/listener error handler. Surfaces a MISSING COMPOSITE
+  //     INDEX prominently: Firestore reports `failed-precondition` with a "create it
+  //     here: https://console.firebase.google.com/…" URL, and a listener on an
+  //     un-indexed query silently never fires — so without this the listener is dead
+  //     and the fix-it link is buried. Everything else is a plain warn. (The read
+  //     path _fsGet above has the analogous branch.) ---
+  function _listenerErr(label) {
+    return function(e) {
+      if (e && e.code === 'failed-precondition' && e.message &&
+          e.message.indexOf('https://console.firebase.google.com') !== -1) {
+        var _u = e.message.match(/https:\/\/console\.firebase\.google\.com\/\S+/);
+        try {
+          console.error('[MastDB.' + label + '] requires a composite index — create it: ' +
+            (_u ? _u[0] : '(see message)') + '\n  ' + e.message);
+        } catch (_e) {}
+        return;
+      }
+      console.warn('[MastDB.' + label + ']:', e && (e.message || e));
+    };
   }
 
   // --- Build a nested object from a dotted fieldPath so set({merge:true}) writes
@@ -585,7 +606,7 @@ var MastDB = (function() {
       subscribe: function(path, cb, onErr) {
         if (typeof cb !== 'function') { console.warn('[MastDB.subscribe] called without a callback for "' + path + '" — no-op; a .listen()/.on() is missing its handler.'); return function () {}; }
         var parsed = _translateTenantPath(path);
-        var errHandler = onErr || function(e) { console.warn('[MastDB.subscribe] ' + path + ':', e.message); };
+        var errHandler = onErr || _listenerErr('subscribe ' + path);
         if (!parsed.docId) {
           return _collRef(parsed).onSnapshot(function(snap) {
             if (snap.empty) { cb(_wrapSnap(null)); return; }
@@ -610,7 +631,7 @@ var MastDB = (function() {
       subscribeChild: function(path, event, cb) {
         var parsed = _translateTenantPath(path);
         var seen = {};
-        var errHandler = function(e) { console.warn('[MastDB.subscribeChild] ' + path + ':', e.message); };
+        var errHandler = _listenerErr('subscribeChild ' + path);
         if (parsed.fieldPath) {
           return _docRef(parsed).onSnapshot(function(doc) {
             if (!doc.exists) return;
@@ -705,7 +726,7 @@ var MastDB = (function() {
         once: function() { return _fsGet(_apply(), { source: 'server' }).then(_snapToObj).then(_wrapSnap); },
         subscribe: function(cb, onErr) {
           if (typeof cb !== 'function') { console.warn('[MastDB.platform.query.subscribe] called without a callback' + (collectionRef && collectionRef.path ? ' (' + collectionRef.path + ')' : '') + ' — no-op; a .listen()/.on() is missing its handler.'); return function () {}; }
-          var errHandler = onErr || function(e) { console.warn('[MastDB.platform.query.subscribe]:', e && (e.message || e)); };
+          var errHandler = onErr || _listenerErr('platform.query.subscribe');
           return _apply().onSnapshot(function(snap) { cb(_wrapSnap(_snapToObj(snap))); }, errHandler);
         }
       };
@@ -828,7 +849,7 @@ var MastDB = (function() {
       subscribe: function(path, cb, onErr) {
         if (typeof cb !== 'function') { console.warn('[MastDB.platform.subscribe] called without a callback for "' + path + '" — no-op; a .listen()/.on() is missing its handler.'); return function () {}; }
         var parsed = _translatePlatformPath(path);
-        var errHandler = onErr || function(e) { console.warn('[MastDB.platform.subscribe] ' + path + ':', e.message); };
+        var errHandler = onErr || _listenerErr('platform.subscribe ' + path);
         if (!parsed.docId) {
           return _platformCollRef(parsed).onSnapshot(function(snap) {
             if (snap.empty) { cb(_wrapSnap(null)); return; }
