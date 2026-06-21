@@ -8,6 +8,7 @@
 <title>My Shop — Point of Sale</title><!-- TENANT: brand -->
 <link rel="icon" href="../images/favicon.svg" type="image/svg+xml">
 <link rel="manifest" href="/pos/manifest.json">
+<link rel="apple-touch-icon" href="/pos/icons/icon-192.png">
 <script>
 // Theme: follow the operator's saved preference (shared same-origin localStorage
 // 'mast-theme', set by the storefront/admin) else the OS color scheme. Runs before
@@ -29,6 +30,15 @@
   --yellow: #ffc107;
   --red: #f44336;
   --blue: #42a5f5;
+  /* Shared UI engine (MastUI) token aliases → map the engine's token names onto
+     the POS palette so MastUI components (e.g. MastUI.prompt) theme correctly here.
+     These reference the POS tokens above, so they flip with light/dark automatically. */
+  --surface-card: var(--card);
+  --text-primary: var(--text);
+  --warm-gray: var(--muted);
+  --bg-secondary: var(--bg);
+  --amber: var(--gold);
+  --amber-ink: #000;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -414,6 +424,7 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="../shared/mastdb.js?v=1"></script>
+<script src="../shared/mast-ui.js?v=1"></script>
 <script src="../shared/camera.js"></script>
 <script src="../pod-config.js"></script>
 <script src="../storefront-tenant.js"></script>
@@ -719,10 +730,34 @@ function closeEventSettings() {
 // ============================================================
 // Auth — init Firebase and attach listener after tenant resolves
 // ============================================================
+// Build a tenant-branded PWA manifest at runtime (the static /pos/manifest.json is
+// generic + shared across tenants). Uses the tenant brand name so the installed
+// home-screen app reads e.g. "Shir Glassworks POS".
+function applyBrandedManifest() {
+  try {
+    var brand = (window.TENANT_BRAND && TENANT_BRAND.name) ||
+      (document.title || '').split('—')[0].trim() || 'Shop';
+    var manifest = {
+      name: brand + ' POS',
+      short_name: (brand.length > 12 ? brand.slice(0, 12) : brand) || 'POS',
+      start_url: '/pos/', scope: '/pos/', display: 'standalone', orientation: 'portrait',
+      background_color: '#1a1a1a', theme_color: '#1a1a1a',
+      icons: [
+        { src: '/pos/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+        { src: '/pos/icons/icon-512.png', sizes: '512x512', type: 'image/png' }
+      ]
+    };
+    var url = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' }));
+    var link = document.querySelector('link[rel="manifest"]');
+    if (link) link.setAttribute('href', url);
+  } catch (e) { /* keep the static manifest on any failure */ }
+}
+
 window.TENANT_READY.then(function() {
   try { firebaseApp = firebase.app(); } catch (e) { firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
   MastDB.init({ firestore: firebaseApp.firestore(), tenantId: TENANT_ID });
   auth = firebaseApp.auth();
+  applyBrandedManifest();
 
   CLASSIFY_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/classifyImage';
   UPLOAD_URL = TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/uploadImage';
@@ -1718,54 +1753,25 @@ function loadPermissions() {
 // light style and ignores the POS theme). Mirrors the existing POS modal pattern
 // (commission / event modals): var(--card) surface, var(--bg) field, var(--text)
 // / var(--border) — so it tracks the active theme in both dark and light mode.
-function posInputModal(opts) {
-  opts = opts || {};
-  var prev = document.getElementById('posInputModal');
-  if (prev) prev.remove();
-  var modal = document.createElement('div');
-  modal.id = 'posInputModal';
-  modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:300;display:flex;align-items:center;justify-content:center;padding:20px;';
-  modal.innerHTML =
-    '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:380px;width:100%;">' +
-      '<h3 style="margin:0 0 14px;font-size:1rem;color:var(--text);">' + esc(opts.title || '') + '</h3>' +
-      '<input id="posInputModalField" type="text" inputmode="' + (opts.inputmode || 'text') + '" ' +
-        'value="' + esc(opts.value || '') + '" placeholder="' + esc(opts.placeholder || '') + '" ' +
-        'style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:16px;box-sizing:border-box;">' +
-      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;">' +
-        '<button type="button" id="posInputModalCancel" style="padding:10px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">Cancel</button>' +
-        '<button type="button" id="posInputModalOk" style="padding:10px 18px;border-radius:8px;border:none;background:var(--gold);color:#000;font-weight:600;font-size:14px;cursor:pointer;">' + esc(opts.confirmLabel || 'OK') + '</button>' +
-      '</div>' +
-    '</div>';
-  document.body.appendChild(modal);
-  var field = document.getElementById('posInputModalField');
-  function close() { modal.remove(); }
-  function submit() { var v = field.value; close(); if (opts.onConfirm) opts.onConfirm(v); }
-  document.getElementById('posInputModalCancel').onclick = close;
-  document.getElementById('posInputModalOk').onclick = submit;
-  field.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') { e.preventDefault(); submit(); }
-    else if (e.key === 'Escape') { e.preventDefault(); close(); }
-  });
-  modal.addEventListener('click', function(e) { if (e.target === modal) close(); });
-  setTimeout(function() { field.focus(); field.select(); }, 0);
-}
-
+// Input dialogs use the shared UI engine: MastUI.prompt (shared/mast-ui.js) —
+// a themed, var-token dialog that replaces window.prompt and renders correctly
+// in both light and dark (POS tokens are aliased to the engine's in :root).
 function overrideLinePrice(idx) {
   if (!canOverridePrice) { showToast('You don’t have permission to override prices', true); return; }
   var it = saleItems[idx];
   if (!it) return;
-  posInputModal({
+  MastUI.prompt({
     title: 'Override price for “' + it.productName + '” (per item)',
     value: ((it.priceCents || 0) / 100).toFixed(2),
     inputmode: 'decimal',
-    confirmLabel: 'Set price',
-    onConfirm: function(input) {
-      var v = parseFloat(String(input).replace(/[^0-9.]/g, ''));
-      if (isNaN(v) || v < 0) { showToast('Enter a valid price', true); return; }
-      it.overridePriceCents = Math.round(v * 100);
-      recomputeLinePrice(it);
-      refreshCartUI();
-    }
+    confirmLabel: 'Set price'
+  }).then(function(input) {
+    if (input == null) return;
+    var v = parseFloat(String(input).replace(/[^0-9.]/g, ''));
+    if (isNaN(v) || v < 0) { showToast('Enter a valid price', true); return; }
+    it.overridePriceCents = Math.round(v * 100);
+    recomputeLinePrice(it);
+    refreshCartUI();
   });
 }
 function clearLineOverride(idx) {
@@ -1798,15 +1804,11 @@ function couponDiscountCents() {
 }
 function openCoupon() {
   if (appliedCoupon) { removeCoupon(); return; }
-  posInputModal({
-    title: 'Add coupon',
-    placeholder: 'Coupon code',
-    confirmLabel: 'Apply',
-    onConfirm: function(code) {
+  MastUI.prompt({ title: 'Add coupon', placeholder: 'Coupon code', confirmLabel: 'Apply' })
+    .then(function(code) {
       code = String(code || '').trim();
       if (code) applyCoupon(code);
-    }
-  });
+    });
 }
 function applyCoupon(code) {
   if (!navigator.onLine) { showToast('Coupon needs a connection', true); return; }
