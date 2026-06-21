@@ -41,6 +41,7 @@ const INDEX_HTML = join(APP_DIR, 'index.html');
 // Shared engine scripts kept content-addressed (the set the old bumper held in
 // lockstep with the global). Keys are the basename without `.js`.
 const LOCKSTEP_SHARED = new Set([
+  'mast-error',
   'mastdb',
   'mast-ui',
   'mast-io',
