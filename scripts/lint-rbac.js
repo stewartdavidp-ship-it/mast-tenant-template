@@ -79,11 +79,15 @@ const MODULE_GATE_BASELINE = new Set([
   // fix-in-place during a verbatim move); gating the import write/delete handlers
   // is a follow-up.
   'website-import.js',
-  // Other legacy feature modules with the same gap (routed, write, 0 gates):
-  'audit-feedback.js', 'audit.js', 'blog.js', 'book.js', 'brand.js', 'campaigns.js',
+  // Other legacy feature modules with the same gap (routed, write, 0 gates).
+  // brand.js + homepage.js were here but are RETIRED (T6 — the last bespoke V1
+  // modules): their BrandBridge/HomepageBridge writers were absorbed VERBATIM into
+  // website-v2.js, which references can('homepage','edit') (canEdit) — so CHECK C
+  // classifies the now-write-bearing website-v2.js as gated (no new entry needed).
+  'audit-feedback.js', 'audit.js', 'blog.js', 'book.js', 'campaigns.js',
   'channels.js', 'commission-terms.js', 'composer.js', 'contacts.js',
   'customer-service.js', 'engagement-inbox.js', 'events.js', 'fulfillment.js',
-  'homepage.js', 'lookbooks.js', 'maker.js', 'mapping.js', 'newsletter.js',
+  'lookbooks.js', 'maker.js', 'mapping.js', 'newsletter.js',
   'procurement.js', 'promotions.js', 'social.js', 'wholesale.js',
   // UI-redesign (?ui=1) proof modules — flag-gated; gate or retire as they graduate:
   // orders-v2.js graduated: native detail actions (triage/cancel/note/email) are

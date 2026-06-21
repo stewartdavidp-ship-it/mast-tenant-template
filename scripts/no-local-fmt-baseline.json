@@ -35,9 +35,6 @@
     "moneyToFixed": 9,
     "localeDate": 8
   },
-  "app/modules/brand.js": {
-    "localeDate": 1
-  },
   "app/modules/campaigns.js": {
     "centsDiv": 1,
     "moneyToFixed": 1,
@@ -290,7 +287,8 @@
   },
   "app/modules/website-v2.js": {
     "centsDiv": 1,
-    "moneyToFixed": 1
+    "moneyToFixed": 1,
+    "localeDate": 1
   },
   "app/modules/website-import.js": {
     "centsDiv": 1,

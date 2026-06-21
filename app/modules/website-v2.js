@@ -700,7 +700,8 @@
         return ok;
       }));
     } else {
-      try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('brand'); } catch (e) {}
+      // BrandBridge is eager (absorbed into this file) — this branch is now
+      // effectively unreachable; keep a toast rather than a silent no-op.
       if (window.showToast) showToast('Site editor still loading — try again', true);
     }
   }
@@ -1281,7 +1282,8 @@
   // silent no-op). Mirrors homepage-v2's hostReady.
   function hpReady(fnName) {
     if (typeof window[fnName] === 'function') return true;
-    try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('homepage'); } catch (e) {}
+    // hp* writers are eager (absorbed into this file) — the guard above always
+    // passes now; keep the defensive toast rather than a silent no-op.
     if (window.showToast) showToast('Site editor still loading — try again', true);
     return false;
   }
@@ -1293,7 +1295,8 @@
     if (window.HomepageBridge && typeof window.HomepageBridge[method] === 'function') {
       return window.HomepageBridge[method].apply(window.HomepageBridge, args);
     }
-    try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('homepage'); } catch (e) {}
+    // HomepageBridge is eager (absorbed into this file) — the guard above always
+    // resolves now; the reject is a defensive fallback, never a silent no-op.
     return Promise.reject(new Error('Site editor still loading — try again'));
   }
 
@@ -1851,7 +1854,7 @@
     pickScheme: function (schemeId) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       if (!window.HomepageBridge || !HomepageBridge.setColorScheme) {
-        try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('homepage'); } catch (e) {}
+        // HomepageBridge is eager (absorbed into this file) — defensive guard only.
         if (window.showToast) showToast('Site editor still loading — try again', true); return;
       }
       // Tier-2 instant preview: push the scheme delta (the storefront resolves it
@@ -2001,7 +2004,7 @@
       if (window.BrandBridge && typeof window.BrandBridge.deleteVariant === 'function') {
         withSave(Promise.resolve(window.BrandBridge.deleteVariant(key)));
       } else {
-        try { if (window.MastAdmin && MastAdmin.loadModule) MastAdmin.loadModule('brand'); } catch (e) {}
+        // BrandBridge is eager (absorbed into this file) — defensive guard only.
         if (window.showToast) showToast('Site editor still loading — try again', true);
       }
     },
@@ -2567,26 +2570,24 @@
   // caches so the read-on-page controls reflect the change without a full reload.
   function reloadSoon() { setTimeout(load, 250); }
 
-  // Host modules that own the single-source writers + the theme manifest Card 1
-  // delegates to: homepage.js (window.HomepageBridge: getThemeOptions / setColorScheme,
-  // and it loads the template manifest), brand.js (window.BrandBridge: setLogoFromUrl).
-  // MastBrandSync + WebsiteBridge are the other writers (brand-sync.js loads eagerly;
-  // WebsiteBridge is defined in the lazy website-core, this builder's host). Load them at
-  // route setup so the first write isn't a cold no-op.
+  // Host writers + the theme manifest Card 1 delegates to. HomepageBridge
+  // (getThemeOptions / setColorScheme + the template-manifest load) and BrandBridge
+  // (setLogoFromUrl) are now EAGER — absorbed into this file as sibling IIFEs (T6:
+  // homepage.js + brand.js retired), so there is nothing to lazy-load for them.
+  // MastBrandSync (brand-sync.js, eager) and WebsiteBridge (the lazy website-core,
+  // this builder's host) are the other writers; website-core is still loaded at
+  // route setup so the first theme/template write isn't a cold no-op.
   function ensureHostModules() {
-    if (!window.MastAdmin || typeof MastAdmin.loadModule !== 'function') return;
+    // Warm the homepage data caches the Card 1 swatch grids read. ensureLoaded is
+    // ASYNC (fetches the template manifest), so re-render only AFTER it resolves,
+    // else the scheme/font swatch grids paint empty.
     try {
-      var p = MastAdmin.loadModule('homepage');
-      if (p && p.then) p.then(function () {
-        // ensureLoaded populates homepage.js' manifest/theme caches the bridge
-        // reads — it's ASYNC (fetches the template manifest), so re-render only
-        // AFTER it resolves, else the scheme/font swatch grids paint empty.
-        var e = (window.HomepageBridge && HomepageBridge.ensureLoaded) ? HomepageBridge.ensureLoaded() : null;
-        Promise.resolve(e).then(function () { render(); }).catch(function () { render(); });
-      });
+      var e = (window.HomepageBridge && HomepageBridge.ensureLoaded) ? HomepageBridge.ensureLoaded() : null;
+      if (e && e.then) e.then(function () { render(); }).catch(function () { render(); });
     } catch (e) {}
-    try { MastAdmin.loadModule('brand'); } catch (e) {}
-    try { MastAdmin.loadModule('website-core'); } catch (e) {} // owns WebsiteBridge.setThemeField
+    // website-core owns WebsiteBridge.setThemeField + the destructive template-switch
+    // cascade — a SEPARATE lazy module, load it here so the first write isn't cold.
+    try { if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') MastAdmin.loadModule('website-core'); } catch (e) {}
   }
 
   function routeSetup() {
@@ -2603,7 +2604,1645 @@
       // ['website-v2','website'], no MAST_V2_ROUTE_MAP remap, un-gated for ALL
       // users). Without this key ROUTE_MAP['website'] is unset and applyRoute()
       // silently no-ops. Write layer → website-core; AI import → website-import.
-      'website': { tab: 'websiteV2Tab', setup: routeSetup }
+      'website': { tab: 'websiteV2Tab', setup: routeSetup },
+      // Bare #homepage / #brand routes ABSORBED (T6 — homepage.js + brand.js
+      // RETIRED, the last bespoke V1 modules). Their HomepageBridge/BrandBridge +
+      // hp*/brand* writers are now eager sibling IIFEs in THIS file. V2 users reach
+      // the builder via MAST_V2_ROUTE_MAP[homepage|brand]='website-v2'; Legacy-UI
+      // users (remap suppressed) need website-v2 to own the BARE routes here — else
+      // applyRoute('homepage'|'brand') silently no-ops once the V1 manifest rows are
+      // dropped (the #website / rma-admin precedent). All four routes paint the same
+      // single-page builder (routeSetup is route-name-agnostic).
+      'homepage': { tab: 'websiteV2Tab', setup: routeSetup },
+      'brand': { tab: 'websiteV2Tab', setup: routeSetup }
     }
   });
+})();
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   ABSORBED FROM homepage.js (T6 — last bespoke V1 modules retired). The
+   HomepageBridge + hp* window writers + page-builder render helpers used to
+   live in the lazy modules/homepage.js, lazy-loaded ONLY by
+   this builder. homepage.js is DELETED; its body is absorbed here VERBATIM as
+   a sibling IIFE so HomepageBridge/hp* are EAGER on website-v2 load (channels-
+   v2 / newsletter-v2 absorb-and-cut recipe). Only change vs the original file:
+   the MastAdmin.registerModule('homepage') block is dropped — website-v2 now
+   owns the bare #homepage route (manifest + registerModule below).
+   ════════════════════════════════════════════════════════════════════════ */
+/**
+ * Homepage Module — Unified section editing + gallery image management
+ * Replaces the core Gallery tab and Website > Sections tab
+ */
+(function() {
+  'use strict';
+
+  // --- State ---
+  var loaded = false;
+  // W1.9 — default to Hero so the edit panel surfaces inline immediately
+  // instead of the "Select a section below to edit" empty state. Persona walk
+  // 2026-05-22 showed operators tapping the Hero card and getting no
+  // visible response (it WAS selected, but the empty state didn't update
+  // until they scrolled). Defaulting to 'hero' resolves the perceived
+  // affordance gap for every section card, not just Hero — once one is
+  // selected, clicking any other card swaps the panel as expected.
+  var selectedSection = 'hero';
+  var galleryData = {};
+  var galleryListener = null;
+  var websiteConfig = null;
+  var themeConfig = null;
+  var templateManifest = null;
+  var navSections = null;
+  // Persisted homepage section order (public/config/sectionOrder) — the array
+  // the storefront reads to order its homepage slots. null until loaded; the
+  // HomepageBridge.getSectionOrder/setSectionOrder accessors own it.
+  var navSectionOrder = null;
+  // W1.8 round-3 — testimonials surfaced in the Page Builder Testimonials
+  // section so operators see review-driven entries from public/testimonials/
+  // alongside any image-based legacy entries.
+  var testimonialsData = {};
+
+  // --- Sync gallery data into the core shell's object without replacing the reference ---
+  function syncToGlobal(data) {
+    var g = window.gallery;
+    // Clear existing keys
+    Object.keys(g).forEach(function(k) { delete g[k]; });
+    // Copy new data in
+    Object.keys(data).forEach(function(k) { g[k] = data[k]; });
+  }
+
+  // --- Mark unpublished (shared with website module) ---
+  function markUnpublished() {
+    if (window.markUnpublished) return window.markUnpublished();
+    // Fallback if website module not loaded yet
+    MastDB.set('webPresence/config/updatedAt', new Date().toISOString());
+  }
+
+  // --- Debounce helper ---
+  var debounceTimers = {};
+  function debounce(key, fn, delay) {
+    clearTimeout(debounceTimers[key]);
+    debounceTimers[key] = setTimeout(fn, delay || 600);
+  }
+
+  // --- Section definitions (from website.js SECTION_DEFS) ---
+  var SECTION_DEFS = [
+    { key: 'hero', name: 'Hero', locked: true, fields: [
+      { id: 'headline', label: 'Headline', type: 'text' },
+      { id: 'subheadline', label: 'Subheadline', type: 'text' },
+      { id: 'ctaText', label: 'Button Text', type: 'text' },
+      { id: 'ctaUrl', label: 'Button URL', type: 'text' },
+      { id: 'headlineSize', label: 'Headline Size', type: 'select', options: [{ v: 'small', l: 'Small' }, { v: 'medium', l: 'Medium (Default)' }, { v: 'large', l: 'Large' }, { v: 'xl', l: 'Extra Large' }] },
+      { id: 'textAlign', label: 'Text Position', type: 'select', options: [{ v: 'left', l: 'Left' }, { v: 'center', l: 'Center (Default)' }, { v: 'right', l: 'Right' }] }
+    ]},
+    { key: 'gallery', name: 'Products / Gallery', fields: [
+      { id: 'heading', label: 'Heading', type: 'text' },
+      { id: 'columns', label: 'Columns', type: 'number' }
+    ]},
+    { key: 'about', name: 'About', fields: [
+      { id: 'heading', label: 'Heading', type: 'text' },
+      { id: 'body', label: 'Body Text', type: 'textarea' },
+      { id: 'imageUrl', label: 'Image', type: 'image' }
+    ]},
+    { key: 'contact', name: 'Contact', fields: [
+      { id: 'heading', label: 'Heading', type: 'text' },
+      { id: 'email', label: 'Email', type: 'text' },
+      { id: 'phone', label: 'Phone', type: 'text' },
+      { id: 'address', label: 'Address', type: 'text' },
+      { id: 'showForm', label: 'Show Contact Form', type: 'toggle' }
+    ]},
+    { key: 'newsletter', name: 'Newsletter', fields: [
+      { id: 'heading', label: 'Heading', type: 'text' },
+      { id: 'subheadline', label: 'Subheadline', type: 'text' },
+      { id: 'buttonLabel', label: 'Button Label', type: 'text' }
+    ]},
+    { key: 'members', name: 'Members', fields: [
+      { id: 'accessModel', label: 'Access Model', type: 'select', options: [{ v: 'passcode', l: 'Passcode' }, { v: 'email', l: 'Email List' }] },
+      { id: 'passcode', label: 'Passcode', type: 'text' }
+    ]}
+  ];
+
+  // --- Variant options ---
+  var VARIANT_OPTIONS = {
+    hero: [
+      { id: 'full-bleed', label: 'Full Bleed', desc: 'Full-width background' },
+      { id: 'split-image', label: 'Split Image', desc: 'Image + text side by side' },
+      { id: 'minimal-text', label: 'Minimal Text', desc: 'Large text, subtle background' }
+    ],
+    gallery: [
+      { id: 'grid', label: 'Grid', desc: 'Even columns' },
+      { id: 'masonry', label: 'Masonry', desc: 'Pinterest-style' },
+      { id: 'carousel', label: 'Carousel', desc: 'Swipeable row' }
+    ],
+    'product-grid': [
+      { id: 'card', label: 'Card', desc: 'Standard product cards' },
+      { id: 'compact', label: 'Compact', desc: 'Dense, small images' }
+    ]
+  };
+
+  // --- Data loading ---
+  async function loadData() {
+    if (loaded) return;
+
+    // Load gallery images
+    galleryData = (await MastDB.gallery.list(500)) || {};
+
+    // Load webPresence/config (section content fields)
+    websiteConfig = (await MastDB.get('webPresence/config')) || {};
+
+    // Load theme config — try shared data first, then load independently
+    themeConfig = MastAdmin.getData('themeConfig');
+    if (!themeConfig) {
+      themeConfig = (await MastDB.get('public/config/theme')) || {};
+    }
+
+    // Load nav sections (enabled states)
+    navSections = (await MastDB.get('public/config/nav/sections')) || {};
+
+    // Load persisted homepage section order (public/config/sectionOrder) so the
+    // v2 builder's reorder UI seeds from the live order. Empty/absent → the
+    // accessor falls back to manifest homepageFlow / section-list order.
+    try {
+      var _so = await MastDB.get('public/config/sectionOrder');
+      navSectionOrder = Array.isArray(_so) ? _so : null;
+    } catch (_e) { navSectionOrder = null; }
+
+    // W1.8 round-3 — load review-driven testimonials so the Testimonials
+    // section card can surface them with visibility toggles.
+    try {
+      testimonialsData = (await MastDB.get('public/testimonials')) || {};
+    } catch (_e) { testimonialsData = {}; }
+
+    // Load template manifest — try shared data first, then load independently
+    templateManifest = MastAdmin.getData('templateManifest');
+    if (!templateManifest) {
+      var templateId = themeConfig.templateId || 'artisan';
+      try {
+        var tenantId = MastDB.tenantId();
+        var siteUrl = 'https://mast-' + tenantId + '.web.app';
+        var resp = await fetch(siteUrl + '/templates/' + templateId + '/manifest.json');
+        if (resp.ok) templateManifest = await resp.json();
+      } catch (e) {}
+      if (!templateManifest) {
+        try {
+          var resp2 = await fetch('/templates/' + (themeConfig.templateId || 'artisan') + '/manifest.json');
+          if (resp2.ok) templateManifest = await resp2.json();
+        } catch (e2) {}
+      }
+    }
+
+    // Sync gallery data into the core shell's gallery object (not replace it).
+    // Core shell declares `var gallery = {}` which is also window.gallery.
+    // Replacing window.gallery would break the local var reference.
+    syncToGlobal(galleryData);
+
+    loaded = true;
+  }
+
+  // --- Firebase listeners ---
+  function startListeners() {
+    if (!galleryListener) {
+      galleryListener = MastDB.gallery.listen(500, function(snap) {
+        galleryData = snap.val() || {};
+        syncToGlobal(galleryData);
+        autoReindexIfNeeded();
+        if (window.currentRoute === 'homepage') renderHomepage();
+      }, function(err) {
+        showToast('Error loading gallery: ' + err.message, true);
+      });
+    }
+  }
+
+  function stopListeners() {
+    if (galleryListener) {
+      MastDB.gallery.unlisten(galleryListener);
+      galleryListener = null;
+    }
+  }
+
+  // --- Section list helpers ---
+  function getSectionList() {
+    var sections = [];
+
+    if (templateManifest && templateManifest.slots) {
+      var categories = ['universal', 'common', 'differentiators'];
+      categories.forEach(function(cat) {
+        var slots = templateManifest.slots[cat];
+        if (!slots) return;
+        slots.forEach(function(slot) {
+          sections.push({
+            id: slot.id,
+            label: slot.label || slot.id,
+            description: slot.description || '',
+            required: slot.required || false,
+            prominent: slot.prominent || false,
+            category: cat
+          });
+        });
+      });
+    }
+
+    // Fallback: use SECTION_DEFS if no manifest
+    if (sections.length === 0) {
+      SECTION_DEFS.forEach(function(def) {
+        sections.push({
+          id: def.key,
+          label: def.name,
+          description: '',
+          required: def.locked || false,
+          prominent: false,
+          category: 'common'
+        });
+      });
+    }
+
+    return sections;
+  }
+
+  function getSectionById(sectionId) {
+    var list = getSectionList();
+    return list.find(function(s) { return s.id === sectionId; }) || null;
+  }
+
+  function countGalleryImages(sectionId) {
+    return Object.values(galleryData).filter(function(g) {
+      return g.section === sectionId && !g.templateHidden;
+    }).length;
+  }
+
+  function getImagesForSection(sectionId) {
+    return Object.entries(galleryData)
+      .filter(function(entry) { return entry[1].section === sectionId && !entry[1].templateHidden; })
+      .sort(function(a, b) { return (a[1].order || 0) - (b[1].order || 0); });
+  }
+
+  // Sections whose gallery images are rendered on the storefront
+  var IMAGE_CAPABLE_SECTIONS = ['hero', 'gallery', 'about', 'our-story', 'shop', 'schedule'];
+
+  function hasImageCapability(sectionId) {
+    // Only show image controls for sections the storefront actually renders gallery images for
+    if (IMAGE_CAPABLE_SECTIONS.indexOf(sectionId) !== -1) return true;
+    // Also include any product category sections (dynamic)
+    if (typeof SHOP_SECTION_IDS !== 'undefined' && SHOP_SECTION_IDS.indexOf(sectionId) !== -1) return true;
+    return false;
+  }
+
+  // --- Main render ---
+  window.renderHomepage = async function renderHomepage() {
+    var root = document.getElementById('homepageModuleRoot');
+    if (!root) return;
+
+    if (!loaded) {
+      root.innerHTML = '<div class="loading">Loading page builder...</div>';
+      await loadData();
+    }
+
+    var html = '<div class="section-header"><h2>Page Builder</h2></div>';
+
+    // Top: Section Cards
+    html += renderSectionCards();
+
+    // Bottom: Edit View (selected section details)
+    html += '<div class="hp-edit-view" style="margin-top:12px;">';
+    html += renderEditView();
+    html += '</div>';
+
+    root.innerHTML = html;
+
+    // Post-render: load hero rotation speed if hero is selected
+    if (selectedSection === 'hero' && typeof loadHeroRotationSpeed === 'function') {
+      loadHeroRotationSpeed();
+    }
+  }
+
+  // --- Section cards (bottom panel) ---
+  function renderSectionCards() {
+    var sections = getSectionList();
+    var html = '<div class="hp-cards-row">';
+
+    sections.forEach(function(sec) {
+      var isSelected = selectedSection === sec.id;
+      var navData = (navSections && navSections[sec.id]) || {};
+      var wpData = (websiteConfig && websiteConfig.sections && websiteConfig.sections[sec.id]) || {};
+      var enabled = sec.required ? true : (navData.enabled !== false && wpData.enabled !== false);
+      var imageCount = countGalleryImages(sec.id);
+
+      html += '<div class="hp-card' + (isSelected ? ' selected' : '') + (!enabled ? ' disabled' : '') + '" onclick="hpSelectSection(\'' + sec.id + '\')">';
+      html += '<div class="hp-card-header">';
+      html += '<span class="hp-card-name">' + esc(sec.label) + '</span>';
+      if (imageCount > 0) {
+        html += '<span class="hp-card-badge">' + imageCount + '</span>';
+      }
+      html += '</div>';
+      // Toggle
+      if (!sec.required) {
+        html += '<label class="toggle-switch hp-card-toggle" onclick="event.stopPropagation();">';
+        html += '<input type="checkbox"' + (enabled ? ' checked' : '') + ' onchange="hpToggleSection(\'' + sec.id + '\', this.checked)">';
+        html += '<span class="toggle-slider"></span>';
+        html += '</label>';
+      }
+      html += '</div>';
+    });
+
+    html += '</div>';
+    return html;
+  }
+
+  // --- Edit view (top panel) ---
+  function renderEditView() {
+    if (!selectedSection) {
+      // W1.9 — fallback empty state. With default selectedSection='hero'
+      // operators should rarely hit this; left in place for the case where
+      // a section gets cleared programmatically.
+      return '<div class="hp-edit-empty"><p>Click any section card below to edit its content and images.</p></div>';
+    }
+
+    var sec = getSectionById(selectedSection);
+    if (!sec) return '';
+
+    var html = '';
+
+    // Header with section name + variant picker
+    html += '<div class="hp-edit-header">';
+    html += '<h3>' + esc(sec.label) + '</h3>';
+    var variantHtml = renderVariantPicker(sec.id);
+    if (variantHtml) html += '<div style="display:flex;align-items:center;gap:4px;">' + variantHtml + '</div>';
+    html += '</div>';
+
+    // Section content fields
+    html += '<div class="hp-edit-fields">';
+    html += renderSectionFields(sec.id);
+    html += '</div>';
+
+    // W1.8 round-3 — Testimonials section: render the review-driven list
+    // (public/testimonials/) above the legacy image grid. Each row shows the
+    // quote/author/rating/product with a Hide/Show toggle (visibility flag
+    // on the testimonial doc). Image-grid below remains for any legacy
+    // image-style entries.
+    if (sec.id === 'testimonials') {
+      html += renderTestimonialsList();
+    }
+
+    // Gallery images for this section
+    var sectionImages = getImagesForSection(sec.id);
+    if (sectionImages.length > 0 || hasImageCapability(sec.id)) {
+      html += '<div class="hp-edit-gallery">';
+      html += '<div class="hp-gallery-header">';
+      html += '<h4>Images (' + sectionImages.length + ')</h4>';
+      html += '<div style="display:flex;gap:8px;align-items:center;">';
+      if (sec.id === 'hero') {
+        html += '<select id="heroRotationSpeed" onchange="saveHeroRotationSpeed(this.value)" style="font-size:0.78rem;padding:3px 8px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);cursor:pointer;" title="Image rotation speed">' +
+          '<option value="3">3s</option><option value="4">4s</option><option value="5">5s</option><option value="6" selected>6s</option><option value="8">8s</option><option value="10">10s</option><option value="15">15s</option><option value="20">20s</option>' +
+          '</select>';
+      }
+      html += '<button class="btn btn-primary" style="font-size:0.78rem;padding:4px 12px;" onclick="hpAddImage(\'' + sec.id + '\')">+ Add from Library</button>';
+      html += '</div>';
+      html += '</div>';
+      html += renderSectionImageGrid(sec.id, sectionImages);
+      html += '</div>';
+    }
+
+    return html;
+  }
+
+  // --- Variant picker ---
+  function renderVariantPicker(sectionId) {
+    var options = VARIANT_OPTIONS[sectionId];
+    if (!options) return '';
+
+    var tc = themeConfig || {};
+    var m = templateManifest || {};
+    var variantKey = sectionId === 'product-grid' ? 'productGridVariant' : sectionId + 'Variant';
+    var currentVariant = tc[variantKey] || m[variantKey] || options[0].id;
+    var defaultVariant = m[variantKey] || options[0].id;
+
+    var html = '<select onclick="event.stopPropagation();" onchange="hpUpdateThemeField(\'' + variantKey + '\', this.value)" style="font-size:0.78rem;padding:3px 6px;border-radius:6px;background:var(--charcoal-light, #333);color:var(--text-primary, #e0e0e0);border:1px solid var(--charcoal-light, #444);cursor:pointer;min-width:100px;">';
+    options.forEach(function(opt) {
+      var selected = currentVariant === opt.id ? ' selected' : '';
+      html += '<option value="' + opt.id + '"' + selected + ' title="' + esc(opt.desc) + '">' + esc(opt.label) + '</option>';
+    });
+    html += '</select>';
+
+    if (currentVariant !== defaultVariant) {
+      html += '<span style="font-size:0.72rem;color:var(--warm-gray);margin-left:4px;" title="Template default: ' + esc(defaultVariant) + '">&#8226; customized</span>';
+    }
+
+    return html;
+  }
+
+  // --- Section fields ---
+  function renderSectionFields(sectionId) {
+    var matchingDef = SECTION_DEFS.find(function(d) { return d.key === sectionId; });
+    if (!matchingDef || !matchingDef.fields) return '';
+
+    var sectionData = (websiteConfig && websiteConfig.sections && websiteConfig.sections[sectionId]) || {};
+    var html = '';
+
+    matchingDef.fields.forEach(function(field) {
+      html += renderFieldInput(sectionId, field, sectionData);
+    });
+
+    if (sectionId === 'contact') {
+      html += renderSocialLinks(sectionData.socialLinks || {});
+    }
+
+    return html;
+  }
+
+  function renderFieldInput(sectionKey, field, data) {
+    var val = data[field.id] !== undefined ? data[field.id] : '';
+    var inputId = 'hp-' + sectionKey + '-' + field.id;
+    var html = '<div class="wp-field-group">';
+    html += '<label for="' + inputId + '">' + esc(field.label) + '</label>';
+
+    if (field.type === 'text') {
+      html += '<input type="text" id="' + inputId + '" value="' + esc(String(val)) + '" oninput="hpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.value)">';
+    } else if (field.type === 'textarea') {
+      html += '<textarea id="' + inputId + '" oninput="hpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.value)">' + esc(String(val)) + '</textarea>';
+    } else if (field.type === 'number') {
+      html += '<input type="number" id="' + inputId + '" value="' + esc(String(val)) + '" oninput="hpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', parseInt(this.value) || 0)">';
+    } else if (field.type === 'select') {
+      html += '<select id="' + inputId + '" onchange="hpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.value)">';
+      (field.options || []).forEach(function(opt) {
+        html += '<option value="' + opt.v + '"' + (String(val) === opt.v ? ' selected' : '') + '>' + esc(opt.l) + '</option>';
+      });
+      html += '</select>';
+    } else if (field.type === 'toggle') {
+      html += '<label class="toggle-switch"><input type="checkbox"' + (val ? ' checked' : '') + ' onchange="hpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.checked)"><span class="toggle-slider"></span></label>';
+    } else if (field.type === 'image') {
+      html += '<div style="display:flex;gap:8px;align-items:center;">';
+      html += '<input type="text" id="' + inputId + '" value="' + esc(String(val)) + '" oninput="hpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.value)" style="flex:1;">';
+      html += '<button class="btn btn-secondary" onclick="hpPickImage(\'' + sectionKey + '\', \'' + field.id + '\')">Browse</button>';
+      html += '</div>';
+      if (val) {
+        html += '<img src="' + esc(String(val)) + '" style="max-width:200px;max-height:120px;border-radius:6px;margin-top:8px;" alt="">';
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // W1.8 round-3 — render the testimonials list (review-driven entries from
+  // public/testimonials/). Each row: quote text, author, rating stars,
+  // product link, source ("From review"), + visibility toggle. Sorted
+  // newest first (matches storefront ordering).
+  function renderTestimonialsList() {
+    var entries = Object.keys(testimonialsData)
+      .map(function(k) { var t = testimonialsData[k] || {}; return Object.assign({}, t, { _key: k }); })
+      .filter(function(t) { return t.quote; })
+      .sort(function(a, b) { return (b.order || 0) - (a.order || 0); });
+
+    var html = '<div class="hp-edit-gallery"><div class="hp-gallery-header">';
+    html += '<h4>Featured testimonials (' + entries.length + ')</h4>';
+    html += '<span style="font-size:0.78rem;color:var(--warm-gray);">Featured from Customer Service › Reviews</span>';
+    html += '</div>';
+
+    if (entries.length === 0) {
+      // Kept bespoke: the wrapper's padding:20px overrides .empty-state's default
+      // 40px 20px (compact gallery context); the emptyState engine has no style hook.
+      html += '<div class="empty-state" style="padding:20px;">' +
+        '<p>No testimonials featured yet. Approve a review in Customer Service and click "Feature on site" to add one here.</p>' +
+      '</div></div>';
+      return html;
+    }
+
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    entries.forEach(function(t) {
+      var stars = t.rating ? ('★ '.repeat(Math.max(0, Math.min(5, parseInt(t.rating, 10) || 0))).trim()) : '';
+      var visible = t.visible !== false;
+      var keyEsc = esc(t._key);
+      html += '<div style="display:flex;gap:12px;padding:12px;background:var(--surface-card);border:1px solid var(--cream-dark);border-radius:8px;align-items:flex-start;">';
+      html += '<div style="flex:1;min-width:0;">';
+      if (stars) html += '<div style="color:var(--amber);letter-spacing:0.15em;font-size:0.85rem;margin-bottom:4px;">' + stars + '</div>';
+      html += '<div style="font-size:0.9rem;font-style:italic;color:var(--text-primary);margin-bottom:4px;">“' + esc(t.quote) + '”</div>';
+      // W1.8 round-4 — read author with proper fallback chain. Round-3 writes
+      // populated `author` + `customerName`, but pre-W1.7-schema-fix entries
+      // may have `author:"Anonymous"` baked in. Prefer `customerName` (admin
+      // view canonical), then `author`, then raw review fields if present.
+      var authorName = t.customerName || t.author || t.authorName || t.reviewerName || '';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);">';
+      if (authorName) html += '— ' + esc(authorName);
+      if (t.productName) html += ' · ' + esc(t.productName);
+      if (t.sourceReviewId) html += ' · <span title="Featured from a review">From review</span>';
+      html += '</div></div>';
+      html += '<label class="toggle-switch" title="' + (visible ? 'Visible on site — click to hide' : 'Hidden — click to show') + '" style="flex-shrink:0;">';
+      html += '<input type="checkbox"' + (visible ? ' checked' : '') + ' onchange="hpToggleTestimonialVisible(\'' + keyEsc + '\', this.checked)">';
+      html += '<span class="toggle-slider"></span></label>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
+  function renderSocialLinks(links) {
+    var platforms = ['instagram', 'facebook', 'etsy', 'pinterest', 'tiktok', 'twitter', 'youtube'];
+    var html = '<h4 style="font-size:0.9rem;margin:16px 0 8px;">Social Links</h4>';
+    platforms.forEach(function(p) {
+      html += '<div class="wp-field-group">';
+      html += '<label>' + p.charAt(0).toUpperCase() + p.slice(1) + '</label>';
+      html += '<input type="url" value="' + esc(links[p] || '') + '" oninput="hpUpdateSocial(\'' + p + '\', this.value)" placeholder="https://">';
+      html += '</div>';
+    });
+    return html;
+  }
+
+  // --- Image grid for a section ---
+  function renderSectionImageGrid(sectionId, items) {
+    if (items.length === 0) {
+      // Kept bespoke: the wrapper's padding:20px overrides .empty-state's default
+      // 40px 20px (compact gallery context); the emptyState engine has no style hook.
+      return '<div class="empty-state" style="padding:20px;"><p>No images yet. Click "+ Add from Library" to add one.</p></div>';
+    }
+
+    var html = '<div class="gallery-grid">';
+    items.forEach(function(entry, idx) {
+      var id = entry[0];
+      var img = entry[1];
+      var isFirst = idx === 0;
+      var isLast = idx === items.length - 1;
+      var isVidEntry = img.videoUrl || /\.(mp4|mov|webm)/i.test(img.url || '');
+
+      html += '<div class="gallery-card">';
+      if (isVidEntry) {
+        html += '<div class="gallery-card-img" style="display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--amber);font-size:1.6rem;min-height:120px;">&#9654;</div>';
+      } else if (img.url) {
+        var fitStyle = img.imageFit ? ' style="object-fit:' + img.imageFit + ';"' : '';
+        html += '<img class="gallery-card-img" src="' + esc(img.url) + '" alt="' + esc(img.alt || '') + '"' + fitStyle + ' onerror="this.classList.add(\'broken\')">';
+      }
+      html += '<div class="gallery-card-body">';
+      html += '<div class="gallery-card-caption">' + esc(img.caption || img.alt || img.productName || '') + '</div>';
+      html += '<div class="gallery-card-meta">';
+
+      // Show relevant metadata per section
+      if (typeof SHOP_SECTION_IDS !== 'undefined' && SHOP_SECTION_IDS.indexOf(sectionId) !== -1 && img.productName) {
+        html += '<span class="category-badge">' + esc(img.productName) + '</span>';
+        if (img.price) html += '<span class="category-badge" style="background:var(--teal);color:white;">' + esc(img.price) + '</span>';
+      } else if (sectionId === 'gallery') {
+        html += '<span class="category-badge">' + esc(img.category || 'other') + '</span>';
+      } else if (sectionId === 'hero' && img.videoUrl) {
+        html += '<span class="category-badge" style="font-size:0.72rem;">video + poster</span>';
+      }
+
+      html += '<span class="order-num">#' + (img.order || 0) + '</span>';
+      html += '</div>';
+      html += '<div class="gallery-card-actions">';
+
+      if (items.length > 1) {
+        html += '<button class="btn-icon" onclick="moveImage(\'' + id + '\', \'up\')" title="Move up"' + (isFirst ? ' disabled' : '') + '>\u2191</button>';
+        html += '<button class="btn-icon" onclick="moveImage(\'' + id + '\', \'down\')" title="Move down"' + (isLast ? ' disabled' : '') + '>\u2193</button>';
+      }
+
+      html += '<button class="visibility-toggle' + (img.visible !== false ? '' : ' hidden') + '" onclick="toggleImageVisibility(\'' + id + '\')" title="Toggle visibility">' +
+        (img.visible !== false ? '\u{1F441}' : '\u{1F6AB}') + '</button>';
+      html += '<button class="btn-icon" onclick="openImageModal(\'' + id + '\')" title="Edit">\u270E</button>';
+      html += '<button class="btn-icon danger" onclick="confirmDeleteImage(\'' + id + '\')" title="Delete">\u2716</button>';
+      html += '</div></div></div>';
+    });
+    html += '</div>';
+
+    // Template-hidden images notice for this section
+    var hiddenCount = Object.values(galleryData).filter(function(g) {
+      return g.section === sectionId && g.templateHidden;
+    }).length;
+    if (hiddenCount > 0) {
+      html += '<div style="margin-top:8px;padding:8px 12px;background:color-mix(in srgb, var(--amber, var(--amber)) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber, var(--amber)) 25%, transparent);border-radius:6px;font-size:0.78rem;color:var(--warm-gray);">';
+      html += hiddenCount + ' image' + (hiddenCount !== 1 ? 's' : '') + ' hidden by template switch';
+      html += '</div>';
+    }
+
+    return html;
+  }
+
+  // --- Window handlers ---
+  window.hpSelectSection = function(sectionId) {
+    selectedSection = sectionId;
+    renderHomepage();
+  };
+
+  window.hpToggleSection = async function(sectionId, enabled) {
+    try {
+      await MastDB.set('public/config/nav/sections/' + sectionId + '/enabled', enabled);
+      if (!navSections) navSections = {};
+      if (!navSections[sectionId]) navSections[sectionId] = {};
+      navSections[sectionId].enabled = enabled;
+
+      if (!websiteConfig.sections) websiteConfig.sections = {};
+      if (!websiteConfig.sections[sectionId]) websiteConfig.sections[sectionId] = {};
+      websiteConfig.sections[sectionId].enabled = enabled;
+      await MastDB.set('webPresence/config/sections/' + sectionId + '/enabled', enabled);
+      markUnpublished();
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+    renderHomepage();
+  };
+
+  window.hpUpdateField = function(sectionKey, fieldId, value) {
+    if (!websiteConfig.sections) websiteConfig.sections = {};
+    if (!websiteConfig.sections[sectionKey]) websiteConfig.sections[sectionKey] = {};
+    websiteConfig.sections[sectionKey][fieldId] = value;
+    debounce('hp-field-' + sectionKey + '-' + fieldId, function() {
+      MastDB.set('webPresence/config/sections/' + sectionKey + '/' + fieldId, value);
+      markUnpublished();
+    });
+  };
+
+  window.hpUpdateThemeField = async function(field, value) {
+    if (!themeConfig) themeConfig = {};
+    themeConfig[field] = value;
+    try {
+      await MastDB.set('public/config/theme/' + field, value);
+      markUnpublished();
+      var labels = {
+        heroVariant: 'Hero layout',
+        galleryVariant: 'Gallery layout',
+        productGridVariant: 'Product grid layout'
+      };
+      showToast((labels[field] || field) + ' updated.');
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+    renderHomepage();
+  };
+
+  window.hpUpdateSocial = function(platform, value) {
+    if (!websiteConfig.sections) websiteConfig.sections = {};
+    if (!websiteConfig.sections.contact) websiteConfig.sections.contact = {};
+    if (!websiteConfig.sections.contact.socialLinks) websiteConfig.sections.contact.socialLinks = {};
+    websiteConfig.sections.contact.socialLinks[platform] = value;
+    debounce('hp-social-' + platform, function() {
+      MastDB.set('webPresence/config/sections/contact/socialLinks/' + platform, value);
+      markUnpublished();
+    });
+  };
+
+  window.hpAddImage = function(sectionId) {
+    if (typeof openImagePicker === 'function') {
+      openImagePicker(function(imgId, url, thumbUrl) {
+        var libImg = (window.imageLibrary || {})[imgId] || {};
+        setTimeout(function() { openGalleryMetadataModal(sectionId, url, imgId, libImg); }, 200);
+      });
+    } else {
+      showToast('Image picker not available.', true);
+    }
+  };
+
+  window.hpPickImage = function(sectionKey, fieldId) {
+    // Single-source the single-image-field write through HomepageBridge.images
+    // (pickField → setField → webPresence/config/sections/{key}/{field}, then
+    // notifyGalleryChanged re-renders the open page builder). Shared with the
+    // website-v2 Card 2 inline image-field control so V1 + V2 never drift.
+    window.HomepageBridge.images.pickField(sectionKey, fieldId);
+  };
+
+  // W1.8 round-3 — toggle testimonial visibility from the Page Builder
+  // Testimonials card. Writes to public/testimonials/{key}/visible; the
+  // storefront index.html testimonials loader filters on visible !== false.
+  window.hpToggleTestimonialVisible = async function(key, visible) {
+    if (!testimonialsData[key]) testimonialsData[key] = {};
+    testimonialsData[key].visible = !!visible;
+    try {
+      await MastDB.set('public/testimonials/' + key + '/visible', !!visible);
+      showToast(visible ? 'Testimonial shown on site.' : 'Testimonial hidden.');
+    } catch (err) {
+      showToast('Error: ' + err.message, true);
+    }
+    renderHomepage();
+  };
+
+  // --- HomepageBridge (additive) ---
+  // Thin shim for the v2 read-on-page twin (homepage-v2.js). Every method
+  // DELEGATES to the existing legacy write logic above — the twin never
+  // reimplements a storefront write. The arg-taking writers (hpToggleSection,
+  // hpUpdateField, hpUpdateThemeField, hpToggleTestimonialVisible, hpUpdateSocial)
+  // read no DOM and are called by the twin directly; only setColorScheme needs a
+  // shim because its custom-override cleanup is not exposed as a window fn (it
+  // lives in website.js' wpSelectScheme, which also re-renders the website tab —
+  // unsafe to call from the homepage twin). This mirrors that exact logic.
+  window.HomepageBridge = {
+    // Set a manifest color scheme. Mirrors website.js wpSelectScheme: write the
+    // scheme id and clear any custom primary/accent overrides so the scheme wins.
+    setColorScheme: async function (schemeId) {
+      if (!themeConfig) themeConfig = {};
+      themeConfig.colorSchemeId = schemeId;
+      delete themeConfig.primaryColor;
+      delete themeConfig.accentColor;
+      await MastDB.set('public/config/theme/colorSchemeId', schemeId);
+      await MastDB.remove('public/config/theme/primaryColor');
+      await MastDB.remove('public/config/theme/accentColor');
+      markUnpublished();
+      return schemeId;
+    },
+    // Expose the loaded template manifest (color schemes + font pairs) so the
+    // twin can render native scheme/font choosers without re-fetching.
+    // ALSO exposes the per-section layout VARIANT options + their manifest
+    // defaults (website-v2 Card 2's variant pickers — closing homepage-v2's
+    // legacy variant hatch) and the canonical section list (manifest slots,
+    // SECTION_DEFS fallback) so the twin doesn't re-derive either.
+    getThemeOptions: function () {
+      var m = templateManifest || {};
+      return {
+        schemes: m.colorSchemes || [],
+        fonts: m.fontPairs || [],
+        templateName: m.name || null,
+        // variants: { hero:[{id,label,desc}], gallery:[…], 'product-grid':[…] }
+        variants: VARIANT_OPTIONS,
+        // variantDefaults: the manifest's heroVariant/galleryVariant/
+        // productGridVariant (the "template default" the twin compares against).
+        variantDefaults: {
+          hero: m.heroVariant || (VARIANT_OPTIONS.hero[0] || {}).id,
+          gallery: m.galleryVariant || (VARIANT_OPTIONS.gallery[0] || {}).id,
+          'product-grid': m.productGridVariant || (VARIANT_OPTIONS['product-grid'][0] || {}).id
+        }
+      };
+    },
+    // The canonical homepage section list (manifest slots → SECTION_DEFS
+    // fallback): [{id,label,required,…}]. Single-sources getSectionList() so the
+    // twin's Card 2 list matches the page builder exactly.
+    getSectionList: function () { return getSectionList(); },
+    // The editable content fields per section type (mirrors SECTION_DEFS) so the
+    // twin renders the same inline text inputs the page builder does, keyed by
+    // section id. Returns { hero:[{id,label,type,options?}], … }.
+    getSectionFields: function () {
+      var out = {};
+      SECTION_DEFS.forEach(function (d) { out[d.key] = d.fields || []; });
+      return out;
+    },
+    // Current homepage section order — the persisted public/config/sectionOrder
+    // array if set, else the manifest homepageFlow, else the section-list order.
+    // Single-sources the order read so the twin's reorder UI seeds correctly.
+    getSectionOrder: function () {
+      if (Array.isArray(navSectionOrder) && navSectionOrder.length) return navSectionOrder.slice();
+      var m = templateManifest || {};
+      if (Array.isArray(m.homepageFlow) && m.homepageFlow.length) return m.homepageFlow.slice();
+      return getSectionList().map(function (s) { return s.id; });
+    },
+    // Persist a reordered homepage section order → public/config/sectionOrder.
+    // Single-source writer (the storefront reads this array to order its slots);
+    // keeps the cache in sync + marks the site unpublished like every other
+    // homepage write. orderIds: array of section ids in display order.
+    setSectionOrder: async function (orderIds) {
+      orderIds = (orderIds || []).filter(function (x) { return !!x; });
+      navSectionOrder = orderIds.slice();
+      await MastDB.set('public/config/sectionOrder', orderIds);
+      markUnpublished();
+      return orderIds;
+    },
+    // Read-through theme config so the twin can refresh after a delegated write
+    // without touching this module's private caches.
+    getThemeConfig: async function () {
+      return (await MastDB.get('public/config/theme').catch(function () { return null; })) || {};
+    },
+    // Ensure section content + theme + testimonials are loaded so the twin's
+    // delegated writes operate on populated caches. Idempotent.
+    ensureLoaded: function () { return loadData(); },
+
+    // ── Section image management (Card 2 native image editing) ──────────
+    // The single write path for per-section images, shared by the legacy page
+    // builder and the website-v2 Card 2 slide-out. Every method DELEGATES to the
+    // existing shared writers (window.openImageModal / openImagePicker /
+    // openGalleryMetadataModal / moveImage / toggleImageVisibility /
+    // confirmDeleteImage) or to a DOM-free core here — the twin never writes
+    // MastDB.gallery itself. Data shape is unchanged: a gallery doc carries
+    // { section, url, alt, caption, category, order, visible, imageFit, … } and
+    // the storefront reads it per section (getImagesForSection). Single-image
+    // FIELDS (e.g. about.imageUrl) write webPresence/config/sections/{key}/{field}.
+    images: {
+      // Section ids the storefront renders gallery images for (mirrors the page
+      // builder's hasImageCapability — includes dynamic shop-category sections).
+      isCapable: function (sectionId) { return hasImageCapability(sectionId); },
+      // The canonical section list filtered to image-capable sections.
+      capableSections: function () {
+        return getSectionList().filter(function (s) { return hasImageCapability(s.id); });
+      },
+      // Count of visible gallery images in a section (excludes template-hidden).
+      count: function (sectionId) { return countGalleryImages(sectionId); },
+      // Count of images this section lost to a template switch (the grid footer).
+      hiddenCount: function (sectionId) {
+        return Object.values(galleryData).filter(function (g) {
+          return g.section === sectionId && g.templateHidden;
+        }).length;
+      },
+      // Fresh-fetch the gallery collection, sync it into the core shell's
+      // window.gallery (so the shared index.html writers — moveImage /
+      // openImageModal / confirmDeleteImage / getNextOrder — operate on current
+      // data even off the homepage route, where no gallery listener is armed),
+      // and return this section's images sorted by order: [[id, imgDoc], …].
+      list: async function (sectionId) {
+        galleryData = (await MastDB.gallery.list(500)) || {};
+        syncToGlobal(galleryData);
+        return getImagesForSection(sectionId);
+      },
+      // The per-section image grid markup — the EXACT renderer the page builder
+      // uses (gallery-card per image, video handling, reorder/visibility/edit/
+      // delete buttons wired to the shared window.* writers). Call list() first
+      // so window.gallery + galleryData are current. Single-sources the grid so
+      // V1 + V2 never drift.
+      gridHtml: function (sectionId, items) {
+        return renderSectionImageGrid(sectionId, items || getImagesForSection(sectionId));
+      },
+      // Add an image from the shared library → metadata modal → a gallery doc
+      // carrying { section }. Same flow hpAddImage uses; the modal's save fires
+      // window.notifyGalleryChanged() so an open V2 slide-out refreshes.
+      addFromLibrary: function (sectionId) {
+        if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
+        window.openImagePicker(function (imgId, url) {
+          var libImg = (window.imageLibrary || {})[imgId] || {};
+          setTimeout(function () {
+            if (typeof window.openGalleryMetadataModal === 'function') window.openGalleryMetadataModal(sectionId, url, imgId, libImg);
+          }, 200);
+        });
+      },
+      // Add an image by upload (or pasted URL) → the full add modal in upload
+      // mode, section preset. saveImage routes uploads through the /uploadImage
+      // CF / Storage exactly like the page builder.
+      addByUpload: function (sectionId) {
+        if (typeof window.openImageModal !== 'function') { if (window.showToast) showToast('Image editor unavailable.', true); return; }
+        window.openImageModal(null, sectionId);
+      },
+      // Edit one image's metadata (caption/alt/category/product/video/visibility)
+      // via the shared full modal.
+      edit: function (imageId) {
+        if (typeof window.openImageModal === 'function') window.openImageModal(imageId);
+      },
+      // Remove an image (shared confirm → deleteImage → MastDB.gallery.remove).
+      remove: function (imageId) {
+        if (typeof window.confirmDeleteImage === 'function') window.confirmDeleteImage(imageId);
+      },
+      // DOM-free add of a library/uploaded image to a section (no legacy modal) —
+      // for the engine image-manager drill. Writes the SAME gallery-doc shape
+      // saveGalleryFromLibrary does: { section, url, alt, caption, order, visible,
+      // libraryImageId }. Returns the new key. opts: { url, imgId?, alt?, caption? }.
+      addFromLibraryDirect: async function (sectionId, opts) {
+        opts = opts || {};
+        var url = opts.url; if (!url) return null;
+        var maxOrder = 0;
+        Object.values(galleryData).forEach(function (g) { if (g.section === sectionId && (g.order || 0) > maxOrder) maxOrder = g.order; });
+        var data = {
+          url: url, alt: (opts.alt != null ? opts.alt : '') || '', caption: opts.caption || '',
+          section: sectionId, visible: true, order: maxOrder + 1,
+          createdAt: MastDB.serverTimestamp(), updatedAt: MastDB.serverTimestamp()
+        };
+        if (opts.imgId) data.libraryImageId = opts.imgId;
+        var key = MastDB.gallery.newKey();
+        await MastDB.gallery.set(key, data);
+        if (typeof window.writeAudit === 'function') { try { await window.writeAudit('create', 'gallery', key); } catch (e) {} }
+        galleryData = (await MastDB.gallery.list(500)) || {}; syncToGlobal(galleryData);
+        if (typeof window.notifyGalleryChanged === 'function') window.notifyGalleryChanged();
+        return key;
+      },
+      // DOM-free metadata patch (alt/caption/category/visible/order) for the
+      // engine drill's inline editors. Mirrors saveImage's update branch.
+      updateImageMeta: async function (imageId, patch) {
+        patch = Object.assign({}, patch || {}); patch.updatedAt = MastDB.serverTimestamp();
+        await MastDB.gallery.update(imageId, patch);
+        if (typeof window.writeAudit === 'function') { try { await window.writeAudit('update', 'gallery', imageId); } catch (e) {} }
+        galleryData = (await MastDB.gallery.list(500)) || {}; syncToGlobal(galleryData);
+        if (typeof window.notifyGalleryChanged === 'function') window.notifyGalleryChanged();
+        return true;
+      },
+      // DOM-free delete (no legacy confirm modal) — the engine drill guards with
+      // mastConfirm. Mirrors deleteImage's write.
+      removeConfirmed: async function (imageId) {
+        if (typeof window.writeAudit === 'function') { try { await window.writeAudit('delete', 'gallery', imageId); } catch (e) {} }
+        await MastDB.gallery.remove(imageId);
+        galleryData = (await MastDB.gallery.list(500)) || {}; syncToGlobal(galleryData);
+        if (typeof window.notifyGalleryChanged === 'function') window.notifyGalleryChanged();
+        return true;
+      },
+      // Reorder an image up/down within its section. Re-syncs window.gallery
+      // first so the shared moveImage swaps against current order values.
+      reorder: async function (imageId, dir) {
+        galleryData = (await MastDB.gallery.list(500)) || {};
+        syncToGlobal(galleryData);
+        if (typeof window.moveImage === 'function') return window.moveImage(imageId, (dir === 'up' || dir === -1) ? 'up' : 'down');
+      },
+      // Toggle an image's public visibility. Re-syncs window.gallery first.
+      toggleVisible: async function (imageId) {
+        galleryData = (await MastDB.gallery.list(500)) || {};
+        syncToGlobal(galleryData);
+        if (typeof window.toggleImageVisibility === 'function') return window.toggleImageVisibility(imageId);
+      },
+
+      // ── Single-image FIELDS (e.g. about.imageUrl) ──────────────────────
+      // The image-type fields a section exposes (from SECTION_DEFS): [{id,label}].
+      // These write ONE url to webPresence/config/sections/{key}/{field} — the
+      // storefront reads e.g. sections.about.imageUrl — NOT a gallery doc.
+      fieldDefs: function (sectionId) {
+        var def = SECTION_DEFS.find(function (d) { return d.key === sectionId; });
+        if (!def || !def.fields) return [];
+        return def.fields.filter(function (f) { return f.type === 'image'; });
+      },
+      // Read the live value of a single-image field (fresh).
+      getFieldValue: async function (sectionKey, fieldId) {
+        var v = await MastDB.get('webPresence/config/sections/' + sectionKey + '/' + fieldId).catch(function () { return ''; });
+        return v || '';
+      },
+      // Pick from the library → write the field (the hpPickImage flow).
+      pickField: function (sectionKey, fieldId) {
+        if (typeof window.openImagePicker !== 'function') { if (window.showToast) showToast('Image library unavailable.', true); return; }
+        window.openImagePicker(function (imgId, url) {
+          if (!url) return;
+          window.HomepageBridge.images.setField(sectionKey, fieldId, url);
+        });
+      },
+      // Write a single-image field URL (the byte-identical core hpPickImage uses).
+      // Keeps the section-content cache in sync + marks the site unpublished, then
+      // fires notifyGalleryChanged() so the V1 page builder + V2 surfaces refresh.
+      setField: async function (sectionKey, fieldId, url) {
+        if (!websiteConfig) websiteConfig = {};
+        if (!websiteConfig.sections) websiteConfig.sections = {};
+        if (!websiteConfig.sections[sectionKey]) websiteConfig.sections[sectionKey] = {};
+        websiteConfig.sections[sectionKey][fieldId] = url;
+        await MastDB.set('webPresence/config/sections/' + sectionKey + '/' + fieldId, url);
+        markUnpublished();
+        if (typeof window.notifyGalleryChanged === 'function') window.notifyGalleryChanged();
+        return url;
+      },
+      // Clear a single-image field.
+      clearField: function (sectionKey, fieldId) {
+        return window.HomepageBridge.images.setField(sectionKey, fieldId, '');
+      }
+    }
+  };
+
+  // --- Module Registration DROPPED on absorb ---
+  // homepage.js's registerModule('homepage', { …homepageTab…, attach/detach
+  // gallery listeners }) is intentionally NOT carried over: website-v2 owns the
+  // bare #homepage route now (its own registerModule + MODULE_MANIFEST routes),
+  // and the V1 gallery-listener lifecycle (startListeners/stopListeners) is dead
+  // with the V1 page-builder UI — HomepageBridge.images fresh-fetches per call.
+
+})();
+
+
+/* ════════════════════════════════════════════════════════════════════════
+   ABSORBED FROM brand.js (T6 — last bespoke V1 modules retired). The
+   BrandBridge + brand* window handlers used to live in the lazy
+   modules/brand.js, lazy-loaded ONLY by this builder.
+   brand.js is DELETED; its body is absorbed here VERBATIM as a sibling IIFE so
+   BrandBridge is EAGER on website-v2 load. Only change vs the original file:
+   the MastAdmin.registerModule('brand') block is dropped — website-v2 owns the
+   bare #brand route. NOTE: shared/brand-sync.js (window.MastBrandSync) is a
+   SEPARATE eager engine and is untouched.
+   ════════════════════════════════════════════════════════════════════════ */
+/**
+ * Brand & Logo Module — Master-Detail Layout
+ * Lazy-loaded via MastAdmin module registry.
+ *
+ * Layout: Detail panel (top) + Logo type grid (middle) + Placements (bottom)
+ * Click a logo type in the grid to focus it in the detail panel.
+ */
+(function() {
+  'use strict';
+
+  var brandLoaded = false;
+  var logoConfig = null;
+  var legacyLogoUrl = null;
+  var voiceConfig = null;
+  var selectedType = 'primary'; // which logo type is focused in detail panel
+  var activeTab = 'logos'; // 'logos' | 'placements' | 'voice'
+
+  // All logo types — primary + variants, treated equally in the grid
+  var LOGO_TYPES = [
+    { key: 'primary', label: 'Primary', desc: 'Original uploaded logo', bg: 'var(--surface-dark)', autoGen: false, isUpload: true },
+    { key: 'transparent', label: 'Transparent', desc: 'White background removed', bg: 'var(--surface-dark)', autoGen: true, isUpload: false },
+    { key: 'light', label: 'Light', desc: 'For dark backgrounds', bg: '#1a1a2e', autoGen: false, isUpload: true },
+    { key: 'dark', label: 'Dark', desc: 'For light backgrounds', bg: '#f5f5f5', autoGen: false, isUpload: true },
+    { key: 'icon', label: 'Icon', desc: 'Square 180x180 (favicon, social)', bg: 'var(--surface-card)', autoGen: true, isUpload: false },
+    { key: 'email', label: 'Email', desc: 'Max 600px wide (email headers)', bg: '#ffffff', autoGen: true, isUpload: false }
+  ];
+
+  var PLACEMENTS = [
+    { key: 'navBar', label: 'Navigation Bar', defaultHeight: 48 },
+    { key: 'hero', label: 'Hero Banner', defaultHeight: 120 },
+    { key: 'footer', label: 'Footer', defaultHeight: 60 },
+    { key: 'email', label: 'Email Header', defaultHeight: 60 },
+    { key: 'favicon', label: 'Favicon', defaultHeight: 32 }
+  ];
+
+  // ─── Data Loading ───
+
+  async function loadBrandData() {
+    try {
+      logoConfig = (await MastDB.get('config/brand/logo')) || null;
+      legacyLogoUrl = (await MastDB.get('public/config/nav/logoUrl')) || null;
+      voiceConfig = (await MastDB.get('config/brand/voice')) || null;
+    } catch (err) {
+      console.warn('[Brand] Failed to load:', err.message);
+      logoConfig = null;
+      legacyLogoUrl = null;
+      voiceConfig = null;
+    }
+    brandLoaded = true;
+    renderBrand();
+  }
+
+  // ─── Helpers ───
+
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '--';
+    try { return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+    catch (_) { return iso; }
+  }
+
+  function getTypeData(key) {
+    if (key === 'primary') return (logoConfig && logoConfig.primary) || null;
+    return (logoConfig && logoConfig.variants && logoConfig.variants[key]) || null;
+  }
+
+  function getTypeUrl(key) {
+    var data = getTypeData(key);
+    return data ? data.url : null;
+  }
+
+  function getAvailableVariantKeys() {
+    var keys = [];
+    if (logoConfig && logoConfig.primary) keys.push('primary');
+    if (logoConfig && logoConfig.variants) {
+      Object.keys(logoConfig.variants).forEach(function(k) { keys.push(k); });
+    }
+    return keys;
+  }
+
+  // ─── Main Render ───
+
+  function renderBrand() {
+    var el = document.getElementById('brandContent');
+    if (!el) return;
+
+    if (!brandLoaded) {
+      el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--warm-gray);">Loading brand configuration...</div>';
+      return;
+    }
+
+    var html = '<div style="max-width:900px;margin:0 auto;padding:16px 0;">';
+    html += '<div class="section-header" style="margin-bottom:16px;"><h2>Brand</h2></div>';
+
+    // Sub-tabs
+    var logosActive = activeTab === 'logos';
+    var placementsActive = activeTab === 'placements';
+    var tabStyle = 'padding:8px 20px;border:none;border-bottom:2px solid transparent;background:none;cursor:pointer;font-size:0.9rem;';
+    var activeStyle = tabStyle + 'color:var(--teal);border-bottom-color:var(--teal);font-weight:600;';
+    var inactiveStyle = tabStyle + 'color:var(--warm-gray);';
+
+    var voiceActive = activeTab === 'voice';
+    html += '<div style="display:flex;gap:4px;border-bottom:1px solid var(--warm-gray-dark);margin-bottom:20px;">' +
+      '<button onclick="brandSwitchTab(\'logos\')" style="' + (logosActive ? activeStyle : inactiveStyle) + '">Logos</button>' +
+      '<button onclick="brandSwitchTab(\'placements\')" style="' + (placementsActive ? activeStyle : inactiveStyle) + '">Placements</button>' +
+      '<button onclick="brandSwitchTab(\'voice\')" style="' + (voiceActive ? activeStyle : inactiveStyle) + '">Voice</button>' +
+    '</div>';
+
+    if (logosActive) {
+      html += renderDetailPanel();
+      html += renderTypeGrid();
+    } else if (placementsActive) {
+      html += renderPlacementTable();
+    } else {
+      html += renderVoicePanel();
+    }
+
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  // ─── Detail Panel (top — shows selected type) ───
+
+  function renderDetailPanel() {
+    var typeDef = LOGO_TYPES.find(function(t) { return t.key === selectedType; }) || LOGO_TYPES[0];
+    var data = getTypeData(selectedType);
+    var hasData = !!data;
+
+    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;margin-bottom:20px;">';
+
+    // Header row with type name + badge
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
+      '<h3 style="margin:0;font-size:1.15rem;color:var(--text-primary);">' + esc(typeDef.label) + '</h3>' +
+      '<span style="font-size:0.78rem;color:var(--warm-gray);">' + esc(typeDef.desc) + '</span>';
+    if (hasData) {
+      var source = selectedType === 'primary' ? 'Uploaded' : (data.generatedFrom === 'primary' ? 'Auto-generated' : 'Manual');
+      html += '<span class="status-badge pill" style="background:rgba(42,124,111,0.15);color:var(--teal);font-size:0.72rem;">' + source + '</span>';
+    } else {
+      html += '<span class="status-badge pill" style="background:rgba(196,133,60,0.15);color:var(--amber);font-size:0.72rem;">Not configured</span>';
+    }
+    html += '</div>';
+
+    if (!hasData) {
+      // Empty state with actions
+      html += '<div style="display:flex;gap:16px;align-items:center;padding:32px 0;flex-wrap:wrap;">' +
+        '<div style="background:' + typeDef.bg + ';border-radius:8px;width:200px;height:120px;display:flex;align-items:center;justify-content:center;">' +
+          '<span style="font-size:0.78rem;color:var(--warm-gray);">No image</span>' +
+        '</div>' +
+        '<div>';
+
+      if (selectedType === 'primary') {
+        html += '<button class="btn btn-primary" onclick="brandUploadLogoPrompt(\'primary\')">Upload Logo</button>';
+      } else if (typeDef.autoGen) {
+        var hasPrimary = !!(logoConfig && logoConfig.primary);
+        if (hasPrimary) {
+          html += '<button class="btn btn-primary" onclick="brandGenerateVariant(\'' + selectedType + '\')">Generate from Primary</button>';
+          html += '<div style="margin-top:8px;"><button class="btn btn-secondary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')" style="font-size:0.78rem;">Or upload manually</button></div>';
+        } else {
+          html += '<div style="color:var(--warm-gray);font-size:0.85rem;">Upload a primary logo first</div>';
+        }
+      } else {
+        html += '<button class="btn btn-primary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')">Upload ' + esc(typeDef.label) + ' Variant</button>';
+      }
+
+      html += '</div></div>';
+    } else {
+      // Show image + metadata + actions
+      html += '<div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">' +
+        '<div style="background:' + typeDef.bg + ';border-radius:8px;padding:16px;display:flex;align-items:center;justify-content:center;min-width:200px;min-height:120px;">' +
+          '<img src="' + esc(data.url) + '" alt="' + esc(typeDef.label) + '" style="max-width:300px;max-height:150px;object-fit:contain;" onerror="this.style.display=\'none\'">' +
+        '</div>' +
+        '<div style="flex:1;min-width:200px;">' +
+          '<div style="display:grid;gap:6px;font-size:0.85rem;">';
+
+      if (data.format) html += '<div><span style="color:var(--warm-gray);">Format:</span> ' + esc(data.format) + (data.hasTransparency ? ' <span style="color:var(--teal);">(transparent)</span>' : '') + '</div>';
+      if (data.dimensions) html += '<div><span style="color:var(--warm-gray);">Dimensions:</span> ' + data.dimensions.width + ' x ' + data.dimensions.height + 'px</div>';
+      if (data.uploadedAt || data.createdAt) html += '<div><span style="color:var(--warm-gray);">Created:</span> ' + formatDate(data.uploadedAt || data.createdAt) + '</div>';
+
+      html += '</div>' +
+        '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-secondary" onclick="brandUploadLogoPrompt(\'' + selectedType + '\')" style="font-size:0.78rem;padding:4px 12px;">Replace</button>';
+
+      // Generate button for auto-gen types
+      if (selectedType !== 'primary' && typeDef.autoGen && logoConfig && logoConfig.primary) {
+        html += '<button class="btn btn-secondary" onclick="brandGenerateVariant(\'' + selectedType + '\')" style="font-size:0.78rem;padding:4px 12px;">Regenerate</button>';
+      }
+
+      // Delete button for variants (not primary)
+      if (selectedType !== 'primary') {
+        html += '<button class="btn btn-secondary" onclick="brandDeleteVariant(\'' + selectedType + '\')" style="font-size:0.78rem;padding:4px 12px;color:var(--red,#ef4444);">Delete</button>';
+      }
+
+      html += '</div></div></div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  // ─── Logo Type Grid (all 6 types as clickable cards) ───
+
+  function renderTypeGrid() {
+    var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(130px, 1fr));gap:10px;margin-bottom:20px;">';
+
+    LOGO_TYPES.forEach(function(lt) {
+      var data = getTypeData(lt.key);
+      var isSelected = lt.key === selectedType;
+      var borderColor = isSelected ? 'var(--teal)' : 'var(--warm-gray-dark)';
+      var borderWidth = isSelected ? '2px' : '1px';
+
+      html += '<div onclick="brandSelectType(\'' + lt.key + '\')" style="cursor:pointer;border:' + borderWidth + ' solid ' + borderColor + ';border-radius:8px;overflow:hidden;transition:border-color 0.15s;">' +
+        '<div style="background:' + lt.bg + ';height:70px;display:flex;align-items:center;justify-content:center;padding:6px;">';
+
+      if (data) {
+        html += '<img src="' + esc(data.url) + '" alt="" style="max-width:100%;max-height:58px;object-fit:contain;" onerror="this.parentElement.innerHTML=\'&#10060;\'">';
+      } else {
+        html += '<span style="font-size:0.72rem;color:var(--warm-gray);">Empty</span>';
+      }
+
+      html += '</div>' +
+        '<div style="padding:6px 8px;text-align:center;">' +
+          '<div style="font-size:0.78rem;font-weight:600;color:' + (isSelected ? 'var(--teal)' : 'var(--text-primary)') + ';">' + esc(lt.label) + '</div>' +
+        '</div></div>';
+    });
+
+    html += '</div>';
+    return html;
+  }
+
+  // ─── Placement Table ───
+
+  function renderPlacementTable() {
+    var placements = (logoConfig && logoConfig.placements) || {};
+    var availableKeys = getAvailableVariantKeys();
+
+    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;">' +
+      '<h3 style="margin:0 0 16px;font-size:1.15rem;color:var(--text-primary);">Placement Assignments</h3>';
+
+    if (!logoConfig || !logoConfig.primary) {
+      html += '<div style="color:var(--warm-gray);font-size:0.85rem;">Upload a primary logo first to configure placements.</div></div>';
+      return html;
+    }
+
+    html += '<div style="display:grid;gap:10px;">';
+
+    PLACEMENTS.forEach(function(p) {
+      var config = placements[p.key] || {};
+      var currentKey = config.variantKey || '';
+      var currentHeight = config.maxHeight || p.defaultHeight;
+      var resolvedUrl = currentKey ? getTypeUrl(currentKey) : getTypeUrl('primary');
+
+      html += '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--surface-dark);border-radius:6px;flex-wrap:wrap;">' +
+        '<div style="width:50px;height:34px;background:var(--surface-card);border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">';
+      if (resolvedUrl) {
+        html += '<img src="' + esc(resolvedUrl) + '" alt="" style="max-width:46px;max-height:30px;object-fit:contain;" onerror="this.style.display=\'none\'">';
+      } else {
+        html += '<span style="font-size:0.72rem;color:var(--warm-gray);">--</span>';
+      }
+      html += '</div>' +
+        '<div style="min-width:110px;flex-shrink:0;font-size:0.85rem;font-weight:600;color:var(--text-primary);">' + esc(p.label) + '</div>' +
+        '<div style="display:flex;align-items:center;gap:6px;flex:1;min-width:200px;">' +
+          '<select id="brandPlacement_' + p.key + '_variant" style="flex:1;padding:4px 8px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.78rem;">';
+
+      availableKeys.forEach(function(k) {
+        var selected = (k === currentKey) ? ' selected' : '';
+        var label = k === 'primary' ? 'Primary' : k.charAt(0).toUpperCase() + k.slice(1);
+        html += '<option value="' + esc(k) + '"' + selected + '>' + label + '</option>';
+      });
+
+      html += '</select>' +
+          '<input type="number" id="brandPlacement_' + p.key + '_height" value="' + currentHeight + '" min="16" max="200" style="width:55px;padding:4px 6px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.78rem;" title="Max height (px)">' +
+          '<span style="font-size:0.72rem;color:var(--warm-gray);">px</span>' +
+          '<button class="btn btn-primary" onclick="brandSavePlacement(\'' + p.key + '\')" style="font-size:0.78rem;padding:4px 10px;">Save</button>' +
+        '</div></div>';
+    });
+
+    html += '</div></div>';
+    return html;
+  }
+
+  // ─── Actions ───
+
+  window.brandSwitchTab = function(tab) {
+    activeTab = tab;
+    renderBrand();
+  };
+
+  window.brandSelectType = function(typeKey) {
+    selectedType = typeKey;
+    renderBrand();
+  };
+
+  window.brandSavePlacement = async function(placementKey) {
+    var variantEl = document.getElementById('brandPlacement_' + placementKey + '_variant');
+    var heightEl = document.getElementById('brandPlacement_' + placementKey + '_height');
+    if (!variantEl) return;
+    var ok = await window.BrandBridge.savePlacement(placementKey, {
+      variantKey: variantEl.value,
+      maxHeight: parseInt(heightEl ? heightEl.value : '48', 10) || 48
+    });
+    if (ok) { showToast('Placement saved: ' + placementKey); await loadBrandData(); }
+    else { showToast('Failed to save placement', true); }
+  };
+
+  window.brandGenerateVariant = async function(type) {
+    showToast('Generating ' + type + ' variant...');
+    // This is a placeholder — the actual generation goes through the MCP tool
+    // which calls the Cloud Function. From the admin UI we just show guidance.
+    showToast('Use your AI assistant to generate variants: generate_logo_variant type="' + type + '"', false);
+  };
+
+  window.brandDeleteVariant = async function(type) {
+    if (!await mastConfirm('Delete the ' + type + ' variant?', { title: 'Delete Variant', danger: true })) return;
+    try {
+      // Delete from Storage if we have a path
+      var data = getTypeData(type);
+      // Remove config
+      await MastDB.remove('config/brand/logo/variants/' + type);
+      // Clear placements referencing this variant
+      var placements = (await MastDB.get('config/brand/logo/placements')) || {};
+      for (var key in placements) {
+        if (placements[key] && placements[key].variantKey === type) {
+          await MastDB.set('config/brand/logo/placements/' + key + '/variantKey', 'primary');
+        }
+      }
+      await resolvePublicPlacements();
+      showToast(type + ' variant deleted');
+      selectedType = 'primary';
+      brandLoaded = false;
+      await loadBrandData();
+    } catch (err) {
+      showToast('Delete failed: ' + err.message, true);
+    }
+  };
+
+  // ─── Upload Actions ───
+
+  window.brandUploadLogoPrompt = function(targetType) {
+    targetType = targetType || 'primary';
+    var typeDef = LOGO_TYPES.find(function(t) { return t.key === targetType; }) || LOGO_TYPES[0];
+    var title = targetType === 'primary' ? 'Upload Logo' : 'Upload ' + typeDef.label + ' Variant';
+
+    var html = '<div class="modal-header"><h3 style="margin:0;">' + esc(title) + '</h3></div>' +
+      '<div class="modal-body" style="display:grid;gap:16px;">' +
+        '<div>' +
+          '<label style="font-size:0.85rem;color:var(--warm-gray);display:block;margin-bottom:4px;">Image URL</label>' +
+          '<input type="text" id="brandLogoUrlInput" placeholder="https://example.com/logo.png" style="width:100%;padding:8px 12px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-card);color:var(--text-primary);font-size:0.9rem;">' +
+          '<input type="hidden" id="brandLogoTargetType" value="' + esc(targetType) + '">' +
+        '</div>' +
+        '<div style="text-align:center;color:var(--warm-gray);font-size:0.78rem;">— or —</div>' +
+        '<div style="text-align:center;">' +
+          '<button class="btn btn-secondary" onclick="brandPickFromLibrary(\'' + esc(targetType) + '\')" style="font-size:0.85rem;">Choose from Image Library</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button class="btn btn-secondary" onclick="closeModal()">Cancel</button>' +
+        '<button class="btn btn-primary" onclick="brandUploadLogoFromUrl()">Upload</button>' +
+      '</div>';
+    openModal(html);
+    setTimeout(function() { var el = document.getElementById('brandLogoUrlInput'); if (el) el.focus(); }, 100);
+  };
+
+  window.brandUploadLogoFromUrl = async function() {
+    var input = document.getElementById('brandLogoUrlInput');
+    var targetInput = document.getElementById('brandLogoTargetType');
+    var url = input ? input.value.trim() : '';
+    var targetType = targetInput ? targetInput.value : 'primary';
+    if (!url) { showToast('Please enter an image URL', true); return; }
+
+    closeModal();
+    showToast('Saving...');
+
+    var ok = await window.BrandBridge.setLogoFromUrl(targetType, url);
+    if (ok) {
+      showToast('Uploaded successfully');
+      selectedType = targetType;
+      brandLoaded = false;
+      await loadBrandData();
+    } else {
+      showToast('Upload failed', true);
+    }
+  };
+
+  window.brandPickFromLibrary = function(targetType) {
+    closeModal();
+    if (typeof openImagePicker === 'function') {
+      openImagePicker(async function(imgId, url) {
+        showToast('Setting from library...');
+        try {
+          var config = {
+            url: url,
+            storagePath: '',
+            format: url.match(/\.(\w+)(?:\?|$)/i) ? RegExp.$1 : 'png',
+            hasTransparency: false,
+            dimensions: null
+          };
+
+          if (targetType === 'primary') {
+            if (window.MastBrandSync && typeof window.MastBrandSync.setLogo === 'function') {
+              await window.MastBrandSync.setLogo(config);
+            } else {
+              config.uploadedAt = new Date().toISOString();
+              await MastDB.set('config/brand/logo/primary', config);
+              await MastDB.set('public/config/nav/logoUrl', url);
+            }
+          } else {
+            config.generatedFrom = 'manual';
+            config.createdAt = new Date().toISOString();
+            await MastDB.set('config/brand/logo/variants/' + targetType, config);
+          }
+
+          await resolvePublicPlacements();
+          showToast('Set from library');
+          selectedType = targetType;
+          brandLoaded = false;
+          await loadBrandData();
+        } catch (err) {
+          showToast('Failed: ' + err.message, true);
+        }
+      });
+    } else {
+      showToast('Image library not available', true);
+      brandUploadLogoPrompt(targetType);
+    }
+  };
+
+  // ─── Placement Resolution ───
+
+  async function resolvePublicPlacements() {
+    if (!logoConfig) return;
+    var primary = logoConfig.primary || {};
+    var variants = logoConfig.variants || {};
+    var placements = (await MastDB.get('config/brand/logo/placements')) || {};
+    var updates = {};
+
+    Object.keys(placements).forEach(function(placement) {
+      var config = placements[placement];
+      var vk = config && config.variantKey;
+      if (!vk) return;
+      var resolvedUrl = vk === 'primary' ? primary.url : (variants[vk] ? variants[vk].url : null);
+      if (resolvedUrl) {
+        updates['public/config/brand/logo/' + placement + '/url'] = resolvedUrl;
+        updates['public/config/brand/logo/' + placement + '/maxHeight'] = config.maxHeight || null;
+      }
+    });
+
+    if (placements.navBar && placements.navBar.variantKey) {
+      var navKey = placements.navBar.variantKey;
+      var navUrl = navKey === 'primary' ? primary.url : (variants[navKey] ? variants[navKey].url : null);
+      if (navUrl) updates['public/config/nav/logoUrl'] = navUrl;
+    }
+
+    if (Object.keys(updates).length > 0) await MastDB.multiUpdate(updates);
+  }
+
+  // ─── Voice Panel ───
+
+  function renderVoicePanel() {
+    var v = voiceConfig || {};
+    var voiceRules = v.voiceRules || '';
+    var tagline = v.tagline || '';
+    var positioning = v.positioningOneLiner || '';
+
+    var html = '<div style="background:var(--surface-card);border-radius:8px;padding:20px;">' +
+      '<h3 style="margin:0 0 4px;font-size:1.15rem;color:var(--text-primary);">Brand Voice</h3>' +
+      '<div style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:20px;">Words and tone used across storefront SEO, newsletter, and social drafts.</div>';
+
+    // Tagline
+    html += '<div style="margin-bottom:16px;">' +
+      '<label style="display:block;font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Tagline</label>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">Short phrase (max 80 chars). Used in storefront &lt;title&gt; and OG tags.</div>' +
+      '<input type="text" id="brandVoiceTagline" maxlength="80" value="' + esc(tagline) + '" placeholder="e.g. Handmade glass from the high desert" ' +
+        'style="width:100%;padding:8px 10px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-dark);color:var(--text-primary);font-size:0.9rem;">' +
+    '</div>';
+
+    // Positioning one-liner
+    html += '<div style="margin-bottom:16px;">' +
+      '<label style="display:block;font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Positioning one-liner</label>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">One sentence (max 160 chars). Used in meta description and OG description.</div>' +
+      '<input type="text" id="brandVoicePositioning" maxlength="160" value="' + esc(positioning) + '" placeholder="e.g. Wheel-thrown and kiln-fired in Taos, shipped worldwide." ' +
+        'style="width:100%;padding:8px 10px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-dark);color:var(--text-primary);font-size:0.9rem;">' +
+    '</div>';
+
+    // Voice rules
+    html += '<div style="margin-bottom:16px;">' +
+      '<label style="display:block;font-size:0.85rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Voice rules</label>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;">Tone, do/don\'t list, signature phrases. Used by Claude when drafting newsletter or social copy.</div>' +
+      '<textarea id="brandVoiceRules" rows="8" placeholder="e.g.&#10;- Warm, plainspoken, never salesy&#10;- Refer to pieces as &quot;work&quot; not &quot;products&quot;&#10;- Always credit the artist by first name" ' +
+        'style="width:100%;padding:8px 10px;border-radius:4px;border:1px solid var(--warm-gray);background:var(--surface-dark);color:var(--text-primary);font-size:0.9rem;font-family:inherit;resize:vertical;">' + esc(voiceRules) + '</textarea>' +
+    '</div>';
+
+    html += '<div style="display:flex;gap:8px;align-items:center;">' +
+      '<button class="btn btn-primary" onclick="brandSaveVoice()">Save Voice</button>' +
+      '<span id="brandVoiceSaveMsg" style="font-size:0.78rem;color:var(--warm-gray);"></span>' +
+    '</div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  window.brandSaveVoice = async function() {
+    var taglineEl = document.getElementById('brandVoiceTagline');
+    var positioningEl = document.getElementById('brandVoicePositioning');
+    var rulesEl = document.getElementById('brandVoiceRules');
+    var msg = document.getElementById('brandVoiceSaveMsg');
+    if (!taglineEl) return;
+    var payload = await window.BrandBridge.saveVoice({
+      tagline: taglineEl.value || '',
+      positioningOneLiner: positioningEl ? positioningEl.value || '' : '',
+      voiceRules: rulesEl ? rulesEl.value || '' : ''
+    });
+    if (payload) {
+      if (msg) { msg.textContent = 'Saved.'; setTimeout(function() { if (msg) msg.textContent = ''; }, 2000); }
+      if (typeof showToast === 'function') showToast('Brand voice saved.');
+    } else {
+      if (typeof showToast === 'function') showToast('Save failed', true);
+      else if (msg) msg.textContent = 'Save failed.';
+    }
+  };
+
+  // ─── Bridge for the brand-v2 redesign twin (flag-gated #brand-v2) ───
+  // The twin delegates voice/logo/variant/placement WRITES here so the
+  // MastBrandSync.setLogo fan-out (canonical config/brand/logo/primary PLUS
+  // public/config/nav/logoUrl + platform publicConfig.brandLogoUrl mirrors), the
+  // public-mirror writes for voice, the variant config shape, and the
+  // resolvePublicPlacements re-derivation stay single-sourced — the twin never
+  // reimplements that logic. These mirror the EXACT writes the legacy DOM
+  // handlers (brandSaveVoice / brandUploadLogoFromUrl / brandSavePlacement /
+  // brandGenerateVariant) make, parameterized by a data object (the legacy
+  // handlers read the modal/panel DOM, so they can't be called directly).
+  // Additive; no behavior change to the legacy #brand surface. Mirrors
+  // window.ContactsBridge / window.MakerMaterialsBridge / window.GiftCardsBridge.
+  //
+  // NOTE on logos: the URL-paste path stores the source URL directly (no re-host
+  // through the uploadImage Cloud Function — re-hosting a URL the user already
+  // trusts adds no value), exactly as the legacy handler did. setLogoFromUrl is
+  // the URL-only capability the legacy surface supports. The uploadImage CF /
+  // Storage write is reachable only via brandPickFromLibrary's image-library
+  // path, which is genuinely library-coupled and stays classic-only.
+  window.BrandBridge = {
+    // Mirrors brandSaveVoice: 80/160-char clamps, config/brand/voice set +
+    // public/config/brand/{tagline,positioningOneLiner} mirror for the storefront
+    // <title>/OG/meta. data: { tagline, positioningOneLiner, voiceRules }.
+    // Returns the saved payload on success, null on failure.
+    saveVoice: async function(data) {
+      data = data || {};
+      var payload = {
+        tagline: (data.tagline || '').slice(0, 80).trim(),
+        positioningOneLiner: (data.positioningOneLiner || '').slice(0, 160).trim(),
+        voiceRules: (data.voiceRules || '').trim(),
+        updatedAt: new Date().toISOString()
+      };
+      try {
+        await MastDB.set('config/brand/voice', payload);
+        await MastDB.multiUpdate({
+          'public/config/brand/tagline': payload.tagline || null,
+          'public/config/brand/positioningOneLiner': payload.positioningOneLiner || null
+        });
+        voiceConfig = payload;
+        return payload;
+      } catch (err) {
+        console.error('[brand] saveVoice', err);
+        return null;
+      }
+    },
+    // Mirrors brandUploadLogoFromUrl: builds the URL-source config (format from
+    // extension), routes primary through MastBrandSync.setLogo (canonical write +
+    // legacy-mirror fan-out) with a stale-load fallback, variants to
+    // config/brand/logo/variants/<type>, then resolvePublicPlacements.
+    // targetType: 'primary' | variant-key. Returns true on success.
+    setLogoFromUrl: async function(targetType, url) {
+      targetType = targetType || 'primary';
+      url = (url || '').trim();
+      if (!url) return false;
+      try {
+        var formatMatch = url.match(/\.([a-z0-9]+)(?:\?|$)/i);
+        var config = {
+          url: url,
+          storagePath: '',
+          format: formatMatch ? formatMatch[1].toLowerCase() : 'png',
+          hasTransparency: false,
+          dimensions: null
+        };
+        if (targetType === 'primary') {
+          if (window.MastBrandSync && typeof window.MastBrandSync.setLogo === 'function') {
+            await window.MastBrandSync.setLogo(config);
+          } else {
+            config.uploadedAt = new Date().toISOString();
+            await MastDB.set('config/brand/logo/primary', config);
+            await MastDB.set('public/config/nav/logoUrl', url);
+          }
+        } else {
+          config.generatedFrom = 'manual';
+          config.createdAt = new Date().toISOString();
+          await MastDB.set('config/brand/logo/variants/' + targetType, config);
+        }
+        await resolvePublicPlacements();
+        return true;
+      } catch (err) {
+        console.error('[brand] setLogoFromUrl', err);
+        return false;
+      }
+    },
+    // Mirrors brandSavePlacement: config/brand/logo/placements/<key> set +
+    // resolvePublicPlacements re-derivation. data: { variantKey, maxHeight }.
+    savePlacement: async function(placementKey, data) {
+      data = data || {};
+      try {
+        await MastDB.set('config/brand/logo/placements/' + placementKey, {
+          variantKey: data.variantKey,
+          maxHeight: parseInt(data.maxHeight, 10) || 48
+        });
+        await resolvePublicPlacements();
+        return true;
+      } catch (err) {
+        console.error('[brand] savePlacement', err);
+        return false;
+      }
+    },
+    // Mirrors brandDeleteVariant's write half (no confirm — the caller confirms):
+    // remove the variant config + repoint any placements that referenced it back
+    // to primary, then resolvePublicPlacements.
+    deleteVariant: async function(type) {
+      try {
+        await MastDB.remove('config/brand/logo/variants/' + type);
+        var placements = (await MastDB.get('config/brand/logo/placements')) || {};
+        for (var key in placements) {
+          if (placements[key] && placements[key].variantKey === type) {
+            await MastDB.set('config/brand/logo/placements/' + key + '/variantKey', 'primary');
+          }
+        }
+        await resolvePublicPlacements();
+        return true;
+      } catch (err) {
+        console.error('[brand] deleteVariant', err);
+        return false;
+      }
+    },
+    // Read-through so the twin can refresh after a write without re-reading the
+    // module's private caches.
+    getConfig: async function() {
+      return {
+        logo: (await MastDB.get('config/brand/logo').catch(function () { return null; })) || null,
+        legacyLogoUrl: (await MastDB.get('public/config/nav/logoUrl').catch(function () { return null; })) || null,
+        voice: (await MastDB.get('config/brand/voice').catch(function () { return null; })) || null
+      };
+    }
+  };
+
+  // ─── Module Registration DROPPED on absorb ───
+  // brand.js's registerModule('brand', { …brandTab… }) is intentionally NOT
+  // carried over: website-v2 owns the bare #brand route now (its own
+  // registerModule + MODULE_MANIFEST routes). The V1 brand-tab UI
+  // (loadBrandData/renderBrand) is dead; BrandBridge's writes stand alone.
+
 })();
