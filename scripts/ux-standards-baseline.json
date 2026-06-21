@@ -113,7 +113,7 @@
   "app/modules/maker.js": {
     "nativeDialogs": 2,
     "rogueOverlays": 7,
-    "hardcodedHex": 106
+    "hardcodedHex": 100
   },
   "app/modules/maker-settings.js": {
     "hardcodedHex": 6
