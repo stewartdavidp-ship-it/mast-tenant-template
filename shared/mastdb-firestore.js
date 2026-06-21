@@ -76,6 +76,16 @@ var MastDB = (function() {
         // Transient — Firestore handles retry. Suppress.
         return;
       }
+      // Missing composite index: a listener on an un-indexed query silently never
+      // fires. Firestore reports `failed-precondition` with a "create it here:" URL —
+      // surface the link prominently (otherwise this listener is silently dead).
+      if (code === 'failed-precondition' && err && err.message &&
+          err.message.indexOf('https://console.firebase.google.com') !== -1) {
+        var _idxUrl = err.message.match(/https:\/\/console\.firebase\.google\.com\/\S+/);
+        console.error('[MastDB.subscribe] ' + label + ' requires a composite index — create it: ' +
+          (_idxUrl ? _idxUrl[0] : '(see message)') + '\n  ' + err.message);
+        return;
+      }
       console.warn('[MastDB.subscribe] listener error for ' + label + ':', err && (err.message || err));
     };
   }

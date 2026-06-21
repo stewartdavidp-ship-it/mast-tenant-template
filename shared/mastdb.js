@@ -354,6 +354,21 @@ var MastDB = (function() {
   function _fsGet(ref, opts, attempt) {
     attempt = attempt || 0;
     return ref.get(opts).catch(function(err) {
+      // Missing composite index: Firestore returns `failed-precondition` carrying a
+      // "create it here: https://console.firebase.google.com/…" URL. This is PERMANENT
+      // (the index will not appear on retry), so the connection-retry below would burn
+      // ~5s of backoff and then throw the URL away. Surface the create-index link and
+      // rethrow at once — no retry. (Other `failed-precondition` causes — e.g. cold-
+      // start persistence — carry no such URL and fall through to the retry path.)
+      if (err && err.code === 'failed-precondition' && err.message &&
+          err.message.indexOf('https://console.firebase.google.com') !== -1) {
+        var _idxUrl = err.message.match(/https:\/\/console\.firebase\.google\.com\/\S+/);
+        try {
+          console.error('[MastDB] Firestore query requires a composite index — create it: ' +
+            (_idxUrl ? _idxUrl[0] : '(see message)') + '\n  ' + err.message);
+        } catch (_e) {}
+        throw err;
+      }
       var isConnErr = err.code === 'unavailable' || err.code === 'failed-precondition' ||
         (err.message && (err.message.indexOf('offline') !== -1 || err.message.indexOf('unavailable') !== -1));
       if (isConnErr && attempt < 3) {
