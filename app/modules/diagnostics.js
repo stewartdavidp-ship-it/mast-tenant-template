@@ -19,8 +19,8 @@
   var U = window.MastUI, N = U.Num, esc = U._esc;
   var PAGE = 100; // bounded read (lint-unbounded-read)
 
-  var KIND_TONE = { 'slow-read': 'warning', error: 'danger', event: 'neutral' };
-  var KIND_LABEL = { 'slow-read': 'Slow query', error: 'Error', event: 'Event' };
+  var KIND_TONE = { 'slow-read': 'warning', error: 'danger', feedback: 'info', event: 'neutral' };
+  var KIND_LABEL = { 'slow-read': 'Slow query', error: 'Error', feedback: 'Feedback', event: 'Event' };
 
   function canView() { return (typeof can !== 'function') || can('settings', 'view'); }
 
@@ -38,7 +38,8 @@
     rec.whenMs = _whenMs(r);
     rec.whenIso = rec.whenMs ? new Date(rec.whenMs).toISOString() : null;
     var desc = String(r.description || '');
-    rec.kind = /slow read/i.test(desc) ? 'slow-read' : 'error';
+    // source 'auto' = the capture sink (errors / slow reads); anything else = user-submitted feedback.
+    rec.kind = (r.source === 'auto') ? (/slow read/i.test(desc) ? 'slow-read' : 'error') : 'feedback';
     rec.summary = desc.split('\n').slice(1).join(' ').replace(/^Error:\s*/, '').trim().slice(0, 140) ||
       desc.split('\n')[0].slice(0, 140);
     rec.screen = r.screen || 'unknown';
