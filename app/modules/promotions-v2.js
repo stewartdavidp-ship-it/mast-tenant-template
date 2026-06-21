@@ -56,7 +56,7 @@
       '<input class="form-input promo-v2-tier-qty" type="number" min="1" value="' + (qty != null && qty !== '' ? esc(qty) : '') + '" placeholder="Qty" style="width:80px;">' +
       '<span style="color:var(--warm-gray);font-size:0.85rem;">for</span>' +
       '<input class="form-input promo-v2-tier-total" type="number" min="0" step="0.01" value="' + (totalCents != null && totalCents !== '' ? esc((totalCents / 100).toFixed(2)) : '') + '" placeholder="Total $" style="flex:1;min-width:90px;">' +
-      '<button type="button" onclick="PromotionsV2.removeTierRow(this)" style="background:none;border:none;color:var(--warm-gray);font-size:1.1rem;cursor:pointer;line-height:1;">×</button>' +
+      '<button type="button" onclick="PromotionsV2.removeTierRow(this)" style="background:none;border:none;color:var(--warm-gray);font-size:1.15rem;cursor:pointer;line-height:1;">×</button>' +
     '</div>';
   }
   function windowText(s) {
