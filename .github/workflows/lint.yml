@@ -185,7 +185,8 @@ jobs:
           node test/mast-format.test.js &&
           node test/mast-export.test.js &&
           node test/mast-sanitize.test.js &&
-          node test/orders-core.test.js
+          node test/orders-core.test.js &&
+          node test/mast-intake.test.js
 
   # Track-0 runtime safety net: boot the real admin shell headless (the localhost
   # `?testmode=1` auth bypass), navigate every major surface, and FAIL on any
