@@ -739,7 +739,7 @@ function applyBrandedManifest() {
       (document.title || '').split('—')[0].trim() || 'Shop';
     var manifest = {
       name: brand + ' POS',
-      short_name: (brand.length > 12 ? brand.slice(0, 12) : brand) || 'POS',
+      short_name: brand || 'POS',  // full brand; the OS ellipsizes the label (no mid-word cut)
       start_url: '/pos/', scope: '/pos/', display: 'standalone', orientation: 'portrait',
       background_color: '#1a1a1a', theme_color: '#1a1a1a',
       icons: [
