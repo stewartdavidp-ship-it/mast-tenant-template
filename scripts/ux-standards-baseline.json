@@ -32,9 +32,6 @@
     "rogueOverlays": 1,
     "hardcodedHex": 129
   },
-  "app/modules/brand.js": {
-    "hardcodedHex": 4
-  },
   "app/modules/campaigns.js": {
     "nativeDialogs": 3,
     "hardcodedHex": 1
@@ -90,9 +87,6 @@
   },
   "app/modules/gallery-metadata-modal.js": {
     "hardcodedHex": 4
-  },
-  "app/modules/homepage.js": {
-    "hardcodedHex": 3
   },
   "app/modules/image-library.js": {
     "nativeDialogs": 1,
@@ -190,6 +184,9 @@
   },
   "app/modules/website-core.js": {
     "rogueOverlays": 1,
+    "hardcodedHex": 7
+  },
+  "app/modules/website-v2.js": {
     "hardcodedHex": 7
   },
   "app/modules/wholesale.js": {
