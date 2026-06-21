@@ -1072,8 +1072,8 @@ function _writeSaleToServer(saleRecord) {
 
   return imagePromise.then(function() {
     // Create the REAL order through the shop pipeline (submitOrder POS mode).
-    // The order draws down physical onHand itself, so we deliberately do NOT
-    // call decrementInventory below — that would double-count stock.
+    // The order draws down physical onHand itself (server-side), so the client
+    // does NOT decrement inventory — that would double-count stock.
     return _createPosOrder(saleRecord);
   }).then(function(orderResult) {
     saleRecord.orderId = orderResult.orderId || null;
@@ -1223,44 +1223,6 @@ function saveSale() {
       showToast('Error saving sale: ' + (err.message || err), true);
     }
   });
-}
-
-function decrementInventory(productQtys) {
-  var promises = [];
-  Object.keys(productQtys).forEach(function(pid) {
-    var qty = productQtys[pid];
-    var prod = products[pid];
-    var stockPath = 'admin/inventory/' + pid + '/stock';
-    promises.push(
-      MastDB.get(stockPath).then(function(current) {
-        if (current !== null && typeof current === 'number') {
-          // Legacy flat stock number — treat as onHand
-          var newVal = Math.max(0, current - qty);
-          return MastDB.set(stockPath, newVal).then(function() {
-            if (prod && prod.businessLine === 'sculpture' && newVal <= 0) {
-              return MastDB.set('public/products/' + pid + '/status', 'sold');
-            }
-          });
-        }
-        // Object-based stock — decrement onHand
-        if (current && typeof current === 'object' && current._default) {
-          var curOnHand = current._default.onHand || 0;
-          var newOnHand = Math.max(0, curOnHand - qty);
-          return MastDB.set('admin/inventory/' + pid + '/stock/_default/onHand', newOnHand).then(function() {
-            // Write audit trail
-            MastDB.push('admin/inventory/' + pid + '/history', {
-              action: 'sold', reason: 'pos_sale', qty: -qty, previousQty: curOnHand, newQty: newOnHand,
-              actor: 'pos', actorType: 'system', timestamp: new Date().toISOString()
-            });
-            if (prod && prod.businessLine === 'sculpture' && newOnHand <= 0) {
-              return MastDB.set('public/products/' + pid + '/status', 'sold');
-            }
-          });
-        }
-      })
-    );
-  });
-  return Promise.all(promises);
 }
 
 function updateEventAllocations(items) {
