@@ -173,6 +173,8 @@
     });
   })();
   </script>
+  <!-- Diagnostics L1: load FIRST so the data layer + every engine can call MastError.capture. -->
+  <script src="../shared/mast-error.js?v=0ce22dda04cf"></script>
   <script src="../shared/mastdb.js?v=076c430e0fe2"></script>
   <script src="../shared/business-entity-constants.js?v=5"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
@@ -24413,7 +24415,7 @@ function _submitAutoReport(type, message, detail) {
     createdAt: MastDB.serverTimestamp()
   };
 
-  MastDB.feedback.ref().push(report).then(function() {
+  MastDB.feedback.ref().push(window.MastError ? MastError.scrubReport(report) : report).then(function() {
     showToast('An issue was automatically detected and reported.');
   }).catch(function(e) {
     console.warn('[autoReport] submit failed:', e);
