@@ -60,7 +60,7 @@
   "app/modules/customer-service.js": {
     "nativeDialogs": 7,
     "rogueOverlays": 3,
-    "hardcodedHex": 21
+    "hardcodedHex": 16
   },
   "app/modules/customers-core.js": {
     "hardcodedHex": 12
@@ -131,7 +131,7 @@
   },
   "app/modules/rma-admin.js": {
     "rogueOverlays": 1,
-    "hardcodedHex": 25
+    "hardcodedHex": 13
   },
   "app/modules/orders-v2.js": {
     "hardcodedHex": 1

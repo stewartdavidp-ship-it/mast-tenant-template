@@ -34,24 +34,15 @@
   var rmaFilter = 'all';
   var selectedRmaId = null;
 
-  var RMA_STATUS_BADGE_COLORS = {
-    requested:     { bg: 'rgba(230,81,0,0.2)',  color: '#FFB74D', border: 'rgba(230,81,0,0.35)' },
-    approved:      { bg: 'rgba(21,101,192,0.2)', color: '#64B5F6', border: 'rgba(21,101,192,0.35)' },
-    'shipped-back':{ bg: 'rgba(123,31,162,0.2)', color: '#CE93D8', border: 'rgba(123,31,162,0.35)' },
-    received:      { bg: 'rgba(27,92,82,0.25)',  color: '#4DB6AC', border: 'rgba(27,92,82,0.4)' },
-    inspected:     { bg: 'rgba(0,121,107,0.2)',  color: '#4DB6AC', border: 'rgba(0,121,107,0.35)' },
-    restocked:     { bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
-    seconds:       { bg: 'rgba(255,152,0,0.2)',  color: '#FFB74D', border: 'rgba(255,152,0,0.35)' },
-    'repair-queued':{ bg: 'rgba(33,150,243,0.2)', color: '#64B5F6', border: 'rgba(33,150,243,0.35)' },
-    'written-off': { bg: 'rgba(158,158,158,0.2)', color: '#BDBDBD', border: 'rgba(158,158,158,0.35)' },
-    'refund-issued':{ bg: 'rgba(46,125,50,0.25)', color: '#66BB6A', border: 'rgba(46,125,50,0.4)' },
-    declined:      { bg: 'rgba(198,40,40,0.2)',  color: '#EF5350', border: 'rgba(198,40,40,0.35)' }
-  };
-
-  function rmaBadgeStyle(status) {
-    var c = RMA_STATUS_BADGE_COLORS[status] || { bg: 'rgba(158,158,158,0.15)', color: '#BDBDBD', border: 'rgba(158,158,158,0.25)' };
-    return 'background:' + c.bg + ';color:' + c.color + ';border:1px solid ' + c.border + ';';
-  }
+  // RMA status badges now render via the canonical MastUI.statusBadge(status,
+  // 'rma') engine (Track 5 / Wave 2; shared/mast-ui.js _statusRegistry.rma). The
+  // text color (hue) and label (status with hyphens to spaces) were captured
+  // verbatim from the former RMA_STATUS_BADGE_COLORS map + inline label derivation
+  // when the registry was built, so the rendered hue + text are identical; only
+  // the pill chrome becomes the unified soft-tint style. No separate label map
+  // existed (label was derived inline), so nothing is kept here. Unknown/out-of-
+  // enum status falls through to the engine's neutral humanized badge (was a
+  // hardcoded gray); RMA statuses are a closed enum (RMA_VALID_TRANSITIONS).
 
   var RMA_VALID_TRANSITIONS = {
     requested:     ['approved', 'declined'],
@@ -206,7 +197,7 @@
         '<td>' + esc(r.customerEmail || '') + '</td>' +
         '<td>' + itemCount + ' item' + (itemCount !== 1 ? 's' : '') + '</td>' +
         '<td>$' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '</td>' +
-        '<td><span class="status-badge" style="' + rmaBadgeStyle(status) + '">' + esc(status.replace(/-/g, ' ')) + '</span></td>' +
+        '<td>' + MastUI.statusBadge(status, 'rma') + '</td>' +
         '<td>' + formatOrderDate(r.requestedAt) + '</td>' +
       '</tr>';
     });
@@ -528,7 +519,7 @@
         '<div>' +
           '<div class="order-detail-title">RMA ' + esc((rmaId || '').substring(0, 8)) + '</div>' +
           '<div class="order-detail-meta">' +
-            '<span class="status-badge pill" style="' + rmaBadgeStyle(status) + '">' + esc(status.replace(/-/g, ' ')) + '</span>' +
+            MastUI.statusBadge(status, 'rma') +
             ' &middot; Order ' + esc(r.orderNumber || '') +
             ' &middot; ' + esc(r.customerEmail || '') +
             ' &middot; ' + formatOrderDateTime(r.requestedAt) +
@@ -922,7 +913,6 @@
   window.submitInspection = submitInspection;
   window.completeRma = completeRma;
   window.overrideRmaRefund = overrideRmaRefund;
-  window.rmaBadgeStyle = rmaBadgeStyle;
 
 
   // ============================================================
