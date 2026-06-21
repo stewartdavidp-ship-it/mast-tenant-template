@@ -786,6 +786,7 @@ window.TENANT_READY.then(function() {
           detectLocation(); // GPS check if no event pre-linked
         }
         showScreen('catalogScreen');
+        _resumeSquareCharge();
       });
     } else {
       currentUser = null;
@@ -1230,6 +1231,108 @@ function _writeSaleToServer(saleRecord) {
 // from the catalog and finalizes the order as paid + delivered (no hosted
 // checkout — the seller charges on their own method). Resolves to the order
 // result; rejects (non-network) on a server rejection e.g. insufficient stock.
+// ============================================================
+// Inline Square card capture (Square Point of Sale API app-switch) — flag-gated.
+//   real: hand off to the Square POS app via the square-commerce-v1:// deep link.
+//   sim:  round-trip through the SAME callback path with a chosen outcome, so the
+//         whole Mast-side flow (persist → leave → return → restore → finalize with
+//         the transaction ref) is testable without a device.
+// Toggle on dev with ?inlinepay=1 and ?paysim=1 (persisted to localStorage; =0 clears).
+// ============================================================
+function _payFlag(key, param) {
+  try {
+    var p = new URLSearchParams(location.search);
+    if (p.get(param) === '1') { localStorage.setItem(key, '1'); return true; }
+    if (p.get(param) === '0') { localStorage.removeItem(key); return false; }
+    return localStorage.getItem(key) === '1';
+  } catch (e) { return false; }
+}
+function posInlinePay() { return _payFlag('mast_pos_inlinepay', 'inlinepay'); }
+function posPaySim() { return _payFlag('mast_pos_paysim', 'paysim'); }
+
+function _startSquareCharge(amountCents) {
+  try {
+    localStorage.setItem('mast_pos_pending_sq', JSON.stringify({
+      items: saleItems,
+      amount: amountCents,
+      contact: (document.getElementById('posContact').value || ''),
+      notes: (document.getElementById('saleNotes').value || ''),
+      coupon: appliedCoupon || null
+    }));
+  } catch (e) {}
+  if (posPaySim()) { _showSquareSim(amountCents); return; }
+  // Real device: app-switch to the Square POS app (app id from config/square).
+  MastDB.get('config/square').then(function(sq) {
+    var appId = sq && (sq.applicationId || sq.appId || sq.clientId);
+    var data = {
+      amount_money: { amount: amountCents, currency_code: 'USD' },
+      callback_url: location.origin + '/pos/?sqreturn=1',
+      client_id: appId, version: '1.3',
+      options: { supported_tender_types: ['CREDIT_CARD', 'CARD_ON_FILE'] },
+      state: 'mastpos'
+    };
+    location.href = 'square-commerce-v1://payment/create?data=' + encodeURIComponent(JSON.stringify(data));
+  }).catch(function() { showToast('Square config unavailable', true); });
+}
+
+// Simulator: a themed chooser that navigates to the same callback URL Square would
+// return to — exercising the real persist/restore/finalize round-trip on desktop.
+function _showSquareSim(amountCents) {
+  var amt = fmtCents(amountCents);
+  window.__sqSimGo = function(outcome, txn) {
+    location.href = location.origin + '/pos/?sqreturn=1&sqsim=' + outcome + (txn ? '&txn=' + encodeURIComponent(txn) : '');
+  };
+  var ov = document.createElement('div');
+  ov.id = 'sqSim';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.innerHTML =
+    '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:340px;width:100%;text-align:center;">' +
+      '<div style="font-size:13px;color:var(--muted);margin-bottom:4px;">Square (simulated)</div>' +
+      '<div style="font-size:24px;font-weight:700;color:var(--text);margin-bottom:16px;">' + amt + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;">' +
+        '<button onclick="__sqSimGo(\'approved\', \'SIM-\' + Date.now())" style="padding:14px;border-radius:8px;border:none;background:var(--green);color:#fff;font-weight:600;font-size:15px;cursor:pointer;">Approve ' + amt + '</button>' +
+        '<button onclick="__sqSimGo(\'declined\')" style="padding:12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">Decline</button>' +
+        '<button onclick="__sqSimGo(\'cancelled\')" style="padding:12px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:14px;cursor:pointer;">Cancel</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+}
+
+// On launch: if we returned from a Square charge, restore the cart + finalize.
+function _resumeSquareCharge() {
+  var p;
+  try { p = new URLSearchParams(location.search); } catch (e) { return; }
+  if (!p.get('sqreturn')) return;
+  try { history.replaceState(null, '', location.pathname); } catch (e) {}  // don't re-trigger on reload
+  var raw = null;
+  try { raw = JSON.parse(localStorage.getItem('mast_pos_pending_sq') || 'null'); } catch (e) {}
+  try { localStorage.removeItem('mast_pos_pending_sq'); } catch (e) {}
+  if (!raw || !raw.items || !raw.items.length) return;
+  // Restore the register exactly as it was before the handoff.
+  saleItems = raw.items;
+  appliedCoupon = raw.coupon || null;
+  var contactEl = document.getElementById('posContact'); if (contactEl) contactEl.value = raw.contact || '';
+  var notesEl = document.getElementById('saleNotes'); if (notesEl) notesEl.value = raw.notes || '';
+  paymentType = 'square';
+  document.getElementById('cashBtn').classList.remove('selected');
+  document.getElementById('squareBtn').classList.add('selected');
+  showScreen('resultScreen');
+  refreshCartUI();
+  // Outcome — sim: sqsim+txn; real: data={status, transaction_id, ...}.
+  var outcome, txn;
+  if (p.get('sqsim')) { outcome = p.get('sqsim'); txn = p.get('txn'); }
+  else if (p.get('data')) {
+    try { var d = JSON.parse(p.get('data')); txn = d.transaction_id || d.client_transaction_id; outcome = d.error_code ? 'declined' : (txn ? 'approved' : 'cancelled'); }
+    catch (e) { outcome = 'declined'; }
+  }
+  if (outcome === 'approved') {
+    window._pendingSquareRef = txn || 'square';
+    saveSale();  // handoff guard is skipped (ref set) → finalizes with the ref
+  } else {
+    showToast(outcome === 'cancelled' ? 'Card payment cancelled' : 'Card declined — try again or take Cash', true);
+  }
+}
+
 function _createPosOrder(saleRecord) {
   var token = authToken || saleRecord.__authToken; // prefer the live token (fresher on outbox flush)
   var orderItems = (saleRecord.items || []).map(function(it) {
@@ -1246,7 +1349,7 @@ function _createPosOrder(saleRecord) {
     taxState: saleRecord.taxState || '',
     items: orderItems,
     couponCode: saleRecord.couponCode || null,
-    posPayment: { method: saleRecord.paymentType || 'cash', tenderedCents: saleRecord.amount || 0 },
+    posPayment: { method: saleRecord.paymentType || 'cash', tenderedCents: saleRecord.amount || 0, ref: saleRecord.squareRef || undefined },
     customerContact: saleRecord.customerContact || null
   } };
   return fetch(TENANT_FIREBASE_CONFIG.cloudFunctionsBase + '/submitOrder', {
@@ -1269,6 +1372,15 @@ function saveSale() {
   var amountCents = Math.round(parseFloat(amountStr) * 100);
   if (isNaN(amountCents) || amountCents <= 0) { showToast('Enter a valid amount', true); return; }
 
+  // Inline Square capture (flag-gated): hand a card sale to Square (device) or the
+  // simulator, then resume here with a confirmed transaction ref. Card needs a
+  // connection; cash still records offline.
+  if (posInlinePay() && paymentType === 'square' && !window._pendingSquareRef) {
+    if (!navigator.onLine) { showToast('Card needs a connection — take Cash offline', true); return; }
+    _startSquareCharge(amountCents);
+    return;
+  }
+
   var btn = document.getElementById('saveSaleBtn');
   btn.disabled = true;
   btn.textContent = 'Saving...';
@@ -1289,6 +1401,7 @@ function saveSale() {
     createdAt: now,
     paymentType: paymentType,
     amount: amountCents,
+    squareRef: window._pendingSquareRef || null,
     items: saleItems.map(function(item) {
       return { productId: item.productId, variantId: item.variantId || null, productName: item.productName, quantity: item.quantity, priceCents: item.priceCents || 0, skipSale: item.skipSale === true, overridePriceCents: (item.overridePriceCents != null ? item.overridePriceCents : null), confidence: item.confidence };
     }),
@@ -1310,6 +1423,7 @@ function saveSale() {
   };
 
   function _onSaved(label) {
+    window._pendingSquareRef = null;   // consumed by this sale
     lastSaleId = saleId;
     // saleRecord.amount is the server-authoritative total post sales+coupon
     // (set in _writeSaleToServer); fall back to the entered amount offline.
