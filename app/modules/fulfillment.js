@@ -420,7 +420,7 @@
           '<div style="display:flex;align-items:center;gap:10px;">' +
             '<input type="checkbox" class="pack-row-check" data-order-key="' + esc(key) + '"' + (isChecked ? ' checked' : '') + ' onclick="event.stopPropagation();togglePackRowSelect(\'' + esc(key) + '\', this.checked)">' +
             '<div>' +
-              '<div style="font-weight:600;font-family:monospace;">' + num + ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(status) + '">' + status.replace(/_/g, ' ') + '</span></div>' +
+              '<div style="font-weight:600;font-family:monospace;">' + num + ' ' + MastUI.statusBadge(status, 'order') + '</div>' +
               '<div style="font-size:0.85rem;color:var(--warm-gray);">' + custName + ' &mdash; ' + esc(itemNames) + '</div>' +
             '</div>' +
           '</div>' +
@@ -815,7 +815,7 @@
       var card = '<div style="background:var(--cream);border:1px solid ' + (isOpen ? 'var(--teal)' : 'var(--cream-dark)') + ';border-radius:8px;padding:12px 16px;margin-bottom:8px;">' +
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
           '<div><strong>' + esc(b.name || 'Unnamed Bundle') + '</strong>' +
-            ' <span class="status-badge pill" style="' + orderStatusBadgeStyle(isOpen ? 'packing' : 'delivered') + '">' + b.status + '</span></div>' +
+            ' ' + MastUI.badge(b.status, isOpen ? 'teal' : 'neutral') + '</div>' +
           '<div style="font-size:0.85rem;color:var(--warm-gray);">' + total + ' package' + (total !== 1 ? 's' : '') + '</div>' +
         '</div>';
       if (b.carrier) {
