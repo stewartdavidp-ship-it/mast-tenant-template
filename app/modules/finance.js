@@ -7,6 +7,28 @@
 (function() {
 'use strict';
 
+// ── Canonical channel normalization (shared, parity-locked) ───────────────────
+// All revenue grouping + display goes through window.MastChannels
+// (shared/channel-normalization.core.js, byte-identical to the MCP finance
+// aggregators) so a record's free-form `source` string collapses onto ONE
+// canonical channel key. Without it a single channel fragments across keys
+// (pos + direct-pos, online + "Online Store") and per-channel reporting is
+// unreliable even though the grand total is correct. Applied at READ time so it
+// also repairs historical mixed-source data. Degrades to the raw source if the
+// engine somehow isn't loaded yet.
+function _chan(source) {
+  var C = (typeof window !== 'undefined' && window.MastChannels) || null;
+  return C ? C.normalize(source) : (source || 'other');
+}
+function _chanLabel(key) {
+  var C = (typeof window !== 'undefined' && window.MastChannels) || null;
+  return C ? C.label(key) : String(key == null ? '' : key);
+}
+function _chanColor(key, fallback) {
+  var C = (typeof window !== 'undefined' && window.MastChannels) || null;
+  return (C && C.color(key)) || fallback || '#888';
+}
+
 // ── Module-private state ──────────────────────────────────────────────────────
 
 var _arData = null;
@@ -575,7 +597,7 @@ async function _loadRevenueAggregate(start, end) {
     var cents = _orderRevenueCents(o);
     if (cents <= 0) return;
     if (isTestOrder(o) && !_includeTestData) return;
-    var ch = o.source || 'direct';
+    var ch = _chan(o.source || 'direct');
     byChannel[ch] = (byChannel[ch] || 0) + cents;
     totalCents += cents;
     txnCount += 1;
@@ -585,7 +607,7 @@ async function _loadRevenueAggregate(start, end) {
     var cents = _salesCents(s);
     if (cents <= 0) return;
     if (isTestOrder(s) && !_includeTestData) return;
-    var ch = s.source || 'pos';
+    var ch = _chan(s.source || 'pos');
     byChannel[ch] = (byChannel[ch] || 0) + cents;
     totalCents += cents;
     txnCount += 1;
@@ -637,7 +659,7 @@ async function loadRevenue() {
       if (o.status === 'cancelled') return;
       var cents = _orderRevenueCents(o);
       if (cents <= 0) return;
-      var ch = o.source || 'direct';
+      var ch = _chan(o.source || 'direct');
       var isTest = isTestOrder(o);
       if (isTest && !_includeTestData) {
         testTotalCents += cents;
@@ -655,7 +677,7 @@ async function loadRevenue() {
       if (!_salesRowCounts(s)) return; // skip voided + POS-square mirrors (orderId set → counted via its orders row)
       var cents = _salesCents(s);
       if (cents <= 0) return;
-      var ch = s.source || 'pos';
+      var ch = _chan(s.source || 'pos');
       var isTest = isTestOrder(s);
       if (isTest && !_includeTestData) {
         testTotalCents += cents;
@@ -770,7 +792,7 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
     var topCh = channels[0];
     var topChSub = fmt$(byChannel[topCh]) + ' · ' + Math.round(byChannel[topCh]/totalCents*100) + '%';
     if (prior) topChSub += _sanityWrap(_renderRevenueDelta(byChannel[topCh], (prior.byChannel || {})[topCh] || 0), byChannel[topCh], (prior.byChannel || {})[topCh] || 0);
-    h += statCard('Top Channel', e(topCh), channelColors[topCh] || '#888', topChSub);
+    h += statCard('Top Channel', e(_chanLabel(topCh)), _chanColor(topCh, channelColors[topCh]), topChSub);
   }
   h += statCard('Period', toDateShort(start) + ' – ' + toDateShort(end), 'var(--warm-gray,#888)');
   h += '</div>';
@@ -788,9 +810,9 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
     h += '<div style="font-size:0.85rem;font-weight:600;color:var(--warm-gray,#888);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">By Channel</div>';
     h += '<div style="display:flex;gap:10px;flex-wrap:wrap;">';
     channels.forEach(function(ch) {
-      var color = channelColors[ch] || '#888';
+      var color = _chanColor(ch, channelColors[ch]);
       h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:10px 14px;min-width:130px;border-left:3px solid ' + color + ';">';
-      h += '<div style="font-size:0.85rem;font-weight:600;text-transform:capitalize;">' + e(ch) + '</div>';
+      h += '<div style="font-size:0.85rem;font-weight:600;text-transform:capitalize;">' + e(_chanLabel(ch)) + '</div>';
       h += '<div style="font-size:1.15rem;font-weight:700;">' + fmt$(byChannel[ch]) + '</div>';
       h += '<div style="font-size:0.72rem;color:var(--warm-gray,#888);">' + Math.round(byChannel[ch]/totalCents*100) + '% of total</div>';
       // W2.6: per-channel Δ vs prior. Prior channels that disappeared still
@@ -851,13 +873,13 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
     var shown = txns.slice(0, 100);
     h += '<div style="display:flex;flex-direction:column;gap:6px;">';
     shown.forEach(function(t) {
-      var color = channelColors[t.channel] || '#888';
+      var color = _chanColor(t.channel, channelColors[t.channel]);
       h += '<div style="background:var(--bg-secondary,#232323);border-radius:8px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;">';
       h += '<div style="flex:1;min-width:0;">';
       h += '<div style="font-size:0.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + e(t.desc) + '</div>';
       h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:2px;">';
       h += toDateShort(t.date);
-      h += ' · <span style="background:' + color + ';color:#fff;padding:1px 5px;border-radius:3px;font-size:0.72rem;text-transform:capitalize;">' + e(t.channel) + '</span>';
+      h += ' · <span style="background:' + color + ';color:#fff;padding:1px 5px;border-radius:3px;font-size:0.72rem;text-transform:capitalize;">' + e(_chanLabel(t.channel)) + '</span>';
       if (t.ref) h += ' · <span style="opacity:0.7;">' + e(t.ref) + '</span>';
       h += '</div></div>';
       h += '<div style="font-weight:700;font-size:0.9rem;flex-shrink:0;">' + fmt$(t.cents) + '</div>';
@@ -872,7 +894,7 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
     var rows = [];
     rows.push(['Date', 'Channel', 'Reference', 'Description', 'Amount (USD)', 'Type']);
     txns.forEach(function(t) {
-      rows.push([t.date || '', t.channel || '', t.ref || '', t.desc || '', (t.cents / 100).toFixed(2), t.type || '']);
+      rows.push([t.date || '', _chanLabel(t.channel), t.ref || '', t.desc || '', (t.cents / 100).toFixed(2), t.type || '']);
     });
     _finDownloadCsv('revenue', rows, 'Period: ' + start + ' to ' + end + ' · Basis: orders.placedAt + admin/sales.createdAt');
   };
@@ -1817,7 +1839,7 @@ async function computePnlLocal(startDate, endDate) {
   orders.forEach(function(o) {
     if (o.status === 'cancelled') return;
     var c = _orderRevenueCents(o); if (c <= 0) return;
-    var ch = o.source || 'direct';
+    var ch = _chan(o.source || 'direct');
     if (isTestOrder(o) && !_includeTestData) {
       testRevenue += c;
       testTxnCount += 1;
@@ -1829,7 +1851,7 @@ async function computePnlLocal(startDate, endDate) {
   sales.forEach(function(s) {
     if (!_salesRowCounts(s)) return; // skip voided + POS-square mirrors (orderId set → counted via its orders row)
     var c = _salesCents(s); if (c <= 0) return;
-    var ch = s.source || 'pos';
+    var ch = _chan(s.source || 'pos');
     if (isTestOrder(s) && !_includeTestData) {
       testRevenue += c;
       testTxnCount += 1;
@@ -2041,7 +2063,7 @@ function renderPnl(curr, prev, start, end, prior) {
 
   h += plRow('Revenue', curr.revenue, false, true, '+');
   var revChs = Object.keys(curr.revByChannel || {}).sort(function(a,b) { return (curr.revByChannel[b]||0)-(curr.revByChannel[a]||0); });
-  revChs.forEach(function(ch) { h += plRow(ch.charAt(0).toUpperCase() + ch.slice(1), curr.revByChannel[ch], true, false, '+'); });
+  revChs.forEach(function(ch) { h += plRow(_chanLabel(ch), curr.revByChannel[ch], true, false, '+'); });
 
   if (cogsMissing) {
     h += '<div style="display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid rgba(255,255,255,0.08);margin-top:4px;padding-top:9px;">' +
@@ -2137,7 +2159,7 @@ function renderPnl(curr, prev, start, end, prior) {
     rows.push(['Line', 'Amount (USD)']);
     rows.push(['Revenue', (curr.revenue / 100).toFixed(2)]);
     revChs.forEach(function(ch) {
-      rows.push(['  ' + ch, (curr.revByChannel[ch] / 100).toFixed(2)]);
+      rows.push(['  ' + _chanLabel(ch), (curr.revByChannel[ch] / 100).toFixed(2)]);
     });
     rows.push(['COGS', cogsMissing ? 'N/A (no product cost)' : (curr.cogs / 100).toFixed(2)]);
     if (curr._burden && curr._burden.acknowledged && curr._burden.effectiveLaborCogsCents > 0) {
@@ -8380,7 +8402,7 @@ async function _loadRevenueRows(start, end) {
     var o = kv[1]; if (!o || o.status === 'cancelled') return;
     var cents = _orderRevenueCents(o); if (cents <= 0) return;
     if (isTestOrder(o) && !_includeTestData) { testCount++; testCents += cents; return; }
-    var ch = o.source || 'direct';
+    var ch = _chan(o.source || 'direct');
     rows.push({ id: kv[0], kind: 'order', date: o.placedAt || o.createdAt || '', label: o.orderNumber || kv[0], party: o.customerName || o.customerEmail || '', channel: ch, cents: cents });
     byChannel[ch] = (byChannel[ch] || 0) + cents; totalCents += cents;
   });
@@ -8388,7 +8410,7 @@ async function _loadRevenueRows(start, end) {
     var s = kv[1]; if (!_salesRowCounts(s)) return; // skip voided + POS-square mirrors (orderId set → counted via its orders row)
     var cents = _salesCents(s); if (cents <= 0) return;
     if (isTestOrder(s) && !_includeTestData) { testCount++; testCents += cents; return; }
-    var ch = s.source || 'pos';
+    var ch = _chan(s.source || 'pos');
     var item = (Array.isArray(s.items) && s.items[0] && s.items[0].productName) || 'POS sale';
     rows.push({ id: kv[0], kind: 'sale', date: s.createdAt || s.timestamp || '', label: item, party: '', channel: ch, cents: cents });
     byChannel[ch] = (byChannel[ch] || 0) + cents; totalCents += cents;

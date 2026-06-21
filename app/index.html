@@ -203,6 +203,14 @@
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
   <script src="../shared/product-readiness.core.js?v=9dcf533c48b5"></script>
+  <!-- Canonical revenue channel normalization (MastChannels.normalize/label/color).
+       Byte-identical to mast-mcp-server/src/shared/channel-normalization.core.js so the
+       finance revenue UI and the MCP finance_get_revenue / finance_get_pnl aggregators
+       collapse the same source synonyms onto the same canonical channel key (kills the
+       pos/direct-pos + online/"Online Store" fragmentation). Eager-loaded so it exists
+       before the lazy finance modules. ?v= kept in lockstep with MAST_MODULES_V by
+       scripts/bump-modules-version.sh. -->
+  <script src="../shared/channel-normalization.core.js?v=df5b81d60c5c"></script>
   <!-- MastIntake secure-intake engine — a peer of MastDB/MastUI. Eager (NOT a
        lazy MODULE_MANIFEST module) so the first in-place secureField()/collect()
        can't fire before it loads. Provider-agnostic; vendor knowledge lives in
@@ -20886,7 +20894,7 @@ var MAST_MODULES_V = '20260618-202331-1353a6aa';
 var MODULE_MANIFEST = {
   trips: { src: 'modules/trips.js', v: '04f6eabdd57a', routes: ['trips'] },
   wholesale: { src: 'modules/wholesale.js', v: '0675eb5aa646', routes: ['wholesale'] },
-  finance: { src: 'modules/finance.js', v: '9aaa1d1a8fd0', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
+  finance: { src: 'modules/finance.js', v: '457398e1a4d1', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
   // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
   // (no top-level route). Empty routes[] keeps it lazy-loadable via MastAdmin.loadModule('accounting').
   accounting: { src: 'modules/accounting.js', v: 'b852b7cb7ccd', routes: [] },
@@ -20954,7 +20962,7 @@ var MODULE_MANIFEST = {
   'instructors-v2': { src: 'modules/instructors-v2.js', v: '7900ac7fc6b7', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
   'wholesale-v2': { src: 'modules/wholesale-v2.js', v: '0a9c019fb163', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
   'fulfillment-v2': { src: 'modules/fulfillment-v2.js', v: '217b694d7df5', routes: ['pack-v2', 'ship-v2'] }, // ONE fulfillment queue: Pack/Ship are one process — route picks the entry bucket (operator-ratified 2026-06-10)
-  'finance-statements-v2': { src: 'modules/finance-statements-v2.js', v: '5e7221471fcc', routes: ['financials-v2', 'finance-revenue-v2', 'finance-pl-v2', 'finance-cash-flow-v2', 'finance-tax-v2'] }, // ONE statements hub: Overview/Revenue/P&L/Cash/Tax are five lenses of the same period reports — route picks the entry lens (finance-v2-build-plan.md)
+  'finance-statements-v2': { src: 'modules/finance-statements-v2.js', v: 'd74457e62f1c', routes: ['financials-v2', 'finance-revenue-v2', 'finance-pl-v2', 'finance-cash-flow-v2', 'finance-tax-v2'] }, // ONE statements hub: Overview/Revenue/P&L/Cash/Tax are five lenses of the same period reports — route picks the entry lens (finance-v2-build-plan.md)
   'finance-openitems-v2': { src: 'modules/finance-openitems-v2.js', v: '41a8ee5a8b52', routes: ['finance-ar-v2', 'finance-ap-v2'] }, // ONE open-items queue: AR/AP aging lenses + vendor records — route picks the entry lens (finance-v2-build-plan.md)
   'finance-close-v2': { src: 'modules/finance-close-v2.js', v: 'd8fe56f86d00', routes: ['finance-period-close-v2', 'finance-amendments-v2'] }, // ONE close pipeline: periods/day-closes/amendments lenses over the Close-v3 CFs — route picks the entry lens (finance-v2-build-plan.md)
   'customer-portfolio-v2': { src: 'modules/customer-portfolio-v2.js', v: 'fd12195110d9', routes: ['customer-portfolio-v2'] }, // finance wave 4: read-only portfolio analytics (quadrants + concentration), drills to customers-v2
