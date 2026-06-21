@@ -45,7 +45,7 @@
     if (!s) return '';
     if (s.discountType === 'quantity-tier') {
       return (s.tiers || []).slice().sort(function (a, b) { return a.qty - b.qty; })
-        .map(function (t) { return t.qty + ' for ' + (N.money(t.totalCents / 100) || '$0'); }).join(', ') || 'Quantity tier';
+        .map(function (t) { return t.qty + ' for ' + (N.money(t.totalCents, { cents: true }) || '$0'); }).join(', ') || 'Quantity tier';
     }
     if (s.discountType === 'percent') return s.discountValue + '% off';
     return (N.money((s.discountValue || 0) / 100) || '$0.00') + ' off';
@@ -55,7 +55,7 @@
     return '<div class="promo-v2-tier" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">' +
       '<input class="form-input promo-v2-tier-qty" type="number" min="1" value="' + (qty != null && qty !== '' ? esc(qty) : '') + '" placeholder="Qty" style="width:80px;">' +
       '<span style="color:var(--warm-gray);font-size:0.85rem;">for</span>' +
-      '<input class="form-input promo-v2-tier-total" type="number" min="0" step="0.01" value="' + (totalCents != null && totalCents !== '' ? esc((totalCents / 100).toFixed(2)) : '') + '" placeholder="Total $" style="flex:1;min-width:90px;">' +
+      '<input class="form-input promo-v2-tier-total" type="number" min="0" step="0.01" value="' + (totalCents != null && totalCents !== '' ? esc(N.moneyRaw(totalCents, { cents: true })) : '') + '" placeholder="Total $" style="flex:1;min-width:90px;">' +
       '<button type="button" onclick="PromotionsV2.removeTierRow(this)" style="background:none;border:none;color:var(--warm-gray);font-size:1.15rem;cursor:pointer;line-height:1;">×</button>' +
     '</div>';
   }
