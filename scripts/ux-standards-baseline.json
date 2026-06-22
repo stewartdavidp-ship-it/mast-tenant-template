@@ -47,9 +47,6 @@
   "app/modules/consignment.js": {
     "hardcodedHex": 102
   },
-  "app/modules/contacts.js": {
-    "hardcodedHex": 33
-  },
   "app/modules/customer-service.js": {
     "nativeDialogs": 7,
     "rogueOverlays": 3,

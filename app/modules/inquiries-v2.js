@@ -198,15 +198,15 @@
   var V2 = { rows: [], byId: {}, sortKey: 'createdAt', sortDir: 'desc', q: '', statusFilter: 'all', loaded: false, busy: false };
 
   // The inquiry-reply flow (CF email → status flip → interaction log → cache
-  // invalidation → audit) is the canonical core respondToInquiryCore in
-  // contacts.js, exposed as window.ContactsBridge.respondToInquiry. We delegate
-  // to it (same as contacts-v2) instead of re-implementing the flow inline, so
-  // the contacts-cache invalidation and the shared payload/status logic stay in
-  // one place. Load the legacy contacts module first if the bridge isn't up yet.
+  // invalidation → audit) is the canonical core respondToInquiryCore, exposed as
+  // window.ContactsBridge.respondToInquiry. We delegate to it (same as contacts-v2)
+  // instead of re-implementing the flow inline, so the contacts-cache invalidation
+  // and the shared payload/status logic stay in one place. T6: contacts.js retired
+  // — the bridge now lives in the non-flag-gated IIFE at the end of contacts-v2.js.
   function withBridge(fn) {
     if (window.ContactsBridge && window.ContactsBridge.respondToInquiry) return fn(window.ContactsBridge);
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
-      MastAdmin.loadModule('contacts').then(function () {
+      MastAdmin.loadModule('contacts-v2').then(function () {
         if (window.ContactsBridge && window.ContactsBridge.respondToInquiry) fn(window.ContactsBridge);
         else if (window.showToast) showToast('Contacts engine still loading — try again', true);
       }).catch(function () { if (window.showToast) showToast('Contacts engine unavailable', true); });

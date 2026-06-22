@@ -91,7 +91,9 @@ const MODULE_GATE_BASELINE = new Set([
   // absorbed into campaigns-v2.js, which references can('campaigns','delete') — so
   // CHECK C classifies the now-write-bearing campaigns-v2.js as gated (no entry).
   'audit-feedback.js', 'audit.js', 'blog.js', 'book.js',
-  'channels.js', 'commission-terms.js', 'composer.js', 'contacts.js',
+  // contacts.js RETIRED (T6): its ContactsBridge + cores absorbed into contacts-v2.js,
+  // which is can()-gated (CHECK C) — no entry needed for the now-write-bearing twin.
+  'channels.js', 'commission-terms.js', 'composer.js',
   'customer-service.js', 'engagement-inbox.js', 'events.js', 'fulfillment.js',
   'lookbooks.js', 'maker.js', 'mapping.js', 'newsletter.js',
   'procurement.js', 'promotions.js', 'social.js', 'wholesale.js',

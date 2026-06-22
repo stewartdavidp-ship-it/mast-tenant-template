@@ -263,16 +263,18 @@
         window._mastNavInternal = false;
       }
       var openIt = function() {
-        if (typeof window.openAddContactModal === 'function') {
-          window.openAddContactModal();
+        // T6: contacts.js retired. The V2 create slide-out reads
+        // _pendingContactCustomerLink (set above) for prefill + the customer link.
+        if (window.ContactsV2 && typeof window.ContactsV2.create === 'function') {
+          window.ContactsV2.create();
         } else {
-          console.error('[customers] openAddContactModal not available after contacts load');
+          console.error('[customers] ContactsV2.create not available after contacts-v2 load');
           toast('Failed to open add-contact form', true);
         }
       };
       if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
-        MastAdmin.loadModule('contacts').then(openIt).catch(function(err) {
-          console.error('[customers] contacts module load failed', err);
+        MastAdmin.loadModule('contacts-v2').then(openIt).catch(function(err) {
+          console.error('[customers] contacts-v2 module load failed', err);
           toast('Failed to load contacts module: ' + (err && err.message || err), true);
         });
       } else {
