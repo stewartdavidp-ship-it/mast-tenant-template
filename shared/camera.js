@@ -49,7 +49,7 @@
       .then(function(stream) {
         self._stream = stream;
         self.videoElement.srcObject = stream;
-        self.videoElement.play().catch(function() {});
+        self.videoElement.play().catch(function(e) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(e, { where: 'camera.start:videoPlay' }); });
         // Wait for video to be ready
         return new Promise(function(resolve) {
           self.videoElement.onloadedmetadata = function() {

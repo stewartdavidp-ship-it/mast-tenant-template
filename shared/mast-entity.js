@@ -565,7 +565,7 @@
           host.innerHTML = res.html;
         } else {
           var collapsed = false;
-          try { collapsed = localStorage.getItem('mastFlowRailCollapsed') === '1'; } catch (e) {}
+          try { collapsed = localStorage.getItem('mastFlowRailCollapsed') === '1'; } catch (e) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(e, { where: 'mast-entity._flowRender:lsGet' }); }
           var phaseLabel = (res.evaluation && res.evaluation.currentPhase) ? res.evaluation.currentPhase.label : '';
           host.innerHTML =
             '<div style="display:flex;align-items:center;gap:8px;">' +
@@ -587,7 +587,7 @@
             if (arrow) arrow.style.transform = nowCollapsed ? '' : 'rotate(90deg)';
             if (ph) ph.style.display = nowCollapsed ? '' : 'none';
             chev.setAttribute('aria-expanded', String(!nowCollapsed));
-            try { localStorage.setItem('mastFlowRailCollapsed', nowCollapsed ? '1' : '0'); } catch (e) {}
+            try { localStorage.setItem('mastFlowRailCollapsed', nowCollapsed ? '1' : '0'); } catch (e) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(e, { where: 'mast-entity._flowRender:lsSet' }); }
           };
         }
       }
@@ -662,7 +662,7 @@
     var f0 = s.fields[0];
     var name = (record && record[f0.name]) || '';
     if (!name && record && typeof f0.get === 'function') {
-      try { name = f0.get(record) || ''; } catch (e) {}
+      try { name = f0.get(record) || ''; } catch (e) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(e, { where: 'mast-entity.recordTitle' }); }
     }
     if (!name && record) name = record.email || record.primaryEmail || record.orderNumber || s.recordId(record) || '';
     return name ? ((s.label ? s.label + ': ' : '') + name) : (s.label || key);
