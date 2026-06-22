@@ -529,7 +529,7 @@
         // Trigger inventory deduction + shipped email via cloud function
         try {
           await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
-        } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
+        } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(shipErr, { where: 'orders-core.transitionOrder:onOrderShipped' }); }
 
         showToast(o.email ? 'Order shipped — customer notified' : 'Order shipped — no customer email on file');
         if (typeof renderOrderDetail === 'function') renderOrderDetail(orderId);
@@ -540,7 +540,7 @@
       if (newStatus === 'shipped') {
         try {
           await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
-        } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
+        } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(shipErr, { where: 'orders-core.transitionOrder:onOrderShipped' }); }
       }
 
       showToast('Order updated to ' + updates['status']);
@@ -660,7 +660,7 @@
       // Square Invoices API so the customer receives a Square-hosted payment link.
       // Falls back to Mast-native email if Square isn't configured or the call fails.
       var processor = 'square';
-      try { processor = (await MastDB.get('config/paymentProcessor')) || 'square'; } catch (_) {}
+      try { processor = (await MastDB.get('config/paymentProcessor')) || 'square'; } catch (_) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(_, { where: 'orders-core.sendInvoice:paymentProcessor' }); }
 
       if (processor === 'square') {
         try {
@@ -1073,7 +1073,7 @@
     // matches the legacy transitionOrder shipped branch).
     try {
       await firebase.functions().httpsCallable('onOrderShipped')({ orderId: orderId, tenantId: MastDB.tenantId() });
-    } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); }
+    } catch (shipErr) { console.error('onOrderShipped call failed:', shipErr); if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(shipErr, { where: 'orders-core._markOrderShippedCore:onOrderShipped' }); }
   }
 
   // ============================================================
