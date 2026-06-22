@@ -252,6 +252,14 @@ html[data-tile-size="small"] .picker-card-name { font-size: 14px; }
 html[data-tile-size="small"] .picker-card-price { font-size: 15px; }
 html[data-tile-size="small"] .picker-card-info { padding: 8px 10px; }
 html[data-tile-size="small"] .picker-card-noimg span { font-size: 14px; }
+/* Small-format override: on phones (<768px, the single-column layout) cap each
+   density one step down so the denser options stay tappable. The 3/4/5 spec above
+   holds on tablet+ (>=768px, the side-by-side layout). */
+@media (max-width: 767px) {
+  html[data-tile-size="large"] #catalogGrid { grid-template-columns: repeat(2, 1fr); }
+  html[data-tile-size="medium"] #catalogGrid { grid-template-columns: repeat(3, 1fr); }
+  html[data-tile-size="small"] #catalogGrid { grid-template-columns: repeat(4, 1fr); }
+}
 
 /* Cart panel — bottom sheet on phone, right rail on tablet */
 .cart-panel { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--border); z-index: 40; display: flex; flex-direction: column; max-height: 78vh; padding-bottom: var(--safe-bottom); box-shadow: 0 -4px 16px rgba(0,0,0,0.3); }
