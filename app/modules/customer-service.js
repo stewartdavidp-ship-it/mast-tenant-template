@@ -945,7 +945,7 @@
           reviewsData[r.id].featuredOnSite = true;
           reviewsData[r.id].featuredAt = payload.addedAt;
         }
-      } catch (_e) { /* non-fatal — testimonial already wrote */ }
+      } catch (_e) { /* non-fatal — testimonial already wrote */ if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(_e, { where: 'customer-service.featureReviewOnSite:cs_reviews_flag' }); }
       showToast('Featured on homepage Testimonials section.');
       // W1.8 round-3 — re-render so the row visibly flips to "✓ Featured" + Unfeature.
       renderReviews();
@@ -971,7 +971,7 @@
           reviewsData[r.id].featuredOnSite = false;
           reviewsData[r.id].featuredAt = null;
         }
-      } catch (_e) { /* non-fatal */ }
+      } catch (_e) { /* non-fatal */ if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(_e, { where: 'customer-service.unfeatureReviewOnSite:cs_reviews_flag' }); }
       showToast('Removed from homepage Testimonials section.');
       renderReviews();
     } catch (err) {
@@ -994,7 +994,7 @@
       });
       try {
         await MastDB.set('public/config/reviews', { anonymousAllowed: !!allowed, updatedAt: nowIso() });
-      } catch (_e) { /* non-fatal — storefront will fall back to CF enforcement */ }
+      } catch (_e) { /* non-fatal — storefront will fall back to CF enforcement */ if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(_e, { where: 'customer-service.setReviewsAnonymousAllowed:public_mirror' }); }
       showToast(allowed ? 'Anonymous reviews allowed' : 'Reviews now require sign-in');
       renderReviews();
     } catch (err) {
