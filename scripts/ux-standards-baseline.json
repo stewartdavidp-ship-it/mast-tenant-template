@@ -153,10 +153,6 @@
   "app/modules/shopify-harness.js": {
     "hardcodedHex": 26
   },
-  "app/modules/students.js": {
-    "rogueOverlays": 1,
-    "hardcodedHex": 60
-  },
   "app/modules/studio.js": {
     "hardcodedHex": 3
   },

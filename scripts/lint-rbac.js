@@ -73,7 +73,10 @@ const UNGATED_ALLOWLIST = new Set([
 const MODULE_GATE_BASELINE = new Set([
   // The canonical 5 the original RBAC-gap audit named (website.js was the 6th —
   // RETIRED in the T6 rip-and-replace, PR3 — so dropped from this baseline):
-  'production.js', 'students.js', 'studio.js', 'trips.js', 'show-light.js',
+  // students.js was a canonical-5 entry but is RETIRED (T6): its StudentsBridge
+  // writer was absorbed into students-v2.js, which is can()-gated (CHECK C
+  // classifies the now-write-bearing twin as gated — no entry needed).
+  'production.js', 'studio.js', 'trips.js', 'show-light.js',
   // website-import.js: AI catalog-import wizard relocated VERBATIM out of the
   // now-retired website.js (T6 PR2). It kept website.js's ungated posture (no
   // fix-in-place during a verbatim move); gating the import write/delete handlers

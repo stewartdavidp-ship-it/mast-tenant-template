@@ -259,9 +259,6 @@
   }
   function load() { _loadPromise = null; loadData().then(render); }
   function loadData() {
-    // Ensure the legacy students module is loaded so window.StudentsBridge
-    // (the delegated write path) exists — mirrors contacts-v2.
-    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('students'); } catch (e) {} }
     // Enrollments load alongside for the Enrollments facet (joins by studentId
     // or email — the storefront writes customerEmail, not studentId).
     return Promise.all([
@@ -604,9 +601,6 @@
       });
     },
     create: function () {
-      // Ensure the legacy module (and thus window.StudentsBridge) is loaded
-      // before opening the create form — mirrors ContactsV2.create.
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('students'); } catch (e) {} }
       MastEntity.openRecord('students-v2', {}, 'create');
     },
     // Mint + copy a signed per-student waiver link (anti-forge, audit 2026-06-01
@@ -779,6 +773,199 @@
   };
 
   MastAdmin.registerModule('students-v2', {
-    routes: { 'students-v2': { tab: 'studentsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: {
+      'students-v2': { tab: 'studentsV2Tab', setup: function () { ensureTab(); render(); load(); } },
+      // Legacy #students route ABSORBED (T6): students.js is deleted, so the twin
+      // owns the bare route directly (no MAST_V2_ROUTE_MAP remap). The write path
+      // (window.StudentsBridge) lives in the non-flag-gated IIFE appended below.
+      'students': { tab: 'studentsV2Tab', setup: function () { ensureTab(); render(); load(); } }
+    }
   });
+})();
+
+
+// ============================================================================
+// ABSORBED FROM students.js (V1) — T6 retirement (absorb-first cut).
+//
+// students-v2 (roster) + students-config-v2 (settings hub) are the sole students
+// surfaces; the V1 students.js UI is deleted. This self-contained, NON-flag-gated
+// IIFE re-hosts — VERBATIM (byte-identical) — window.StudentsBridge, the write
+// path students-v2 single-sources through (create / update / remove + the native
+// sub-editors addClearance / removeClearance / saveChecklistItem / saveDocument /
+// removeDocument / saveClearanceType), plus its two transitive helpers
+// (buildStudentFields field-transform + writeStudent, which make the EXACT writes
+// the legacy saveStudent did). It references only shell globals (MastDB /
+// writeAudit / Date) plus its own closure. The legacy `studentsLoaded` list-cache
+// flag is carried as a private var so the bridge's invalidations stay no-ops (the
+// V1 list it gated is gone). Not flag-gated: the bridge must exist for students-v2
+// regardless of the UI-redesign flag.
+// ============================================================================
+(function () {
+  'use strict';
+
+  // V1 list-cache flag; the bridge invalidates it on every write. No reader
+  // survives the retire (the V1 roster is gone), so these stay harmless no-ops.
+  var studentsLoaded = false;
+
+  function buildStudentFields(data, isNew) {
+    data = data || {};
+    var birthDate = data.birthDate || null;
+    var fields = {
+      displayName: (data.displayName || '').trim(),
+      contactId: (data.contactId || '').trim() || null,
+      birthDate: birthDate || null,
+      guardianContactId: data.guardianContactId || null,
+      photoWaiverStatus: data.photoWaiverStatus || 'pending',
+      emergencyContact: {
+        name: (data.emergencyContact && data.emergencyContact.name) || null,
+        phone: (data.emergencyContact && data.emergencyContact.phone) || null,
+        relationship: (data.emergencyContact && data.emergencyContact.relationship) || null,
+      },
+      allergies: data.allergies || null,
+      medicalNotes: data.medicalNotes || null,
+      waiverStatus: data.waiverStatus || 'pending',
+      waiverSignedAt: data.waiverSignedAt || null,
+      safetyOrientationCompleted: data.safetyOrientationCompleted === true,
+      safetyOrientationDate: data.safetyOrientationDate || null,
+      instructorNotes: data.instructorNotes || null,
+    };
+    // isMinor: 'true'/'false' manual override, else auto-compute from birthDate.
+    var isMinorSelect = data.isMinor;
+    if (isMinorSelect === true || isMinorSelect === 'true') fields.isMinor = true;
+    else if (isMinorSelect === false || isMinorSelect === 'false') fields.isMinor = false;
+    else if (birthDate) {
+      var birth = new Date(birthDate);
+      var now = new Date();
+      var age = now.getFullYear() - birth.getFullYear();
+      var m = now.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) age--;
+      fields.isMinor = age < 18;
+    }
+    if (!isNew && data.status) fields.status = data.status || 'active';
+    return fields;
+  }
+
+  // Make the EXACT write saveStudent() makes: a full `set` for a new student
+  // (seeding status/clearances/documents/onboardingChecklist) or a partial
+  // `update` for an existing one. Returns the student id.
+  async function writeStudent(id, fields, isNew) {
+    if (isNew) {
+      id = MastDB.newKey('students');
+      fields.createdAt = new Date().toISOString();
+      fields.status = 'active';
+      fields.clearances = [];
+      fields.documents = [];
+      fields.onboardingChecklist = {
+        liabilityWaiver: { status: fields.waiverStatus === 'signed' ? 'completed' : 'pending' },
+        safetyOrientation: { status: fields.safetyOrientationCompleted ? 'completed' : 'pending' },
+        photoRelease: { status: fields.photoWaiverStatus === 'accepted' ? 'completed' : 'pending' },
+        guardianConsent: { status: fields.isMinor ? 'pending' : 'not-applicable' },
+      };
+      await MastDB.set('students/' + id, fields);
+    } else {
+      fields.updatedAt = new Date().toISOString();
+      await MastDB.update('students/' + id, fields);
+    }
+    return id;
+  }
+
+  window.StudentsBridge = {
+    create: async function (data) {
+      var fields = buildStudentFields(data, true);
+      var id = await writeStudent(null, fields, true);
+      studentsLoaded = false;
+      return id;
+    },
+    update: async function (id, data) {
+      var fields = buildStudentFields(data, false);
+      await writeStudent(id, fields, false);
+      studentsLoaded = false;
+      return id;
+    },
+    // Hard delete (the twin confirms + checks enrollment references first).
+    remove: async function (id) {
+      await MastDB.remove('students/' + id);
+      studentsLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'student', id);
+      return true;
+    },
+    // ── Sub-collection editors (students-v2 native sub-editors) ──────────
+    // Clearances + documents are arrays and the onboarding checklist is a map on
+    // the student doc; legacy edits them via saveClearance / saveDoc / saveChecklist.
+    // These make the SAME writes (same paths + updatedAt stamping) so the twin's
+    // in-pane sub-editors stay single-sourced. Each reads the live doc, applies the
+    // change by index/key, writes back, and returns the new value for the twin to
+    // mirror into its cache. (The twin builds the entry/record shape — there is no
+    // field transform here, unlike buildStudentFields.)
+    addClearance: async function (studentId, entry) {
+      var stu = (await MastDB.get('students/' + studentId)) || {};
+      var clearances = Array.isArray(stu.clearances) ? stu.clearances.slice() : [];
+      clearances.push(entry);
+      await MastDB.set('students/' + studentId + '/clearances', clearances);
+      await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
+      studentsLoaded = false;
+      if (window.writeAudit) writeAudit('create', 'student-clearance', studentId);
+      return clearances;
+    },
+    removeClearance: async function (studentId, idx) {
+      var stu = (await MastDB.get('students/' + studentId)) || {};
+      var clearances = Array.isArray(stu.clearances) ? stu.clearances.slice() : [];
+      if (idx < 0 || idx >= clearances.length) return clearances;
+      clearances.splice(idx, 1);
+      await MastDB.set('students/' + studentId + '/clearances', clearances);
+      await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
+      studentsLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'student-clearance', studentId);
+      return clearances;
+    },
+    saveChecklistItem: async function (studentId, fieldKey, fields) {
+      await MastDB.update('students/' + studentId + '/onboardingChecklist/' + fieldKey, fields);
+      await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
+      studentsLoaded = false;
+      if (window.writeAudit) writeAudit('update', 'student-checklist', studentId);
+      return fields;
+    },
+    saveDocument: async function (studentId, docIdx, record) {
+      var stu = (await MastDB.get('students/' + studentId)) || {};
+      var docs = Array.isArray(stu.documents) ? stu.documents.slice() : [];
+      var now = new Date().toISOString();
+      var isNew = !(docIdx != null && docs[docIdx]);
+      if (docIdx != null && docs[docIdx]) {
+        docs[docIdx] = Object.assign({}, docs[docIdx], record, { updatedAt: now });
+      } else {
+        docs.push(Object.assign({ documentId: 'doc_' + Date.now(), createdAt: now }, record, { updatedAt: now }));
+      }
+      await MastDB.set('students/' + studentId + '/documents', docs);
+      await MastDB.set('students/' + studentId + '/updatedAt', now);
+      studentsLoaded = false;
+      if (window.writeAudit) writeAudit(isNew ? 'create' : 'update', 'student-document', studentId);
+      return docs;
+    },
+    removeDocument: async function (studentId, docIdx) {
+      var stu = (await MastDB.get('students/' + studentId)) || {};
+      var docs = Array.isArray(stu.documents) ? stu.documents.slice() : [];
+      if (docIdx < 0 || docIdx >= docs.length) return docs;
+      docs.splice(docIdx, 1);
+      await MastDB.set('students/' + studentId + '/documents', docs);
+      await MastDB.set('students/' + studentId + '/updatedAt', new Date().toISOString());
+      studentsLoaded = false;
+      if (window.writeAudit) writeAudit('delete', 'student-document', studentId);
+      return docs;
+    },
+    // Clearance types are a tenant-level settings map (settings/clearanceTypes);
+    // the twin lets the user create one inline from the clearance editor so it
+    // isn't blocked when none exist yet. Mirrors legacy saveClearanceType.
+    saveClearanceType: async function (typeId, fields) {
+      if (typeId) {
+        await MastDB.update('settings/clearanceTypes/' + typeId, fields);
+        if (window.writeAudit) writeAudit('update', 'clearance-type', typeId);
+        return Object.assign({ _key: typeId }, fields);
+      }
+      var key = MastDB.newKey('settings/clearanceTypes');
+      fields.createdAt = new Date().toISOString();
+      await MastDB.set('settings/clearanceTypes/' + key, fields);
+      if (window.writeAudit) writeAudit('create', 'clearance-type', key);
+      return Object.assign({ _key: key }, fields);
+    }
+  };
 })();

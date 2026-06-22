@@ -19647,7 +19647,8 @@ var MAST_V2_ROUTE_MAP = {
   // owns the bare `website` route directly in its manifest (rma-admin precedent),
   // so it resolves to the builder for ALL users (V2 + Legacy) without a remap.
   brand: 'website-v2', homepage: 'website-v2', products: 'products-v2',
-  wholesale: 'wholesale-v2', students: 'students-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
+  // 'students' NOT remapped: students.js RETIRED (T6); students-v2 owns the bare route via its manifest entry.
+  wholesale: 'wholesale-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
   contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
   resources: 'classes-rooms-v2',
   'gift-cards': 'gift-cards-v2', coupons: 'coupons-v2', book: 'classes-v2', calendar: 'calendar-v2', 'book-reports': 'book-reports-v2', 'book-settings': 'classes-settings-v2', membership: 'membership-v2',
@@ -21013,7 +21014,7 @@ var MODULE_MANIFEST = {
   'consignments-v2': { src: 'modules/consignments-v2.js', v: 'ea535cfa9490', routes: ['consignments-v2'] }, // UI-redesign conversion: consignment placements read detail (flag-gated)
   'sessions-v2': { src: 'modules/sessions-v2.js', v: '401940e1fe7a', routes: ['sessions-v2'] }, // UI-redesign conversion: class sessions read detail (flag-gated)
   'inquiries-v2': { src: 'modules/inquiries-v2.js', v: '6720327c5b26', routes: ['inquiries-v2'] }, // UI-redesign conversion: inquiries/leads read detail (flag-gated)
-  'students-v2': { src: 'modules/students-v2.js', v: 'bb14cec82b0c', routes: ['students-v2'] }, // UI-redesign conversion: students roster (read-focused Faceted Record)
+  'students-v2': { src: 'modules/students-v2.js', v: 'd61b7b921868', routes: ['students-v2', 'students'] }, // Students roster (read Faceted Record + native create/edit/sub-editors). students.js (V1) RETIRED (T6): its StudentsBridge was absorbed here, so the bare #students route resolves here directly (no MAST_V2_ROUTE_MAP remap). Settings sub-tabs live in students-config-v2.
   'students-config-v2': { src: 'modules/students-config-v2.js', v: '39b2e4a9dc96', routes: ['students-config-v2'] }, // UI-redesign conversion: tenant Student SETTINGS hub (waiver templates / clearance types / business documents) — finishes retiring legacy #students config view-tabs
   'galleries-v2': { src: 'modules/galleries-v2.js', v: '0c19197c9bb5', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
   'instructors-v2': { src: 'modules/instructors-v2.js', v: '7900ac7fc6b7', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
@@ -21049,7 +21050,6 @@ var MODULE_MANIFEST = {
   book: { src: 'modules/book.js', v: '6989b28f020b', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', v: '089b810a2bba', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'ec2784aaf153', routes: ['studio'] },
-  students: { src: 'modules/students.js', v: '6537e0bf1bea', routes: ['students'] },
   'customer-service': { src: 'modules/customer-service.js', v: 'd9ee502932c5', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
   engagementInbox: { src: 'modules/engagement-inbox.js', v: 'a6665c778030', routes: ['engagement-inbox'] },
