@@ -265,7 +265,7 @@ async function _finResolveUid(uid) {
       var label = (u && (u.displayName || u.email)) || uid;
       _finUidCache[uid] = label;
       return label;
-    } catch (x) { _finUidCache[uid] = uid; return uid; }
+    } catch (x) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(x, { where: 'finance._finResolveUid' }); _finUidCache[uid] = uid; return uid; }
     finally { delete _finUidInflight[uid]; }
   })();
   return _finUidInflight[uid];
@@ -291,7 +291,7 @@ function _finPatchUidLabels(root) {
         }
       });
     });
-  } catch (x) {}
+  } catch (x) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(x, { where: 'finance._finPatchUidLabels' }); }
 }
 // Renders a span that initially shows `name || uid`, and (if the value looks
 // like a raw UID — 20+ chars no spaces) schedules a resolver patch.

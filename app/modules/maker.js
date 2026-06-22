@@ -695,7 +695,7 @@
           var cs = computeCostShape(prodForShape, freshRecipe);
           await persistCostShape(recipe.productId, cs);
           // Checkpoint E — recompute readiness on cost change
-          try { await recomputeAndPersistReadiness(recipe.productId); } catch (e2) {}
+          try { await recomputeAndPersistReadiness(recipe.productId); } catch (e2) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(e2, { where: 'maker.recalculateRecipe:recomputeReadiness' }); }
         }
       } catch (e) {
         console.warn('costShape sync (build mode) failed', e);
@@ -750,10 +750,10 @@
   // maker listeners haven't run in this session).
   async function ensureRecipeCtx(recipeId) {
     if (!materialsLoaded || !Object.keys(materialsData).length) {
-      try { var m = await MastDB.materials.list(500); if (m) { materialsData = m; materialsLoaded = true; } } catch (e) {}
+      try { var m = await MastDB.materials.list(500); if (m) { materialsData = m; materialsLoaded = true; } } catch (e) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(e, { where: 'maker.ensureRecipeCtx:materialsList' }); }
     }
     if (!recipesData[recipeId]) {
-      try { var rc = await MastDB.recipes.get(recipeId); if (rc) recipesData[recipeId] = rc; } catch (e) {}
+      try { var rc = await MastDB.recipes.get(recipeId); if (rc) recipesData[recipeId] = rc; } catch (e) { if (typeof window !== 'undefined' && window.MastError) window.MastError.capture(e, { where: 'maker.ensureRecipeCtx:recipeGet' }); }
     }
     return recipesData[recipeId] || null;
   }
