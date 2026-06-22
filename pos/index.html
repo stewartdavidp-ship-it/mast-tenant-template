@@ -814,7 +814,8 @@ function renderAccountMenu() {
 
   var prefs = _acctItem('Dark mode', { onclick: "setPosTheme(document.documentElement.classList.contains('light')?'dark':'light');renderAccountMenu();", toggle: true, toggleOn: isDark }) +
     _acctSizeRow() +
-    _acctItem('Send feedback', { onclick: 'closeAccountMenu();openFeedbackDialog();' });
+    _acctItem('Send feedback', { onclick: 'closeAccountMenu();openFeedbackDialog();' }) +
+    _acctItem('Sale promotions', { onclick: "window.open('../app/#promotions', '_blank')", chevron: true });
 
   var events = '<div class="avatar-menu-divider"></div>' +
     '<div class="avatar-menu-header" style="border-bottom:none;padding:8px 16px 2px;"><p class="avatar-menu-header-email" style="margin:0;">Event / Fair</p></div>' +
