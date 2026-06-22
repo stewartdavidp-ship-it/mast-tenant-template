@@ -240,13 +240,35 @@
       '</div>';
   }
 
+  // (Re)load signals then repaint. Single-flighted with a trailing coalesce so the
+  // burst of boot-time triggers (TENANT_READY, the two dashboard-render hooks, and
+  // the safety-net poll) collapse into at most one in-flight load plus one trailing
+  // re-sync — never a read storm.
+  var _loading = false, _reloadAgain = false;
+  function reloadAndRender() {
+    if (!document.getElementById('dashCardAdoption')) return;
+    if (_loading) { _reloadAgain = true; return; }
+    _loading = true;
+    loadState().then(function () {
+      _loading = false; renderCard();
+      if (_reloadAgain) { _reloadAgain = false; reloadAndRender(); }
+    }).catch(function (e) {
+      _loading = false;
+      if (window.MastError) MastError.capture(e, { where: 'adoption.loadState' });
+      if (_reloadAgain) { _reloadAgain = false; reloadAndRender(); }
+    });
+  }
+
   function refreshCard() {
     if (!document.getElementById('dashCardAdoption')) return;
-    if (S.loaded) { renderCard(); return; }
-    renderCard();                       // paint the "Calculating…" placeholder
-    loadState().then(renderCard).catch(function (e) {
-      if (window.MastError) MastError.capture(e, { where: 'adoption.loadState' });
-    });
+    // Paint instantly (the "Calculating…" placeholder on first paint, or the
+    // last-known score on a repeat view — no flicker), then (re)load and repaint.
+    // We ALWAYS reload rather than trust a single cached load: the onboarding
+    // signals we read (_nextStepsCache's fields, the lifetime-orders count)
+    // initialise all-false/undefined and are filled in asynchronously by the shell
+    // over the first few seconds, so a one-shot load can lock in a bogus 0%.
+    renderCard();
+    reloadAndRender();
   }
 
   // ── wire into the dashboard render (wrap, don't edit the shell) ───────────────
@@ -259,12 +281,23 @@
   }
   function installPatches() {
     // renderAllDashboardCards runs on every Dashboard view (route setup); paint our
-    // card alongside the shell's. S is cached after the first load, so repeat views
-    // are synchronous.
+    // card alongside the shell's.
     patch('renderAllDashboardCards', function (orig) {
       return function () {
         var r = orig.apply(this, arguments);
         try { refreshCard(); } catch (_e) {}
+        return r;
+      };
+    });
+    // The shell re-renders the Set-Up-Your-Shop card EXACTLY when the onboarding
+    // signals we read finish loading: once after loadNextStepsCache() resolves and
+    // again after the lifetime-orders count query returns (see app/index.html). Re-
+    // sync off that same trigger so our score converges to the real value as the
+    // data lands, instead of sticking at the initial all-false 0%.
+    patch('renderDashCardSetupShop', function (orig) {
+      return function () {
+        var r = orig.apply(this, arguments);
+        try { reloadAndRender(); } catch (_e) {}
         return r;
       };
     });
@@ -278,8 +311,17 @@
     } else {
       refreshCard();
     }
+    // Safety net, independent of the shell re-render hooks above (in case those
+    // call sites change): re-sync a few times over the first few seconds so a first
+    // paint that snapshotted the still-loading signals converges to the real score.
+    // Single-flighting in reloadAndRender keeps this from piling up reads.
+    var ticks = 0;
+    var iv = setInterval(function () {
+      if (++ticks > 4) { clearInterval(iv); return; }
+      if (document.getElementById('dashCardAdoption')) reloadAndRender();
+    }, 1500);
   }
 
-  window.AdoptionV2 = { refresh: function () { S.loaded = false; refreshCard(); } };
+  window.AdoptionV2 = { refresh: function () { reloadAndRender(); } };
   start();
 })();
