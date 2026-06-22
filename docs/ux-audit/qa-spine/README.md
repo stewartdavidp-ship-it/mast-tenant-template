@@ -14,8 +14,12 @@ docs/ux-audit/qa-spine/
   scorecard-W3.json     ← machine-readable pilot result (agent baseline + proxy run)
   oracle-templates.md   ← agent/MCP oracle for the other 9 (W1,W2,W4–W10) + findings ledger
   suite-scorecard.json  ← consolidated 10-workflow rollup (feeds the heatmap)
+  money-canary.md       ← cross-surface VALUE assertion layer (Phase 3 item 3)
 scripts/qa-spine/
   w3-pos-ui.mjs         ← Playwright UI runner (records steps/time/errors/console)
+  money-canary.mjs      ← live cross-surface money probe (oracle self-check + UI cross-check)
+test/
+  money-canary.test.js  ← deterministic money-canary (CI-gated; UI math == canonical oracle)
 ```
 
 The **agent/MCP** side of a workflow is run by an agent executing the documented tool
@@ -51,12 +55,18 @@ success, steps, time, errors, SEQ (1–7); agent = tool-calls, tokens/bytes, $ c
 as an accuracy–cost trade-off. **Lens 3 (value):** not per-run; workflows are value-weighted
 at the suite level (which money-critical flows are weakly covered).
 
-## Status (2026-06-20)
+## Status (2026-06-22)
 
 - **Agent/MCP oracle: instrumented for all 10** — W3 proxy-validated; W1/W5/W6/W8/W9 baselines
   captured live on `sgtest15`; W2/W4/W7 read-side runnable; **W10 has no agent tool**. Details in
   [oracle-templates.md](oracle-templates.md), rollup in [suite-scorecard.json](suite-scorecard.json).
+- **Money canary (Phase 3 item 3): BUILT** — the cross-surface VALUE assertion. Deterministic
+  `test/money-canary.test.js` is CI-gated (UI money math == canonical oracle, fixture discriminating);
+  live `scripts/qa-spine/money-canary.mjs` self-checks the MCP oracle (W6 matrix, all channels canonical)
+  and cross-checks the rendered admin surface. **F14 closed** (deployed; `marginReliable` parity verified
+  live). See [money-canary.md](money-canary.md).
 - **Human UI: 0/10 measured** — blocked on a writable automated session (the #1 open decision).
-- **11 findings** surfaced (ledger in oracle-templates.md); F1 chipped as `task_f0d1c0e4`.
+- **Findings:** F1 fixed (`task_f0d1c0e4`), F14 fixed+deployed (`task_14a258f4` closed); **F19** logged
+  (latent MCP order-`totalCents` divergence). Ledger in oracle-templates.md.
 
 Per-workflow surface × lens maturity is in `suite-scorecard.json` and the heatmap.
