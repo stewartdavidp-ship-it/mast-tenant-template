@@ -292,6 +292,23 @@ body {
 .avatar-menu-item-toggle.on::after { left: 16px; }
 .avatar-menu-divider { height: 1px; background: var(--border); margin: 4px 0; }
 .avatar-menu-item-signout { color: var(--red); }
+/* Feedback dialog — mirrors the admin (app/index.html .feedback-*), POS-tokenized. */
+.feedback-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; align-items: center; justify-content: center; padding: 20px; }
+.feedback-overlay.open { display: flex; }
+.feedback-dialog { background: var(--card); border: 1px solid var(--border); border-radius: 10px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+.feedback-dialog-header { padding: 20px 24px 0; display: flex; align-items: center; justify-content: space-between; }
+.feedback-dialog-header h3 { font-size: 1.15rem; font-weight: 600; margin: 0; color: var(--text); }
+.feedback-dialog-body { padding: 16px 24px 20px; }
+.feedback-screen-badge { background: rgba(196,148,74,0.15); color: var(--gold); padding: 6px 12px; border-radius: 6px; font-size: 0.85rem; font-weight: 500; margin-bottom: 16px; display: inline-block; }
+.feedback-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.feedback-chip { padding: 5px 13px; border-radius: 20px; font-size: 0.85rem; font-weight: 500; cursor: pointer; border: 1.5px solid var(--border); background: transparent; color: var(--muted); transition: background 0.15s, color 0.15s, border-color 0.15s; line-height: 1.4; }
+.feedback-chip:hover { border-color: var(--muted); color: var(--text); }
+.feedback-chip.selected { border-color: transparent; color: #fff; }
+.feedback-dialog textarea { width: 100%; min-height: 100px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 0.9rem; resize: vertical; box-sizing: border-box; background: var(--bg); color: var(--text); }
+.feedback-dialog-footer { padding: 0 24px 20px; display: flex; justify-content: flex-end; gap: 10px; }
+.feedback-form-group { margin-bottom: 14px; }
+.feedback-form-group label.feedback-label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; color: var(--text); }
+.feedback-screenshot-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text); cursor: pointer; }
 .tier-badges { position: absolute; top: 8px; left: 8px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; z-index: 2; }
 .tier-badge { background: var(--gold); color: #000; border: none; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,0.35); }
 .tier-tag { background: var(--gold); color: #000; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; margin-left: 6px; }
@@ -331,6 +348,7 @@ body {
       <span class="avatar-menu-chevron" aria-hidden="true">▾</span>
     </div>
     <div class="avatar-menu" id="accountMenu" role="menu" aria-hidden="true"></div>
+    <div class="feedback-overlay" id="feedbackOverlay" onclick="if(event.target===this)closeFeedbackDialog()"><div class="feedback-dialog" id="feedbackDialog"></div></div>
   </div>
 </div>
 
@@ -451,6 +469,7 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 <script src="../shared/mastdb.js?v=1"></script>
 <script src="../shared/mast-ui.js?v=1"></script>
 <script src="../shared/camera.js"></script>
@@ -774,7 +793,7 @@ function renderAccountMenu() {
     (email ? '<p class="avatar-menu-header-email">' + esc(email) + '</p>' : '') + '</div>';
 
   var prefs = _acctItem('Dark mode', { onclick: "setPosTheme(document.documentElement.classList.contains('light')?'dark':'light');renderAccountMenu();", toggle: true, toggleOn: isDark }) +
-    _acctItem('Send feedback', { onclick: 'openPosFeedback();' });
+    _acctItem('Send feedback', { onclick: 'closeAccountMenu();openFeedbackDialog();' });
 
   var events = '<div class="avatar-menu-divider"></div>' +
     '<div class="avatar-menu-header" style="border-bottom:none;padding:8px 16px 2px;"><p class="avatar-menu-header-email" style="margin:0;">Event / Fair</p></div>' +
@@ -817,38 +836,174 @@ function setPosTheme(mode) {
   h.classList.add(mode);
 }
 
-// Feedback dialog -> feedbackReports (same path the admin Engagement Inbox reads).
-function openPosFeedback() {
-  closeAccountMenu();
-  var prev = document.getElementById('posFeedbackModal');
-  if (prev) prev.remove();
-  var ov = document.createElement('div');
-  ov.id = 'posFeedbackModal';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px;';
-  ov.innerHTML = '<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:24px;max-width:380px;width:100%;">' +
-    '<h3 style="margin:0 0 12px;font-size:1rem;color:var(--text);">Send feedback</h3>' +
-    '<textarea id="posFeedbackText" rows="4" placeholder="Tell us what is working or what is broken..." style="width:100%;padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:15px;box-sizing:border-box;resize:vertical;"></textarea>' +
-    '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">' +
-      '<button type="button" onclick="var m=document.getElementById(\'posFeedbackModal\');if(m)m.remove();" style="padding:10px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">Cancel</button>' +
-      '<button type="button" onclick="submitPosFeedback()" style="padding:10px 18px;border-radius:8px;border:none;background:var(--gold);color:#000;font-weight:600;font-size:14px;cursor:pointer;">Send</button>' +
-    '</div></div>';
-  document.body.appendChild(ov);
-  ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
-  setTimeout(function () { var t = document.getElementById('posFeedbackText'); if (t) t.focus(); }, 0);
+// Feedback — full dialog mirroring the admin (app/index.html openFeedbackDialog):
+// type + severity chips, description, optional screenshot (html2canvas -> Storage).
+// Writes the SAME feedbackReports schema so it renders in the admin inbox / My Feedback.
+function getScreenLabel() {
+  if (typeof eventData !== 'undefined' && eventData && eventData.name) return 'POS — ' + eventData.name;
+  return 'POS — Catalog';
 }
-function submitPosFeedback() {
-  var ta = document.getElementById('posFeedbackText');
-  var msg = (ta && ta.value || '').trim();
-  if (!msg) { showToast('Enter some feedback first', true); return; }
-  MastDB.push('feedbackReports', {
-    message: msg, source: 'pos',
-    email: (currentUser && currentUser.email) || null,
-    url: location.href, userAgent: navigator.userAgent,
-    status: 'new', createdAt: new Date().toISOString()
-  }).then(function () {
-    showToast('Thanks for the feedback!');
-    var m = document.getElementById('posFeedbackModal'); if (m) m.remove();
-  }).catch(function (e) { showToast('Could not send: ' + (e.message || e), true); });
+
+function openFeedbackDialog() {
+  closeAccountMenu();
+  var html = '<div class="feedback-dialog-header">' +
+    '<h3>Send Feedback</h3>' +
+    '<button type="button" onclick="closeFeedbackDialog()" style="background:none;border:none;font-size:24px;line-height:1;color:var(--muted);cursor:pointer;" aria-label="Close">&times;</button>' +
+  '</div>' +
+  '<div class="feedback-dialog-body">' +
+    '<div class="feedback-screen-badge">\uD83D\uDCCD You\'re on: ' + esc(getScreenLabel()) + '</div>' +
+    '<div class="feedback-form-group">' +
+      '<label class="feedback-label">Type</label>' +
+      '<input type="hidden" id="fbTypeVal" value="bug">' +
+      '<div class="feedback-chips">' +
+        '<button type="button" class="feedback-chip selected" data-group="fbType" data-value="bug" data-color="#dc2626" style="background:#dc2626;border-color:transparent;color:#fff;" onclick="selectFbChip(this)">Bug</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbType" data-value="enhancement" data-color="#2563eb" onclick="selectFbChip(this)">Enhancement</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbType" data-value="question" data-color="#0d9488" onclick="selectFbChip(this)">Question</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbType" data-value="suggestion" data-color="#7c3aed" onclick="selectFbChip(this)">Suggestion</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="feedback-form-group">' +
+      '<label class="feedback-label">Severity</label>' +
+      '<input type="hidden" id="fbSeverityVal" value="medium">' +
+      '<div class="feedback-chips">' +
+        '<button type="button" class="feedback-chip" data-group="fbSeverity" data-value="low" data-color="#16a34a" onclick="selectFbChip(this)">Low</button>' +
+        '<button type="button" class="feedback-chip selected" data-group="fbSeverity" data-value="medium" data-color="#d97706" style="background:#d97706;border-color:transparent;color:#fff;" onclick="selectFbChip(this)">Medium</button>' +
+        '<button type="button" class="feedback-chip" data-group="fbSeverity" data-value="high" data-color="#dc2626" onclick="selectFbChip(this)">High</button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="feedback-form-group">' +
+      '<label class="feedback-label">Description</label>' +
+      '<textarea id="fbDescription" placeholder="What is wrong or what do you need?" oninput="updateFbSubmitState()"></textarea>' +
+    '</div>' +
+    '<div class="feedback-form-group">' +
+      '<label class="feedback-screenshot-label"><input type="checkbox" id="fbScreenshot"> Attach a screenshot of this screen</label>' +
+    '</div>' +
+  '</div>' +
+  '<div class="feedback-dialog-footer">' +
+    '<button type="button" onclick="closeFeedbackDialog()" style="padding:10px 18px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">Cancel</button>' +
+    '<button type="button" id="fbSubmitBtn" onclick="submitFeedback()" disabled style="padding:10px 18px;border-radius:8px;border:none;background:var(--gold);color:#000;font-weight:600;font-size:14px;cursor:pointer;opacity:0.5;">Submit</button>' +
+  '</div>';
+  document.getElementById('feedbackDialog').innerHTML = html;
+  document.getElementById('feedbackOverlay').classList.add('open');
+  setTimeout(function () { var ta = document.getElementById('fbDescription'); if (ta) ta.focus(); }, 100);
+}
+
+function closeFeedbackDialog() {
+  document.getElementById('feedbackOverlay').classList.remove('open');
+  document.getElementById('feedbackDialog').innerHTML = '';
+}
+
+function selectFbChip(chip) {
+  var group = chip.dataset.group;
+  var color = chip.dataset.color;
+  document.querySelectorAll('.feedback-chip[data-group="' + group + '"]').forEach(function (c) {
+    c.classList.remove('selected'); c.style.background = ''; c.style.borderColor = ''; c.style.color = '';
+  });
+  chip.classList.add('selected');
+  chip.style.background = color; chip.style.borderColor = 'transparent'; chip.style.color = '#fff';
+  var hidden = document.getElementById(group + 'Val');
+  if (hidden) hidden.value = chip.dataset.value;
+}
+
+function updateFbSubmitState() {
+  var desc = document.getElementById('fbDescription');
+  var btn = document.getElementById('fbSubmitBtn');
+  if (btn) { var ok = !!(desc && desc.value.trim()); btn.disabled = !ok; btn.style.opacity = ok ? '1' : '0.5'; }
+}
+
+function submitFeedback() {
+  var desc = document.getElementById('fbDescription');
+  if (!desc || !desc.value.trim()) return;
+  var typeEl = document.getElementById('fbTypeVal');
+  var sevEl = document.getElementById('fbSeverityVal');
+  var wantScreenshot = !!(document.getElementById('fbScreenshot') && document.getElementById('fbScreenshot').checked);
+  var btn = document.getElementById('fbSubmitBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; btn.style.opacity = '0.7'; }
+  var descValue = desc.value.trim();
+  var fbType = typeEl ? typeEl.value : 'bug';
+  var fbSeverity = sevEl ? sevEl.value : 'medium';
+  var screenLabel = getScreenLabel();
+  closeFeedbackDialog();   // close first so a screenshot captures the underlying screen
+
+  function buildReport(shotUrl, shotPath) {
+    return {
+      appId: (MastDB.tenantId && MastDB.tenantId()) || TENANT_ID,
+      source: 'pos',
+      screen: 'pos',
+      screenLabel: screenLabel,
+      type: fbType,
+      severity: fbSeverity,
+      description: descValue,
+      email: (currentUser && currentUser.email) || null,
+      userId: currentUser ? currentUser.uid : null,
+      userName: currentUser ? (currentUser.displayName || currentUser.email || '') : null,
+      deviceInfo: { userAgent: navigator.userAgent, viewport: { width: window.innerWidth, height: window.innerHeight } },
+      appVersion: null,
+      screenshotUrl: shotUrl || null,
+      screenshotStoragePath: shotPath || null,
+      timestamp: new Date().toISOString(),
+      status: 'open',
+      jobId: null,
+      createdAt: MastDB.serverTimestamp ? MastDB.serverTimestamp() : new Date().toISOString()
+    };
+  }
+
+  function pushReport(report) {
+    return MastDB.push('feedbackReports', report).then(function () {
+      showToast('Feedback submitted — thanks!');
+    }).catch(function (e) {
+      showToast('Error submitting feedback: ' + (e.message || e), true);
+    });
+  }
+
+  if (!wantScreenshot) { pushReport(buildReport(null, null)); return; }
+
+  // Capture the screenshot first (with a timeout), then push with the URL. A
+  // failed/slow capture must never lose the report — fall back to no screenshot.
+  var timeout = new Promise(function (_, rej) { setTimeout(function () { rej(new Error('screenshot timeout')); }, 8000); });
+  Promise.race([captureFeedbackScreenshot(), timeout]).then(function (res) {
+    pushReport(buildReport(res.url, res.storagePath));
+  }).catch(function () {
+    pushReport(buildReport(null, null));
+  });
+}
+
+async function captureFeedbackScreenshot() {
+  if (!window.html2canvas) {
+    await new Promise(function (resolve, reject) {
+      var sc = document.createElement('script');
+      sc.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      sc.onload = resolve; sc.onerror = reject;
+      document.head.appendChild(sc);
+    });
+  }
+  var canvas = await window.html2canvas(document.body, {
+    scale: 0.75, useCORS: true, logging: false, allowTaint: false, imageTimeout: 2000,
+    foreignObjectRendering: false,
+    width: window.innerWidth, height: window.innerHeight,
+    x: window.scrollX || window.pageXOffset, y: window.scrollY || window.pageYOffset,
+    ignoreElements: function (el) {
+      if (el.tagName === 'IMG' && el.src) {
+        try { var o = new URL(el.src, location.href).origin; if (o !== location.origin && !el.crossOrigin) return true; } catch (e) {}
+      }
+      if (el.tagName === 'IFRAME') return true;
+      return false;
+    }
+  });
+  return new Promise(function (resolve, reject) {
+    canvas.toBlob(function (blob) {
+      if (!blob) { reject(new Error('toBlob returned null')); return; }
+      var tenantId = (MastDB.tenantId && MastDB.tenantId()) || TENANT_ID;
+      var suffix = Math.random().toString(36).slice(2, 8);
+      var storagePath = tenantId + '/feedback-screenshots/' + Date.now() + '-' + suffix + '.jpg';
+      var ref = firebase.storage().ref(storagePath);
+      ref.put(blob, { contentType: 'image/jpeg' }).then(function () {
+        return ref.getDownloadURL();
+      }).then(function (url) {
+        resolve({ url: url, storagePath: storagePath });
+      }).catch(reject);
+    }, 'image/jpeg', 0.65);
+  });
 }
 
 function posSignOut() {
