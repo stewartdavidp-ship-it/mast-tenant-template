@@ -366,10 +366,16 @@
       if (last && (Date.now() - last) < 20 * 3600 * 1000) { _reportTried = true; return; }
     } catch (_e) {}
     if (typeof firebase === 'undefined' || !firebase.functions) return;
+    // The deployed reportAdoptionScore is gated via assertTenantMember(tenantId) — it
+    // requires tenantId in the body (validated against the caller's membership), so we
+    // send it explicitly. No tenant context → skip (can't report).
+    var tid = (window.MastDB && typeof MastDB.tenantId === 'function' && MastDB.tenantId()) ||
+      window.TENANT_ID || (window.TENANT_CONFIG && window.TENANT_CONFIG.tenantId) || null;
+    if (!tid) return;
     var fn;
     try { fn = firebase.functions().httpsCallable('reportAdoptionScore'); } catch (_e) { return; }
     _reportTried = true;
-    fn({ overall: scores.pct, byDomain: domainPcts(scores), cohort: cohortOf() }).then(function (res) {
+    fn({ tenantId: tid, overall: scores.pct, byDomain: domainPcts(scores), cohort: cohortOf() }).then(function (res) {
       var d = (res && res.data) || {};
       S.band = d.band || null;
       S.cohortN = d.cohortN || 0;
