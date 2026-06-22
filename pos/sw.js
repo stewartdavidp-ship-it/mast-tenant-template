@@ -10,7 +10,7 @@
 //   - Other static /pos/ assets (manifest, icons) → cache-first (immutable-ish).
 // Bump CACHE_NAME on any caching-behaviour change so activate() purges the old
 // cache (the cleanup below deletes every cache whose name !== CACHE_NAME).
-var CACHE_NAME = 'pos-cache-v6';
+var CACHE_NAME = 'pos-cache-v7';
 var APP_SHELL = '/pos/index.html';
 var PRECACHE = [
   '/pos/',

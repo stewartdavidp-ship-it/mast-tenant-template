@@ -15,6 +15,8 @@
 // the stylesheet so there is no flash; the CSS provides a light :root, an OS-dark
 // fallback, and explicit html.dark / html.light overrides.
 (function(){try{var s=localStorage.getItem('mast-theme');var d=window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches;if(s==='dark'||(s!=='light'&&d))document.documentElement.classList.add('dark');else document.documentElement.classList.add('light');}catch(e){document.documentElement.classList.add('dark');}})();
+// Catalog tile density (Large/Medium/Small) — set before paint so the grid never reflows.
+(function(){try{var s=localStorage.getItem('pos-tile-size');document.documentElement.setAttribute('data-tile-size',(s==='medium'||s==='small')?s:'large');}catch(e){document.documentElement.setAttribute('data-tile-size','large');}})();
 </script>
 <style>
 :root {
@@ -241,6 +243,15 @@ body {
    (clipped by .picker-card's overflow:hidden). max-content sizes each row to the
    full square tile. */
 #catalogGrid { flex: 1; overflow-y: auto; padding: 14px; padding-bottom: 96px; display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: max-content; gap: 14px; align-content: start; }
+/* Tile density — Large(3) is the default above; Medium(4)/Small(5) re-flow the grid + scale tile text proportionally. */
+html[data-tile-size="medium"] #catalogGrid { grid-template-columns: repeat(4, 1fr); }
+html[data-tile-size="small"] #catalogGrid { grid-template-columns: repeat(5, 1fr); }
+html[data-tile-size="medium"] .picker-card-name { font-size: 15px; }
+html[data-tile-size="medium"] .picker-card-price { font-size: 16px; }
+html[data-tile-size="small"] .picker-card-name { font-size: 14px; }
+html[data-tile-size="small"] .picker-card-price { font-size: 15px; }
+html[data-tile-size="small"] .picker-card-info { padding: 8px 10px; }
+html[data-tile-size="small"] .picker-card-noimg span { font-size: 14px; }
 
 /* Cart panel — bottom sheet on phone, right rail on tablet */
 .cart-panel { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--border); z-index: 40; display: flex; flex-direction: column; max-height: 78vh; padding-bottom: var(--safe-bottom); box-shadow: 0 -4px 16px rgba(0,0,0,0.3); }
@@ -794,6 +805,7 @@ function renderAccountMenu() {
     (email ? '<p class="avatar-menu-header-email">' + esc(email) + '</p>' : '') + '</div>';
 
   var prefs = _acctItem('Dark mode', { onclick: "setPosTheme(document.documentElement.classList.contains('light')?'dark':'light');renderAccountMenu();", toggle: true, toggleOn: isDark }) +
+    _acctSizeRow() +
     _acctItem('Send feedback', { onclick: 'closeAccountMenu();openFeedbackDialog();' });
 
   var events = '<div class="avatar-menu-divider"></div>' +
@@ -835,6 +847,32 @@ function setPosTheme(mode) {
   var h = document.documentElement;
   h.classList.remove('dark', 'light');
   h.classList.add(mode);
+}
+
+// Catalog tile density — Large(3-col, default) / Medium(4) / Small(5). Applied via a
+// data-tile-size attr on <html> (mirrors the theme pattern); CSS sets the columns.
+function posTileSize() {
+  try { var s = localStorage.getItem('pos-tile-size'); if (s === 'medium' || s === 'small' || s === 'large') return s; } catch (e) {}
+  return 'large';
+}
+function setPosTileSize(size) {
+  if (size !== 'medium' && size !== 'small') size = 'large';
+  try { localStorage.setItem('pos-tile-size', size); } catch (e) {}
+  document.documentElement.setAttribute('data-tile-size', size);
+}
+// Segmented Large/Medium/Small control for the account menu (3-way, so not a toggle).
+function _acctSizeRow() {
+  var cur = posTileSize();
+  function seg(val, label) {
+    var on = cur === val;
+    return '<button type="button" onclick="event.stopPropagation();setPosTileSize(\'' + val + '\');renderAccountMenu();" ' +
+      'style="flex:1;padding:6px 0;border:1px solid ' + (on ? 'var(--gold)' : 'var(--border)') + ';background:' + (on ? 'rgba(196,148,74,0.18)' : 'transparent') +
+      ';color:var(--text);font-size:13px;cursor:pointer;border-radius:6px;">' + label + '</button>';
+  }
+  return '<div class="avatar-menu-item" style="cursor:default;flex-direction:column;align-items:stretch;gap:6px;">' +
+    '<span>Tile size</span>' +
+    '<div style="display:flex;gap:6px;">' + seg('large', 'Large') + seg('medium', 'Medium') + seg('small', 'Small') + '</div>' +
+  '</div>';
 }
 
 // Feedback — full dialog mirroring the admin (app/index.html openFeedbackDialog):
