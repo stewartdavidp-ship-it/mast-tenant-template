@@ -399,7 +399,7 @@
     // MastIntake provider catalog so the editor's secure Tax ID / bank account
     // fields (identity-data) render + hydrate inline (fail-closed if it can't load).
     if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') {
-      try { MastAdmin.loadModule('procurement'); } catch (e) {}
+      try { MastAdmin.loadModule('procurement-v2'); } catch (e) {}
       try { MastAdmin.loadModule('connections-providers'); } catch (e) {}
     }
     // Vendors + product-suppliers (Supplies facet/count) + materials (target
@@ -526,7 +526,7 @@
     var d = supplyDraft;
     if (!d.targetId) { if (window.showToast) showToast('Pick an item', true); return false; }
     if (!window.VendorsBridge || typeof VendorsBridge.createSupply !== 'function') {
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement-v2'); } catch (e) {} }
       if (window.showToast) showToast('Vendors engine still loading — try again', true); return false;
     }
     var payload = { vendorId: d.vendorId, targetKind: d.targetKind, targetId: d.targetId, vendorSku: d.vendorSku || null, unitCost: d.unitCost, moq: d.moq, leadTimeDays: d.leadTimeDays, preferred: !!d.preferred };
@@ -587,7 +587,7 @@
     create: function () {
       // Ensure the legacy module (and thus window.VendorsBridge) is loaded
       // before opening the create form — mirrors ContactsV2.create.
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement'); } catch (e) {} }
+      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement-v2'); } catch (e) {} }
       MastEntity.openRecord('vendors-v2', {}, 'create');
     },
     // Vendor identity create/edit + archiving + product-supplier links are all
