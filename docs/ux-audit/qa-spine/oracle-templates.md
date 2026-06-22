@@ -106,9 +106,11 @@ Coverage: ✅ full · ◑ partial · ➖ none · ✅✅ richer than UI.
 | **F11** | W10 | gap | No classes/booking MCP tool — agent cannot operate a whole revenue line |
 | **F14** | W6 | med | P&L UI withholds gross/net margin when COGS is incomplete; MCP `finance_get_pnl` returned them with no caveat → agent got numbers the UI deemed unreliable → **task_14a258f4** · ✅ **FIXED + DEPLOYED** ([mcp-server#141](https://github.com/stewartdavidp-ship-it/mast-mcp-server/pull/141): `finance_get_pnl` now returns `marginReliable`/`cogsLineMissingCount`/`cogsMissing`, same formula as UI `computePnlLocal`). Live-verified `sgtest15` 2026-06-22: `marginReliable:false, cogsLineMissingCount:22`. Pinned by `test/money-canary.test.js`. |
 | **F19** | W6 | low | MCP order revenue reads `(o.total||0)*100` while UI reads `_orderRevenueCents` (prefers `totalCents`) — latent **100×** divergence on the cents-in-the-dollar-field bad-data shape (SGTE-0187/0188). Doesn't move `sgtest15`'s aggregate today. Fix: adopt `orderRevenueCents` in `mast-finance.ts` (cross-repo MCP chip). Surfaced by the money canary's cross-surface contract review. |
+| **F20** | W4,W2 | coverage⁺ | **Positive** coverage drift since 2026-06-20, re-verified live 2026-06-22: `mast_procurement` (full PO lifecycle incl. `receive`→CF-restock + lots), `mast_vendors`, `materials_cost_history` now exist → **W4 agent ◑→✅**; `mast_production` (job/line-item/request lifecycle; 3 live jobs on `golden-auric`) → **W2-mid agent ➖→✅** (pack/ship still UI-only). The scorecard's "PO write UI-only" / "no production MCP tool" were STALE. **Lesson:** re-verify the live MCP registry each matrix refresh. Folded into [`value-coverage-matrix.md`](value-coverage-matrix.md) §4. (Good-news finding, not a bug.) |
 
 **Chipped:** F1 → `task_f0d1c0e4` (channel normalization, FIXED); F6+F7 → `task_aad9b8d1` (labor proration /
 payroll, FIXED); F5 → `task_673dfb81` (tax-state capture); **F14 → `task_14a258f4` (P&L margin parity) — FIXED+DEPLOYED+CLOSED.**
-F9/F11 are agent-coverage decisions for Lens 3, not bugs (carry into the Lens-3 review). F4/F8/F10 are low/info —
-logged, not chipped. **F19** (order-`totalCents`) is a new cross-repo MCP chip from the money-canary contract review.
-The W6 revenue↔P&L reconciliation matrix is now codified + executable in `scripts/qa-spine/money-canary.mjs`.
+F9/F11 are agent-coverage decisions for Lens 3, not bugs — **now resolved into the Lens-3 artifact**: [`value-coverage-matrix.md`](value-coverage-matrix.md)
+ranks F9 (add `mast_customers`) and F11 (add `mast_classes`/`mast_book`) by importance×coverage, both **re-confirmed live 2026-06-22**.
+F4/F8/F10 are low/info — logged, not chipped. **F19** (order-`totalCents`) is a new cross-repo MCP chip from the money-canary contract review.
+**F20** is a positive coverage-drift correction (W4/W2 agent coverage improved). The W6 revenue↔P&L reconciliation matrix is codified + executable in `scripts/qa-spine/money-canary.mjs`.
