@@ -32,10 +32,6 @@
     "rogueOverlays": 1,
     "hardcodedHex": 129
   },
-  "app/modules/campaigns.js": {
-    "nativeDialogs": 3,
-    "hardcodedHex": 1
-  },
   "app/modules/cart.js": {
     "hardcodedHex": 54
   },

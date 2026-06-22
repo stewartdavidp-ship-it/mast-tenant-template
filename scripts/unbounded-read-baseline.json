@@ -6,9 +6,6 @@
   "app/modules/accounting.js": {
     "onSnapshot": 1
   },
-  "app/modules/campaigns.js": {
-    "unboundedList": 1
-  },
   "app/modules/composer.js": {
     "unboundedList": 2
   },

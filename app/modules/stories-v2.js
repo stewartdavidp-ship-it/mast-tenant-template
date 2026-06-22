@@ -159,10 +159,10 @@
         else if (canEdit && statusOf(s) === 'draft' && ec > 0) bar += '<button class="btn btn-primary" onclick="StoriesV2.publishFromDetail(\'' + esc(sid) + '\')">🚀 Publish</button>';
         if (statusOf(s) === 'draft' && canDel) bar += '<button class="btn btn-secondary" style="color:var(--text-danger);" onclick="StoriesV2.removeDraft(\'' + esc(sid) + '\')">Delete draft</button>';
         var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' + bar + '</div><div id="storyCampChip_' + esc(sid) + '"></div>';
-        // Part-of-campaign chip — single-sourced renderer in campaigns.js (Wave 3).
+        // Part-of-campaign chip — single-sourced renderer in campaigns-v2.js (Wave 3).
         setTimeout(function () {
           if (window.MastAdmin && MastAdmin.loadModule) {
-            MastAdmin.loadModule('campaigns').then(function () {
+            MastAdmin.loadModule('campaigns-v2').then(function () {
               if (window.CampaignsBridge && CampaignsBridge.renderChipInto) CampaignsBridge.renderChipInto('storyCampChip_' + sid, sid);
             }).catch(function () {});
           }

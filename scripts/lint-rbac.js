@@ -84,7 +84,10 @@ const MODULE_GATE_BASELINE = new Set([
   // modules): their BrandBridge/HomepageBridge writers were absorbed VERBATIM into
   // website-v2.js, which references can('homepage','edit') (canEdit) — so CHECK C
   // classifies the now-write-bearing website-v2.js as gated (no new entry needed).
-  'audit-feedback.js', 'audit.js', 'blog.js', 'book.js', 'campaigns.js',
+  // campaigns.js was here but is RETIRED (T6): its CampaignsBridge writer was
+  // absorbed into campaigns-v2.js, which references can('campaigns','delete') — so
+  // CHECK C classifies the now-write-bearing campaigns-v2.js as gated (no entry).
+  'audit-feedback.js', 'audit.js', 'blog.js', 'book.js',
   'channels.js', 'commission-terms.js', 'composer.js', 'contacts.js',
   'customer-service.js', 'engagement-inbox.js', 'events.js', 'fulfillment.js',
   'lookbooks.js', 'maker.js', 'mapping.js', 'newsletter.js',
