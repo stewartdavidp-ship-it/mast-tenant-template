@@ -511,9 +511,6 @@
   }
 
   function load() {
-    // Ensure the legacy wholesale module is loaded so window.WholesaleBridge
-    // (the delegated write path) exists — mirrors contacts-v2.
-    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('wholesale'); } catch (e) {} }
     Promise.all([
       MastDB.wholesaleAccounts.list(500),
       // Same source as legacy #wholesale: wholesale orders live at admin/orders
@@ -657,9 +654,6 @@
       });
     },
     create: function () {
-      // Ensure the legacy module (and thus window.WholesaleBridge) is loaded
-      // before opening the create form — mirrors ContactsV2.create.
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('wholesale'); } catch (e) {} }
       MastEntity.openRecord('wholesale-v2', {}, 'create');
     },
     // ── Authorized-user CRUD (W2d) — RBAC-gated, single-sourced via WholesaleBridge ──
@@ -740,6 +734,129 @@
   };
 
   MastAdmin.registerModule('wholesale-v2', {
-    routes: { 'wholesale-v2': { tab: 'wholesaleV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: {
+      'wholesale-v2': { tab: 'wholesaleV2Tab', setup: function () { ensureTab(); render(); load(); } },
+      // Legacy #wholesale route ABSORBED (T6): wholesale.js is deleted, so the twin
+      // owns the bare route directly (no MAST_V2_ROUTE_MAP remap). The write path
+      // (window.WholesaleBridge) lives in the non-flag-gated IIFE appended below.
+      'wholesale': { tab: 'wholesaleV2Tab', setup: function () { ensureTab(); render(); load(); } }
+    }
   });
+})();
+
+
+// ============================================================================
+// ABSORBED FROM wholesale.js (V1) — T6 retirement (absorb-first cut).
+//
+// wholesale-v2 is the sole wholesale surface; the V1 wholesale.js UI is deleted.
+// This self-contained, NON-flag-gated IIFE re-hosts — VERBATIM (byte-identical) —
+// window.WholesaleBridge, the write path wholesale-v2 single-sources through
+// (create/update accounts + grantUser/authorizeUser/linkUser/revokeUser +
+// approveRequest/denyRequest), plus its one helper wsEmailToKey (the email→
+// Firebase-key normalization). References only shell globals (MastDB / Date).
+// Not flag-gated: the bridge must exist for the wholesale-v2 native actions
+// regardless of the UI-redesign flag.
+// ============================================================================
+(function () {
+  'use strict';
+
+  function wsEmailToKey(email) {
+    if (!email) return '';
+    return email.toLowerCase().replace(/\./g, ',');
+  }
+
+  window.WholesaleBridge = {
+    create: async function (data) {
+      var now = new Date().toISOString();
+      var rec = Object.assign({}, data, { createdAt: now, updatedAt: now });
+      var id = MastDB.wholesaleAccounts.newKey();
+      await MastDB.wholesaleAccounts.set(id, rec);
+      return id;
+    },
+    update: async function (id, data) {
+      var rec = Object.assign({}, data, { updatedAt: new Date().toISOString() });
+      await MastDB.wholesaleAccounts.update(id, rec);
+      return id;
+    },
+    // ── Authorized-user ↔ account linkage (W2d) ──
+    // Single-source the admin/wholesaleAuthorized writes the legacy
+    // saveWholesaleUserLink / revokeWholesaleRequest handlers make, parameterized
+    // so the wholesale-v2 twin can grant / link / revoke without re-implementing
+    // the email→key normalization or the write shape. The twin RBAC-gates these.
+    // emailKey is the email with '.'→',' (the Firebase key) — wsEmailToKey.
+    grantUser: async function (email, accountId) {
+      var key = wsEmailToKey((email || '').trim().toLowerCase());
+      if (!key) throw new Error('email required');
+      await MastDB.set('admin/wholesaleAuthorized/' + key, {
+        active: true,
+        createdAt: new Date().toISOString(),
+        wholesaleAccountId: accountId || null
+      });
+      return key;
+    },
+    // Upsert: if a grant already exists for this email, re-link it (preserving
+    // createdAt / approvedFrom) and re-activate; otherwise create a fresh grant.
+    // Used by the wholesale-v2 "Authorize buyer" action so re-authorizing a known
+    // buyer doesn't clobber their history.
+    authorizeUser: async function (email, accountId) {
+      var key = wsEmailToKey((email || '').trim().toLowerCase());
+      if (!key) throw new Error('email required');
+      var existing = null;
+      try { existing = await MastDB.get('admin/wholesaleAuthorized/' + key); } catch (_e) {}
+      if (existing && typeof existing === 'object') {
+        await MastDB.update('admin/wholesaleAuthorized/' + key, {
+          wholesaleAccountId: accountId || null,
+          active: true,
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        await MastDB.set('admin/wholesaleAuthorized/' + key, {
+          active: true,
+          createdAt: new Date().toISOString(),
+          wholesaleAccountId: accountId || null
+        });
+      }
+      return key;
+    },
+    linkUser: async function (emailKey, accountId) {
+      if (!emailKey) throw new Error('emailKey required');
+      // update (not set) so createdAt / approvedFrom / displayName survive.
+      await MastDB.update('admin/wholesaleAuthorized/' + emailKey, {
+        wholesaleAccountId: accountId || null,
+        updatedAt: new Date().toISOString()
+      });
+      return emailKey;
+    },
+    revokeUser: async function (emailKey) {
+      if (!emailKey) throw new Error('emailKey required');
+      await MastDB.update('admin/wholesaleAuthorized/' + emailKey, { active: false });
+      return emailKey;
+    },
+    // ── Access-request approvals (W2c) ──
+    // Mirror approveWholesaleRequest / denyWholesaleRequest exactly (one atomic
+    // multiUpdate). `req` is the request record (carries email + displayName).
+    approveRequest: async function (requestId, req) {
+      if (!requestId || !req || !req.email) throw new Error('request required');
+      var key = wsEmailToKey(req.email);
+      var updates = {};
+      updates['admin/wholesaleAuthorized/' + key] = {
+        active: true,
+        displayName: req.displayName || '',
+        approvedFrom: requestId,
+        createdAt: new Date().toISOString()
+      };
+      updates['admin/wholesaleRequests/' + requestId + '/status'] = 'approved';
+      updates['admin/wholesaleRequests/' + requestId + '/resolvedAt'] = new Date().toISOString();
+      await MastDB.multiUpdate(updates);
+      return key;
+    },
+    denyRequest: async function (requestId) {
+      if (!requestId) throw new Error('requestId required');
+      var updates = {};
+      updates['admin/wholesaleRequests/' + requestId + '/status'] = 'denied';
+      updates['admin/wholesaleRequests/' + requestId + '/resolvedAt'] = new Date().toISOString();
+      await MastDB.multiUpdate(updates);
+      return requestId;
+    }
+  };
 })();

@@ -178,10 +178,6 @@
   "app/modules/website-v2.js": {
     "hardcodedHex": 7
   },
-  "app/modules/wholesale.js": {
-    "rogueOverlays": 2,
-    "hardcodedHex": 123
-  },
   "app/modules/newsletter-v2.js": {
     "hardcodedHex": 20
   }

@@ -19654,7 +19654,7 @@ var MAST_V2_ROUTE_MAP = {
   // so it resolves to the builder for ALL users (V2 + Legacy) without a remap.
   brand: 'website-v2', homepage: 'website-v2', products: 'products-v2',
   // 'students' NOT remapped: students.js RETIRED (T6); students-v2 owns the bare route via its manifest entry.
-  wholesale: 'wholesale-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
+  galleries: 'galleries-v2', instructors: 'instructors-v2',  // 'wholesale' NOT remapped: wholesale.js RETIRED (T6), wholesale-v2 owns the bare route via manifest.
   enrollments: 'enrollments-v2', passes: 'passes-v2',  // 'contacts' NOT remapped: contacts.js RETIRED (T6), contacts-v2 owns the bare route via manifest.
   resources: 'classes-rooms-v2',
   'gift-cards': 'gift-cards-v2', coupons: 'coupons-v2', book: 'classes-v2', calendar: 'calendar-v2', 'book-reports': 'book-reports-v2', 'book-settings': 'classes-settings-v2', membership: 'membership-v2',
@@ -20957,7 +20957,7 @@ var MAST_MODULES_V = '20260621-041500-pos0ride';
 // Populated as modules are extracted in future sessions.
 var MODULE_MANIFEST = {
   trips: { src: 'modules/trips.js', v: '04f6eabdd57a', routes: ['trips'] },
-  wholesale: { src: 'modules/wholesale.js', v: '0675eb5aa646', routes: ['wholesale'] },
+  // wholesale.js (V1) manifest row REMOVED (T6): its WholesaleBridge absorbed into wholesale-v2.js, which owns the bare #wholesale route below.
   finance: { src: 'modules/finance.js', v: '5016cadae7a0', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
   // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
   // (no top-level route). Empty routes[] keeps it lazy-loadable via MastAdmin.loadModule('accounting').
@@ -21024,7 +21024,7 @@ var MODULE_MANIFEST = {
   'students-config-v2': { src: 'modules/students-config-v2.js', v: '39b2e4a9dc96', routes: ['students-config-v2'] }, // UI-redesign conversion: tenant Student SETTINGS hub (waiver templates / clearance types / business documents) — finishes retiring legacy #students config view-tabs
   'galleries-v2': { src: 'modules/galleries-v2.js', v: '0c19197c9bb5', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
   'instructors-v2': { src: 'modules/instructors-v2.js', v: '7900ac7fc6b7', routes: ['instructors-v2'] }, // UI-redesign conversion: instructors roster read detail (flag-gated, side-by-side)
-  'wholesale-v2': { src: 'modules/wholesale-v2.js', v: '0a9c019fb163', routes: ['wholesale-v2'] }, // UI-redesign conversion: wholesale accounts read detail (flag-gated, side-by-side)
+  'wholesale-v2': { src: 'modules/wholesale-v2.js', v: '116b2b891bab', routes: ['wholesale-v2', 'wholesale'] }, // Wholesale accounts hub (read detail + native create/edit + AR/cadence/authorized-buyers facets). wholesale.js (V1) RETIRED (T6): its WholesaleBridge absorbed here, so the bare #wholesale route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'fulfillment-v2': { src: 'modules/fulfillment-v2.js', v: '217b694d7df5', routes: ['pack-v2', 'ship-v2'] }, // ONE fulfillment queue: Pack/Ship are one process — route picks the entry bucket (operator-ratified 2026-06-10)
   'finance-statements-v2': { src: 'modules/finance-statements-v2.js', v: 'd74457e62f1c', routes: ['financials-v2', 'finance-revenue-v2', 'finance-pl-v2', 'finance-cash-flow-v2', 'finance-tax-v2'] }, // ONE statements hub: Overview/Revenue/P&L/Cash/Tax are five lenses of the same period reports — route picks the entry lens (finance-v2-build-plan.md)
   'finance-openitems-v2': { src: 'modules/finance-openitems-v2.js', v: '41a8ee5a8b52', routes: ['finance-ar-v2', 'finance-ap-v2'] }, // ONE open-items queue: AR/AP aging lenses + vendor records — route picks the entry lens (finance-v2-build-plan.md)
