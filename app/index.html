@@ -7578,6 +7578,32 @@
       </form>
     </div>
 
+    <!-- Cross-device email-link sign-in: themed confirm overlay. Shown by
+         completeEmailLinkSignInIfPresent() at boot when the magic link is opened
+         in a different browser/profile than where the email was entered (so the
+         address isn't cached in localStorage). Replaces a native window.prompt,
+         which renders in the OS's light chrome and ignores the app's (always-on)
+         dark mode. Pure markup + the existing .auth-email-form tokens so it works
+         at auth-bootstrap, before MastUI / mastConfirm load. The form resolves the
+         entered address back into proceed() via the window.__emailLinkConfirmCb
+         callback the sign-in code sets just before showing this overlay. -->
+    <div id="emailLinkConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="elcTitle" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:24px;" onkeydown="if(event.key==='Escape'){this.style.display='none';window.__emailLinkConfirmCb=null;}">
+      <div style="background:var(--cream);border-radius:16px;padding:28px 28px 24px;box-shadow:0 8px 32px rgba(0,0,0,0.3);width:100%;max-width:380px;box-sizing:border-box;">
+        <h2 id="elcTitle" style="font-size:1.15rem;color:var(--text-primary);margin:0 0 6px;">Confirm your email</h2>
+        <p style="color:var(--warm-gray);font-size:0.9rem;margin:0 0 18px;">Enter the email address you used to request this sign-in link.</p>
+        <form class="auth-email-form" id="emailLinkConfirmForm" novalidate style="max-width:none;" onsubmit="event.preventDefault();var elcV=(document.getElementById('elcEmail').value||'').trim();if(!elcV)return;document.getElementById('emailLinkConfirmOverlay').style.display='none';var elcCb=window.__emailLinkConfirmCb;window.__emailLinkConfirmCb=null;if(elcCb)elcCb(elcV);">
+          <div class="auth-email-row">
+            <label for="elcEmail">Email address</label>
+            <input id="elcEmail" type="email" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder="you@example.com" />
+          </div>
+          <div style="display:flex;gap:10px;margin-top:4px;">
+            <button type="button" class="auth-secondary-btn" style="max-width:none;flex:1;" onclick="document.getElementById('emailLinkConfirmOverlay').style.display='none';window.__emailLinkConfirmCb=null;">Cancel</button>
+            <button type="submit" class="btn btn-primary" style="flex:1;">Confirm</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Module Selection Modal — shown after first login when tier requires module choice -->
     <div id="moduleSelectionOverlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);overflow-y:auto;">
       <div style="max-width:720px;margin:60px auto 40px;padding:0 24px;">
@@ -17877,13 +17903,13 @@ function completeEmailLinkSignInIfPresent() {
   if (email) {
     proceed(email);
   } else {
-    // Cross-device: the link was clicked on a different browser/profile than
-    // where the email was entered. Prompt for it. (window.prompt is OS-level
-    // and ignores theme, but admin login has no styled dialog helper here in
-    // V1 — acceptable for the rare cross-device case; revisit if needed.)
-    var entered = null;
-    try { entered = window.prompt('Confirm the email address you used to request this sign-in link:'); } catch (e) { /* ignore */ }
-    if (entered) proceed(entered.trim());
+    // Cross-device: the link was opened in a different browser/profile than
+    // where the email was entered (not cached here). Show the themed, dark-mode
+    // confirm overlay (markup below) instead of a native window.prompt, which
+    // paints in OS light chrome. Its form resolves the email into proceed().
+    window.__emailLinkConfirmCb = proceed;
+    var elcOv = document.getElementById('emailLinkConfirmOverlay');
+    if (elcOv) { elcOv.style.display = 'flex'; var elcInp = document.getElementById('elcEmail'); if (elcInp) { elcInp.value = ''; elcInp.focus(); } }
   }
 }
 
