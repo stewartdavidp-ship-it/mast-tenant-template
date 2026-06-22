@@ -61,6 +61,7 @@ const result = {
   probe: 'write-delta-sale', surface: SURFACE, fixturePid: FIXTURE_PID, qty: SALE_QTY,
   dryRun: DRY_RUN, baseUrl: BASE, startedAt: new Date().toISOString(),
   steps: [], consoleErrors: [], pageErrors: [], submitObserved: null,
+  checkoutTotalCents: null, // captured at the review step → the canary's independent T (UI-charged amount)
   totalMs: 0, errorCount: 0, success: false,
 };
 
@@ -96,6 +97,29 @@ async function firstVisible(selectors, timeout = 8000) {
       if (await el.count() && await el.isVisible().catch(() => false)) return s;
     }
     await page.waitForTimeout(200);
+  }
+  return null;
+}
+// "$1,234.50" → 123450 (integer cents). null if no money token found.
+function parseMoneyCents(text) {
+  if (!text) return null;
+  const m = String(text).replace(/[^\d.]/g, ' ').match(/\d+(?:\.\d{1,2})?/);
+  if (!m) return null;
+  return Math.round(parseFloat(m[0]) * 100);
+}
+// Read the rendered grand total at the review step → the canary's independent T.
+// Tries the order-breakdown grand-total row first, then the cart summary, so a
+// real sale's expected delta is the UI-charged amount (catches the aggregator's
+// cents-vs-dollars / double-count classes without a hardcoded figure).
+async function captureCheckoutTotal() {
+  for (const sel of ['.order-total-row.grand-total .order-total-value', '.grand-total .order-total-value', '#cartFooterSummary', '.cart-footer-summary']) {
+    try {
+      const loc = page.locator(sel).first();
+      if (await loc.count()) {
+        const cents = parseMoneyCents((await loc.innerText()).trim());
+        if (cents && cents > 0) { result.checkoutTotalCents = cents; return cents; }
+      }
+    } catch { /* try next */ }
   }
   return null;
 }
@@ -173,11 +197,12 @@ async function storefrontSteps() {
     const place = await firstVisible(['[data-co="place-order"]', 'button:has-text("Place Order")', 'button:has-text("Proceed to Payment")'], 8000);
     if (!place) throw new Error('place-order control not found at review step');
     const label = (await page.locator(place).first().innerText().catch(() => '')).trim();
-    if (DRY_RUN) return `FOUND place-order ("${label}") — STOPPED before the irreversible submitOrder write ✔`;
+    const T = await captureCheckoutTotal(); // the independent expected-delta the runner asserts against
+    if (DRY_RUN) return `FOUND place-order ("${label}"), checkoutTotal=${T != null ? '$' + (T / 100).toFixed(2) : 'n/a'} — STOPPED before the irreversible submitOrder write ✔`;
     await page.locator(place).first().click();
     // submitOrder fires here; card flow then redirects to the (test-mode) processor.
     await page.waitForTimeout(4000);
-    return `clicked "${label}"; submitOrder ${result.submitObserved ? 'OBSERVED' : 'not yet observed'}; url=${page.url()}`;
+    return `clicked "${label}" (T=${T != null ? '$' + (T / 100).toFixed(2) : 'n/a'}); submitOrder ${result.submitObserved ? 'OBSERVED' : 'not yet observed'}; url=${page.url()}`;
   });
 }
 
