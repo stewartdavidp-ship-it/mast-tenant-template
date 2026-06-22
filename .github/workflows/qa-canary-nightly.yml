@@ -1,0 +1,112 @@
+name: QA write-delta money canary (nightly)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Scheduled E2E that DRIVES the write-delta money canary unattended against the
+# dedicated writable QA tenant: restock fixture → (k× : oracle-before → REAL sale
+# → oracle-after → assert A1–A5) → pass^k → scorecard. Red ⇒ a real money-flow
+# divergence (a sale did NOT move the books by exactly the sale amount, into one
+# canonical channel, with inventory drawn down, reconciled, no collateral).
+#
+# ⚠️ THIS IS NOT A PR GATE. It runs ONLY on a nightly schedule + manual dispatch —
+# never on `pull_request` — so it can never block a merge. It is intentionally
+# absent from branch-protection required checks and does not touch lint.yml.
+# See docs/ux-audit/qa-spine/automated-runner.md (supersedes write-delta-canary.md §4).
+#
+# The ONE operator step: provision/confirm the QA tenant + add the secret
+# MAST_QA_STORAGE_STATE (an authed admin storageState, base64; mint it with
+# scripts/qa-spine/capture-qa-storage-state.mjs). Everything else is autonomous.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  schedule:
+    - cron: "0 9 * * *"      # ~nightly, 09:00 UTC (overnight in the Americas)
+  workflow_dispatch:
+    inputs:
+      surface:
+        description: "Sale surface (storefront = dtc_online, pos = in_person)"
+        type: choice
+        options: [storefront, pos]
+        default: storefront
+      k:
+        description: "Iterations (pass^k)"
+        default: "5"
+      base_url:
+        description: "Override QA base URL (else repo var QA_BASE_URL)"
+        required: false
+      tenant:
+        description: "Override QA tenant id (else repo var QA_TENANT)"
+        required: false
+
+# Read-only token; this workflow only reads the repo + uploads an artifact.
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-canary-nightly
+  cancel-in-progress: false
+
+jobs:
+  write-delta-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # tenant + base url come from repo variables (Settings → Variables), with
+      # manual-dispatch overrides. The credential is the single secret.
+      MAST_TENANT: ${{ github.event.inputs.tenant || vars.QA_TENANT }}
+      MAST_BASE_URL: ${{ github.event.inputs.base_url || vars.QA_BASE_URL }}
+      MAST_QA_STORAGE_STATE: ${{ secrets.MAST_QA_STORAGE_STATE }}
+      SURFACE: ${{ github.event.inputs.surface || 'storefront' }}
+      K: ${{ github.event.inputs.k || '5' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Preflight — is the QA canary configured?
+        id: preflight
+        run: |
+          MISSING=""
+          [ -z "$MAST_QA_STORAGE_STATE" ] && MISSING="$MISSING MAST_QA_STORAGE_STATE(secret)"
+          [ -z "$MAST_BASE_URL" ] && MISSING="$MISSING QA_BASE_URL(var)"
+          [ -z "$MAST_TENANT" ] && MISSING="$MISSING QA_TENANT(var)"
+          if [ -n "$MISSING" ]; then
+            echo "::warning title=QA canary not configured::Skipping — set:$MISSING. See docs/ux-audit/qa-spine/automated-runner.md (the one-time operator setup)."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node.js
+        if: steps.preflight.outputs.configured == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Playwright (>=1.51 for IndexedDB storageState) + Chromium
+        if: steps.preflight.outputs.configured == 'true'
+        working-directory: scripts
+        run: |
+          npm ci --no-audit --no-fund
+          # Firebase compat persists auth in IndexedDB; restoring it from a captured
+          # storageState needs Playwright >= 1.51. Override the repo's 1.45 pin here only.
+          npm i --no-audit --no-fund playwright@^1.51
+          npx playwright install --with-deps chromium
+
+      - name: Run write-delta canary (k iterations, pass^k)
+        if: steps.preflight.outputs.configured == 'true'
+        env:
+          ORACLE: browser
+          OUT_DIR: qa-spine-out
+          HEADLESS: '1'
+        run: node scripts/qa-spine/write-delta-runner.mjs
+
+      - name: Upload scorecard + iteration artifacts
+        if: always() && steps.preflight.outputs.configured == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: write-delta-scorecard-${{ github.run_id }}
+          path: |
+            qa-spine-out/qa-canary-scorecard.json
+            qa-spine-out/write-delta-iter-*.json
+            qa-spine-out/iter-*/write-delta-sale-*.json
+          if-no-files-found: warn
+          retention-days: 30
