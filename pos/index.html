@@ -2046,6 +2046,7 @@ function buildSaleLookup(salesData) {
     if (!sale || sale.archived) return;
     if (sale.startDate && sale.startDate > now) return;
     if (sale.endDate && sale.endDate < now) return;
+    if (sale.channels && sale.channels.length && sale.channels.indexOf('pos') === -1) return;   // channel-scoped, not for POS
     (sale.products || []).forEach(function(entry) {
       var pid = typeof entry === 'string' ? entry : (entry && entry.pid);
       if (!pid) return;

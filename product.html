@@ -1143,7 +1143,7 @@
       var now = new Date().toISOString();
       Object.keys(salesData).forEach(function(saleId) {
         var sale = salesData[saleId];
-        if (sale.archived || (sale.startDate && sale.startDate > now) || (sale.endDate && sale.endDate < now)) return;
+        if (sale.archived || (sale.startDate && sale.startDate > now) || (sale.endDate && sale.endDate < now) || (sale.channels && sale.channels.length && sale.channels.indexOf('online') === -1)) return;
         var products = sale.products || [];
         products.forEach(function(entry) {
           var entryPid = typeof entry === 'string' ? entry : entry.pid;
