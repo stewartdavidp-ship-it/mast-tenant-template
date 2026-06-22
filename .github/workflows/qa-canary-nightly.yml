@@ -55,7 +55,7 @@ jobs:
       MAST_TENANT: ${{ github.event.inputs.tenant || vars.QA_TENANT }}
       MAST_BASE_URL: ${{ github.event.inputs.base_url || vars.QA_BASE_URL }}
       MAST_QA_STORAGE_STATE: ${{ secrets.MAST_QA_STORAGE_STATE }}
-      SURFACE: ${{ github.event.inputs.surface || 'storefront' }}
+      SURFACE: ${{ github.event.inputs.surface || vars.SURFACE || 'storefront' }}
       K: ${{ github.event.inputs.k || '5' }}
     steps:
       - name: Checkout
