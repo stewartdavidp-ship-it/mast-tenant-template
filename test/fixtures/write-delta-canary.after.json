@@ -1,0 +1,23 @@
+{
+  "_note": "AFTER snapshot — the BEFORE state plus ONE clean storefront (dtc_online) sale of 1x qa-write-canary @ 2500 cents. The canonical clean-sale delta the canary must accept: revenue +2500 into dtc_online ONLY; fixture totalAvailable 100->99 + totalCommitted 0->1 (storefront RESERVES at placement; onHand stays 100 until ship); pnl.revenue +2500 with gross/net re-reconciled (cogs held flat -> the new line has no COGS snapshot, the realistic case); witnesses unchanged; one new order. The self-test tampers a deep clone of THIS file to manufacture each negative control (100x, double-count, wrong/extra channel, no-drawdown, collateral, un-reconciled) and asserts each turns the canary RED.",
+  "revenue": {
+    "total": 3789891,
+    "byChannel": { "dtc_online": 1663898, "in_person": 1616993, "wholesale": 509000 }
+  },
+  "pnl": {
+    "revenue": 3789891,
+    "cogs": 1171674,
+    "grossProfit": 2618217,
+    "operatingExpenses": 913520,
+    "netProfit": 1704697,
+    "marginReliable": false,
+    "cogsLineMissingCount": 11,
+    "cogsMissing": false
+  },
+  "products": {
+    "qa-write-canary": { "stockType": "strict", "totalOnHand": 100, "totalAvailable": 99, "totalCommitted": 1 },
+    "ao-crescent-ear-climbers": { "stockType": "in-stock", "totalOnHand": 11, "totalAvailable": 11, "totalCommitted": 0 },
+    "ao-seedpod-studs": { "stockType": "made-to-order", "totalOnHand": 0, "totalAvailable": 0, "totalCommitted": 0 }
+  },
+  "orderCount": 275
+}
