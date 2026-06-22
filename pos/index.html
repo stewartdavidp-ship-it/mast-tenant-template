@@ -470,6 +470,7 @@ body {
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+<script src="../shared/mast-error.js?v=1"></script>
 <script src="../shared/mastdb.js?v=1"></script>
 <script src="../shared/mast-ui.js?v=1"></script>
 <script src="../shared/camera.js"></script>
@@ -839,6 +840,79 @@ function setPosTheme(mode) {
 // Feedback — full dialog mirroring the admin (app/index.html openFeedbackDialog):
 // type + severity chips, description, optional screenshot (html2canvas -> Storage).
 // Writes the SAME feedbackReports schema so it renders in the admin inbox / My Feedback.
+// ============================================================
+// Auto error-capture — diagnostics L1 for the POS. Mirrors the admin's
+// auto-report sink (app/index.html fireAutoReport): unhandled errors + promise
+// rejections push a scrubbed source:'auto' feedbackReports doc, so POS failures
+// surface in #diagnostics. Silent by design (no operator-facing toast mid-sale).
+// Scrub + ring come from shared/mast-error.js (loaded first).
+// ============================================================
+var _posAutoCount = 0;
+var _POS_AUTO_CAP = 10;        // per session — never flood the inbox
+var _posAutoSeen = {};         // fingerprint -> expiry ts (dedup window)
+
+function _posAutoIgnore(msg) {
+  msg = String(msg || '');
+  // Opaque cross-origin "Script error." and the benign ResizeObserver loop warning.
+  return !msg || /^Script error\.?$/i.test(msg) || /ResizeObserver loop/i.test(msg);
+}
+
+function posAutoReport(type, message, detail) {
+  try {
+    if (!currentUser) return;                    // need auth to write
+    if (_posAutoCount >= _POS_AUTO_CAP) return;
+    if (_posAutoIgnore(message)) return;
+    var fp = type + '::' + String(message || '').slice(0, 120);
+    var now = Date.now();
+    if (_posAutoSeen[fp] && _posAutoSeen[fp] > now) return;
+    _posAutoSeen[fp] = now + 5 * 60 * 1000;       // 5-min dedup
+    _posAutoCount++;
+    var detailStr = detail ? String(detail).slice(0, 2000) : '';
+    var report = {
+      appId: (MastDB.tenantId && MastDB.tenantId()) || TENANT_ID,
+      source: 'auto',
+      screen: 'pos',
+      screenLabel: (typeof getScreenLabel === 'function') ? getScreenLabel() : 'POS',
+      type: 'bug',
+      severity: 'medium',
+      description: '[Auto-detected] ' + type + ' in POS | ' + String(message || '').slice(0, 200) + (detailStr ? ' | ' + detailStr : ''),
+      detail: detailStr,
+      email: null,
+      userId: currentUser ? currentUser.uid : null,
+      userName: currentUser ? (currentUser.displayName || currentUser.email || '') : null,
+      deviceInfo: { userAgent: navigator.userAgent, viewport: { width: window.innerWidth, height: window.innerHeight } },
+      appVersion: null,
+      timestamp: new Date().toISOString(),
+      status: 'open',
+      jobId: null,
+      createdAt: MastDB.serverTimestamp ? MastDB.serverTimestamp() : new Date().toISOString()
+    };
+    MastDB.push('feedbackReports', window.MastError ? MastError.scrubReport(report) : report)
+      .catch(function (e) { try { console.warn('[posAutoReport] failed:', e); } catch (_) {} });
+  } catch (e) { /* capture must NEVER throw — it stands in for a swallow */ }
+}
+
+// Install global handlers once (after MastDB is ready). posAutoReport guards on
+// currentUser, so errors before sign-in are caught but not persisted.
+function installPosAutoDetection() {
+  if (window._posAutoInstalled) return;
+  window._posAutoInstalled = true;
+  var prev = window.onerror;
+  window.onerror = function (msg, src, line, col, err) {
+    try {
+      var detail = (src || '') + ':' + (line || '') + ':' + (col || '') + (err && err.stack ? ' | ' + err.stack : '');
+      posAutoReport('unhandled-error', msg, detail);
+    } catch (e) {}
+    return prev ? prev.apply(this, arguments) : false;
+  };
+  window.addEventListener('unhandledrejection', function (e) {
+    try {
+      var msg = (e.reason && (e.reason.message || String(e.reason))) || 'Unhandled promise rejection';
+      posAutoReport('unhandled-rejection', msg, e.reason && e.reason.stack);
+    } catch (_) {}
+  });
+}
+
 function getScreenLabel() {
   if (typeof eventData !== 'undefined' && eventData && eventData.name) return 'POS — ' + eventData.name;
   return 'POS — Catalog';
@@ -949,7 +1023,7 @@ function submitFeedback() {
   }
 
   function pushReport(report) {
-    return MastDB.push('feedbackReports', report).then(function () {
+    return MastDB.push('feedbackReports', window.MastError ? MastError.scrubReport(report) : report).then(function () {
       showToast('Feedback submitted — thanks!');
     }).catch(function (e) {
       showToast('Error submitting feedback: ' + (e.message || e), true);
@@ -1064,6 +1138,7 @@ function applyBrandedManifest() {
 window.TENANT_READY.then(function() {
   try { firebaseApp = firebase.app(); } catch (e) { firebaseApp = firebase.initializeApp(TENANT_FIREBASE_CONFIG); }
   MastDB.init({ firestore: firebaseApp.firestore(), tenantId: TENANT_ID });
+  installPosAutoDetection();   // wire window.onerror / unhandledrejection -> source:'auto' feedbackReports
   auth = firebaseApp.auth();
   applyBrandedManifest();
 
@@ -1339,7 +1414,7 @@ function removeItem(idx) {
 function autoFillAmount() {
   var total = cartTotalCents();   // net of sales + coupon
   if (total > 0) {
-    document.getElementById('amountInput').value = '$' + (total / 100).toFixed(2);
+    document.getElementById('amountInput').value = fmtCents(total);
   } else {
     document.getElementById('amountInput').value = '';
   }
@@ -1754,7 +1829,7 @@ function saveSale() {
     lastSaleItems = saleItems.slice();
     btn.disabled = false;
     btn.textContent = 'Complete Sale';
-    var totalStr = '$' + (saleRecord.amount / 100).toFixed(2);
+    var totalStr = fmtCents(saleRecord.amount);
     var itemNames = saleItems.map(function(i) { return i.productName; }).join(', ');
     var orderTag = saleRecord.orderNumber ? ('Order ' + saleRecord.orderNumber + ' · ') : '';
     document.getElementById('successSummary').textContent = orderTag + totalStr + ' ' + paymentType + ' — ' + itemNames;
@@ -2269,7 +2344,7 @@ function overrideLinePrice(idx) {
   if (!it) return;
   MastUI.prompt({
     title: 'Override price for “' + it.productName + '” (per item)',
-    value: ((it.priceCents || 0) / 100).toFixed(2),
+    value: (window.MastUI && MastUI.Num) ? MastUI.Num.moneyRaw(it.priceCents || 0, { cents: true }) : ((it.priceCents || 0) / 100).toFixed(2),
     inputmode: 'decimal',
     confirmLabel: 'Set price'
   }).then(function(input) {
@@ -2358,7 +2433,8 @@ function cartTotalCents() {
 }
 
 function fmtCents(c) {
-  return window.formatCents ? window.formatCents(c) : '$' + (c / 100).toFixed(2);
+  // Reuse the shared money formatter (separators + locale) instead of hand-rolling.
+  return (window.MastUI && MastUI.Num) ? MastUI.Num.money(c, { cents: true }) : '$' + (c / 100).toFixed(2);
 }
 
 function renderCart() {
