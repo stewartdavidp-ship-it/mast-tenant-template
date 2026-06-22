@@ -31,14 +31,25 @@ suite misses them (F1, F5, F14 each required comparing two surfaces).
 ## The two pieces
 
 ### 1. Deterministic backbone — `test/money-canary.test.js` (CI-gated)
-A golden money fixture (orders + POS sales carrying **every** trap shape above) is run through
-the **real shipped** UI aggregator — the helpers are *extracted from* `app/modules/finance.js`
-(`_orderRevenueCents`, `_salesCents`, `_salesRowCounts`) and `finance-statements-v2.js`
-(`marginText`), and the **byte-shared** `shared/channel-normalization.core.js` (`MastChannels`,
-the same core the MCP aggregates on) — and asserted equal to a hand-derived **canonical oracle**
-to the cent. A `divergence demonstration` block proves the fixture *discriminates* (each
-historical buggy form yields a different number), so it is a real canary, not a tautology. Wired
-into the `lint.yml` `&&`-chain next to the other finance tests; no network, runs in CI.
+A **committed golden fixture** — `test/fixtures/money-canary.golden.json` (orders, POS sales,
+expenses, journal entries, products, AR invoices carrying **every** trap shape above) — grounded
+in and cross-checked against the live **"Auric & Oak"** demo golden tenant (`golden-auric`, captured
+2026-06-22 via the mast-mcp finance tools; provenance in the fixture header) plus hand-authored
+edge records for the bad-data traps the clean tenant lacks. It is run through the **REAL shipped UI
+aggregators**: the pure helpers (`_orderRevenueCents`, `_salesCents`, `_salesRowCounts`,
+`isTestOrder`, `_agingBucket`) and `finance-statements-v2.js`'s `marginText` are regex-extracted
+and eval'd, while the four entangled async aggregators (`_loadRevenueAggregate`, `computePnlLocal`,
+`_arAgingSnapshotCore`, `_computeTaxByState`) are extracted **whole** and run against a **fake
+MastDB** (the engine-hardening vm pattern), so a regression in the real loop body — not just a
+helper — turns the test RED. The `shared/channel-normalization.core.js` core (`MastChannels`, the
+same code the MCP aggregates on) does the channel grouping. Every figure + reliability flag is
+asserted against the committed **expected manifest** (`test/fixtures/money-canary.expected.json`) to
+the cent. Coverage: revenue + by-channel canonicality (**F1**), cents-vs-dollars / 100× (**SGTE-0187**),
+POS double-count, Timestamp coercion, P&L + the **F14** margin-withhold gate, **F5** tax-by-state
+(stateless-order surfacing), and AR aging buckets (incl. partial payment). A `divergence demonstration`
+block proves the fixture *discriminates*, and the **F14 + F1 negative controls are demonstrated**
+(neutralize the withhold gate or the `pos→in_person` mapping in the real source → the canary goes
+RED). Wired into the `lint.yml` `&&`-chain next to the other finance tests; no network, runs in CI.
 
 ### 2. Live probe — `scripts/qa-spine/money-canary.mjs` (supervised)
 The live half, in the `w3-pos-ui.mjs` harness style. Two layered modes:

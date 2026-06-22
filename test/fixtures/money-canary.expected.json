@@ -1,0 +1,53 @@
+{
+  "_about": "Known-good values computed FROM money-canary.golden.json by the REAL shipped finance functions (app/modules/finance.js + finance-statements-v2.js) run against a fake MastDB. This is the shared cross-surface contract: the same figures the MCP finance_get_revenue / finance_get_pnl / finance_get_ar_aging / finance_get_tax_summary tools must return on the same data (their byte-shared cores). Regenerate by re-running test/money-canary.test.js after any intentional fixture change; the test FAILS until this manifest matches, by design. All monetary values are INTEGER CENTS. asOf 2026-06-22.",
+
+  "revenue": {
+    "totalCents": 318953,
+    "byChannel": { "dtc_online": 61953, "in_person": 113000, "marketplace": 8000, "wholesale": 124000, "manual": 12000 },
+    "txnCount": 8,
+    "_derivation": "orders ao-o1(11953 dtc)+ao-o2(50000 dtc)+ao-o3(102000 in_person, totalCents preferred not 10.2M)+ao-o5(4500 in_person)+ao-o6(8000 mkt)+ao-o7(124000 wholesale) + sales ao-s2(12000 manual)+ao-s4(6500 in_person). EXCLUDED: ao-o4 cancelled, ao-o8 test (revenue filters test), ao-s1 POS-square mirror (orderId), ao-s3 voided."
+  },
+
+  "pnl": {
+    "revenue": 318953,
+    "cogs": 60000,
+    "grossProfit": 258953,
+    "opex": 45780,
+    "netProfit": 213173,
+    "cogsLineMissingCount": 1,
+    "cogsLineCoveredCount": 3,
+    "cogsMissing": false,
+    "marginReliable": false,
+    "hasPayroll": true,
+    "uiMarginWithheld": true,
+    "uiMarginText": "—",
+    "_derivation": "cogs = materials expense ao-e1(40000, reviewed) + cogs-adjustment JE ao-j1(5000) + line items [ao-o1 cogsCents 3000, ao-o6 product-cost fallback 1500x2=3000, ao-o7 line1 cogsCents 4500x2=9000] = 60000. ao-o7 line2 (p-unknown, no cogsCents, no product cost) → cogsLineMissingCount 1 → marginReliable false → UI withholds. opex = software 4500 + shipping 5880 + booth_fee 5400 + payroll JE 30000 = 45780 (EXCLUDED: ao-e2 materials-not-reviewed, ao-e6 personal, ao-e7 not-reviewed, ao-j3 owner-draw)."
+  },
+
+  "tax": {
+    "byState": {
+      "OR": { "taxCollected": 0, "orderCount": 1 },
+      "WA": { "taxCollected": 4250, "orderCount": 2 },
+      "CA": { "taxCollected": 850, "orderCount": 1 }
+    },
+    "totalTaxCollected": 5100,
+    "missingStateCount": 3,
+    "_derivation": "F5: ao-o1 OR taxCents 0 (kept — stated even at $0), ao-o2 WA 4250, ao-o7 WA 0 (→ WA orderCount 2), ao-o3 shippingState CA fallback + tax 8.50 dollars → 850 cents. STATELESS (surfaced in missingStateOrders, NOT bucketed): ao-o5, ao-o6, ao-o8. ao-o4 cancelled excluded entirely. Note: the tax loop does NOT filter test orders (ao-o8 counts toward missingState), unlike the revenue loop."
+  },
+
+  "arAging": {
+    "asOf": "2026-06-22",
+    "openCount": 5,
+    "buckets": { "current": 54000, "1_to_30": 98000, "31_to_60": 100000, "61_to_90": 72000, "90_plus": 45000 },
+    "totalOpenCents": 369000,
+    "_derivation": "ao-wsinv-5 due 2026-07-12 (future) → current 54000. ao-ar2 due 2026-06-05 (17d) → 1_to_30 98000. ao-ar3 due 2026-05-08 (45d), partial-paid → due 161000-61000=100000 → 31_to_60. ao-ar4 due 2026-04-10 (73d) → 61_to_90 72000. ao-ar5 due 2026-01-15 (>90d) → 90_plus 45000. EXCLUDED: ao-ar6 paid-in-full (due 0), ao-ar7 test."
+  },
+
+  "crossSurfaceSelfChecks": {
+    "revenueTotal_equals_pnlRevenue": 318953,
+    "grossProfit_equals_revenue_minus_cogs": true,
+    "netProfit_equals_grossProfit_minus_opex": true,
+    "byChannel_sums_to_total": 318953,
+    "all_channel_keys_canonical": true
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "_provenance": {
+    "what": "Frozen golden money fixture for test/money-canary.test.js — the deterministic cross-surface VALUE assertion (QA spine Phase 3 item 3 / ROADMAP 1.5).",
+    "groundedIn": "mast-architecture demo golden tenant 'Auric & Oak' (tenantId golden-auric, arch #335). Seed spec: docs/ux-audit/demo-golden-seed-dataset.md.",
+    "capturedBy": "Claude Code via mast-mcp finance_* read tools",
+    "capturedAt": "2026-06-22",
+    "window": "2025-10-01..2026-06-30 (the seed history window); AR asOf 2026-06-22",
+    "liveGoldenFigures_crossChecked_2026_06_22": {
+      "note": "What the MCP finance tools returned on golden-auric on the capture date. The fixture reproduces these SHAPES — canonical channel keys, the real open AR invoice, the F14 marginReliable:false condition, and the F5 stateless-order surfacing — so the canary pins the same cross-surface contract. The expected manifest values are computed FROM this fixture by the real shipped finance functions (a curated slice + edge records), NOT equal to these tenant-wide totals.",
+      "finance_get_revenue": { "total": 3787391, "byChannel": { "dtc_online": 1661398, "in_person": 1616993, "wholesale": 509000 } },
+      "finance_get_pnl": { "revenue": 3787391, "cogs": 1171674, "grossProfit": 2615717, "operatingExpenses": 913520, "netProfit": 1702197, "marginReliable": false, "cogsLineMissingCount": 10, "cogsLineCoveredCount": 264, "cogsMissing": false },
+      "finance_get_ar_aging_asOf_2026_06_22": { "current": 54000, "1_to_30": 0, "31_to_60": 0, "61_to_90": 0, "90_plus": 0, "openInvoice": "Harbor Goods INV-2026-0005 (ao-wsinv-5) $540.00 due 2026-07-12" },
+      "finance_get_tax_summary": { "byState": {}, "missingState": 227 }
+    },
+    "composition": {
+      "real_grounded": "Canonical channel keys (dtc_online/in_person/wholesale), the REAL open AR invoice (ao-wsinv-5 Harbor Goods $540 due 2026-07-12 → current), the F14 missing-COGS condition (live: 10 missing → marginReliable:false), the F5 all-stateless condition (live: 227 missingState), and wholesale accounts from the seed doc (Cedar & Salt, Wildwood, Harbor).",
+      "hand_authored_edges": "Bad-data traps the CLEAN golden tenant does not contain but the canary must lock: the SGTE-0187 cents-in-the-dollar-field 100x shape (ao-o3), fragmented channel synonyms ('Online Store','direct-pos','Etsy','craft-fair'), the POS-square dedup mirror (ao-s1), a Firestore-Timestamp createdAt (ao-o5), a test-channel row (ao-o8), and stated-tax orders (OR/WA/CA) to lock the F5 with-state path."
+    },
+    "fieldNotes": "Revenue/P&L/Tax orders carry placedAt within the window. AR invoices carry invoiceStatus + invoiceDueDate but NO placedAt, so the placedAt-range queries (revenue/pnl/tax) exclude them while the invoiceStatus query (AR) matches them — the same separation a real Firestore gives. amounts: order.totalCents & admin/sales.amount & expense.amount & je.amount & order.taxCents are INTEGER CENTS; order.total is DOLLARS (legacy) unless it redundantly holds cents (SGTE-0187); order.tax is DOLLARS."
+  },
+
+  "asOf": "2026-06-22",
+
+  "orders": [
+    { "id": "ao-o1", "source": "Online Store", "total": 119.53, "placedAt": "2025-11-03", "taxState": "OR", "taxCents": 0, "customerName": "Maya Halvorsen", "items": [ { "pid": "p-fern", "qty": 1, "cogsCents": 3000 } ] },
+    { "id": "ao-o2", "source": "online", "total": 500, "totalCents": 50000, "placedAt": "2025-12-10", "taxState": "WA", "taxCents": 4250, "customerName": "Priya Nair" },
+    { "id": "ao-o3", "source": "pos", "total": 102000, "totalCents": 102000, "placedAt": "2026-01-15", "shippingState": "CA", "tax": 8.50, "customerName": "Walk-in" },
+    { "id": "ao-o4", "source": "pos", "total": 999, "status": "cancelled", "placedAt": "2026-02-01", "taxState": "CA", "taxCents": 999, "customerName": "Cancelled Sale" },
+    { "id": "ao-o5", "source": "direct-pos", "total": 45.00, "placedAt": "2026-03-05", "createdAt": { "_seconds": 1718000000, "_nanoseconds": 0 }, "customerName": "Market Booth" },
+    { "id": "ao-o6", "source": "Etsy", "total": 80.00, "placedAt": "2026-04-02", "customerName": "Jen Okafor", "items": [ { "pid": "p-seedpod", "qty": 2 } ] },
+    { "id": "ao-o7", "source": "wholesale", "totalCents": 124000, "placedAt": "2025-11-20", "taxState": "WA", "taxCents": 0, "customerName": "Cedar & Salt Gallery", "items": [ { "pid": "p-rivercuff", "qty": 2, "cogsCents": 4500 }, { "pid": "p-unknown", "qty": 1 } ] },
+    { "id": "ao-o8", "source": "test", "totalCents": 99900, "placedAt": "2026-05-01", "customerName": "QA Harness" }
+  ],
+
+  "sales": [
+    { "id": "ao-s1", "source": "pos", "amount": 102000, "orderId": "ao-o3", "status": "captured", "createdAt": "2026-01-15" },
+    { "id": "ao-s2", "source": "manual", "amount": 12000, "status": "captured", "createdAt": "2026-02-20", "note": "Phone reorder" },
+    { "id": "ao-s3", "source": "pos", "amount": 5000, "status": "voided", "createdAt": "2026-02-21" },
+    { "id": "ao-s4", "source": "craft-fair", "amount": 6500, "status": "captured", "createdAt": "2026-03-30", "items": [ { "productName": "Seedpod Studs" } ] }
+  ],
+
+  "expenses": [
+    { "id": "ao-e1", "category": "materials", "reviewed": true, "amount": 40000, "date": "2025-11-15" },
+    { "id": "ao-e2", "category": "materials", "reviewed": false, "amount": 9999, "date": "2026-01-05" },
+    { "id": "ao-e3", "category": "software", "reviewed": true, "amount": 4500, "date": "2026-02-01" },
+    { "id": "ao-e4", "category": "shipping", "reviewed": true, "amount": 5880, "date": "2026-03-01" },
+    { "id": "ao-e5", "category": "booth_fee", "reviewed": true, "amount": 5400, "date": "2026-04-01" },
+    { "id": "ao-e6", "category": "personal", "reviewed": true, "amount": 7777, "date": "2026-04-15" },
+    { "id": "ao-e7", "category": "marketing", "reviewed": false, "amount": 3000, "date": "2026-05-01" }
+  ],
+
+  "journalEntries": [
+    { "id": "ao-j1", "category": "cogs-adjustment", "amount": 5000, "date": "2026-01-10" },
+    { "id": "ao-j2", "category": "payroll", "amount": 30000, "date": "2026-02-15" },
+    { "id": "ao-j3", "category": "owner-draw", "amount": 20000, "date": "2026-03-20" }
+  ],
+
+  "products": {
+    "p-fern": { "costCents": 2800 },
+    "p-seedpod": { "costCents": 1500 },
+    "p-rivercuff": { "costCents": 5000 }
+  },
+
+  "arInvoices": [
+    { "id": "ao-wsinv-5", "invoiceStatus": "sent", "invoiceNumber": "INV-2026-0005", "customerName": "Harbor Goods", "customerEmail": "ap@harborgoods.example", "totalCents": 54000, "invoicePaidAmount": 0, "invoiceDueDate": "2026-07-12" },
+    { "id": "ao-ar2", "invoiceStatus": "overdue", "invoiceNumber": "INV-2026-0002", "customerName": "Cedar & Salt Gallery", "customerEmail": "buyer@cedarsalt.example", "totalCents": 98000, "invoicePaidAmount": 0, "invoiceDueDate": "2026-06-05" },
+    { "id": "ao-ar3", "invoiceStatus": "overdue", "invoiceNumber": "INV-2026-0001", "customerName": "Wildwood Mercantile", "customerEmail": "ap@wildwood.example", "totalCents": 161000, "invoicePaidAmount": 61000, "invoiceDueDate": "2026-05-08" },
+    { "id": "ao-ar4", "invoiceStatus": "sent", "invoiceNumber": "INV-2026-0003", "customerName": "Cedar & Salt Gallery", "customerEmail": "buyer@cedarsalt.example", "totalCents": 72000, "invoicePaidAmount": 0, "invoiceDueDate": "2026-04-10" },
+    { "id": "ao-ar5", "invoiceStatus": "overdue", "invoiceNumber": "INV-2025-0009", "customerName": "Stonecrop Studio", "customerEmail": "ar@stonecrop.example", "totalCents": 45000, "invoicePaidAmount": 0, "invoiceDueDate": "2026-01-15" },
+    { "id": "ao-ar6", "invoiceStatus": "sent", "invoiceNumber": "INV-2026-0006", "customerName": "Paid In Full Co", "customerEmail": "ap@paidinfull.example", "totalCents": 30000, "invoicePaidAmount": 30000, "invoiceDueDate": "2026-06-01" },
+    { "id": "ao-ar7", "invoiceStatus": "overdue", "source": "test", "invoiceNumber": "INV-TEST-0001", "customerName": "QA Harness", "customerEmail": "qa@example.test", "totalCents": 99999, "invoicePaidAmount": 0, "invoiceDueDate": "2026-01-01" }
+  ]
+}
