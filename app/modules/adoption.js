@@ -57,7 +57,9 @@
     cache: {},          // window._nextStepsCache snapshot
     orders: null,       // lifetime order count, or null if not yet known
     featurePages: [],   // storefront enabledFeaturePages
-    channelConnected: false
+    channelConnected: false,
+    band: null,         // G3: this tenant's anonymized cohort percentile band, or null
+    cohortN: 0          // G3: # of similar shops in the cohort (anonymity context)
   };
 
   function nsc(key) { return !!(S.cache && S.cache[key]); }
@@ -214,6 +216,9 @@
     } else {
       h += '<p style="font-size:0.85rem;color:var(--teal);font-weight:600;margin:0;">You\'re using everything Mast offers for your business. 🎉</p>';
     }
+    if (S.band) {
+      h += '<div style="margin-top:12px;font-size:0.85rem;color:var(--text);">🏅 You\'re in the <strong style="color:var(--teal);">' + esc(bandLabel(S.band)) + '</strong> of makers your size.</div>';
+    }
     h += '<div style="margin-top:12px;"><a onclick="navigateTo(\'adoption\')" style="font-size:0.85rem;color:var(--teal);cursor:pointer;font-weight:600;">View full breakdown →</a></div>';
     h += '<p style="font-size:0.72rem;color:var(--warm-gray);margin:10px 0 0;">Reflects the features you\'ve set up and are using.</p>';
     return h;
@@ -295,8 +300,9 @@
       { k: 'Capabilities in use', v: scores.done + ' / ' + scores.total },
       { k: 'Domains mastered', v: String(masteryCount) }
     ]) : '';
+    var bench = S.band ? '<p style="font-size:0.9rem;color:var(--text);margin:14px 0 0;">🏅 You\'re in the <strong style="color:var(--teal);">' + esc(bandLabel(S.band)) + '</strong> of makers your size' + (S.cohortN ? ' (compared with ' + S.cohortN + ' similar shops)' : '') + '.</p>' : '';
     var foot = '<p style="font-size:0.72rem;color:var(--warm-gray);margin:14px 0 0;">Scoped to your business type — you\'re only scored on capabilities that fit how you operate.</p>';
-    tab.innerHTML = head + intro + tiles + cards + foot;
+    tab.innerHTML = head + intro + tiles + bench + cards + foot;
   }
 
   // (Re)load signals then repaint. Single-flighted with a trailing coalesce so the
@@ -310,6 +316,7 @@
     _loading = true;
     loadState().then(function () {
       _loading = false; repaint();
+      try { var _sc = computeScores(); if (_sc.total > 0) reportAndBenchmark(_sc); } catch (_e) {}
       if (_reloadAgain) { _reloadAgain = false; reloadAndRender(); }
     }).catch(function (e) {
       _loading = false;
@@ -328,6 +335,47 @@
     // over the first few seconds, so a one-shot load can lock in a bogus 0%.
     renderCard();
     reloadAndRender();
+  }
+
+  // ── G3: anonymized cohort benchmark (gated CF; dormant until [ARCH] deploys) ──
+  // Emits THIS tenant's own value-score to the platform aggregator and reads back
+  // ONLY its own cohort percentile band — the tenant app never reads another
+  // tenant's data. Stays invisible until reportAdoptionScore is deployed AND the
+  // cohort clears the anonymity floor (band stays null → nothing renders).
+  var BAND_LABEL = { 'top-10': 'top 10%', 'top-25': 'top 25%', 'top-50': 'top half', 'top-75': 'top 75%' };
+  function bandLabel(b) { return BAND_LABEL[b] || b; }
+  function cohortOf() {
+    var n = (typeof S.orders === 'number') ? S.orders : 0;
+    var sizeBucket = n < 10 ? 'new' : n < 100 ? 'small' : n < 1000 ? 'growing' : 'established';
+    return { mode: (S.modes && S.modes[0]) || 'standard', sizeBucket: sizeBucket };
+  }
+  function domainPcts(scores) {
+    var out = {};
+    Object.keys(scores.byDomain).forEach(function (dom) {
+      var d = scores.byDomain[dom];
+      out[dom] = d.total ? Math.round(d.done / d.total * 100) : 0;
+    });
+    return out;
+  }
+  var _reportTried = false; // at most one attempt per page load
+  function reportAndBenchmark(scores) {
+    if (_reportTried) return;
+    // Throttle to ~once/day across loads — the score barely moves intra-day and this is a write.
+    try {
+      var last = +(localStorage.getItem('__mast_adoption_reported') || 0);
+      if (last && (Date.now() - last) < 20 * 3600 * 1000) { _reportTried = true; return; }
+    } catch (_e) {}
+    if (typeof firebase === 'undefined' || !firebase.functions) return;
+    var fn;
+    try { fn = firebase.functions().httpsCallable('reportAdoptionScore'); } catch (_e) { return; }
+    _reportTried = true;
+    fn({ overall: scores.pct, byDomain: domainPcts(scores), cohort: cohortOf() }).then(function (res) {
+      var d = (res && res.data) || {};
+      S.band = d.band || null;
+      S.cohortN = d.cohortN || 0;
+      try { localStorage.setItem('__mast_adoption_reported', String(Date.now())); } catch (_e) {}
+      repaint();
+    }).catch(function () { /* reportAdoptionScore not deployed yet — stay dormant */ });
   }
 
   // ── wire into the dashboard render (wrap, don't edit the shell) ───────────────
