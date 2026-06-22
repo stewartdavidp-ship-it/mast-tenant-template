@@ -2359,6 +2359,7 @@ function pickProduct(pid) {
   var prod = products[pid];
   if (!prod) return;
   addToCart({ productId: pid, variantId: null, productName: prod.name, priceCents: prod.priceCents || 0, imageUrl: productImg(prod) });
+  _afterAddReturn();
   showToast('Added: ' + prod.name);
 }
 
@@ -2369,8 +2370,20 @@ function pickVariant(pid, vid) {
   if (!v) return;
   var label = variantLabel(v);
   addToCart({ productId: pid, variantId: vid, productName: prod.name + ' — ' + label, priceCents: variantPriceCents(prod, v), imageUrl: variantImg(prod, v) });
-  exitVariants();                                  // back to the product list, ready for the next item
+  _afterAddReturn();                               // clear search + return, ready for the next item
   showToast('Added: ' + prod.name + ' — ' + label);
+}
+
+// After adding to cart, reset the browse state so the next item is one tap: drop out
+// of variants, and if a search was active clear it (back to the landing or category).
+function _afterAddReturn() {
+  variantParent = null;
+  if (currentFilter) {
+    currentFilter = '';
+    var sb = document.getElementById('catalogSearch'); if (sb) sb.value = '';
+  }
+  updateCatalogChrome();
+  renderCatalog();
 }
 
 // Shared add/increment — dedup on product + variant.
