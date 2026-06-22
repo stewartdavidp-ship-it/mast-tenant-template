@@ -133,9 +133,9 @@
       if (!relevant(cap)) return;
       var a = cap.adopted();
       if (a === null) return; // unknown this pass — exclude from both sides
-      var d = byDomain[cap.domain] || (byDomain[cap.domain] = { total: 0, done: 0, todo: [] });
+      var d = byDomain[cap.domain] || (byDomain[cap.domain] = { total: 0, done: 0, todo: [], doneCaps: [] });
       d.total++; total++;
-      if (a) { d.done++; done++; } else { d.todo.push(cap); }
+      if (a) { d.done++; done++; d.doneCaps.push(cap); } else { d.todo.push(cap); }
     });
     var pct = total > 0 ? Math.round(done / total * 100) : 0;
     return { pct: pct, done: done, total: total, byDomain: byDomain };
@@ -214,7 +214,8 @@
     } else {
       h += '<p style="font-size:0.85rem;color:var(--teal);font-weight:600;margin:0;">You\'re using everything Mast offers for your business. 🎉</p>';
     }
-    h += '<p style="font-size:0.72rem;color:var(--warm-gray);margin:12px 0 0;">Reflects the features you\'ve set up and are using.</p>';
+    h += '<div style="margin-top:12px;"><a onclick="navigateTo(\'adoption\')" style="font-size:0.85rem;color:var(--teal);cursor:pointer;font-weight:600;">View full breakdown →</a></div>';
+    h += '<p style="font-size:0.72rem;color:var(--warm-gray);margin:10px 0 0;">Reflects the features you\'ve set up and are using.</p>';
     return h;
   }
 
@@ -240,17 +241,75 @@
       '</div>';
   }
 
+  // ── the full breakdown view (#adoption route) ────────────────────────────────
+  function viewVisible() {
+    var t = document.getElementById('adoptionTab');
+    return !!(t && t.style.display !== 'none');
+  }
+  function repaint() { renderCard(); renderView(); }
+
+  function capRow(cap, adopted) {
+    var U = window.MastUI;
+    var right = adopted
+      ? (U ? U.badge('✓ In use', 'success') : '<span style="color:var(--teal);font-size:0.85rem;">✓ In use</span>')
+      : '<a onclick="navigateTo(\'' + esc(cap.route) + '\')" style="font-size:0.85rem;color:var(--teal);cursor:pointer;">Set up →</a>';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--cream-dark);">' +
+      '<span style="font-size:0.9rem;color:var(--text);">' + esc(cap.label) + '</span>' + right + '</div>';
+  }
+
+  // Renders into #adoptionTab. No-ops while the tab is hidden so the dashboard-side
+  // refresh hooks don't build it needlessly; the route setup shows the tab first.
+  function renderView() {
+    if (!viewVisible()) return;
+    var tab = document.getElementById('adoptionTab');
+    if (!tab) return;
+    var U = window.MastUI;
+    var head = U ? U.pageHeader({
+      title: 'Your Mast value score',
+      count: S.loaded ? (computeScores().pct + '% in use') : '',
+      actionsHtml: '<button class="btn btn-secondary" onclick="AdoptionV2.refresh()">↻ Refresh</button>'
+    }) : '<h1>Your Mast value score</h1>';
+    if (!S.loaded) { tab.innerHTML = head + '<div style="margin-top:14px;color:var(--warm-gray);">Calculating…</div>'; return; }
+    var scores = computeScores();
+    if (scores.total === 0) {
+      tab.innerHTML = head + '<div style="margin-top:14px;color:var(--warm-gray);">Nothing to score yet — set up your shop to start building your value score.</div>';
+      return;
+    }
+    var masteryCount = 0, cards = '';
+    DOMAIN_ORDER.forEach(function (dom) {
+      var d = scores.byDomain[dom];
+      if (!d || !d.total) return;
+      var domPct = Math.round(d.done / d.total * 100);
+      var mastered = d.done === d.total;
+      if (mastered) masteryCount++;
+      var rows = '';
+      d.doneCaps.forEach(function (c) { rows += capRow(c, true); });
+      d.todo.forEach(function (c) { rows += capRow(c, false); });
+      var title = (DOMAIN_LABEL[dom] || dom) + ' · ' + domPct + '%' + (mastered ? ' ⭐' : '');
+      cards += U ? U.card(title, rows) : ('<h3>' + esc(title) + '</h3>' + rows);
+    });
+    var intro = '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 14px;max-width:560px;">' +
+      'How much of Mast you\'re putting to work. A capability counts once you\'ve set it up and are using it — turn on more to get the full value of your subscription.</p>';
+    var tiles = U ? U.tiles([
+      { k: 'Value score', v: scores.pct + '%', hero: true },
+      { k: 'Capabilities in use', v: scores.done + ' / ' + scores.total },
+      { k: 'Domains mastered', v: String(masteryCount) }
+    ]) : '';
+    var foot = '<p style="font-size:0.72rem;color:var(--warm-gray);margin:14px 0 0;">Scoped to your business type — you\'re only scored on capabilities that fit how you operate.</p>';
+    tab.innerHTML = head + intro + tiles + cards + foot;
+  }
+
   // (Re)load signals then repaint. Single-flighted with a trailing coalesce so the
   // burst of boot-time triggers (TENANT_READY, the two dashboard-render hooks, and
   // the safety-net poll) collapse into at most one in-flight load plus one trailing
   // re-sync — never a read storm.
   var _loading = false, _reloadAgain = false;
   function reloadAndRender() {
-    if (!document.getElementById('dashCardAdoption')) return;
+    if (!document.getElementById('dashCardAdoption') && !viewVisible()) return;
     if (_loading) { _reloadAgain = true; return; }
     _loading = true;
     loadState().then(function () {
-      _loading = false; renderCard();
+      _loading = false; repaint();
       if (_reloadAgain) { _reloadAgain = false; reloadAndRender(); }
     }).catch(function (e) {
       _loading = false;
@@ -322,6 +381,18 @@
     }, 1500);
   }
 
-  window.AdoptionV2 = { refresh: function () { reloadAndRender(); } };
+  // ── the dedicated #adoption route (reached from the Dashboard card link) ──────
+  // Registered via MastAdmin so applyRoute() renders #adoptionTab. No sidebar item
+  // (that would need a MODE_ROUTE_VISIBILITY rule + risks a silent mode-hide);
+  // discovery is the card's "View full breakdown" link.
+  function openView() { renderView(); reloadAndRender(); }
+  if (window.MastAdmin && typeof window.MastAdmin.registerModule === 'function') {
+    window.MastAdmin.registerModule('adoption', { routes: { adoption: { tab: 'adoptionTab', setup: openView } } });
+  }
+
+  window.AdoptionV2 = {
+    refresh: function () { reloadAndRender(); },
+    open: function () { if (typeof navigateTo === 'function') navigateTo('adoption'); }
+  };
   start();
 })();
