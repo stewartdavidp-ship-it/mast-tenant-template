@@ -1,0 +1,23 @@
+{
+  "_note": "BEFORE snapshot for the write-delta canary self-test. Grounded in LIVE golden-auric (Auric & Oak) MCP reads 2026-06-22 (finance_get_revenue / finance_get_pnl / mast_products get, window 2025-10-01..2026-06-30) — the same tenant the read-side money canary fixture is grounded in. Models a fresh demo CLONE of golden-auric with a seeded deterministic fixture product 'qa-write-canary' (strict, onHand 100). The witness products are REAL golden-auric SKUs (ao-crescent-ear-climbers in-stock onHand 11; ao-seedpod-studs made-to-order onHand 0) so the A5 collateral check runs against real inventory shapes.",
+  "revenue": {
+    "total": 3787391,
+    "byChannel": { "dtc_online": 1661398, "in_person": 1616993, "wholesale": 509000 }
+  },
+  "pnl": {
+    "revenue": 3787391,
+    "cogs": 1171674,
+    "grossProfit": 2615717,
+    "operatingExpenses": 913520,
+    "netProfit": 1702197,
+    "marginReliable": false,
+    "cogsLineMissingCount": 10,
+    "cogsMissing": false
+  },
+  "products": {
+    "qa-write-canary": { "stockType": "strict", "totalOnHand": 100, "totalAvailable": 100, "totalCommitted": 0 },
+    "ao-crescent-ear-climbers": { "stockType": "in-stock", "totalOnHand": 11, "totalAvailable": 11, "totalCommitted": 0 },
+    "ao-seedpod-studs": { "stockType": "made-to-order", "totalOnHand": 0, "totalAvailable": 0, "totalCommitted": 0 }
+  },
+  "orderCount": 274
+}
