@@ -104,7 +104,11 @@ Coverage: ✅ full · ◑ partial · ➖ none · ✅✅ richer than UI.
 | **F9** | W9 | gap | MCP contacts projection thin (no LTV/wholesale/segment); customer-value surface is UI-only |
 | **F10** | W1,W9 | low | Test-data pollution on `sgtest15` (`ZZ-TEST` materials, `_review_throwaway`/`QA` contacts) — fixture hygiene |
 | **F11** | W10 | gap | No classes/booking MCP tool — agent cannot operate a whole revenue line |
+| **F14** | W6 | med | P&L UI withholds gross/net margin when COGS is incomplete; MCP `finance_get_pnl` returned them with no caveat → agent got numbers the UI deemed unreliable → **task_14a258f4** · ✅ **FIXED + DEPLOYED** ([mcp-server#141](https://github.com/stewartdavidp-ship-it/mast-mcp-server/pull/141): `finance_get_pnl` now returns `marginReliable`/`cogsLineMissingCount`/`cogsMissing`, same formula as UI `computePnlLocal`). Live-verified `sgtest15` 2026-06-22: `marginReliable:false, cogsLineMissingCount:22`. Pinned by `test/money-canary.test.js`. |
+| **F19** | W6 | low | MCP order revenue reads `(o.total||0)*100` while UI reads `_orderRevenueCents` (prefers `totalCents`) — latent **100×** divergence on the cents-in-the-dollar-field bad-data shape (SGTE-0187/0188). Doesn't move `sgtest15`'s aggregate today. Fix: adopt `orderRevenueCents` in `mast-finance.ts` (cross-repo MCP chip). Surfaced by the money canary's cross-surface contract review. |
 
-**Chipped:** F1 → `task_f0d1c0e4` (channel normalization); F6+F7 → `task_aad9b8d1` (labor proration /
-payroll); F5 → `task_673dfb81` (tax-state capture). F9/F11 are agent-coverage decisions for Lens 3,
-not bugs (carry into the Lens-3 review). F4/F8/F10 are low/info — logged, not chipped.
+**Chipped:** F1 → `task_f0d1c0e4` (channel normalization, FIXED); F6+F7 → `task_aad9b8d1` (labor proration /
+payroll, FIXED); F5 → `task_673dfb81` (tax-state capture); **F14 → `task_14a258f4` (P&L margin parity) — FIXED+DEPLOYED+CLOSED.**
+F9/F11 are agent-coverage decisions for Lens 3, not bugs (carry into the Lens-3 review). F4/F8/F10 are low/info —
+logged, not chipped. **F19** (order-`totalCents`) is a new cross-repo MCP chip from the money-canary contract review.
+The W6 revenue↔P&L reconciliation matrix is now codified + executable in `scripts/qa-spine/money-canary.mjs`.

@@ -36,10 +36,10 @@ v1's headline first step ("make boot-smoke a fail-closed gate") is **already don
 
 ## 3. The REAL remaining gaps (narrow + specific)
 1. **No golden seed / fixture-reset on main.** Prerequisite for everything below; today the smoke runs against a permission-denied preview user (no deterministic data). *(Blocker.)*
-2. **No live cross-surface VALUE assertion ("money canary").** The parity guards prove the *code* is byte-identical; nothing asserts a **rendered UI dollar value == the same MCP tool's value** on a seeded tenant. This is exactly the class that found F1/F5/F14.
+2. ✅ **BUILT (2026-06-22) — the money canary.** Was: no live cross-surface VALUE assertion; the parity guards prove the *code* is byte-identical but nothing asserted a **UI dollar value == the same MCP tool's value**. Now: deterministic `test/money-canary.test.js` (CI-gated; the real shipped UI money math == a canonical oracle, fixture proven discriminating) + live `scripts/qa-spine/money-canary.mjs` (MCP oracle self-check — the W6 matrix, every channel canonical — plus the authed UI cross-check). See [money-canary.md](money-canary.md). This is the class that found F1/F5/F14.
 3. **No end-to-end workflow test** (cart→checkout, admin CRUD round-trip) beyond route-boot. *(Optional/higher-cost.)*
 4. **No visual regression.** *(Optional.)*
-5. **F14 is an open bug** (P&L UI↔MCP divergence) — should be chipped.
+5. ✅ **F14 CLOSED** (P&L UI↔MCP divergence) — fixed by mast-mcp-server #141 and **deployed**; `finance_get_pnl` now returns `marginReliable`/`cogsLineMissingCount`/`cogsMissing`, verified live on `sgtest15` 2026-06-22 (`marginReliable:false, cogsLineMissingCount:22`). Pinned by the F14 cases in the money canary. (New residual logged: **F19** — MCP order loop reads `total*100` not `totalCents`; latent 100× on the SGTE-0187 bad-data shape; cross-repo MCP chip.)
 
 ## 4. The three decisions — revised recommendations (verified basis)
 **Runner model → deterministic backbone for the gaps; agent as a *periodic cross-surface discovery* tool.** The backbone exists; extend it deterministically (golden seed + money-canary value assertion). The agent's durable, evidenced value is **cross-surface divergence discovery** — 3 of 7 genuine bugs (F1, F5, F14) needed it, and F14 (still open) proves a single-surface suite misses this class. Run it **periodically (per major surface change), supervised** — not nightly infra. When it confirms a finding, graduate it to a deterministic test (as F15→`orders-timestamp-sort.test.ts` already did in the mcp repo).
@@ -49,9 +49,9 @@ v1's headline first step ("make boot-smoke a fail-closed gate") is **already don
 **Human lens → occasional real SUS on top flows; CUT the LLM-judge "human proxy."** The agent-proxy measures *agent* friction (the tab/toggle "failures" were agent-click artifacts, not human pain); an LLM-judge UX score would be uncalibrated pseudo-rigor. Measure the **agent** lens authentically (pass^k, tokens/steps/cost — it *is* the agent user); spot-check **humans** with real SUS, don't manufacture a number.
 
 ## 5. Sequencing
-1. **Chip F14** — the one open genuine bug (well-characterized: UI `finance-statements-v2.js:128/217`, MCP `mast-finance.ts:154-165`).
-2. **Golden seed + reset** on main (unblocks #2/#3; also kills the test-data cruft = F10).
-3. **Money-canary cross-surface value assertions** — deterministic checks: rendered UI total == MCP tool value, to the cent (revenue, P&L, AR) on the seeded tenant. This is the genuinely-missing layer.
+1. ✅ **F14 DONE** — fixed (mast-mcp-server #141) + deployed + live-verified; chip `task_14a258f4` closed.
+2. **Golden seed + reset** on main (unblocks the UI cross-check at full strength + kills the test-data cruft = F10). Still the top open prerequisite; the money canary runs against `sgtest15` today and against the golden tenant once it exists.
+3. ✅ **Money canary DONE** — deterministic `test/money-canary.test.js` (CI-gated) + live `scripts/qa-spine/money-canary.mjs`. Covers revenue total, by-channel canonicality, P&L arithmetic, and the F14 margin gate; FAILS loudly on divergence (negative-control verified). The genuinely-missing layer is now in place.
 4. **Commit the qa-spine harness/docs to main** if the program is to persist (today they're local-only).
 5. **(Optional) E2E workflow + visual-regression** for the top money flows.
 6. **(Optional) Periodic agent cross-surface sweep** — gated by a pre-registered falsification bar (below).

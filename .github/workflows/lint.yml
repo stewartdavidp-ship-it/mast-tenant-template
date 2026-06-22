@@ -165,6 +165,7 @@ jobs:
           node test/mast-entity.test.js &&
           node test/finance-order-money.test.js &&
           node test/finance-pos-dedup.test.js &&
+          node test/money-canary.test.js &&
           node test/pos-tax-jurisdiction.test.js &&
           node test/customer-filters.test.js &&
           node test/customer-resolver.test.js &&
