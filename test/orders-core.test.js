@@ -724,6 +724,66 @@ test('_cancelOrderCore: CS-ticket number is allocated ATOMICALLY (bulk-cancel ra
   assert.deepStrictEqual(ticketNums, ['T-0001', 'T-0002'], 'each concurrent cancel gets a distinct ticket number');
 });
 
+test('_cancelOrderCore: releases placement `committed` for a backorder line (keyed by backorderVariantKey) even with NO fulfillment map; clamps made-to-order to a no-op', async () => {
+  // Pre-existing inventory-leak fix: submitOrder commits `committed` at PLACEMENT
+  // for every stock-tracked line, so cancelling an order that was placed but never
+  // confirmed (no o.fulfillment) must still release. Lines:
+  //  - PBO: backorder line, qty 2, committed sits in the VARIANT bucket 'vRed'.
+  //         arch keyed it via item.backorderVariantKey, which differs from the
+  //         harness getItemComboKey ('_default') → proves we release the bucket
+  //         arch actually committed, not the options-derived one.
+  //  - PMTO: made-to-order line, qty 5, NO inventory record at all → release must
+  //          be a no-op (never push committed negative).
+  const inventory = {
+    PBO: { stockType: 'strict', stock: {
+      _default: { onHand: 0, committed: 2, held: 0, damaged: 0 },
+      vRed:     { onHand: 0, committed: 2, held: 0, damaged: 0 }
+    } }
+    // PMTO intentionally absent (true made-to-order has no inventory record).
+  };
+  const orders = { ORD: {
+    orderNumber: 'SO-1', status: 'placed', // placed but NOT confirmed → no fulfillment map
+    items: [
+      { pid: 'PBO', qty: 2, backorder: true, backorderVariantKey: 'vRed', options: { color: 'Red' } },
+      { pid: 'PMTO', qty: 5 }
+    ]
+  } };
+  const mastFlow = { getDefinition: () => ({ id: 'pickship' }), transition: () => Promise.resolve() };
+  const { OrdersCore, rec } = makeCtx({ orders: orders, inventory: inventory, productionRequests: {}, mastFlow: mastFlow });
+  await OrdersCore._cancelOrderCore('ORD', 'cust cancelled');
+
+  const releases = ops(rec, 'multiUpdate').map((w) => w.updates);
+  const boRelease = releases.find((u) => 'admin/inventory/PBO/stock/vRed/committed' in u);
+  assert.ok(boRelease, 'backorder line released against its backorderVariantKey bucket (vRed), not getItemComboKey');
+  assert.deepStrictEqual(boRelease['admin/inventory/PBO/stock/vRed/committed'], { __inc: -2 }, 'releases the full committed qty (2)');
+  assert.deepStrictEqual(boRelease['admin/inventory/PBO/stock/_default/committed'], { __inc: -2 }, '_default aggregate moves in lockstep');
+  assert.ok(!releases.some((u) => Object.keys(u).some((k) => k.indexOf('admin/inventory/PMTO/') === 0)), 'made-to-order line (no committed) releases nothing — clamp min(qty, 0) = 0');
+  const relHist = ops(rec, 'push').find((w) => /\/inventory\/PBO\/history$/.test(w.path));
+  assert.ok(relHist && relHist.data.action === 'released' && relHist.data.reason === 'order_cancelled', 'released history written for the backorder line');
+  assert.strictEqual(relHist.data.orderId, 'ORD', 'release history records the cancelled orderId');
+});
+
+test('_cancelOrderCore: a confirmed build (stock-to-build) line releases its committed too, clamped to what was actually reserved', async () => {
+  // The OLD gate released only source==='stock' && ready, so a 'build' line's
+  // placement committed leaked. submitOrder commits min(qty, available) for a
+  // stock-to-build line, so here committed (3) < line qty (5): the release must be
+  // the committed 3, not the line qty 5 (no over-release, never negative).
+  const inventory = {
+    PSB: { stockType: 'stock-to-build', stock: { _default: { onHand: 3, committed: 3, held: 0, damaged: 0 } } }
+  };
+  const orders = { ORD: {
+    orderNumber: 'SO-2', status: 'building',
+    fulfillment: { PSB: { source: 'build', buildJobId: null, ready: false } },
+    items: [ { pid: 'PSB', qty: 5 } ]
+  } };
+  const mastFlow = { getDefinition: () => ({ id: 'pickship' }), transition: () => Promise.resolve() };
+  const { OrdersCore, rec } = makeCtx({ orders: orders, inventory: inventory, productionRequests: {}, mastFlow: mastFlow });
+  await OrdersCore._cancelOrderCore('ORD', null);
+  const rel = ops(rec, 'multiUpdate').map((w) => w.updates).find((u) => 'admin/inventory/PSB/stock/_default/committed' in u);
+  assert.ok(rel, 'build (stock-to-build) line released its committed reservation (old code skipped non-stock sources)');
+  assert.deepStrictEqual(rel['admin/inventory/PSB/stock/_default/committed'], { __inc: -3 }, 'released min(qty 5, committed 3) = 3 — clamped, never negative');
+});
+
 test('_addOrderNoteCore: ARRAY-shaped notes are appended as an array (preserves shape)', async () => {
   const orders = { ORD1: { notes: [{ text: 'old' }] } };
   const { OrdersCore, rec } = makeCtx({ orders: orders });

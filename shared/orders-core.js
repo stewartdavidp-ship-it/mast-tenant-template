@@ -899,11 +899,13 @@
   // DOM-free cancellation core (single source for the legacy detail "Cancel
   // Order" handler + the orders-v2 native action via OrdersBridge.cancelOrder).
   // The DOM read of #cancelReason and the toast/closeModal UI live in the
-  // legacy handler; this core is the legacy cancellation logic VERBATIM with
-  // the reason lifted to an argument. It reads the live record from the global
-  // `orders` cache (seeded by the bridge when the V2 twin drives the flow).
-  // Firestore writes are byte-identical to the pre-extraction handler:
-  // releaseInventory (variant-aware), cancel open buildJobs reqs, write
+  // legacy handler; the reason is lifted to an argument. It reads the live record
+  // from the global `orders` cache (seeded by the bridge when the V2 twin drives
+  // the flow). It mirrors the pre-extraction handler EXCEPT the inventory release,
+  // which was fixed to release the placement-time `committed` reservation for every
+  // line (see the release block below) — the legacy handler released only confirmed
+  // in-stock lines and leaked build/backorder/unconfirmed reservations. The
+  // remaining writes are unchanged: cancel open buildJobs reqs, write
   // cancelledAt/cancelReason, MastFlow 'closed' transition (force), and the
   // non-fatal CS-ticket creation. Returns void.
   async function _cancelOrderCore(orderId, reason) {
@@ -914,16 +916,29 @@
     var history = o.statusHistory ? o.statusHistory.slice() : [];
     history.push({ status: 'cancelled', at: now, by: 'admin', note: reason || null });
 
-    // Release committed inventory (variant-aware)
-    if (o.fulfillment) {
-      (o.items || []).forEach(function(item) {
-        var ffKey = getItemFulfillmentKey(item);
-        var ff = o.fulfillment[ffKey];
-        if (ff && ff.source === 'stock' && ff.ready) {
-          releaseInventory(item.pid, item.qty || 1, getItemComboKey(item.pid, item.options));
-        }
-      });
-    }
+    // Release any inventory still RESERVED (committed) for this order's lines.
+    // submitOrder commits at PLACEMENT for every stock-tracked line — in-stock,
+    // stock-to-build (the available portion), AND backorder (full qty held against
+    // the incoming PO) — so the reservation exists from placement onward, before a
+    // fulfillment map is ever written. The previous gate (o.fulfillment present +
+    // source==='stock' + ready) released ONLY confirmed in-stock lines, leaking the
+    // committed reservation for build/backorder lines and for any order cancelled
+    // before confirmation (no fulfillment map → phantom committed forever). Mirror
+    // the authoritative onOrderCancelled CF instead: release every line, clamped to
+    // what is actually committed (min(qty, committed)), so made-to-order lines (zero
+    // committed), POS lines (drew down onHand, not committed), and already-shipped
+    // lines (committed drawn down) are no-ops and committed never goes negative.
+    // Backorder lines key off item.backorderVariantKey — the exact variant bucket
+    // arch committed against; getItemComboKey can resolve a variant differently.
+    (o.items || []).forEach(function(item) {
+      var ck = item.backorderVariantKey || getItemComboKey(item.pid, item.options);
+      var invRec = inventory[item.pid];
+      var stockEntry = (invRec && invRec.stock && invRec.stock[ck]) || {};
+      var releaseQty = Math.min(item.qty || 1, stockEntry.committed || 0);
+      if (releaseQty > 0) {
+        releaseInventory(item.pid, releaseQty, ck, orderId);
+      }
+    });
 
     // Cancel open production requests
     var reqKeys = Object.keys(productionRequests).filter(function(k) {
