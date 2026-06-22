@@ -50,6 +50,15 @@
     if (s.discountType === 'percent') return s.discountValue + '% off';
     return (N.money((s.discountValue || 0) / 100) || '$0.00') + ' off';
   }
+  // Which channels a sale applies to. Missing/empty = both (legacy + default).
+  function formatChannels(ch) {
+    if (!ch || !ch.length) return 'POS + Online';
+    var pos = ch.indexOf('pos') !== -1, on = ch.indexOf('online') !== -1;
+    if (pos && on) return 'POS + Online';
+    if (pos) return 'POS only';
+    if (on) return 'Online only';
+    return '—';
+  }
   // One editable tier row (qty → total $) for the quantity-tier editor.
   function tierRowHtml(qty, totalCents) {
     return '<div class="promo-v2-tier" style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">' +
@@ -111,6 +120,7 @@
         var schedule = UI.kv([
           { k: 'Discount', v: esc(formatDiscount(s)) },
           { k: 'Window', v: esc(windowText(s) || '—') },
+          { k: 'Applies to', v: esc(formatChannels(s.channels)) },
           { k: 'Keep after end', v: s.keepAfterEnd ? 'Yes' : 'No' }
         ]);
         var id = s._key || s.id;
@@ -171,7 +181,12 @@
               '<input class="form-input" type="datetime-local" id="promoV2End" value="' + (s && s.endDate ? esc(s.endDate.slice(0, 16)) : '') + '" style="width:100%;"></div>' +
           '</div>' +
           '<div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;">' +
-            '<input type="checkbox" id="promoV2Keep"' + (s && s.keepAfterEnd ? ' checked' : '') + '> Keep after end (prevent auto-archiving)</label></div>';
+            '<input type="checkbox" id="promoV2Keep"' + (s && s.keepAfterEnd ? ' checked' : '') + '> Keep after end (prevent auto-archiving)</label></div>' +
+          '<div class="form-group"><label class="form-label">Where it applies</label>' +
+            '<div style="display:flex;gap:16px;flex-wrap:wrap;">' +
+              '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;"><input type="checkbox" id="promoV2ChPos"' + (!s || !s.channels || s.channels.indexOf('pos') !== -1 ? ' checked' : '') + '> Point of sale</label>' +
+              '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.9rem;"><input type="checkbox" id="promoV2ChOnline"' + (!s || !s.channels || s.channels.indexOf('online') !== -1 ? ' checked' : '') + '> Online store</label>' +
+            '</div></div>';
 
         var picker =
           '<div class="form-group"><label class="form-label">Products</label>' +
@@ -225,10 +240,15 @@
       var endISO = end ? new Date(end).toISOString() : null;
       if (endISO && endISO < startISO) { showToast('End date must be after start date', true); return false; }
 
+      var channels = [];
+      if ((document.getElementById('promoV2ChPos') || {}).checked) channels.push('pos');
+      if ((document.getElementById('promoV2ChOnline') || {}).checked) channels.push('online');
+      if (!channels.length) { showToast('Pick at least one place: Point of sale or Online store', true); return false; }
+
       var now = new Date().toISOString();
       var data = { name: name, discountType: type, products: pids,
         startDate: startISO, endDate: endISO, keepAfterEnd: keep, updatedAt: now,
-        discountValue: (type === 'quantity-tier' ? null : value), tiers: (type === 'quantity-tier' ? tiers : null) };
+        discountValue: (type === 'quantity-tier' ? null : value), tiers: (type === 'quantity-tier' ? tiers : null), channels: channels };
 
       var id = rec._key || rec.id;
       var op;

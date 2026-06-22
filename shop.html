@@ -656,6 +656,7 @@ window.TENANT_READY.then(function() {
       if (sale.archived) return;
       if (sale.startDate && sale.startDate > now) return;
       if (sale.endDate && sale.endDate < now) return;
+      if (sale.channels && sale.channels.length && sale.channels.indexOf('online') === -1) return;   // POS-only sale, not online
       var products = sale.products || [];
       products.forEach(function(entry) {
         var pid = typeof entry === 'string' ? entry : entry.pid;
