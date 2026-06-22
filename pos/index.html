@@ -2169,15 +2169,9 @@ function renderCatalog() {
   var grid = document.getElementById('catalogGrid');
   var f = (currentFilter || '').toLowerCase();
 
-  // Search overrides the drill — show matching products across every category.
-  if (f) {
-    grid.innerHTML = productTilesHtml(productsList.filter(function(p) {
-      return (p.name || '').toLowerCase().indexOf(f) !== -1;
-    }));
-    return;
-  }
-
-  // Level 3 — variants of the tapped product.
+  // Level 3 — variants of the tapped product. Checked BEFORE search so tapping a
+  // search result drills into its variants; the search term stays active so the
+  // back bar returns to the results.
   if (variantParent) {
     var parent = products[variantParent];
     if (parent && hasVariants(parent)) {
@@ -2193,6 +2187,14 @@ function renderCatalog() {
       return;
     }
     variantParent = null;                            // stale parent — fall through
+  }
+
+  // Search overrides the drill — show matching products across every category.
+  if (f) {
+    grid.innerHTML = productTilesHtml(productsList.filter(function(p) {
+      return (p.name || '').toLowerCase().indexOf(f) !== -1;
+    }));
+    return;
   }
 
   // Level 1 — categories as buttons (the landing). Skipped when none exist.
@@ -2282,11 +2284,13 @@ function updateCatalogChrome() {
   if (!back) return;
   var label = document.getElementById('backBarLabel');
   var title = document.getElementById('backBarTitle');
-  if (currentFilter) { back.style.display = 'none'; return; }   // search is a flat overlay
+  // Variant level wins over search so a search-result drill shows a working back bar.
   if (variantParent && products[variantParent]) {
     back.style.display = 'flex';
-    label.textContent = (currentCategory && currentCategory !== 'all') ? currentCategory : 'All products';
+    label.textContent = currentFilter ? 'Search' : ((currentCategory && currentCategory !== 'all') ? currentCategory : 'All products');
     title.textContent = products[variantParent].name || 'Product';
+  } else if (currentFilter) {
+    back.style.display = 'none';   // search is a flat overlay
   } else if (_catList.length && currentCategory != null) {
     back.style.display = 'flex';
     label.textContent = 'Categories';
