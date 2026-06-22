@@ -260,12 +260,22 @@
     // Build fulfillment map from admin choices
     var ff = {};
     var needsBuilding = false;
+    var hasBackorder = false;
     itemActions.forEach(function(ia) {
       var ffKey = getItemFulfillmentKey(ia.item);
       if (ia.action === 'stock') {
         ff[ffKey] = { source: 'stock', buildJobId: null, ready: true };
         var ck = getItemComboKey(ia.item.pid, ia.item.options);
         reserveInventory(ia.item.pid, ia.item.qty || 1, ck);
+      } else if (ia.action === 'backorder') {
+        // Tier 2 resold backorder: the goods are sourced from the incoming PO,
+        // NOT built. submitOrder already reserved `committed` for the line at
+        // placement, so we DON'T re-reserve here (that would double-commit and
+        // leak a phantom commit on ship). No build job — the covering PO restocks
+        // onHand on receipt and the pickship `backorder-stock` gate releases the
+        // order (Confirmed → Ready) once onHand >= committed.
+        ff[ffKey] = { source: 'backorder', buildJobId: null, ready: false };
+        hasBackorder = true;
       } else {
         ff[ffKey] = { source: 'build', buildJobId: null, ready: false };
         needsBuilding = true;
@@ -276,14 +286,23 @@
     updates['confirmedAt'] = now;
     history.push({ status: 'confirmed', at: now, by: 'admin' });
 
-    if (!needsBuilding) {
-      updates['status'] = 'pack';
-      updates['packAt'] = now;
-      history.push({ status: 'pack', at: now, by: 'system', note: 'All items in stock' });
-    } else {
+    if (needsBuilding) {
+      // Build items drive the order to Building (+ production requests). A
+      // backorder line riding along stays gated by the Confirmed-phase
+      // backorder-stock requirement, which spans the building status too.
       updates['status'] = 'building';
       updates['buildingAt'] = now;
       history.push({ status: 'building', at: now, by: 'system', note: 'Items need to be made' });
+    } else if (hasBackorder) {
+      // Backorder, no build: hold the order in the Confirmed phase. The pickship
+      // `backorder-stock` hard gate blocks Confirmed → Ready until the covering
+      // PO is received (onHand >= committed). No build job, no premature pack/ship.
+      updates['status'] = 'confirmed';
+      history.push({ status: 'confirmed', at: now, by: 'system', note: 'Awaiting back-ordered stock' });
+    } else {
+      updates['status'] = 'pack';
+      updates['packAt'] = now;
+      history.push({ status: 'pack', at: now, by: 'system', note: 'All items in stock' });
     }
     updates['statusHistory'] = history;
 
@@ -494,6 +513,10 @@
       // On confirm: use triage function with auto-determined actions
       if (newStatus === 'confirmed') {
         var autoActions = (o.items || []).map(function(item) {
+          // Tier 2 backorder lines are sourced from the incoming PO, not built —
+          // route them to 'backorder' (no build job) so this auto-confirm path
+          // matches the slide-out triage. Mirrors triageAndConfirmOrder.
+          if (item.backorder) return { item: item, action: 'backorder' };
           var invStatus = getItemInventoryStatus(item);
           return { item: item, action: invStatus.status === 'stock' ? 'stock' : 'build' };
         });
