@@ -171,11 +171,7 @@ body {
 .picker-card-price { font-size: 18px; font-weight: 700; color: var(--gold); margin-top: 4px; }
 /* "N options ›" badge on a product that drills into variants */
 .variant-badge { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.7); color: var(--text); font-size: 12px; font-weight: 600; padding: 4px 9px; border-radius: 999px; backdrop-filter: blur(2px); }
-/* Back bar shown in place of the category strip while drilled into a product's variants */
-.variant-back-bar { display: flex; align-items: center; gap: 8px; padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); cursor: pointer; font-size: 15px; color: var(--muted); }
-.variant-back-bar strong { color: var(--text); }
-.variant-back-arrow { font-size: 20px; line-height: 1; color: var(--gold); }
-.variant-back-sep { color: var(--border); }
+/* (Drill-up nav is the breadcrumb toolbar + bottom Back button — see .breadcrumb / .catalog-backbar.) */
 
 /* Success screen */
 #successScreen { align-items: center; justify-content: center; padding: 40px; text-align: center; gap: 16px; }
@@ -225,10 +221,24 @@ body {
 #catalogScreen { padding: 0; }
 #catalogScreen.active { display: flex; flex-direction: column; }
 .catalog-main { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
-.catalog-header { display: flex; gap: 8px; padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); align-items: center; }
-.catalog-header input { flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 15px; }
+/* Catalog toolbar: search/scan + breadcrumb. Stacked on phone; one row on tablet (see @media 768). */
+.catalog-toolbar { display: flex; flex-direction: column; gap: 8px; padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border); }
+.catalog-search-row { display: flex; gap: 8px; align-items: center; }
+.catalog-search-row input { flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 15px; }
 .scan-btn { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; }
 .scan-btn:active { border-color: var(--gold); }
+/* Breadcrumb — tappable crumbs that jump to any drill level (replaces the old gray back strip). */
+.breadcrumb { display: flex; align-items: center; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.breadcrumb:empty { display: none; }
+.crumb { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 9px 13px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: inherit; }
+.crumb:active { transform: scale(0.97); }
+.crumb.current { border-color: var(--gold); background: rgba(196,148,74,0.15); cursor: default; }
+.crumb-sep { flex: 0 0 auto; color: var(--muted); font-size: 15px; }
+.crumb-arrow, .pos-back-arrow { font-size: 19px; line-height: 1; }
+/* Big thumb-zone Back button below the product area (tablet only; phone uses the crumbs). */
+.catalog-backbar { display: none; padding: 10px 14px; border-top: 1px solid var(--border); background: var(--card); }
+.pos-back-btn { display: inline-flex; align-items: center; gap: 7px; padding: 13px 22px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 16px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.pos-back-btn:active { border-color: var(--gold); transform: scale(0.98); }
 
 /* Category strip */
 .category-strip { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; background: var(--card); border-bottom: 1px solid var(--border); -webkit-overflow-scrolling: touch; }
@@ -343,15 +353,22 @@ html[data-tile-size="small"] .picker-card-noimg span { font-size: 14px; }
   .cart-body { display: flex !important; flex: 1; }
   .cart-items { max-height: none; flex: 1; }
   #catalogGrid { padding-bottom: 12px; }
+  .catalog-toolbar { flex-direction: row-reverse; align-items: center; gap: 12px; }
+  .catalog-toolbar .breadcrumb { flex: 1; min-width: 0; }
+  .catalog-toolbar .catalog-search-row { flex: 0 0 auto; }
+  .catalog-search-row input { flex: 0 0 220px; width: 220px; }
+  .catalog-main.has-back .catalog-backbar { display: block; }
+  .crumb-back { display: none; }
 }
 
 /* Checkout (result) screen header + back nav */
 .checkout-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: var(--card); border-bottom: 1px solid var(--border); }
-.back-btn { background: none; border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 14px; padding: 8px 12px; cursor: pointer; }
+.back-btn { display: inline-flex; align-items: center; gap: 7px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font-size: 16px; font-weight: 600; padding: 11px 18px; cursor: pointer; font-family: inherit; }
+.back-btn:active { border-color: var(--gold); transform: scale(0.98); }
 .checkout-header h2 { font-size: 16px; font-weight: 600; }
 
 /* Camera-screen close button (scanner is now opt-in) */
-.cam-close { position: absolute; top: 16px; left: 16px; z-index: 11; background: rgba(0,0,0,0.55); color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 8px 14px; font-size: 14px; cursor: pointer; }
+.cam-close { position: absolute; top: 16px; left: 16px; z-index: 11; display: inline-flex; align-items: center; gap: 7px; background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.35); border-radius: 10px; padding: 11px 18px; font-size: 16px; font-weight: 600; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -386,17 +403,17 @@ html[data-tile-size="small"] .picker-card-noimg span { font-size: 14px; }
 <!-- Catalog Screen (home) — browse products, persistent cart -->
 <div id="catalogScreen" class="screen">
   <div class="catalog-main">
-    <div class="catalog-header">
-      <input type="text" id="catalogSearch" placeholder="Search products..." oninput="filterCatalog(this.value)">
-      <button class="scan-btn" onclick="openScanner()" title="Identify a product with the camera">📷 Scan</button>
-    </div>
-    <div class="variant-back-bar" id="backBar" onclick="onBackBar()" style="display:none;">
-      <span class="variant-back-arrow">‹</span>
-      <span id="backBarLabel">Categories</span>
-      <span class="variant-back-sep">·</span>
-      <strong id="backBarTitle"></strong>
+    <div class="catalog-toolbar">
+      <div class="catalog-search-row">
+        <input type="text" id="catalogSearch" placeholder="Search products..." oninput="filterCatalog(this.value)">
+        <button class="scan-btn" onclick="openScanner()" title="Identify a product with the camera">📷 Scan</button>
+      </div>
+      <div class="breadcrumb" id="breadcrumb"></div>
     </div>
     <div id="catalogGrid"></div>
+    <div class="catalog-backbar" id="catalogBackBar">
+      <button class="pos-back-btn" onclick="onBackBar()"><span class="pos-back-arrow">‹</span> Back</button>
+    </div>
   </div>
   <div class="cart-panel" id="cartPanel">
     <div class="cart-header" onclick="toggleCart()">
@@ -1275,6 +1292,7 @@ function loadProducts() {
       .filter(function(p) { return !p.availability || p.availability === 'available'; })
       .sort(function(a, b) { return (a.name || '').localeCompare(b.name || ''); });
     buildCategoryList();
+    updateCatalogChrome();
     renderCatalog();
     refreshCartUI();
   });
@@ -2268,12 +2286,17 @@ function exitVariants() {
   renderCatalog();
 }
 
-// Back bar — drives the drill-up. Hidden at the category landing (and during a
-// search); "‹ Categories · {Category}" at the product level; "‹ {Category} ·
-// {Product}" at the variant level.
+// Drill-up nav. The breadcrumb (toolbar) jumps to any level; onBackBar() steps up
+// ONE level and drives the big bottom Back button (tablet) + the phone back chip.
 function onBackBar() {
-  if (variantParent) exitVariants();
-  else exitToCategories();
+  if (variantParent) { exitVariants(); return; }   // variant -> product list (search stays active if set)
+  if (currentFilter) {                              // search results -> landing
+    var sb = document.getElementById('catalogSearch'); if (sb) sb.value = '';
+    currentFilter = '';
+    updateCatalogChrome(); renderCatalog();
+    return;
+  }
+  exitToCategories();                               // category products -> categories landing
 }
 function exitToCategories() {
   currentCategory = null;
@@ -2281,25 +2304,55 @@ function exitToCategories() {
   updateCatalogChrome();
   renderCatalog();
 }
-function updateCatalogChrome() {
-  var back = document.getElementById('backBar');
-  if (!back) return;
-  var label = document.getElementById('backBarLabel');
-  var title = document.getElementById('backBarTitle');
-  // Variant level wins over search so a search-result drill shows a working back bar.
-  if (variantParent && products[variantParent]) {
-    back.style.display = 'flex';
-    label.textContent = currentFilter ? 'Search' : ((currentCategory && currentCategory !== 'all') ? currentCategory : 'All products');
-    title.textContent = products[variantParent].name || 'Product';
-  } else if (currentFilter) {
-    back.style.display = 'none';   // search is a flat overlay
-  } else if (_catList.length && currentCategory != null) {
-    back.style.display = 'flex';
-    label.textContent = 'Categories';
-    title.textContent = (currentCategory === 'all') ? 'All products' : currentCategory;
-  } else {
-    back.style.display = 'none';
+// Breadcrumb trail for the current drill state. Landing = just [All].
+function buildCrumbs() {
+  var crumbs = [{ label: 'All', target: 'home' }];
+  if (currentFilter) {
+    crumbs.push({ label: 'Search', target: 'search' });
+  } else if (currentCategory && currentCategory !== 'all') {
+    crumbs.push({ label: currentCategory, target: 'category' });
   }
+  if (variantParent && products[variantParent]) {
+    crumbs.push({ label: products[variantParent].name || 'Product', target: 'category' });
+  }
+  crumbs[crumbs.length - 1].current = true;
+  return crumbs;
+}
+// Tap a crumb to jump straight to that level.
+function crumbTo(target) {
+  var sb = document.getElementById('catalogSearch');
+  if (target === 'home') {
+    if (currentFilter) { if (sb) sb.value = ''; currentFilter = ''; }
+    exitToCategories();
+  } else if (target === 'category') {
+    if (currentFilter) { if (sb) sb.value = ''; currentFilter = ''; }
+    variantParent = null;
+    updateCatalogChrome(); renderCatalog();
+  } else if (target === 'search') {
+    variantParent = null;
+    updateCatalogChrome(); renderCatalog();
+  }
+}
+function renderBreadcrumb(crumbs) {
+  var el = document.getElementById('breadcrumb');
+  if (!el) return;
+  var html = '';
+  if (crumbs.length > 1) {
+    html += '<button class="crumb crumb-back" onclick="onBackBar()"><span class="crumb-arrow">‹</span> Back</button>';
+  }
+  crumbs.forEach(function (c, i) {
+    if (i > 0) html += '<span class="crumb-sep">›</span>';
+    var cls = 'crumb' + (c.current ? ' current' : '');
+    var click = c.current ? '' : ' onclick="crumbTo(\'' + c.target + '\')"';
+    html += '<button class="' + cls + '"' + click + '>' + esc(c.label) + '</button>';
+  });
+  el.innerHTML = html;
+}
+function updateCatalogChrome() {
+  var crumbs = buildCrumbs();
+  renderBreadcrumb(crumbs);
+  var main = document.querySelector('#catalogScreen .catalog-main');
+  if (main) main.classList.toggle('has-back', crumbs.length > 1);
 }
 
 function pickProduct(pid) {
