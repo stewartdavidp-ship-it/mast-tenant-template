@@ -1,14 +1,27 @@
-name: QA write-delta money canary (nightly)
+name: QA write-delta money canary (on deploy)
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Scheduled E2E that DRIVES the write-delta money canary unattended against the
+# CHANGE-TRIGGERED E2E that DRIVES the write-delta money canary against the
 # dedicated writable QA tenant: restock fixture → (k× : oracle-before → REAL sale
 # → oracle-after → assert A1–A5) → pass^k → scorecard. Red ⇒ a real money-flow
 # divergence (a sale did NOT move the books by exactly the sale amount, into one
 # canonical channel, with inventory drawn down, reconciled, no collateral).
 #
-# ⚠️ THIS IS NOT A PR GATE. It runs ONLY on a nightly schedule + manual dispatch —
-# never on `pull_request` — so it can never block a merge. It is intentionally
+# WHY this trigger (not a clock): the live money path spans 3 repos
+# (template UI · submitOrder CF in mast-architecture · finance tools in
+# mast-mcp-server) + live infra. Template CODE is already covered per-PR by the
+# deterministic money-canary unit test + boot smoke. This live run's unique job is
+# catching regressions in the DEPLOYED, wired-together system — so it fires when a
+# money-path component DEPLOYS, not on an arbitrary nightly clock:
+#   • template:  after a successful `Deploy` (push→main) THAT touched money-path
+#                files (the gate below); skipped otherwise.
+#   • cross-repo: arch/MCP deploys should `repository_dispatch` this workflow
+#                (TODO — add `repository_dispatch:` types here + a dispatch step in
+#                 those repos' deploy jobs). That's where the real cross-repo gap is.
+#   • on-demand:  manual `workflow_dispatch`.
+#
+# ⚠️ THIS IS NOT A PR GATE. It runs only AFTER a merge deploys (workflow_run) or on
+# manual dispatch — never on `pull_request` — so it can never block a merge. It is
 # absent from branch-protection required checks and does not touch lint.yml.
 # See docs/ux-audit/qa-spine/automated-runner.md (supersedes write-delta-canary.md §4).
 #
@@ -18,8 +31,9 @@ name: QA write-delta money canary (nightly)
 # ─────────────────────────────────────────────────────────────────────────────
 
 on:
-  schedule:
-    - cron: "0 9 * * *"      # ~nightly, 09:00 UTC (overnight in the Americas)
+  workflow_run:
+    workflows: ["Deploy"]      # the template dev-deploy (deploy.yml, push→main)
+    types: [completed]
   workflow_dispatch:
     inputs:
       surface:
@@ -42,13 +56,16 @@ permissions:
   contents: read
 
 concurrency:
-  group: qa-canary-nightly
+  group: qa-canary-on-deploy
   cancel-in-progress: false
 
 jobs:
   write-delta-canary:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Only after a SUCCESSFUL deploy (or a manual dispatch). A failed/cancelled
+    # deploy never deployed anything, so there's nothing new to exercise.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     env:
       # tenant + base url come from repo variables (Settings → Variables), with
       # manual-dispatch overrides. The credential is the single secret.
@@ -58,11 +75,37 @@ jobs:
       SURFACE: ${{ github.event.inputs.surface || vars.SURFACE || 'storefront' }}
       K: ${{ github.event.inputs.k || '5' }}
     steps:
-      - name: Checkout
+      - name: Checkout (the deployed commit)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 2
+
+      - name: Gate — only run when the deploy touched the money path
+        id: gate
+        run: |
+          # Manual dispatch always runs. Deploy trigger runs ONLY if the deployed
+          # commit changed a money-path file (so a docs/unrelated deploy is skipped
+          # — "test the money path when the money path changes"). Fail-SAFE: if the
+          # diff can't be computed, RUN (better to over-run than silently miss).
+          if [ "${{ github.event_name }}" != "workflow_run" ]; then
+            echo "manual dispatch → run"; echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          CHANGED="$(git diff --name-only HEAD^ HEAD 2>/dev/null || true)"
+          if [ -z "$CHANGED" ]; then
+            echo "could not compute diff → run (fail-safe)"; echo "run=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if echo "$CHANGED" | grep -qE '(app/modules/(finance|orders|sales|products|reorder|procurement|jobs|production)|(^|/)pos/|(^|/)checkout\.js|(^|/)cart\.js|shared/(orders-core|channel-normalization|mast-format|mast-io))'; then
+            echo "money-path files changed → run"; echo "$CHANGED" | grep -E '(finance|orders|sales|products|pos/|checkout|cart|orders-core|channel-normalization)' | sed 's/^/  /'
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Money canary skipped::Deploy ${{ github.event.workflow_run.head_sha }} did not touch the money path."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Preflight — is the QA canary configured?
         id: preflight
+        if: steps.gate.outputs.run == 'true'
         run: |
           MISSING=""
           [ -z "$MAST_QA_STORAGE_STATE" ] && MISSING="$MISSING MAST_QA_STORAGE_STATE(secret)"
@@ -76,13 +119,13 @@ jobs:
           fi
 
       - name: Setup Node.js
-        if: steps.preflight.outputs.configured == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.configured == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
       - name: Install Playwright (>=1.51 for IndexedDB storageState) + Chromium
-        if: steps.preflight.outputs.configured == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.configured == 'true'
         working-directory: scripts
         run: |
           npm ci --no-audit --no-fund
@@ -92,7 +135,7 @@ jobs:
           npx playwright install --with-deps chromium
 
       - name: Run write-delta canary (k iterations, pass^k)
-        if: steps.preflight.outputs.configured == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.preflight.outputs.configured == 'true'
         env:
           ORACLE: browser
           OUT_DIR: qa-spine-out
@@ -100,7 +143,7 @@ jobs:
         run: node scripts/qa-spine/write-delta-runner.mjs
 
       - name: Upload scorecard + iteration artifacts
-        if: always() && steps.preflight.outputs.configured == 'true'
+        if: always() && steps.gate.outputs.run == 'true' && steps.preflight.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: write-delta-scorecard-${{ github.run_id }}

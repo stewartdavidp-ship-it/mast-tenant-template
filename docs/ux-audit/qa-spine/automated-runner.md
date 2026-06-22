@@ -1,17 +1,24 @@
-# Automated write-delta money canary — the unattended nightly runner
+# Automated write-delta money canary — the deploy-triggered runner
 
 > **Supersedes the manual operator handoff in [write-delta-canary.md](write-delta-canary.md) §4.**
 > That section was a step-by-step the operator ran by hand each time (mint clone →
-> seed → loop k=5 → assert → purge). This replaces it with a **scheduled runner**
-> that closes the loop with **zero per-run human action**: on a nightly cron,
-> against a **dedicated persistent writable QA tenant**, it restocks the fixture,
+> seed → loop k=5 → assert → purge). This replaces it with a **deploy-triggered runner**
+> that closes the loop with **zero per-run human action**: after a money-path **Deploy**
+> (push→main), against a **dedicated persistent writable QA tenant**, it restocks the fixture,
 > drives a real sale, snapshots the books before/after via the finance oracle,
 > asserts A1–A5, repeats **k=5 (pass^k)**, and reports pass/fail. The only thing a
-> human does is the **one-time setup** below. Authored 2026-06-22.
+> human does is the **one-time setup** below. Authored 2026-06-22; rewired deploy-triggered 2026-06-22.
 >
-> ⚠️ **This is a scheduled E2E that REPORTS — not a PR gate.** It runs only on the
-> nightly schedule + manual dispatch, is absent from branch-protection required
-> checks, and does not touch `lint.yml`. It can never block a merge.
+> **Why deploy-triggered, not nightly?** The live money path spans 3 repos (template UI ·
+> `submitOrder` CF in mast-architecture · finance tools in mast-mcp-server). Template *code* is
+> already covered per-PR by the deterministic money-canary unit test + smoke. This live run's
+> unique job is the *deployed, wired-together* system — so it fires when a money-path component
+> **deploys** (test on change), not on an arbitrary clock. (Earlier "nightly/cron/09:00 UTC"
+> references below are superseded — the **setup steps are identical**; only the *trigger* changed.)
+>
+> ⚠️ **This is a deploy-triggered E2E that REPORTS — not a PR gate.** It runs only AFTER a
+> money-path Deploy + manual dispatch (never on `pull_request`), is absent from branch-protection
+> required checks, and does not touch `lint.yml`. It can never block a merge.
 
 ---
 
@@ -79,7 +86,7 @@ real.
 ## 2. Architecture — what runs, and what each piece reuses
 
 ```
-.github/workflows/qa-canary-nightly.yml   cron + manual dispatch; installs PW≥1.51
+.github/workflows/qa-canary-on-deploy.yml   cron + manual dispatch; installs PW≥1.51
    └─ scripts/qa-spine/write-delta-runner.mjs        THE UNATTENDED ORCHESTRATOR
         restock fixture if low  ── authed admin session (MastDB.update)
         loop k:
@@ -96,7 +103,7 @@ real.
 | `write-delta-sale.mjs` | Playwright sale driver | reused (+ a tiny additive `checkoutTotalCents` capture) |
 | `write-delta-runner.mjs` | the unattended orchestrator (oracle + restock + loop + pass^k) | **new** |
 | `capture-qa-storage-state.mjs` | one-time credential mint helper | **new** |
-| `qa-canary-nightly.yml` | the scheduled workflow | **new** |
+| `qa-canary-on-deploy.yml` | the scheduled workflow | **new** |
 
 **The oracle is no longer "the agent runs MCP."** It is an authed Playwright
 session reading the **shipped** `FinanceBridge.loadRevenueAggregate` /
@@ -112,8 +119,8 @@ the exact live shapes — including the load-bearing `opex`→`operatingExpenses
 
 ## 3. The schedule, the results, and the failure alert
 
-- **When:** nightly at `09:00 UTC` (`cron: "0 9 * * *"`) + **manual dispatch**
-  (Actions → *QA write-delta money canary (nightly)* → *Run workflow*; choose
+- **When:** after a successful **Deploy** (push→main) that touched the money path (the workflow's gate) + **manual dispatch** + (TODO) arch/MCP deploy `repository_dispatch`
+  (Actions → *QA write-delta money canary (on deploy)* → *Run workflow*; choose
   `surface` / `k` / optional base-url + tenant overrides).
 - **Pass:** all k iterations green → `pass^k` PASS → job **green**.
 - **Fail (the alert):** any assertion fails, or a sale never fires after retries →
@@ -200,7 +207,7 @@ Set the choice via the dispatch input or a `SURFACE` repo variable.
 
 ## 6. Operations & troubleshooting
 
-- **Run it now:** Actions → *QA write-delta money canary (nightly)* → *Run
+- **Run it now:** Actions → *QA write-delta money canary (on deploy)* → *Run
   workflow*. Use `k=1` for a quick smoke.
 - **Validate the wiring with no credential:** `ORACLE=mock MAST_TENANT=<t>
   MAST_BASE_URL=<url> node scripts/qa-spine/write-delta-runner.mjs` (drives the
