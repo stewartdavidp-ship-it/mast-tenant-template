@@ -12,12 +12,15 @@ docs/ux-audit/qa-spine/
   README.md             ← this file (structure + scorecard schema)
   W3-pilot.md           ← the pilot workflow, proxy-validated live (POS sale → books)
   scorecard-W3.json     ← machine-readable pilot result (agent baseline + proxy run)
-  oracle-templates.md   ← agent/MCP oracle for the other 9 (W1,W2,W4–W10) + findings ledger
+  oracle-templates.md   ← agent/MCP oracle for the other 9 (W1,W2,W4–W10) + findings ledger (F1–F20)
   suite-scorecard.json  ← consolidated 10-workflow rollup (feeds the heatmap)
   money-canary.md       ← cross-surface VALUE assertion layer (Phase 3 item 3)
+  value-coverage-matrix.md (+ .json) ← Lens 3: ranked capability × importance × coverage ("where to invest")
+  usability-runbook.md  ← Lens 2 (human): the SUS + SEQ + objective-metrics protocol
 scripts/qa-spine/
   w3-pos-ui.mjs         ← Playwright UI runner (records steps/time/errors/console)
   money-canary.mjs      ← live cross-surface money probe (oracle self-check + UI cross-check)
+  usability-harness.mjs ← Lens 2 (human): objective-metrics capture (6 tasks; SUS/SEQ left to a human)
 test/
   money-canary.test.js  ← deterministic money-canary (CI-gated; UI math == canonical oracle)
 ```
@@ -65,8 +68,16 @@ at the suite level (which money-critical flows are weakly covered).
   live `scripts/qa-spine/money-canary.mjs` self-checks the MCP oracle (W6 matrix, all channels canonical)
   and cross-checks the rendered admin surface. **F14 closed** (deployed; `marginReliable` parity verified
   live). See [money-canary.md](money-canary.md).
-- **Human UI: 0/10 measured** — blocked on a writable automated session (the #1 open decision).
+- **Lens 3 (business value): BUILT** — [`value-coverage-matrix.md`](value-coverage-matrix.md) ranks
+  20 capabilities (the 9-module catalog × W1–W10) by importance × coverage on all three surfaces.
+  Coverage is **live-verified** (surfaced **F20** — W4/W2 agent coverage drifted *positive*; the ledger
+  was stale). Value-at-risk headliners: classes/booking (F11, a whole revenue line, agent+test blind),
+  returns/refund (untested money-out), restock/PO (new agent write power, no regression net).
+- **Lens 2 (human ease-of-use): INSTRUMENT BUILT** — [`usability-runbook.md`](usability-runbook.md) +
+  [`usability-harness.mjs`](../../../scripts/qa-spine/usability-harness.mjs): SUS (10-item) + SEQ + objective
+  metrics over 6 top flows. Objective half auto-captured; **subjective SUS/SEQ = operator-scheduled human run**
+  (no numbers fabricated — phase-3-plan §4). Was: "Human UI 0/10 measured, blocked on a writable session."
 - **Findings:** F1 fixed (`task_f0d1c0e4`), F14 fixed+deployed (`task_14a258f4` closed); **F19** logged
-  (latent MCP order-`totalCents` divergence). Ledger in oracle-templates.md.
+  (latent MCP order-`totalCents` divergence); **F20** logged (positive coverage drift). Ledger in oracle-templates.md.
 
 Per-workflow surface × lens maturity is in `suite-scorecard.json` and the heatmap.

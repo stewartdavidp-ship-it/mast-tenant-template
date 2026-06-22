@@ -1,0 +1,245 @@
+{
+  "artifact": "Capability × Importance × Coverage matrix (Lens 3 — business value)",
+  "purpose": "Make 'where is high business value weakly covered' legible at a glance, across all three test surfaces (human UI · AI-agent/MCP · automated-test). The Lens-3 'where to invest' artifact the next-gen testing program was missing.",
+  "kind": "periodic — refresh on any surface change (new MCP tool, new test, new module). NOT a per-run gate.",
+  "date": "2026-06-22",
+  "verifiedAgainst": "origin/main @ f0c7b426 + live mast-mcp tool surface (read-only, golden-auric/sgtest15) on 2026-06-22",
+  "provenanceNote": "Coverage claims are LIVE-verified, not copied from the 2026-06-20 scorecard. The re-verification surfaced positive drift: mast_procurement (W4) and mast_production (W2) now exist — the scorecard called them 'UI-only / no tool'. See coverageRefresh.",
+  "sources": {
+    "workflows": "docs/ux-audit/testing-workflows-spine.md (W1–W10, JTBD/frequency/criticality headers)",
+    "moduleCatalog": "Sell · Make · Ship · Market · Show · Run · Web · Book · Manage (the 9-module nav/gamification catalog)",
+    "agentCoverage": "live mast-mcp registry + read calls (golden-auric) 2026-06-22; suite-scorecard.json agent.coverage as prior baseline",
+    "testCoverage": "test/ (35 *.test.js) + 20 scripts/lint-*.js + test/money-canary.test.js + scripts/smoke-boot.mjs (67-route fail-closed Playwright)",
+    "importanceAnchors": "testing-program-discovery.md §5E — JTBD/ODI (invest where importance high & satisfaction low), RICE/opportunity scoring, outcomes-over-outputs; suite-scorecard.json moneyCritical flag"
+  },
+  "importanceRubric": {
+    "note": "RICE-lite, value-weighted. Three transparent signals, money weighted 2x. Composite drives the tier; tiers are defensible orderings, not false precision.",
+    "money": { "3": "moves money / restates the books / compliance (moneyCritical:true)", "2": "margin- or cost-affecting (indirect money)", "1": "revenue-enabling (indirect)", "0": "non-money" },
+    "frequency": { "3": "daily", "2": "weekly", "1": "seasonal / pay-period / periodic", "0": "one-time" },
+    "revenueLine": { "2": "a whole revenue line or sales channel", "1": "revenue-enabling", "0": "supporting/back-office" },
+    "formula": "importanceScore = 2*money + frequency + revenueLine  (range 0–11)",
+    "tiers": { "Critical": ">=9", "High": "7–8", "Med": "4–6", "Low": "<=3" }
+  },
+  "coverageLegend": {
+    "ui": { "full": "surface supports the whole workflow", "partial": "some steps only / exposes less", "none": "no support" },
+    "agent": { "full": "MCP supports the whole workflow", "richer": "MCP exceeds the UI", "partial": "read/oracle or some steps only", "gap": "wrong/thin collection — value metric absent", "none": "no tool" },
+    "test": { "proven": "behavioral/value regression net (assertions on real math)", "partial": "engine/parity-pinned or some helpers", "structural": "boot-smoke route render only — no behavioral assertion", "none": "no automated coverage" }
+  },
+  "capabilities": [
+    { "id": "C1", "module": "Sell", "capability": "List a product for sale", "workflow": "W1",
+      "jtbd": "When I've made a new item, I want it priced and live on my storefront so I can sell it.",
+      "importance": { "money": 2, "frequency": 2, "revenueLine": 1, "score": 7, "tier": "High", "rationale": "Weekly; sets price/margin & makes the catalog sellable (revenue-enabling)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "materials → recipe builder → product editor → publish gate → storefront" },
+        "agent": { "level": "full", "note": "mast_products create/get + mast_recipes + mast_materials + materialize_variants + set_status" },
+        "test": { "level": "partial", "note": "product-readiness.test.js, variant-reconcile.test.js, lint-readiness-parity (SHA-pinned UI↔MCP gate); no create round-trip E2E" }
+      } },
+    { "id": "C2", "module": "Sell", "capability": "In-person POS sale → books", "workflow": "W3",
+      "jtbd": "When I sell at the counter or a fair, I want it recorded so inventory and revenue are right.",
+      "importance": { "money": 3, "frequency": 3, "revenueLine": 1, "score": 10, "tier": "Critical", "rationale": "Daily/seasonal; money-critical revenue accuracy — the cents/×100/double-count hot path." },
+      "coverage": {
+        "ui": { "level": "full", "note": "#pos sales ledger → separate-tab register → receipt → inventory + finance" },
+        "agent": { "level": "partial", "note": "UI-only for creation by design; the agent is the ORACLE (finance_get_revenue byChannel + mast_products inventory before/after)" },
+        "test": { "level": "proven", "note": "money-canary.test.js (POS double-count, cents-vs-dollars, channel canonicality), finance-pos-dedup.test.js, pos-tax-jurisdiction.test.js, orders-core.test.js" }
+      } },
+    { "id": "C3", "module": "Sell", "capability": "Online storefront purchase (cart → checkout → order)", "workflow": "W2-front",
+      "jtbd": "When a customer orders online, the sale and order must be captured correctly.",
+      "importance": { "money": 3, "frequency": 3, "revenueLine": 1, "score": 10, "tier": "Critical", "rationale": "Daily core revenue; the storefront buy flow that feeds fulfillment + finance." },
+      "coverage": {
+        "ui": { "level": "full", "note": "storefront checkout.js → order created" },
+        "agent": { "level": "partial", "note": "creation is storefront-gated by design; agent uses mast_orders create_test on test tenants; order reads are protected (F2 handshake)" },
+        "test": { "level": "partial", "note": "orders-core.test.js, finance-order-money.test.js; no cart→checkout E2E in-repo" }
+      } },
+    { "id": "C4", "module": "Sell", "capability": "Manage a customer / wholesale account", "workflow": "W9",
+      "jtbd": "When I work with a customer (esp. wholesale), I want their full picture and the right pricing.",
+      "importance": { "money": 1, "frequency": 3, "revenueLine": 1, "score": 6, "tier": "Med", "rationale": "Daily; retention/AOV (not directly money-moving — moneyCritical:false)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "customers-v2 (V2 lens over V1 CustomersBridge): LTV, sorts (spend/orders/lapse/gross-margin-12m), Retail/Wholesale filters, saved segments" },
+        "agent": { "level": "gap", "note": "F9 (LIVE-CONFIRMED 2026-06-22): no mast_customers tool. mast_contacts is a DIFFERENT thin collection (name/email/phone/category only; 50 records on golden-auric) — no LTV / wholesale tier / segment / spend / lapse. The customer-value surface is UI-only." },
+        "test": { "level": "proven", "note": "customer-filters.test.js (D4-005 over-inclusion class), customer-resolver.test.js (email dedup), lint-customer-writes" }
+      } },
+    { "id": "C5", "module": "Make", "capability": "Recipe / BOM costing & price-from-cost", "workflow": "W1/W5",
+      "jtbd": "When I build a recipe, I want accurate unit cost so my price protects margin.",
+      "importance": { "money": 2, "frequency": 2, "revenueLine": 1, "score": 7, "tier": "High", "rationale": "Weekly; the costing engine underpins every price (margin)." },
+      "coverage": {
+        "ui": { "level": "partial", "note": "recipe builder exists; the UI exposes less of the cost engine than the MCP" },
+        "agent": { "level": "richer", "note": "mast_recipes get/recalculate/get_cost_basis_diff/set_active_tier/get_margin_history — exceeds the UI" },
+        "test": { "level": "partial", "note": "mast-entity.test.js (engine); the cost engine itself is MCP-side, not unit-pinned in this repo" }
+      } },
+    { "id": "C6", "module": "Make", "capability": "Reprice on material cost change", "workflow": "W5",
+      "jtbd": "When my material price moves, I want to reprice affected products before margin erodes.",
+      "importance": { "money": 3, "frequency": 1, "revenueLine": 0, "score": 7, "tier": "High", "rationale": "As markets move; margin-protection (money-critical), but supporting not a revenue line." },
+      "coverage": {
+        "ui": { "level": "partial", "note": "the UI exposes less of this than the agent" },
+        "agent": { "level": "richer", "note": "mast_recipes list_needing_reprice / get_drift / simulate_metal_shift (zero-write) / reprice; mast_price_locks to verify locked items skipped — notably stronger than UI" },
+        "test": { "level": "none", "note": "no reprice/drift regression in this repo (recipe engine lives MCP-side); UI surface is partial AND untested" }
+      } },
+    { "id": "C7", "module": "Make", "capability": "Production / build job", "workflow": "W2-mid",
+      "jtbd": "When an order needs making, I want a build job so it gets produced and tracked.",
+      "importance": { "money": 2, "frequency": 2, "revenueLine": 1, "score": 7, "tier": "High", "rationale": "Weekly; WIP/cost + enables fulfillment of made-to-order revenue." },
+      "coverage": {
+        "ui": { "level": "full", "note": "jobs / production.js — create job, line items, builds" },
+        "agent": { "level": "full", "upgrade": true, "note": "UPGRADE (live 2026-06-22): mast_production list_jobs/create_job/add_line_item/update_line_item/list_requests/assign_request/list_operators — returned 3 real jobs on golden-auric. The 2026-06-20 scorecard's 'no production/pack MCP tools' is STALE for production." },
+        "test": { "level": "partial", "note": "jobs-transitions.test.js, workflow-overrides.test.js (MastFlow process transitions)" }
+      } },
+    { "id": "C8", "module": "Ship", "capability": "Fulfill order → pack → ship → delivered", "workflow": "W2",
+      "jtbd": "When a customer orders, I want to fulfill and ship it so they get their goods and I get paid.",
+      "importance": { "money": 3, "frequency": 3, "revenueLine": 1, "score": 10, "tier": "Critical", "rationale": "Daily; core revenue recognition + CX; historic bug hotspot (reserve/release field-path)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "orders-v2 triage → production → fulfillment.js (pack/ship/tracking) → complete" },
+        "agent": { "level": "partial", "note": "triage/status via mast_orders (protected, F2); production now covered (mast_production); but PACK/SHIP has no MCP tool — the agent cannot close the loop to 'delivered'" },
+        "test": { "level": "partial", "note": "orders-core.test.js, jobs-transitions.test.js; no pack→ship E2E" }
+      } },
+    { "id": "C9", "module": "Ship", "capability": "Restock from low inventory (PO lifecycle)", "workflow": "W4",
+      "jtbd": "When stock runs low, I want to reorder from my vendor so I don't run out.",
+      "importance": { "money": 3, "frequency": 2, "revenueLine": 0, "score": 8, "tier": "High", "rationale": "Weekly; continuity + cost control (moneyCritical:true); cost-basis write." },
+      "coverage": {
+        "ui": { "level": "full", "note": "reorder-v2 → procurement-v2 (PO as MastFlow process) → vendors-v2 → receive → inventory/cost-basis" },
+        "agent": { "level": "full", "upgrade": true, "note": "UPGRADE (live 2026-06-22): mast_procurement list/create_purchase_order/update/set_status/send_to_vendor/RECEIVE (creates lots + CF restocks on-hand) + mast_vendors + materials_cost_history. Tool works live (empty PO list on golden-auric, not error). The 2026-06-20 scorecard's 'PO write UI-only (no clear tool)' is STALE — full PO write loop now agent-operable." },
+        "test": { "level": "none", "note": "NO procurement test; boot-smoke loads the procurement-v2 route only (structural). The PO→receive→restock→cost-basis money path has no regression net despite new agent write power." }
+      } },
+    { "id": "C10", "module": "Ship", "capability": "Resolve a return / refund", "workflow": "W7",
+      "jtbd": "When a customer returns an item, I want to process it and refund them correctly.",
+      "importance": { "money": 3, "frequency": 2, "revenueLine": 0, "score": 8, "tier": "High", "rationale": "Weekly; money-OUT + CX; double/over-refund adversarial risk." },
+      "coverage": {
+        "ui": { "level": "full", "note": "rma → return.workflow (MastFlow) → refund (transitionRma CF) → inventory/finance" },
+        "agent": { "level": "partial", "note": "mast_cs_tickets read + mast_orders status (protected); refund itself is a server-side CF — agent observes, may not drive" },
+        "test": { "level": "none", "note": "no RMA/refund test; the over/double-refund collateral check the spine flagged (AppWorld-style) is unbuilt" }
+      } },
+    { "id": "C11", "module": "Market", "capability": "Campaign / newsletter / social authoring", "workflow": null,
+      "jtbd": "When I want to drive demand, I want to author and send campaigns.",
+      "importance": { "money": 1, "frequency": 2, "revenueLine": 1, "score": 5, "tier": "Med", "rationale": "Weekly; demand-gen (indirect revenue)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "campaigns/newsletter/social authoring UI" },
+        "agent": { "level": "none", "note": "MCP sends only transactional email (mast_email); no campaign/newsletter authoring tool" },
+        "test": { "level": "none", "note": "creative-quality is an LLM-as-judge/human + visual problem, NOT task-success — deliberately excluded from the dual spine" }
+      } },
+    { "id": "C12", "module": "Show", "capability": "Events / craft-fair (shows, booths, vendors)", "workflow": null,
+      "jtbd": "When I exhibit at or organize a market, I want to manage shows, booths and vendors.",
+      "importance": { "money": 2, "frequency": 1, "revenueLine": 1, "score": 6, "tier": "Med", "rationale": "Seasonal; a sales channel + booth/vendor fees." },
+      "coverage": {
+        "ui": { "level": "full", "note": "events module — shows, booths, vendors, submissions, announcements, scavenger hunt" },
+        "agent": { "level": "partial", "note": "mast_events full CRUD EXISTS (shows/booths/vendors) but is a PROTECTED action — even list_shows triggers the confirmation handshake (agent friction, F2-class). NB: this is the SHOW module (markets you exhibit at/organize), NOT the Book module (classes) — they are distinct." },
+        "test": { "level": "none", "note": "no events test" }
+      } },
+    { "id": "C13", "module": "Run", "capability": "Understand the financial truth", "workflow": "W6",
+      "jtbd": "When I need to know how the business is doing (or file taxes), I want accurate financials.",
+      "importance": { "money": 3, "frequency": 2, "revenueLine": 0, "score": 8, "tier": "High", "rationale": "Weekly + period-end; decisions + compliance (money-critical)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "finance-v2 hubs (revenue, P&L, AR/AP, tax, period-close)" },
+        "agent": { "level": "richer", "note": "10 finance read tools, token-cheap, self-reconciling (W6 matrix passes 6/6 live); F14 marginReliable/cogsLineMissingCount now present live (verified golden-auric: marginReliable:false, missing 10)" },
+        "test": { "level": "proven", "note": "money-canary.test.js — THE cross-surface value assertion (revenue/byChannel/P&L/F14-margin-gate/F5-tax/AR aging vs golden 'Auric & Oak' fixtures, to the cent); finance-order-money, finance-pos-dedup" }
+      } },
+    { "id": "C14", "module": "Run", "capability": "Run payroll & labor", "workflow": "W8",
+      "jtbd": "When the pay period closes, I want hours, PTO and labor cost right so I can pay my team.",
+      "importance": { "money": 3, "frequency": 1, "revenueLine": 0, "score": 7, "tier": "High", "rationale": "Pay-period; people + cost (money-critical)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "team.js — timeclock, PTO, payroll, commissions (team-v2/employees-v2)" },
+        "agent": { "level": "full", "note": "team_clock_in/out, team_record_pto, team_set_pto_policy, team_get_labor_cost, team_get_time_entries — fine-grained" },
+        "test": { "level": "partial", "note": "lint-labor-parity SHA-pins the labor core UI↔MCP byte-identical; no labor unit test in-repo" }
+      } },
+    { "id": "C15", "module": "Run", "capability": "Expenses & bookkeeping", "workflow": null,
+      "jtbd": "When money goes out, I want it categorized so my books and taxes are right.",
+      "importance": { "money": 3, "frequency": 2, "revenueLine": 0, "score": 8, "tier": "High", "rationale": "Weekly; books/compliance/tax (money-critical)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "expenses hubs + categorization" },
+        "agent": { "level": "full", "note": "expenses_create/update/delete/categorize + finance_get_expenses + finance_get_1099_prep" },
+        "test": { "level": "partial", "note": "money-canary.test.js exercises opex→P&L routing; no expenses-specific regression" }
+      } },
+    { "id": "C16", "module": "Web", "capability": "Storefront / website / brand builder", "workflow": null,
+      "jtbd": "When I set up my store, I want a storefront and brand that sells.",
+      "importance": { "money": 2, "frequency": 1, "revenueLine": 2, "score": 7, "tier": "High", "rationale": "Set-and-maintain; IS the online revenue front-of-house (a whole revenue surface)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "website/storefront builder, brand, lookbooks, sections, templates" },
+        "agent": { "level": "none", "note": "UI-only builder; mast_domains/mast_hosting are infra, not the builder" },
+        "test": { "level": "structural", "note": "boot-smoke renders the storefront routes only; theme-sanity.html is an unreferenced rotting copy. Visual/aesthetic — the right instrument is visual-regression + human review, deliberately outside the dual spine." }
+      } },
+    { "id": "C17", "module": "Book", "capability": "Run a class / booking program", "workflow": "W10",
+      "jtbd": "When I teach classes, I want to schedule them and enroll students so I can sell my time.",
+      "importance": { "money": 3, "frequency": 2, "revenueLine": 2, "score": 10, "tier": "Critical", "rationale": "Seasonal/weekly; a WHOLE second revenue line (money-critical)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "classes-v2 + book.js — an 11-route sub-app: enrollments, instructors, passes, sessions, resources, calendar" },
+        "agent": { "level": "none", "note": "F11 (LIVE-CONFIRMED 2026-06-22): NO classes/booking/enrollment/sessions/passes tool. mast_events=shows/booths, mast_missions=QA scenarios, trips=mileage — none cover this domain. The agent cannot operate this revenue line AT ALL." },
+        "test": { "level": "structural", "note": "boot-smoke renders the classes-v2/book routes only; zero behavioral/booking test — the largest untested domain." }
+      } },
+    { "id": "C18", "module": "Manage", "capability": "Product lifecycle & inventory accuracy", "workflow": "W1/W4",
+      "jtbd": "When my catalog changes, I want products and stock accurate so I don't oversell or misprice.",
+      "importance": { "money": 2, "frequency": 3, "revenueLine": 0, "score": 7, "tier": "High", "rationale": "Daily; stock accuracy → oversell/cost; lifecycle integrity." },
+      "coverage": {
+        "ui": { "level": "full", "note": "product record/variants/lifecycle; inventory adjustments; lots" },
+        "agent": { "level": "full", "note": "mast_products lifecycle + update_inventory + materialize_variants + set_status; mast_procurement lots" },
+        "test": { "level": "partial", "note": "variant-reconcile.test.js, product-readiness.test.js; money-canary touches inventory-adjacent invariants" }
+      } },
+    { "id": "C19", "module": "Manage", "capability": "Tenant onboarding / channel & payment connect", "workflow": null,
+      "jtbd": "When I sign up, I want my store, channels and payment rails connected so I can transact.",
+      "importance": { "money": 2, "frequency": 0, "revenueLine": 1, "score": 5, "tier": "Med", "rationale": "One-time; activation + payment rails (enabling)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "setup wizard, channel/payment connect, domains, hosting" },
+        "agent": { "level": "partial", "note": "mast_provisioning, mast_import, mast_migration, mast_domains, mast_hosting exist; OAuth/secret-vault connect is one-time + external and can't be live-verified on sgtest15" },
+        "test": { "level": "partial", "note": "wizard-launch-never-blocks.test.js pins the wizard-launch gate; channel/payment connect untested (external deps)" }
+      } },
+    { "id": "C20", "module": "Manage", "capability": "Settings / users / RBAC governance", "workflow": null,
+      "jtbd": "When I run the business, I want settings, users and permissions correct and safe.",
+      "importance": { "money": 1, "frequency": 1, "revenueLine": 0, "score": 3, "tier": "Low", "rationale": "Occasional; governance/security-adjacent (indirect)." },
+      "coverage": {
+        "ui": { "level": "full", "note": "settings, users, roles, config" },
+        "agent": { "level": "partial", "note": "mast_users, mast_user_admin, mast_config, mast_routing, mast_tokens, mast_skills" },
+        "test": { "level": "partial", "note": "lint-rbac (live-source gate fails the instant prod RBAC drifts), business-entity-feature-mode.test.js, guided-header-branch.test.js" }
+      } }
+  ],
+  "valueAtRisk": [
+    { "rank": 1, "capability": "C17", "module": "Book", "name": "Run a class / booking program (W10)", "importance": "Critical (10)",
+      "weakSurface": "agent=none + test=structural-only", "finding": "F11",
+      "why": "A whole second revenue line (money-critical) is invisible to the agent and has zero behavioral test. Highest importance × lowest coverage in the matrix." },
+    { "rank": 2, "capability": "C10", "module": "Ship", "name": "Resolve a return / refund (W7)", "importance": "High (8)",
+      "weakSurface": "agent=partial + test=none",
+      "why": "Money-OUT with a real double/over-refund adversarial risk, entirely untested; the agent can observe but likely not drive the refund CF." },
+    { "rank": 3, "capability": "C9", "module": "Ship", "name": "Restock from low inventory / PO (W4)", "importance": "High (8)",
+      "weakSurface": "test=none (agent now full)",
+      "why": "Agent write power was just added (mast_procurement receive → CF restock + cost-basis), but the PO→receive→restock→cost-basis money path has NO regression net. New write power, zero automated guard." },
+    { "rank": 4, "capability": "C6", "module": "Make", "name": "Reprice on material cost change (W5)", "importance": "High (7)",
+      "weakSurface": "test=none + ui=partial",
+      "why": "Margin-critical; agent-strong but no drift/reprice regression and the human surface is the weakest of the Make flows — locks-respected correctness is unguarded." },
+    { "rank": 5, "capability": "C16/C11", "module": "Web/Market", "name": "Storefront/brand builder + campaign authoring", "importance": "High (7) / Med (5)",
+      "weakSurface": "agent=none + test=structural/none",
+      "why": "Revenue-enabling front-of-house, but BY DESIGN outside the dual task-success spine — the correct instrument is visual-regression + human review, which does not exist yet (theme-sanity.html rots). Flagged distinctly from the should-add-tool gaps." },
+    { "rank": 6, "capability": "C4", "module": "Sell", "name": "Customer value metrics (W9)", "importance": "Med (6)",
+      "weakSurface": "agent=gap (F9)", "finding": "F9",
+      "why": "The customer base and every value metric (LTV/wholesale/segment/lapse) are invisible to the agent — mast_contacts is a different thin collection. A clean, well-scoped tool would close it." },
+    { "rank": 7, "capability": "C8", "module": "Ship", "name": "Fulfillment tail — pack/ship (W2)", "importance": "Critical (10)",
+      "weakSurface": "agent=partial",
+      "why": "Production is now agent-covered, but pack/ship has no MCP tool — the agent can't close the loop to 'delivered'. Lower priority (fulfillment is legitimately hands-on) but a real residual agent gap on a Critical flow." }
+  ],
+  "recommendations": [
+    { "priority": 1, "rec": "Add a mast_classes / mast_book MCP tool", "ties": "VAR-1 / F11 / C17",
+      "rationale": "Unblocks a whole revenue line for the agent. Highest importance × lowest coverage. (Building it is a separate product decision; the matrix recommends, it does not build.)" },
+    { "priority": 2, "rec": "Build a refund oracle with an over/double-refund collateral check; verify the agent can DRIVE the refund CF (not just observe)", "ties": "VAR-2 / C10 / W7",
+      "rationale": "Money-out + adversarial; the AppWorld-style collateral check the spine flagged is the right shape." },
+    { "priority": 3, "rec": "Extend the money-canary class to a procurement/restock canary (PO→receive→on-hand+cost-basis to the cent)", "ties": "VAR-3 / C9 / W4",
+      "rationale": "Pin the newly agent-writable PO money path before it drifts — same value-assertion pattern as money-canary.test.js." },
+    { "priority": 4, "rec": "Add a mast_customers MCP tool (LTV/wholesale/segment/spend), distinct from the thin mast_contacts", "ties": "VAR-6 / F9 / C4",
+      "rationale": "Clean, well-scoped; surfaces the customer-value layer the agent is currently blind to." },
+    { "priority": 5, "rec": "Add a reprice regression (drift → reprice → locks respected) + close the UI parity gap", "ties": "VAR-4 / C6 / W5",
+      "rationale": "Margin-critical capability with the weakest combined UI+test coverage among the Make flows." },
+    { "priority": 6, "rec": "Stand up a visual-regression layer (Playwright snapshot / Chromatic) for Web/Market", "ties": "VAR-5 / C16,C11",
+      "rationale": "The by-design gap; the correct instrument for creative/aesthetic surfaces — keep it separate from the task-success spine." },
+    { "priority": 7, "rec": "Make 'refresh the live MCP tool surface' a step of every matrix refresh", "ties": "coverageRefresh",
+      "rationale": "W4 and W2 agent coverage drifted POSITIVE between 2026-06-20 and 2026-06-22 and the ledger went stale. Coverage is a moving target — re-verify against the live registry, never memory." }
+  ],
+  "coverageRefresh": {
+    "note": "Positive drift surfaced by live re-verification 2026-06-22 — the matrix is MORE covered than the 2026-06-20 ledger claimed. Logged so the ledger is corrected, not just the gaps.",
+    "upgrades": [
+      { "capability": "C9 / W4", "from": "agent ◑ partial — 'PO write UI-only (no clear tool)'", "to": "agent ✅ full — mast_procurement full lifecycle incl. receive→CF-restock; mast_vendors; materials_cost_history" },
+      { "capability": "C7 / W2-mid", "from": "agent ➖ none — 'no production/pack MCP tools'", "to": "agent ✅ full (production) — mast_production job/line-item/request lifecycle (3 live jobs on golden-auric)" },
+      { "capability": "C13 / W6", "from": "agent returned gross/net with no caveat (F14)", "to": "agent now returns marginReliable/cogsLineMissingCount/cogsMissing (F14 closed, mcp #141; verified live golden-auric)" }
+    ]
+  },
+  "rollup": {
+    "byTier": { "Critical": ["C2", "C3", "C8", "C17"], "High": ["C1", "C5", "C6", "C7", "C9", "C10", "C13", "C14", "C15", "C16", "C18"], "Med": ["C4", "C11", "C12", "C19"], "Low": ["C20"] },
+    "agentNone": ["C11", "C16", "C17"],
+    "agentGap": ["C4"],
+    "testNoneOrStructural": ["C6", "C9", "C10", "C11", "C12", "C16", "C17"],
+    "criticalOrHighWithAWeakSurface": ["C17", "C10", "C9", "C6", "C16", "C8", "C3", "C2"],
+    "headline": "Of 4 Critical + 11 High capabilities, the sharpest value-at-risk cells are: Book/classes (agent+test blind, a whole revenue line), returns/refund (untested money-out), restock/PO (new agent write power, no regression net), and reprice (margin-critical, untested + weak UI). The agent's Make/Ship operability materially improved (W4/W2) — re-verify the surface each refresh."
+  }
+}

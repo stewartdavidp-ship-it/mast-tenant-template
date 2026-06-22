@@ -46,7 +46,7 @@ v1's headline first step ("make boot-smoke a fail-closed gate") is **already don
 
 **Gate placement → tiered (mostly already in place).** PR-required: the existing lint + fail-closed smoke (done) + the new money-canary value assertions once seeded. Pre-prod: the cross-surface money oracle. The agent never gates (non-deterministic) — it discovers + drafts tests for human ratification.
 
-**Human lens → occasional real SUS on top flows; CUT the LLM-judge "human proxy."** The agent-proxy measures *agent* friction (the tab/toggle "failures" were agent-click artifacts, not human pain); an LLM-judge UX score would be uncalibrated pseudo-rigor. Measure the **agent** lens authentically (pass^k, tokens/steps/cost — it *is* the agent user); spot-check **humans** with real SUS, don't manufacture a number.
+**Human lens → occasional real SUS on top flows; CUT the LLM-judge "human proxy."** The agent-proxy measures *agent* friction (the tab/toggle "failures" were agent-click artifacts, not human pain); an LLM-judge UX score would be uncalibrated pseudo-rigor. Measure the **agent** lens authentically (pass^k, tokens/steps/cost — it *is* the agent user); spot-check **humans** with real SUS, don't manufacture a number. ✅ **INSTRUMENT BUILT (2026-06-22):** `scripts/qa-spine/usability-harness.mjs` (objective half: 6-task success/time/steps/errors, auto) + `docs/ux-audit/qa-spine/usability-runbook.md` (SUS 10-item + SEQ + scoring + scorecard drop-in). The objective half auto-captures; the **subjective SUS/SEQ is an operator-scheduled human run** — left `null`, never faked. This honored the cut: no LLM-as-human-judge.
 
 ## 5. Sequencing
 1. ✅ **F14 DONE** — fixed (mast-mcp-server #141) + deployed + live-verified; chip `task_14a258f4` closed.
