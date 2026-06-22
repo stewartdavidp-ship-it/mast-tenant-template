@@ -583,7 +583,7 @@
         var campChip = '<div id="socialCampChip_' + esc(id) + '"></div>';
         setTimeout(function () {
           if (window.MastAdmin && MastAdmin.loadModule) {
-            MastAdmin.loadModule('campaigns').then(function () {
+            MastAdmin.loadModule('campaigns-v2').then(function () {
               if (window.CampaignsBridge && CampaignsBridge.renderChipInto) CampaignsBridge.renderChipInto('socialCampChip_' + id, id);
             }).catch(function () {});
           }

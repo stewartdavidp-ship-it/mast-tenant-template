@@ -19660,7 +19660,9 @@ var MAST_V2_ROUTE_MAP = {
   // was retired into audit-v2 — one audit pipeline, admin-v2-build-plan.md Q1).
   // 'channels' is NOT remapped: channels.js (V1) is RETIRED (T6) and channels-v2
   // owns the bare 'channels' route directly in its manifest entry.
-  campaigns: 'campaigns-v2', 'email-log': 'email-log-v2', suppressions: 'audit-muted-v2',
+  // 'campaigns' is NOT remapped: campaigns.js (V1) is RETIRED (T6) and campaigns-v2
+  // owns the bare 'campaigns' route directly in its manifest entry.
+  'email-log': 'email-log-v2', suppressions: 'audit-muted-v2',
   // Shows lifecycle: shows.js (V1) is RETIRED (T6). The shows-v2 twin now owns
   // the bare #show* routes directly in its manifest entry, so no remap pair is
   // needed — navigateTo('show'/'show-find'/…) resolves straight to the twin.
@@ -21003,10 +21005,10 @@ var MODULE_MANIFEST = {
   'cs-reviews-v2': { src: 'modules/cs-reviews-v2.js', v: '3914ec83b5a8', routes: ['cs-reviews-v2'] }, // UI-redesign conversion: CS reviews read detail (flag-gated)
   'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', v: '350b80606f25', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
   'loyalty-v2': { src: 'modules/loyalty-v2.js', v: '7df34997ff70', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
-  'stories-v2': { src: 'modules/stories-v2.js', v: '9fc8b7bf3fc6', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
+  'stories-v2': { src: 'modules/stories-v2.js', v: '42c0fdf997dc', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
   'jobs-v2': { src: 'modules/jobs-v2.js', v: '0fc65a643e5a', routes: ['jobs-v2'] }, // UI-redesign conversion: Jobs (production) B1 scaffold — list + read-only detail (flag-gated, side-by-side)
   'cs-members-v2': { src: 'modules/cs-members-v2.js', v: '0d444b855147', routes: ['cs-members-v2'] }, // UI-redesign conversion: CS members read detail (flag-gated)
-  'blog-v2': { src: 'modules/blog-v2.js', v: '30f877867cd4', routes: ['blog-v2', 'blog'] }, // Blog authoring hub (posts list + read detail + native rich-body editor). blog.js (V1) RETIRED (T6): its BlogBridge + blogOpenFromContent + write-core/sanitizer closure were absorbed here, so the bare #blog route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
+  'blog-v2': { src: 'modules/blog-v2.js', v: '9fdf14825521', routes: ['blog-v2', 'blog'] }, // Blog authoring hub (posts list + read detail + native rich-body editor). blog.js (V1) RETIRED (T6): its BlogBridge + blogOpenFromContent + write-core/sanitizer closure were absorbed here, so the bare #blog route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'sales-events-v2': { src: 'modules/sales-events-v2.js', v: '058614e335dd', routes: ['sales-events-v2'] }, // UI-redesign conversion: sales events read detail (flag-gated)
   'consignments-v2': { src: 'modules/consignments-v2.js', v: 'ea535cfa9490', routes: ['consignments-v2'] }, // UI-redesign conversion: consignment placements read detail (flag-gated)
   'sessions-v2': { src: 'modules/sessions-v2.js', v: '401940e1fe7a', routes: ['sessions-v2'] }, // UI-redesign conversion: class sessions read detail (flag-gated)
@@ -21027,7 +21029,7 @@ var MODULE_MANIFEST = {
   'commission-terms-v2': { src: 'modules/commission-terms-v2.js', v: 'dbbf310345e5', routes: ['commission-terms-v2', 'commission-terms'] }, // versioned commission terms; owns the legacy 'commission-terms' route too (V1 commission-terms.js retired, T6)
   'receipts-v2': { src: 'modules/receipts-v2.js', v: '4b05752caba1', routes: ['receipts-v2'] }, // sales-v2 wave 3: day close reconciliation (record archetype + match view, flag-gated, side-by-side)
   'lookbooks-v2': { src: 'modules/lookbooks-v2.js', v: '128d9ccf76ec', routes: ['lookbooks-v2', 'lookbooks'] }, // sales-v2 wave 3: line sheets / lookbooks. Owns the legacy 'lookbooks' route too (V1 lookbooks.js retired, T6).
-  'campaigns-v2': { src: 'modules/campaigns-v2.js', v: 'aad7589a782c', routes: ['campaigns-v2'] }, // UI-redesign conversion: marketing campaigns read detail (flag-gated, side-by-side)
+  'campaigns-v2': { src: 'modules/campaigns-v2.js', v: '950a7787f008', routes: ['campaigns-v2', 'campaigns'] }, // Marketing campaigns hub (list + read detail + native create/edit/refs/delete). campaigns.js (V1) RETIRED (T6): its CampaignsBridge was absorbed here, so the bare #campaigns route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'email-log-v2': { src: 'modules/email-log-v2.js', v: '8273b9e43c8d', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
   'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', v: 'f18703b4dec4', routes: ['marketing-calendar-v2', 'marketing-calendar'] }, // marketing calendar; owns the legacy 'marketing-calendar' route too (V1 marketing-calendar.js retired, T6)
   'channels-v2': { src: 'modules/channels-v2.js', v: '8e522c85dee9', routes: ['channels-v2', 'channels'] }, // sales channels surface; owns the legacy 'channels' route too (V1 channels.js retired, T6 — ChannelsBridge + MastChannelShim + channelReconnect absorbed, no MAST_V2_ROUTE_MAP remap)
@@ -21035,7 +21037,7 @@ var MODULE_MANIFEST = {
   'enrollments-v2': { src: 'modules/enrollments-v2.js', v: 'f1ec6c15ef8e', routes: ['enrollments-v2'] }, // UI-redesign conversion: enrollments roster read detail (read-focused Faceted Record)
   'passes-v2': { src: 'modules/passes-v2.js', v: '5f5a185fa4d3', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)
   'resources-v2': { src: 'modules/resources-v2.js', v: '817832f43559', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
-  'newsletter-v2': { src: 'modules/newsletter-v2.js', v: '39ce447d358d', routes: ['newsletter-v2', 'newsletter'] }, // Newsletter hub (issues + subscribers + native composer). newsletter.js (V1) RETIRED (T6): its NewsletterBridge + rich-text helpers + newsletterOpenFromContent were absorbed here; the bare #newsletter route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
+  'newsletter-v2': { src: 'modules/newsletter-v2.js', v: 'af9d511841d6', routes: ['newsletter-v2', 'newsletter'] }, // Newsletter hub (issues + subscribers + native composer). newsletter.js (V1) RETIRED (T6): its NewsletterBridge + rich-text helpers + newsletterOpenFromContent were absorbed here; the bare #newsletter route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   sales: { src: 'modules/sales.js', v: 'dbf72357eecb', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', v: '1889e0d1419e', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', v: 'd599d372978f', routes: ['events-shows', 'events-settings'] },
@@ -21050,7 +21052,6 @@ var MODULE_MANIFEST = {
   students: { src: 'modules/students.js', v: '6537e0bf1bea', routes: ['students'] },
   'customer-service': { src: 'modules/customer-service.js', v: 'd9ee502932c5', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
-  campaigns: { src: 'modules/campaigns.js', v: '9d866794259c', routes: ['campaigns'] },
   engagementInbox: { src: 'modules/engagement-inbox.js', v: 'a6665c778030', routes: ['engagement-inbox'] },
   composer: { src: 'modules/composer.js', v: 'fac71133333b', routes: ['composer'] },
   // W2.3 — Commission terms editor (admin-side; storefront accept flow is
@@ -21071,7 +21072,7 @@ var MODULE_MANIFEST = {
   // Workflow engine — reusable gated-workflow primitive. No routes; loaded
   // on-demand by consuming surfaces (commissions, pick/ship, RMA, etc.)
   // before they render. See docs/workflow-engine-design.md.
-  'social-v2': { src: 'modules/social-v2.js', v: '8a34b82ab2b1', routes: ['social-v2', 'social'] }, // native social pipeline; owns the legacy 'social' route too (V1 social.js retired, T6)
+  'social-v2': { src: 'modules/social-v2.js', v: 'a3a67a703767', routes: ['social-v2', 'social'] }, // native social pipeline; owns the legacy 'social' route too (V1 social.js retired, T6)
   'composer-v2': { src: 'modules/composer-v2.js', v: '80f8e8f074cd', routes: ['composer-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'engagement-inbox-v2': { src: 'modules/engagement-inbox-v2.js', v: 'ae7074515108', routes: ['engagement-inbox-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'mapping-v2': { src: 'modules/mapping-v2.js', v: '8996b35a8ba9', routes: ['mapping-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)

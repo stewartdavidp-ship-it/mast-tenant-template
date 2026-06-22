@@ -262,10 +262,10 @@
           : '<span class="mu-sub">Sent / published issues are send history.</span>';
         var compose = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;">' + cbtns + '</div>' +
           '<div id="nlIssueCampChip_' + esc(id) + '"></div>';
-        // Part-of-campaign chip — single-sourced renderer in campaigns.js.
+        // Part-of-campaign chip — single-sourced renderer in campaigns-v2.js.
         setTimeout(function () {
           if (window.MastAdmin && MastAdmin.loadModule) {
-            MastAdmin.loadModule('campaigns').then(function () {
+            MastAdmin.loadModule('campaigns-v2').then(function () {
               if (window.CampaignsBridge && CampaignsBridge.renderChipInto) CampaignsBridge.renderChipInto('nlIssueCampChip_' + id, id);
             }).catch(function () {});
           }

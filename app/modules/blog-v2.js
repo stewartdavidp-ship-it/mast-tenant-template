@@ -217,7 +217,7 @@
         // Part-of-campaign chip — single-sourced renderer in campaigns.js (Wave 3).
         setTimeout(function () {
           if (window.MastAdmin && MastAdmin.loadModule) {
-            MastAdmin.loadModule('campaigns').then(function () {
+            MastAdmin.loadModule('campaigns-v2').then(function () {
               if (window.CampaignsBridge && CampaignsBridge.renderChipInto) CampaignsBridge.renderChipInto('blogCampChip_' + pid, pid);
             }).catch(function () {});
           }

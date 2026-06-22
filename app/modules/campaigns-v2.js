@@ -233,9 +233,6 @@
   // gate; CLAUDE.md no-unbounded-read rule). 500 comfortably covers a tenant's
   // campaign set; we sort client-side (created desc default).
   function load() {
-    // Ensure the legacy campaigns module is loaded so window.CampaignsBridge
-    // (the delegated write path) exists — mirrors contacts-v2 / students-v2.
-    if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('campaigns'); } catch (e) {} }
     Promise.resolve(MastDB.list('admin/campaigns', { limit: 500 })).then(function (val) {
       val = (val && typeof val.val === 'function') ? val.val() : val;
       var out = [];
@@ -314,9 +311,6 @@
       });
     },
     create: function () {
-      // Ensure the legacy module (and thus window.CampaignsBridge) is loaded
-      // before opening the create form — mirrors ContactsV2.create.
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('campaigns'); } catch (e) {} }
       MastEntity.openRecord('campaigns-v2', {}, 'create');
     },
     // Re-open the record in read mode after a reference write so the slide-out
@@ -400,6 +394,146 @@
   };
 
   MastAdmin.registerModule('campaigns-v2', {
-    routes: { 'campaigns-v2': { tab: 'campaignsV2Tab', setup: function () { ensureTab(); render(); load(); } } }
+    routes: {
+      'campaigns-v2': { tab: 'campaignsV2Tab', setup: function () { ensureTab(); render(); load(); } },
+      // Legacy #campaigns route ABSORBED (T6): campaigns.js is deleted, so the
+      // twin owns the bare route directly (no MAST_V2_ROUTE_MAP remap). The
+      // write path (window.CampaignsBridge) lives in the non-flag-gated IIFE
+      // appended below.
+      'campaigns': { tab: 'campaignsV2Tab', setup: function () { ensureTab(); render(); load(); } }
+    }
   });
+})();
+
+
+// ============================================================================
+// ABSORBED FROM campaigns.js (V1) — T6 retirement (absorb-first cut).
+//
+// campaigns-v2 is the sole campaigns surface; the V1 list/detail UI is deleted.
+// This self-contained, NON-flag-gated IIFE re-hosts — VERBATIM (byte-identical) —
+// window.CampaignsBridge, the write/lookup path campaigns-v2 single-sources
+// through (create / update / addReference / removeReference / remove /
+// findReferencing) PLUS renderChipInto, the "Part of: <campaign>" chip that
+// blog-v2 / social-v2 / newsletter-v2 / stories-v2 render on their detail
+// slide-outs (they loadModule('campaigns-v2') then call it). It references only
+// shell globals (MastDB / MastEntity / document) plus its own helper closure
+// (esc / nowIso / slugifyCampaign) and a module-private `campaigns` cache —
+// identical to the V1 closure. Not flag-gated: the bridge must exist for the
+// artifact twins regardless of the UI-redesign flag.
+// ============================================================================
+(function () {
+  'use strict';
+
+  // Module-private write-through cache (mirrors the V1 `campaigns` map; the V2
+  // list surface keeps its own V2.byId, so this is just bridge bookkeeping).
+  var campaigns = {};
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function nowIso() { return new Date().toISOString(); }
+
+  // Slugify a campaign name into a deterministic utm_campaign token.
+  function slugifyCampaign(name) {
+    return String(name || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'campaign';
+  }
+
+  window.CampaignsBridge = {
+    // Mirrors campaignsCreateNewConfirm — same id source, doc shape, slug.
+    create: async function (data) {
+      var name = ((data && data.name) || '').trim();
+      var id = MastDB.newKey('admin/campaigns');
+      var doc = {
+        id: id, name: name, goal: '', startDate: '', endDate: '',
+        utmCampaign: slugifyCampaign(name), references: [],
+        status: 'active', createdAt: nowIso(), updatedAt: nowIso()
+      };
+      await MastDB.set('admin/campaigns/' + id, doc);
+      campaigns[id] = doc;
+      return id;
+    },
+    // Mirrors campaignsSaveCurrent — same patch fields, slug re-derive, update().
+    update: async function (id, data) {
+      var c = campaigns[id] || {};
+      var name = ((data && data.name) != null ? data.name : c.name) || '';
+      var patch = {
+        name: name.trim(),
+        goal: ((data && data.goal) || '').trim(),
+        startDate: (data && data.startDate) || '',
+        endDate: (data && data.endDate) || '',
+        status: (data && data.status) || 'active',
+        utmCampaign: slugifyCampaign(name),
+        updatedAt: nowIso()
+      };
+      await MastDB.update('admin/campaigns/' + id, patch);
+      if (campaigns[id]) Object.assign(campaigns[id], patch);
+      return patch;
+    },
+    // Mirrors campaignsSaveReference — push {type,refId,scheduledFor,addedAt},
+    // write the whole references array.
+    addReference: async function (id, ref) {
+      var c = campaigns[id];
+      if (!c) return null;
+      var refs = (c.references || []).slice();
+      refs.push({
+        type: (ref && ref.type) || 'blog',
+        refId: ((ref && ref.refId) || '').trim(),
+        scheduledFor: (ref && ref.scheduledFor) || '',
+        addedAt: nowIso()
+      });
+      await MastDB.update('admin/campaigns/' + id, { references: refs, updatedAt: nowIso() });
+      c.references = refs;
+      return refs;
+    },
+    // Mirrors campaignsRemoveReference — splice by index, write the array.
+    removeReference: async function (id, idx) {
+      var c = campaigns[id];
+      if (!c) return null;
+      var refs = (c.references || []).slice();
+      refs.splice(idx, 1);
+      await MastDB.update('admin/campaigns/' + id, { references: refs, updatedAt: nowIso() });
+      c.references = refs;
+      return refs;
+    },
+    // Mirrors the legacy campaign delete (the confirm lives with the caller).
+    remove: async function (id) {
+      await MastDB.remove('admin/campaigns/' + id);
+      delete campaigns[id];
+      return true;
+    },
+    // Reverse lookup for the artifact slide-outs' "Part of campaign" chip
+    // (marketing-v2 Wave 3). Artifacts carry NO campaignId back-reference, so
+    // the link is computed by scanning references — single-sourced here.
+    findReferencing: async function (refId) {
+      var tree = await MastDB.list('admin/campaigns', { limit: 500 });
+      tree = (tree && typeof tree.val === 'function') ? tree.val() : tree;
+      var out = [];
+      Object.keys(tree || {}).forEach(function (k) {
+        var c = tree[k];
+        if (c && (c.references || []).some(function (r) { return r && r.refId === refId; })) {
+          out.push({ id: k, name: c.name || '(untitled)' });
+        }
+      });
+      return out;
+    },
+    // Fill a placeholder element with "Part of: <campaign links>" — the ONE
+    // implementation all artifact slide-outs (blog/newsletter/social/stories
+    // V2 twins) call, so the chip markup + lookup stay single-sourced.
+    renderChipInto: async function (elId, refId) {
+      var links = await window.CampaignsBridge.findReferencing(refId);
+      var el = document.getElementById(elId);
+      if (!el) return;
+      if (!links.length) { el.innerHTML = ''; return; }
+      el.innerHTML = '<div class="mu-sub" style="margin-top:10px;">Part of: ' + links.map(function (c) {
+        return '<button type="button" class="mu-link" onclick="MastEntity.drill(\'campaigns-v2\',\'' + esc(c.id) + '\')" style="color:var(--teal);background:none;border:none;cursor:pointer;padding:0;font-size:inherit;">' + esc(c.name) + '</button>';
+      }).join(', ') + '</div>';
+    }
+  };
 })();
