@@ -18749,7 +18749,7 @@ auth.onAuthStateChanged(async function(user) {
   // Init trips module (locations, settings, active trip check, notifications)
   // Trips module is lazy-loaded — initTripsModule runs immediately via module script
   // but we also need it on auth for active trip indicator, so load the module eagerly
-  MastAdmin.loadModule('trips').then(function() {
+  MastAdmin.loadModule('trips-v2').then(function() {   // T6: trips.js retired; the active-trip engine is absorbed into trips-v2.js
     if (typeof initTripsModule === 'function') initTripsModule();
   }).catch(function() {});
 
@@ -19644,7 +19644,7 @@ window.getRouteParams = function() { return currentRouteParams || {}; };
 // flag-gated v2 modules (which read mastUiRedesign at load) register cleanly.
 var MAST_V2_ROUTE_MAP = {
   // 'customers' NOT remapped (T6 PR5): customers.js RETIRED — customers-v2 owns the bare #customers route via its manifest entry (resolves to the twin for ALL users).
-  trips: 'trips-v2', procurement: 'procurement-v2',
+  procurement: 'procurement-v2',  // 'trips' NOT remapped: trips.js RETIRED (T6), trips-v2 owns the bare route via manifest.
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', 'cs-surveys': 'cs-surveys-v2', terms: 'terms-v2', wallet: 'wallet-v2',
   // "Your website" capstone: #brand and #homepage resolve to the single unified
@@ -20956,7 +20956,7 @@ var MAST_MODULES_V = '20260621-041500-pos0ride';
 // Routes listed here will be lazy-loaded when first navigated to.
 // Populated as modules are extracted in future sessions.
 var MODULE_MANIFEST = {
-  trips: { src: 'modules/trips.js', v: '04f6eabdd57a', routes: ['trips'] },
+  // trips.js (V1) manifest row REMOVED (T6): the entire trips engine absorbed into trips-v2.js, which owns the bare #trips route below.
   // wholesale.js (V1) manifest row REMOVED (T6): its WholesaleBridge absorbed into wholesale-v2.js, which owns the bare #wholesale route below.
   finance: { src: 'modules/finance.js', v: '5016cadae7a0', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
   // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
@@ -20984,7 +20984,7 @@ var MODULE_MANIFEST = {
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: 'a8e6475587d6', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
   'calendar-v2': { src: 'modules/calendar-v2.js', v: '37194dc1a8b0', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
   'promotions-v2': { src: 'modules/promotions-v2.js', v: '1c378ee3ca12', routes: ['promotions-v2', 'promotions'] }, // promotions; owns the legacy 'promotions' route too (V1 promotions.js retired, T6)
-  'trips-v2': { src: 'modules/trips-v2.js', v: '444cf9fb076e', routes: ['trips-v2'] }, // UI-redesign conversion: trips history (flag-gated, side-by-side)
+  'trips-v2': { src: 'modules/trips-v2.js', v: '4e6d44cbcd8e', routes: ['trips-v2', 'trips'] }, // Trips hub (read history + delegated start/end/retroactive flows + tax report + app-wide active-trip banner). trips.js (V1) RETIRED (T6): the entire trips engine is absorbed here, so the bare #trips route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', v: '9712ea2fdab0', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
   'team-v2': { src: 'modules/team-v2.js', v: 'fba0132fa2d7', routes: ['team-v2', 'team'] }, // Team roster/employee + HR sub-surfaces (time clock / PTO / labor burden / docs / onboarding). team.js (V1) RETIRED (T6): its TeamBridge + TeamPanels + full handler closure were absorbed into team-v2.js, and the bare #team route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'procurement-v2': { src: 'modules/procurement-v2.js', v: 'e0dce287de8a', routes: ['procurement-v2'] }, // UI-redesign conversion: purchase orders (now hosts the Needs-reorder lens)
@@ -21312,7 +21312,7 @@ function switchSettingsSubView(view) {
   if (view === 'payments') { if (typeof refreshPaymentsTabStatus === 'function') refreshPaymentsTabStatus(); }
   if (view === 'email') { loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); if (typeof refreshEmailTabStatus === 'function') refreshEmailTabStatus(); }
   if (view === 'integrations') { loadEtsyConfig(); loadShopifyConfig(); MastAdmin.loadModule('settingsPanels').then(function(){ if (typeof window.loadPlaidBanksForSettingsImpl === 'function') window.loadPlaidBanksForSettingsImpl(); }); if (typeof switchIntegrationsTab === 'function') switchIntegrationsTab(window.__integrationsActiveTab || 'googleMaps'); }
-  if (view === 'trips') { MastAdmin.loadModule('trips').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); if (typeof refreshTripsTabStatus === 'function') refreshTripsTabStatus(); }); }
+  if (view === 'trips') { MastAdmin.loadModule('trips-v2').then(function() { if (typeof loadTripsSettings === 'function') loadTripsSettings(); if (typeof refreshTripsTabStatus === 'function') refreshTripsTabStatus(); }); }
   if (view === 'storefront') { loadShopDisplaySettings(); loadPrivacyUrlSettings(); if (typeof refreshDisplayTabStatus === 'function') refreshDisplayTabStatus(); }
   if (view === 'dashboard') renderDashCardSettings();
   if (view === 'domains') { loadDomainSettings(); if (typeof refreshDomainsTabStatus === 'function') refreshDomainsTabStatus(); }

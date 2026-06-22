@@ -158,10 +158,6 @@
     "rogueOverlays": 1,
     "hardcodedHex": 55
   },
-  "app/modules/trips.js": {
-    "rogueOverlays": 3,
-    "hardcodedHex": 55
-  },
   "app/modules/unified-drift-dialog.js": {
     "rogueOverlays": 1
   },
@@ -180,5 +176,9 @@
   },
   "app/modules/newsletter-v2.js": {
     "hardcodedHex": 20
+  },
+  "app/modules/trips-v2.js": {
+    "rogueOverlays": 3,
+    "hardcodedHex": 55
   }
 }

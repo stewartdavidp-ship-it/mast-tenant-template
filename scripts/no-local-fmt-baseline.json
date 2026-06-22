@@ -255,12 +255,9 @@
     "moneyToFixed": 19
   },
   "app/modules/trips-v2.js": {
-    "localeDate": 1
-  },
-  "app/modules/trips.js": {
     "centsDiv": 4,
     "moneyToFixed": 8,
-    "localeDate": 2
+    "localeDate": 3
   },
   "app/modules/unified-drift-dialog.js": {
     "localeDate": 1
