@@ -555,14 +555,36 @@ test('getItemInventoryStatus: stock-to-build with depleted stock → build (made
 // 8. LIFECYCLE — triageAndConfirmOrder + transitionOrder
 // ════════════════════════════════════════════════════════════════════════════
 
-test('triageAndConfirmOrder: all-stock → status "pack" + reserves inventory, no production request', async () => {
-  const orders = { ORD1: { items: [{ pid: 'P1', qty: 1 }] } };
+// Confirm-time `committed` double-commit (companion to PR #810's backorder fix).
+// A STOREFRONT order (arch submitOrder, non-POS) already reserved `committed` for
+// every stock line at PLACEMENT, and carries NO `source`. Confirming it must route
+// the line to 'stock' and advance to "pack" but must NOT re-reserve — re-reserving
+// double-commits the line and leaks a phantom commit on ship (committed never falls
+// back, understating availability forever). No build job opens.
+test('triageAndConfirmOrder: all-stock storefront order (no source) → "pack", NO re-reserve (already committed at placement)', async () => {
+  const orders = { ORD1: { items: [{ pid: 'P1', qty: 1 }] } }; // no source ⇒ storefront submitOrder
   const { OrdersCore, rec } = makeCtx({ orders: orders, inventory: STOCKED });
   await OrdersCore.triageAndConfirmOrder('ORD1', [{ item: { pid: 'P1', qty: 1 }, action: 'stock' }]);
   const upd = ops(rec, 'orders.update').find((w) => w.data.status);
   assert.strictEqual(upd.data.status, 'pack');
   assert.ok(upd.data.fulfillment, 'fulfillment map written');
-  assert.strictEqual(ops(rec, 'multiUpdate').length, 1, 'stock item reserved via multiUpdate');
+  assert.strictEqual(ops(rec, 'multiUpdate').length, 0, 'NO re-reserve — submitOrder committed this line at placement');
+  assert.strictEqual(ops(rec, 'pr.set').length, 0, 'no production request for an in-stock item');
+});
+
+// The flip side of the gate: an order created OUTSIDE the storefront checkout never
+// got the placement `committed` reservation — wholesale pay-by-check (client-side
+// MastDB.set, source 'wholesale_catalog'), an Etsy-sync order (source 'etsy'), etc.
+// For these the confirm-time reserve is the FIRST/ONLY commit and MUST fire, or the
+// sold stock is never held (oversell). The non-storefront `source` is the gate.
+test('triageAndConfirmOrder: all-stock NON-storefront order (source set) → "pack" + reserves committed (first commit)', async () => {
+  const orders = { ORD1: { source: 'etsy', items: [{ pid: 'P1', qty: 2 }] } };
+  const { OrdersCore, rec } = makeCtx({ orders: orders, inventory: STOCKED });
+  await OrdersCore.triageAndConfirmOrder('ORD1', [{ item: { pid: 'P1', qty: 2 }, action: 'stock' }]);
+  assert.strictEqual(ops(rec, 'orders.update').find((w) => w.data.status).data.status, 'pack');
+  const mu = ops(rec, 'multiUpdate');
+  assert.strictEqual(mu.length, 1, 'never-committed line reserved at confirm (first commit)');
+  assert.deepStrictEqual(mu[0].updates['admin/inventory/P1/stock/_default/committed'], { __inc: 2 }, 'committed += qty');
   assert.strictEqual(ops(rec, 'pr.set').length, 0, 'no production request for an in-stock item');
 });
 

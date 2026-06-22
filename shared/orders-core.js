@@ -257,6 +257,21 @@
     var updates = {};
     var history = o.statusHistory ? o.statusHistory.slice() : [];
 
+    // Did this order ALREADY reserve `committed` for its stock lines at PLACEMENT?
+    // Only the storefront checkout (arch submitOrder, non-POS) does — and it stamps
+    // NO `source` on the order. Every OTHER order-creation path skips the placement
+    // reserve AND carries an explicit `source`/`externalSource`: wholesale pay-by-
+    // check (client-side MastDB.set, source 'wholesale_catalog'), Etsy sync (source
+    // 'etsy'), Shopify/webhook import (externalSource.platform; created 'confirmed'),
+    // POS (source 'pos', draws onHand not committed — and never reaches confirm).
+    // So a 'stock' line on a storefront order is ALREADY committed: re-reserving it
+    // here double-commits and leaks a phantom commit on ship (the exact bug PR #810
+    // fixed for the backorder branch). For a non-storefront order this confirm is the
+    // FIRST/ONLY commit, so it MUST still reserve. CONTRACT: any NEW path that creates
+    // an order WITHOUT reserving committed at placement must stamp a `source`, or it
+    // is mistaken for a storefront order and under-commits (oversell).
+    var reservedAtPlacement = !o.source && !o.externalSource;
+
     // Build fulfillment map from admin choices
     var ff = {};
     var needsBuilding = false;
@@ -265,8 +280,10 @@
       var ffKey = getItemFulfillmentKey(ia.item);
       if (ia.action === 'stock') {
         ff[ffKey] = { source: 'stock', buildJobId: null, ready: true };
-        var ck = getItemComboKey(ia.item.pid, ia.item.options);
-        reserveInventory(ia.item.pid, ia.item.qty || 1, ck);
+        if (!reservedAtPlacement) {
+          var ck = getItemComboKey(ia.item.pid, ia.item.options);
+          reserveInventory(ia.item.pid, ia.item.qty || 1, ck);
+        }
       } else if (ia.action === 'backorder') {
         // Tier 2 resold backorder: the goods are sourced from the incoming PO,
         // NOT built. submitOrder already reserved `committed` for the line at
