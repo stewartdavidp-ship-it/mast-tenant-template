@@ -96,7 +96,7 @@
   }
 
   // ── module state + data ─────────────────────────────────────────────
-  var V2 = { rows: [], byId: {}, loaded: false };
+  var V2 = { rows: [], byId: {}, loaded: false, stRunning: false, stResults: null };
 
   function ingest(reports) {
     reports = reports || {};
@@ -142,6 +142,42 @@
       '</div>';
   }
 
+  function _nowMs() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+  // Proactive read probes against representative tenant paths — the counterpart to the
+  // passive captured-error list. Exercises the read chokepoint (a slow/unindexed read
+  // also trips the L2 timing) and reports pass/fail/ms. All reads are bounded + read-only.
+  var PROBES = [
+    { label: 'Shop config', read: function () { return MastDB.get('public/config/shopDisplay'); } },
+    { label: 'Product catalog', read: function () { return MastDB.list('public/products', { limit: 1 }); } },
+    { label: 'Diagnostics feed', read: function () { return MastDB.query('feedbackReports').limitToLast(1).once(); } }
+  ];
+  function runSelfTest() {
+    if (!canView()) return;
+    V2.stRunning = true; V2.stResults = null; render();
+    var out = [], chain = Promise.resolve();
+    PROBES.forEach(function (p) {
+      chain = chain.then(function () {
+        var t0 = _nowMs();
+        return Promise.resolve(p.read()).then(function () {
+          out.push({ label: p.label, ok: true, ms: Math.round(_nowMs() - t0) });
+        }, function (e) {
+          out.push({ label: p.label, ok: false, ms: Math.round(_nowMs() - t0), err: (e && (e.code || e.message)) || 'failed' });
+        });
+      });
+    });
+    chain.then(function () { V2.stRunning = false; V2.stResults = out; render(); });
+  }
+  function selfTestCard() {
+    if (!V2.stRunning && !V2.stResults) return '';
+    if (V2.stRunning) return U.card('Self-test', '<span style="color:var(--warm-gray);">Running read probes…</span>');
+    var rows = V2.stResults.map(function (r) {
+      return { k: r.label, v: r.ok
+        ? U.badge(r.ms + ' ms' + (r.ms >= 800 ? ' · slow' : ''), r.ms >= 800 ? 'warning' : 'success')
+        : U.badge('failed · ' + esc(String(r.err).slice(0, 60)), 'danger') };
+    });
+    return U.card('Self-test', U.kv(rows));
+  }
+
   function render() {
     var tab = ensureTab();
     if (!canView()) {
@@ -157,9 +193,10 @@
       U.pageHeader({
         title: 'Diagnostics',
         count: N.count(V2.rows.length) + ' recent report' + (V2.rows.length === 1 ? '' : 's'),
-        actionsHtml: '<button class="btn btn-secondary" onclick="DiagnosticsV2.refresh()">↻ Refresh</button>'
+        actionsHtml: '<button class="btn btn-secondary" onclick="DiagnosticsV2.selfTest()">Run self-test</button> <button class="btn btn-secondary" onclick="DiagnosticsV2.refresh()">↻ Refresh</button>'
       }) +
       sessionPulse() +
+      selfTestCard() +
       MastEntity.renderList('diagnostics', {
         rows: V2.rows,
         onRowClickFnName: 'DiagnosticsV2.open',
@@ -169,7 +206,8 @@
 
   window.DiagnosticsV2 = {
     open: function (id) { var rec = V2.byId[id]; if (rec) MastEntity.openRecord('diagnostics', rec, 'read'); },
-    refresh: function () { V2.loaded = false; render(); load(); }
+    refresh: function () { V2.loaded = false; render(); load(); },
+    selfTest: runSelfTest
   };
 
   MastAdmin.registerModule('diagnostics', {
