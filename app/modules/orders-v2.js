@@ -564,24 +564,47 @@
         '</div>';
       }
       var inv = itemInvStatus(it);
+      var isBackorder = !!it.backorder;
       var disableStock = (inv.status === 'out' || inv.status === 'build');
       var defStock = (inv.status === 'stock');
       var tone = inv.status === 'stock' ? 'success' : inv.status === 'partial' ? 'amber' : inv.status === 'out' ? 'danger' : 'neutral';
-      var picker = '<label style="margin-right:14px;font-size:0.85rem;cursor:pointer;">' +
-          '<input type="radio" name="ordersV2Triage_' + idx + '" value="stock" ' + (defStock ? 'checked' : '') + (disableStock ? ' disabled' : '') + ' style="margin-right:4px;">From stock' +
-        '</label>' +
-        '<label style="font-size:0.85rem;cursor:pointer;">' +
-          '<input type="radio" name="ordersV2Triage_' + idx + '" value="build" ' + (!defStock ? 'checked' : '') + ' style="margin-right:4px;">Send to build' +
-        '</label>';
+      var invLabel = inv.label || '';
+      var picker;
+      if (isBackorder) {
+        // Tier 2 resold backorder: covered by an incoming PO, so it's not "out",
+        // it's on its way. Default to "Backorder · awaiting PO" (records a
+        // fulfillment source with NO build job; the order holds in Confirmed
+        // until the covering PO is received). Stock stays disabled (out); "Send
+        // to build" remains a manual override but is no longer the default.
+        var shipsBy = it.shipsByText || (it.shipsByDate ? ('Ships by ' + (U.Num.date(it.shipsByDate) || '')) : '');
+        invLabel = 'Backorder' + (shipsBy ? ' · ' + shipsBy : '');
+        tone = 'amber';
+        picker = '<label style="margin-right:14px;font-size:0.85rem;cursor:pointer;">' +
+            '<input type="radio" name="ordersV2Triage_' + idx + '" value="stock" disabled style="margin-right:4px;">From stock' +
+          '</label>' +
+          '<label style="margin-right:14px;font-size:0.85rem;cursor:pointer;">' +
+            '<input type="radio" name="ordersV2Triage_' + idx + '" value="backorder" checked style="margin-right:4px;">Backorder · awaiting PO' +
+          '</label>' +
+          '<label style="font-size:0.85rem;cursor:pointer;">' +
+            '<input type="radio" name="ordersV2Triage_' + idx + '" value="build" style="margin-right:4px;">Send to build' +
+          '</label>';
+      } else {
+        picker = '<label style="margin-right:14px;font-size:0.85rem;cursor:pointer;">' +
+            '<input type="radio" name="ordersV2Triage_' + idx + '" value="stock" ' + (defStock ? 'checked' : '') + (disableStock ? ' disabled' : '') + ' style="margin-right:4px;">From stock' +
+          '</label>' +
+          '<label style="font-size:0.85rem;cursor:pointer;">' +
+            '<input type="radio" name="ordersV2Triage_' + idx + '" value="build" ' + (!defStock ? 'checked' : '') + ' style="margin-right:4px;">Send to build' +
+          '</label>';
+      }
       return '<div style="display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:12px;padding:10px 0;border-top:1px solid var(--cream-dark,rgba(127,127,127,.18));align-items:center;">' +
         '<div>' + name + '</div>' +
-        '<div>' + U.badge(esc(inv.label || ''), tone) + '</div>' +
+        '<div>' + U.badge(esc(invLabel), tone) + '</div>' +
         '<div>' + picker + '</div>' +
       '</div>';
     }).join('');
     var head = '<div style="display:grid;grid-template-columns:2fr 1fr 1.4fr;gap:12px;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;color:var(--warm-gray);padding-bottom:4px;"><span>Item</span><span>Inventory</span><span>Source</span></div>';
     var body = U.card('Route & confirm order ' + esc(getDisplayNum(r)),
-      '<div class="mu-sub" style="margin-bottom:10px;">Choose how to fulfill each item. Stock items reserve inventory; build items create production requests and move the order to Building.</div>' +
+      '<div class="mu-sub" style="margin-bottom:10px;">Choose how to fulfill each item. Stock items reserve inventory; build items create production requests and move the order to Building; backorder items wait for the incoming PO — the order holds in Confirmed until stock arrives.</div>' +
       head + rows);
     U.slideOut.open({
       id: 'triage-' + orderId, title: 'Confirm order', subtitle: esc(getDisplayNum(r)), size: 'lg',
@@ -600,7 +623,7 @@
     var itemActions = [];
     (r.items || []).forEach(function (it, idx) {
       if (isGiftCardItem(it)) return; // digital — not triaged
-      var action = 'build';
+      var action = it.backorder ? 'backorder' : 'build';
       var radios = bodyEl.querySelectorAll('input[name="ordersV2Triage_' + idx + '"]');
       for (var i = 0; i < radios.length; i++) { if (radios[i].checked) { action = radios[i].value; break; } }
       itemActions.push({ item: it, action: action });
@@ -609,7 +632,12 @@
       if (!bridge || typeof bridge.triageConfirm !== 'function') { toast('Orders engine still loading — try again', true); return; }
       return Promise.resolve(bridge.triageConfirm(orderId, itemActions, r)).then(function () {
         var built = itemActions.filter(function (ia) { return ia.action === 'build'; }).length;
-        toast(built ? ('Order confirmed — ' + built + ' item' + (built === 1 ? '' : 's') + ' sent to production') : 'Order confirmed and routed to packing');
+        var backordered = itemActions.filter(function (ia) { return ia.action === 'backorder'; }).length;
+        var msg;
+        if (built) msg = 'Order confirmed — ' + built + ' item' + (built === 1 ? '' : 's') + ' sent to production';
+        else if (backordered) msg = 'Order confirmed — held for back-ordered stock (' + backordered + ' item' + (backordered === 1 ? '' : 's') + ')';
+        else msg = 'Order confirmed and routed to packing';
+        toast(msg);
         window.MastUI.slideOut.requestCloseForce();
         return reloadThenOpen(orderId);
       });

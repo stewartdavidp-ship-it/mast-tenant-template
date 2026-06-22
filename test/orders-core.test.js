@@ -584,6 +584,39 @@ test('triageAndConfirmOrder: unknown order → throws "Order not found"', async 
   await assert.rejects(() => OrdersCore.triageAndConfirmOrder('GHOST', []), /Order not found/);
 });
 
+// Tier 2 backorder: a resold out-of-stock line covered by an open PO must NOT be
+// forced to Build. It records a 'backorder' fulfillment source, opens NO build
+// job, does NOT re-reserve (submitOrder committed it at placement), and holds the
+// order in Confirmed so the pickship backorder-stock gate governs release.
+test('triageAndConfirmOrder: a backorder item → status "confirmed", NO build job, NO re-reserve', async () => {
+  const orders = { ORD1: { items: [{ pid: 'P1', qty: 1, backorder: true }] } };
+  const inv = { P1: { stockType: 'strict', stock: { _default: { onHand: 0, committed: 1 } } } };
+  const { OrdersCore, rec } = makeCtx({ orders: orders, inventory: inv });
+  await OrdersCore.triageAndConfirmOrder('ORD1', [{ item: { pid: 'P1', qty: 1, backorder: true }, action: 'backorder' }]);
+  const upd = ops(rec, 'orders.update').find((w) => w.data.status);
+  assert.strictEqual(upd.data.status, 'confirmed', 'backorder order holds in Confirmed (gate governs release), not Building');
+  const ff = upd.data.fulfillment;
+  const key = Object.keys(ff)[0];
+  assert.strictEqual(ff[key].source, 'backorder', 'fulfillment source is backorder');
+  assert.strictEqual(ff[key].buildJobId, null, 'no build job linked to the backorder line');
+  assert.strictEqual(ops(rec, 'pr.set').length, 0, 'no production request for a backorder item');
+  assert.strictEqual(ops(rec, 'multiUpdate').length, 0, 'no re-reserve — committed was already set at placement by submitOrder');
+});
+
+test('triageAndConfirmOrder: build + backorder mix → status "building", build job ONLY for the build line', async () => {
+  const orders = { ORD1: { orderNumber: 'SO-2', items: [{ pid: 'P1', name: 'Mug', qty: 1 }, { pid: 'P2', name: 'Resold', qty: 1, backorder: true }] } };
+  const inv = { P1: { stockType: 'made-to-order' }, P2: { stockType: 'strict', stock: { _default: { onHand: 0, committed: 1 } } } };
+  const { OrdersCore, rec } = makeCtx({ orders: orders, inventory: inv });
+  await OrdersCore.triageAndConfirmOrder('ORD1', [
+    { item: { pid: 'P1', name: 'Mug', qty: 1 }, action: 'build' },
+    { item: { pid: 'P2', name: 'Resold', qty: 1, backorder: true }, action: 'backorder' }
+  ]);
+  assert.strictEqual(ops(rec, 'orders.update').find((w) => w.data.status).data.status, 'building', 'a build line still drives Building');
+  const pr = ops(rec, 'pr.set');
+  assert.strictEqual(pr.length, 1, 'exactly one production request');
+  assert.strictEqual(pr[0].data.productId, 'P1', 'only the build line P1 opens a build job — the backorder line P2 does not');
+});
+
 test('transitionOrder: INVALID transition is refused — error toast, NO db write, NO cloud call', async () => {
   const orders = { ORD1: { status: 'placed' } };
   const { OrdersCore, rec } = makeCtx({ orders: orders });
