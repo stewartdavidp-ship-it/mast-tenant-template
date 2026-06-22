@@ -100,7 +100,9 @@ const MODULE_GATE_BASELINE = new Set([
   'lookbooks.js', 'maker.js', 'mapping.js', 'newsletter.js',
   // wholesale.js RETIRED (T6): WholesaleBridge absorbed into wholesale-v2.js,
   // which is can()-gated (CHECK C) — no entry needed for the write-bearing twin.
-  'procurement.js', 'promotions.js', 'social.js',
+  // procurement.js RETIRED (T6): its ProcurementBridge + VendorsBridge engine absorbed
+  // into procurement-v2.js, which is can()-gated (CHECK C) — no entry needed.
+  'promotions.js', 'social.js',
   // UI-redesign (?ui=1) proof modules — flag-gated; gate or retire as they graduate:
   // orders-v2.js graduated: native detail actions (triage/cancel/note/email) are
   // can('orders','edit')-gated (PR2; writes delegate to OrdersBridge).

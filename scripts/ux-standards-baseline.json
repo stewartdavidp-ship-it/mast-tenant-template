@@ -123,9 +123,6 @@
   "app/modules/orders-v2.js": {
     "hardcodedHex": 1
   },
-  "app/modules/procurement.js": {
-    "hardcodedHex": 3
-  },
   "app/modules/production.js": {
     "hardcodedHex": 25
   },
@@ -180,5 +177,8 @@
   "app/modules/trips-v2.js": {
     "rogueOverlays": 3,
     "hardcodedHex": 55
+  },
+  "app/modules/procurement-v2.js": {
+    "hardcodedHex": 3
   }
 }

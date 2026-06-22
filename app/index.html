@@ -11498,7 +11498,7 @@
     <div id="marketingCalendarV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: marketing calendar (index control) -->
     <div id="channelsV2Tab" class="tab-content" style="display:none;"></div><!-- UI-redesign conversion: sales channels (read-focused) -->
 
-    <!-- Admin: Procurement Tab — rendered entirely from app/modules/procurement.js -->
+    <!-- Admin: legacy Procurement Tab container — retired (T6); #procurement now renders into #procurementV2Tab via procurement-v2.js. Kept as an empty no-op anchor. -->
     <div id="procurementTab" style="display:none;"></div>
 
     <!-- Admin: Book Tab -->
@@ -19644,7 +19644,7 @@ window.getRouteParams = function() { return currentRouteParams || {}; };
 // flag-gated v2 modules (which read mastUiRedesign at load) register cleanly.
 var MAST_V2_ROUTE_MAP = {
   // 'customers' NOT remapped (T6 PR5): customers.js RETIRED — customers-v2 owns the bare #customers route via its manifest entry (resolves to the twin for ALL users).
-  procurement: 'procurement-v2',  // 'trips' NOT remapped: trips.js RETIRED (T6), trips-v2 owns the bare route via manifest.
+  // 'procurement' & 'trips' NOT remapped: procurement.js + trips.js RETIRED (T6); procurement-v2 / trips-v2 own the bare routes via their manifest entries.
   materials: 'materials-v2', 'finance-expenses': 'finance-expenses-v2',
   'cs-tickets': 'cs-tickets-v2', 'cs-inbox': 'cs-inbox-v2', 'cs-surveys': 'cs-surveys-v2', terms: 'terms-v2', wallet: 'wallet-v2',
   // "Your website" capstone: #brand and #homepage resolve to the single unified
@@ -19760,11 +19760,11 @@ function navigateTo(route, params) {
   // navigateToClassic() sets _skipV2RemapOnce to reach a legacy route regardless
   // (consume-once, so only that single navigation bypasses the remap).
   var _skipRemap = window._skipV2RemapOnce; window._skipV2RemapOnce = false;
-  // Procurement is fully ported to V2 (Tier 1.5, 2026-06-06): #procurement resolves
-  // to the V2 twin for ALL users, independent of the global Legacy-UI flag. Other
-  // domains still respect mastUseV2Routes(). navigateToClassic() still bypasses via
-  // _skipV2RemapOnce for any not-yet-ported sub-tool.
-  if (!_skipRemap && (mastUseV2Routes() || route === 'procurement') && MAST_V2_ROUTE_MAP[route]) {
+  // V2 route remap (Legacy-UI users keep V1 routes). navigateToClassic() bypasses via
+  // _skipV2RemapOnce for any not-yet-ported sub-tool. Procurement is no longer special-
+  // cased here: procurement.js is RETIRED (T6) and procurement-v2 owns the bare
+  // #procurement route directly via its manifest entry, for all users.
+  if (!_skipRemap && mastUseV2Routes() && MAST_V2_ROUTE_MAP[route]) {
     route = MAST_V2_ROUTE_MAP[route];
   }
   // Top-level nav (sidebar click, dashboard tile, in-page button) consults
@@ -20974,7 +20974,7 @@ var MODULE_MANIFEST = {
   'connections-providers': { src: 'modules/connections-providers.js', v: '04b778b661f9', routes: [] },
   'shows-v2': { src: 'modules/shows-v2.js', v: '23692c20cf27', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2', 'show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] }, // Shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin. shows.js (V1) RETIRED (T6): its ShowsBridge + DOM-free write cores were absorbed into shows-v2.js, and the bare #show* routes now resolve here directly (no MAST_V2_ROUTE_MAP remap).
   production: { src: 'modules/production.js', v: '69ab19210c64', routes: ['jobs', 'production', 'stories', 'forecast'] },
-  procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
+  // procurement.js (V1) manifest row REMOVED (T6): its ProcurementBridge + VendorsBridge + receive→stock→QBO engine absorbed into procurement-v2.js, which owns the bare #procurement route below.
   // contacts.js (V1) manifest row REMOVED (T6): its ContactsBridge + cores absorbed into contacts-v2.js, which owns the bare #contacts route below.
   // customers.js (V1) manifest row REMOVED (T6 PR5): the 3.5K-line V1 Customers UI is deleted; the bare #customers route is now owned by the customers-v2 row below.
   'customers-core': { src: 'modules/customers-core.js', v: '9d4ebcda16e4', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module customer write layer (CustomersBridge, wallet-adjust, merge, add-contact, open-detail) lifted out of customers.js so V2 consumers load this, not the 3.5K-line V1 UI. Non-routed lazy core.
@@ -20987,7 +20987,7 @@ var MODULE_MANIFEST = {
   'trips-v2': { src: 'modules/trips-v2.js', v: '4e6d44cbcd8e', routes: ['trips-v2', 'trips'] }, // Trips hub (read history + delegated start/end/retroactive flows + tax report + app-wide active-trip banner). trips.js (V1) RETIRED (T6): the entire trips engine is absorbed here, so the bare #trips route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', v: '9712ea2fdab0', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
   'team-v2': { src: 'modules/team-v2.js', v: 'fba0132fa2d7', routes: ['team-v2', 'team'] }, // Team roster/employee + HR sub-surfaces (time clock / PTO / labor burden / docs / onboarding). team.js (V1) RETIRED (T6): its TeamBridge + TeamPanels + full handler closure were absorbed into team-v2.js, and the bare #team route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
-  'procurement-v2': { src: 'modules/procurement-v2.js', v: 'e0dce287de8a', routes: ['procurement-v2'] }, // UI-redesign conversion: purchase orders (now hosts the Needs-reorder lens)
+  'procurement-v2': { src: 'modules/procurement-v2.js', v: 'f14e36eb084b', routes: ['procurement-v2', 'procurement'] }, // Procurement hub (POs + Needs-reorder lens + receiving + vendors via vendors-v2). procurement.js (V1) RETIRED (T6): its ProcurementBridge + VendorsBridge + receive→stock→QBO engine absorbed here, so the bare #procurement route resolves here directly (no remap).
   'lots-v2': { src: 'modules/lots-v2.js', v: '182c811e7879', routes: ['lots-v2'] }, // Tier 1.5 P2: inventory lots (material+product) list + detail (flag-gated)
   'materials-v2': { src: 'modules/materials-v2.js', v: '9c5c9bf2656f', routes: ['materials-v2'] }, // UI-redesign conversion: maker materials (flag-gated, side-by-side)
   'cs-support-v2': { src: 'modules/cs-support-v2.js', v: '9da15d6e725d', routes: ['cs-inbox-v2', 'cs-tickets-v2'] }, // ONE support hub: Inbox/Tickets are two lenses of the same conversation queue — route picks the entry lens (customer-service-v2-build-plan.md)
@@ -21007,7 +21007,7 @@ var MODULE_MANIFEST = {
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: '82492c030beb', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
   'coupons-v2': { src: 'modules/coupons-v2.js', v: 'c7a94342abd2', routes: ['coupons-v2'] }, // UI-redesign conversion: coupons read detail (flag-gated)
   'classes-v2': { src: 'modules/classes-v2.js', v: '10178d0580be', routes: ['classes-v2', 'book-reports-v2', 'classes-rooms-v2', 'classes-settings-v2'] }, // ONE classes hub: Catalog + Rooms & equipment + Reports lenses — route picks the lens (8→6 ratified 2026-06-10)
-  'vendors-v2': { src: 'modules/vendors-v2.js', v: 'ecb1bb96518b', routes: ['vendors-v2'] }, // UI-redesign conversion: vendors read detail (flag-gated)
+  'vendors-v2': { src: 'modules/vendors-v2.js', v: 'bff61f62879a', routes: ['vendors-v2'] }, // UI-redesign conversion: vendors read detail (flag-gated)
   'membership-v2': { src: 'modules/membership-v2.js', v: '1e17872446a4', routes: ['membership-v2'] }, // UI-redesign conversion: membership members read detail (flag-gated)
   'cs-reviews-v2': { src: 'modules/cs-reviews-v2.js', v: '3914ec83b5a8', routes: ['cs-reviews-v2'] }, // UI-redesign conversion: CS reviews read detail (flag-gated)
   'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', v: '350b80606f25', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
