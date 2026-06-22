@@ -267,6 +267,11 @@
        Hand-versioned ?v= (not a MODULE_MANIFEST entry, so gen-cache-bust skips it;
        bump on edit). -->
   <script defer src="modules/demo-mode.js?v=1"></script>
+  <!-- Adoption gamification (Stage 1): paints the "Your Mast value score" Dashboard
+       card. Eager + deferred; reads-only. Lives in a module (not inline shell JS)
+       per the shell-size ratchet. Hand-versioned (not a MANIFEST entry, so
+       gen-cache-bust skips it; bump on edit). -->
+  <script defer src="modules/adoption.js?v=1"></script>
   <style>
     /* Pre-paint dark mode on html element to prevent flash before body exists */
     html.dark-mode { background: var(--charcoal); }
@@ -7150,6 +7155,7 @@
       <!-- Dashboard Cards -->
       <div id="dashboardCards">
         <div id="dashCardSetupShop"></div>
+        <div id="dashCardAdoption"></div><!-- adoption gamification: "Your Mast value score" card (renders via app/modules/adoption.js) -->
         <div id="dashCardNewInquiries"></div>
         <div id="dashCardQuickActions"></div>
         <div id="dashCardNewOrders"></div>
