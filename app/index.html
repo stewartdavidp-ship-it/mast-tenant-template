@@ -19655,7 +19655,7 @@ var MAST_V2_ROUTE_MAP = {
   brand: 'website-v2', homepage: 'website-v2', products: 'products-v2',
   // 'students' NOT remapped: students.js RETIRED (T6); students-v2 owns the bare route via its manifest entry.
   wholesale: 'wholesale-v2', galleries: 'galleries-v2', instructors: 'instructors-v2',
-  contacts: 'contacts-v2', enrollments: 'enrollments-v2', passes: 'passes-v2',
+  enrollments: 'enrollments-v2', passes: 'passes-v2',  // 'contacts' NOT remapped: contacts.js RETIRED (T6), contacts-v2 owns the bare route via manifest.
   resources: 'classes-rooms-v2',
   'gift-cards': 'gift-cards-v2', coupons: 'coupons-v2', book: 'classes-v2', calendar: 'calendar-v2', 'book-reports': 'book-reports-v2', 'book-settings': 'classes-settings-v2', membership: 'membership-v2',
   'cs-reviews': 'cs-reviews-v2', 'cs-faqs': 'cs-faqs-v2', loyalty: 'loyalty-v2', stories: 'stories-v2', 'cs-members': 'cs-members-v2',
@@ -20975,9 +20975,9 @@ var MODULE_MANIFEST = {
   'shows-v2': { src: 'modules/shows-v2.js', v: '23692c20cf27', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2', 'show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] }, // Shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin. shows.js (V1) RETIRED (T6): its ShowsBridge + DOM-free write cores were absorbed into shows-v2.js, and the bare #show* routes now resolve here directly (no MAST_V2_ROUTE_MAP remap).
   production: { src: 'modules/production.js', v: '69ab19210c64', routes: ['jobs', 'production', 'stories', 'forecast'] },
   procurement: { src: 'modules/procurement.js', v: '59b60af2a3c6', routes: ['procurement'] },
-  contacts: { src: 'modules/contacts.js', v: 'cf4b8c58276c', routes: ['contacts'] },
+  // contacts.js (V1) manifest row REMOVED (T6): its ContactsBridge + cores absorbed into contacts-v2.js, which owns the bare #contacts route below.
   // customers.js (V1) manifest row REMOVED (T6 PR5): the 3.5K-line V1 Customers UI is deleted; the bare #customers route is now owned by the customers-v2 row below.
-  'customers-core': { src: 'modules/customers-core.js', v: 'd806bab581e4', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module customer write layer (CustomersBridge, wallet-adjust, merge, add-contact, open-detail) lifted out of customers.js so V2 consumers load this, not the 3.5K-line V1 UI. Non-routed lazy core.
+  'customers-core': { src: 'modules/customers-core.js', v: '9d4ebcda16e4', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module customer write layer (CustomersBridge, wallet-adjust, merge, add-contact, open-detail) lifted out of customers.js so V2 consumers load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'rma-admin': { src: 'modules/rma-admin.js', v: '5c4adb89306f', routes: ['rma'] }, // RMA/Returns lifecycle admin (admin/rma records via the transitionRma CF). orders.js (V1) RETIRED (T6 PR4b): the orders route went to orders-v2 (PR3), commissions to commissions-v2 (PR2), and this RMA lifecycle UI was relocated here VERBATIM and un-gated, so the bare #rma route resolves here directly for ALL users (no MAST_V2_ROUTE_MAP remap). rma-v2.js (#rma-v2) is a separate flag-gated returns lens over orders/{id} return_* statuses.
   'orders-v2': { src: 'modules/orders-v2.js', v: '367c9c9fd762', routes: ['orders-v2', 'orders'] }, // Orders surface (UI-redesign). Owns the bare #orders route (T6 PR3 — absorbed OrdersBridge from orders.js).
   'customers-v2': { src: 'modules/customers-v2.js', v: 'b76a3ca3aa7e', routes: ['customers-v2', 'customers'] }, // Customers surface (MastEntity engine). customers.js (V1) RETIRED (T6 rip-and-replace PR1-PR5): the write layer moved to customers-core, certs/filters/sorts/activity were rebuilt on the engine, and this twin now owns the bare #customers route directly for ALL users (un-gated, no MAST_V2_ROUTE_MAP remap).
@@ -21019,7 +21019,7 @@ var MODULE_MANIFEST = {
   'sales-events-v2': { src: 'modules/sales-events-v2.js', v: '058614e335dd', routes: ['sales-events-v2'] }, // UI-redesign conversion: sales events read detail (flag-gated)
   'consignments-v2': { src: 'modules/consignments-v2.js', v: 'ea535cfa9490', routes: ['consignments-v2'] }, // UI-redesign conversion: consignment placements read detail (flag-gated)
   'sessions-v2': { src: 'modules/sessions-v2.js', v: '401940e1fe7a', routes: ['sessions-v2'] }, // UI-redesign conversion: class sessions read detail (flag-gated)
-  'inquiries-v2': { src: 'modules/inquiries-v2.js', v: '6720327c5b26', routes: ['inquiries-v2'] }, // UI-redesign conversion: inquiries/leads read detail (flag-gated)
+  'inquiries-v2': { src: 'modules/inquiries-v2.js', v: '761b57caf5a2', routes: ['inquiries-v2'] }, // UI-redesign conversion: inquiries/leads read detail (flag-gated)
   'students-v2': { src: 'modules/students-v2.js', v: 'd61b7b921868', routes: ['students-v2', 'students'] }, // Students roster (read Faceted Record + native create/edit/sub-editors). students.js (V1) RETIRED (T6): its StudentsBridge was absorbed here, so the bare #students route resolves here directly (no MAST_V2_ROUTE_MAP remap). Settings sub-tabs live in students-config-v2.
   'students-config-v2': { src: 'modules/students-config-v2.js', v: '39b2e4a9dc96', routes: ['students-config-v2'] }, // UI-redesign conversion: tenant Student SETTINGS hub (waiver templates / clearance types / business documents) — finishes retiring legacy #students config view-tabs
   'galleries-v2': { src: 'modules/galleries-v2.js', v: '0c19197c9bb5', routes: ['galleries-v2'] }, // UI-redesign conversion: galleries & consignment read detail (flag-gated, side-by-side)
@@ -21040,7 +21040,7 @@ var MODULE_MANIFEST = {
   'email-log-v2': { src: 'modules/email-log-v2.js', v: '8273b9e43c8d', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
   'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', v: 'f18703b4dec4', routes: ['marketing-calendar-v2', 'marketing-calendar'] }, // marketing calendar; owns the legacy 'marketing-calendar' route too (V1 marketing-calendar.js retired, T6)
   'channels-v2': { src: 'modules/channels-v2.js', v: '8e522c85dee9', routes: ['channels-v2', 'channels'] }, // sales channels surface; owns the legacy 'channels' route too (V1 channels.js retired, T6 — ChannelsBridge + MastChannelShim + channelReconnect absorbed, no MAST_V2_ROUTE_MAP remap)
-  'contacts-v2': { src: 'modules/contacts-v2.js', v: '810819197941', routes: ['contacts-v2'] }, // UI-redesign conversion: contacts (CRM) read detail (flag-gated, side-by-side)
+  'contacts-v2': { src: 'modules/contacts-v2.js', v: '0825cca25520', routes: ['contacts-v2', 'contacts'] }, // Contacts/CRM hub (read detail + native create/edit/interactions/inquiry-reply/Google-sync). contacts.js (V1) RETIRED (T6): its ContactsBridge + state-free cores absorbed here, so the bare #contacts route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'enrollments-v2': { src: 'modules/enrollments-v2.js', v: 'f1ec6c15ef8e', routes: ['enrollments-v2'] }, // UI-redesign conversion: enrollments roster read detail (read-focused Faceted Record)
   'passes-v2': { src: 'modules/passes-v2.js', v: '5f5a185fa4d3', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)
   'resources-v2': { src: 'modules/resources-v2.js', v: '817832f43559', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
