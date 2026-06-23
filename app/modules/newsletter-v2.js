@@ -1013,12 +1013,7 @@
           built = built || {};
           if (!built.html) { if (window.showToast) showToast('Nothing to export yet.', true); return; }
           try {
-            var blob = new Blob([built.html], { type: 'text/html' });
-            var url = URL.createObjectURL(blob);
-            var a = document.createElement('a');
-            a.href = url; a.download = built.filename || 'newsletter.html';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            MastExport.downloadBlob(built.filename || 'newsletter.html', built.html, 'text/html');
             if (window.showToast) showToast('Exported HTML downloaded.');
           } catch (e) { console.error('[newsletter-v2] exportHtml download', e); if (window.showToast) showToast('Download failed.', true); }
         }).catch(function (e) { console.error('[newsletter-v2] exportHtml', e); if (window.showToast) showToast('Could not export: ' + (e && e.message || e), true); });

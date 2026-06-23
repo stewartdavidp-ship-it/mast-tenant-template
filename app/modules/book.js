@@ -4234,13 +4234,7 @@
     rows.forEach(function(r) {
       lines.push(header.map(function(k) { return cell(r[k] == null ? '' : r[k]); }).join(','));
     });
-    var blob = new Blob([lines.join('\n')], { type: 'text/csv' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'pass-cohort-' + _passViewPid + '-' + _passSelectedCohort + '.csv';
-    a.click();
-    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    MastExport.downloadBlob('pass-cohort-' + _passViewPid + '-' + _passSelectedCohort + '.csv', lines.join('\n'), 'text/csv');
   };
   window._passToggleFields = function() {
     var type = document.getElementById('pdfType');
