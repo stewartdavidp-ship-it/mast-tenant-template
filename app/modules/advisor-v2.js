@@ -796,9 +796,9 @@
       var aCount = (r.actions || []).length;
       if (wCount + cCount + aCount > 0) {
         h += '<div style="display:flex;gap:12px;margin-top:6px;font-size:0.72rem;color:var(--warm-gray-light);">';
-        if (wCount) h += '<span style="color:' + C_OK + ';">' + wCount + ' win' + (wCount > 1 ? 's' : '') + '</span>';
-        if (cCount) h += '<span style="color:' + C_WARN + ';">' + cCount + ' concern' + (cCount > 1 ? 's' : '') + '</span>';
-        if (aCount) h += '<span>' + aCount + ' action' + (aCount > 1 ? 's' : '') + '</span>';
+        if (wCount) h += '<span style="color:' + C_OK + ';">' + MastFormat.countNoun(wCount, 'win') + '</span>';
+        if (cCount) h += '<span style="color:' + C_WARN + ';">' + MastFormat.countNoun(cCount, 'concern') + '</span>';
+        if (aCount) h += '<span>' + MastFormat.countNoun(aCount, 'action') + '</span>';
         h += '</div>';
       }
 

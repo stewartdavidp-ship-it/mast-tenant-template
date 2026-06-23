@@ -338,7 +338,7 @@
 
     var html = _galleriesSubNavHtml('galleries');
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;">' +
-      '<div style="font-size:0.85rem;color:var(--warm-gray);">' + rows.length + ' galler' + (rows.length === 1 ? 'y' : 'ies') + '</div>' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">' + MastFormat.countNoun(rows.length, 'gallery', 'galleries') + '</div>' +
       '<button class="btn btn-primary" onclick="consignmentNewGallery()">+ New Gallery</button>' +
     '</div>';
 
@@ -524,7 +524,7 @@
 
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0;gap:12px;flex-wrap:wrap;">' +
       '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
-        '<span style="font-weight:600;color:var(--text-primary);">' + formatCurrency(_fromCents(totalOwedCents)) + '</span> owed across ' + galleries.length + ' galler' + (galleries.length === 1 ? 'y' : 'ies') +
+        '<span style="font-weight:600;color:var(--text-primary);">' + formatCurrency(_fromCents(totalOwedCents)) + '</span> owed across ' + MastFormat.countNoun(galleries.length, 'gallery', 'galleries') +
       '</div>' +
       '<div style="display:flex;gap:6px;align-items:center;">' +
         '<label style="font-size:0.85rem;color:var(--warm-gray);">Status:</label>' +

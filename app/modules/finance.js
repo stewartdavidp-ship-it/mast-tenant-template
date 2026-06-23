@@ -4924,7 +4924,7 @@ function renderTaxNexus(states, byState, nexus, overrides, startDate, endDate) {
   if (actionRequired.length > 0) {
     h += '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:8px;padding:10px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px;">';
     h += '<span>⚠️</span><span style="font-size:0.85rem;font-weight:600;color:#ef4444;">Action required — you have nexus in ';
-    h += actionRequired.length + ' state' + (actionRequired.length > 1 ? 's' : '') + ' where you are not registered: ' + e(actionRequired.join(', ')) + '</span></div>';
+    h += MastFormat.countNoun(actionRequired.length, 'state') + ' where you are not registered: ' + e(actionRequired.join(', ')) + '</span></div>';
   }
 
   h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';

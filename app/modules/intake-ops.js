@@ -294,7 +294,7 @@ function showTrainingPrompt(productName, existingPhotos) {
   content.innerHTML = '<div style="color:white;">' +
     '<div style="font-weight:600;margin-bottom:8px;">✅ ' + esc(productName) + ' logged to inventory</div>' +
     suggestion +
-    (intakeTrainingPhotoCount > 0 ? '<div style="color:rgba(76,175,80,1);font-size:0.85rem;margin-bottom:8px;">+' + intakeTrainingPhotoCount + ' training photo' + (intakeTrainingPhotoCount > 1 ? 's' : '') + ' captured</div>' : '') +
+    (intakeTrainingPhotoCount > 0 ? '<div style="color:rgba(76,175,80,1);font-size:0.85rem;margin-bottom:8px;">+' + MastFormat.countNoun(intakeTrainingPhotoCount, 'training photo') + ' captured</div>' : '') +
     '<div style="display:flex;gap:8px;">' +
       '<button onclick="captureTrainingPhoto()" style="flex:1;background:rgba(25,118,210,1);color:white;border:none;padding:10px;border-radius:6px;cursor:pointer;font-family:\'DM Sans\',sans-serif;font-weight:600;">📸 Add Training Photo</button>' +
       '<button onclick="finishCurrentPiece()" style="flex:1;background:rgba(255,255,255,0.15);color:white;border:none;padding:10px;border-radius:6px;cursor:pointer;font-family:\'DM Sans\',sans-serif;">Done → Next Piece</button>' +
