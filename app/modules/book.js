@@ -1699,9 +1699,9 @@
         '</div>' +
         '<div style="border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
           '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Lifecycle</h4>' +
-          _row('Enrolled', e.enrolledAt ? esc(new Date(e.enrolledAt).toLocaleString()) : '—') +
-          (e.attendedAt ? _row('Attended', esc(new Date(e.attendedAt).toLocaleString())) : '') +
-          (e.cancelledAt ? _row('Cancelled', esc(new Date(e.cancelledAt).toLocaleString())) : '') +
+          _row('Enrolled', e.enrolledAt ? esc(MastFormat.dateTime(e.enrolledAt)) : '—') +
+          (e.attendedAt ? _row('Attended', esc(MastFormat.dateTime(e.attendedAt))) : '') +
+          (e.cancelledAt ? _row('Cancelled', esc(MastFormat.dateTime(e.cancelledAt))) : '') +
           (e.waitlistPosition ? _row('Waitlist #', esc(String(e.waitlistPosition))) : '') +
         '</div>' +
       '</div>' +
@@ -4641,7 +4641,7 @@
         html += '<button class="btn btn-primary" style="background:' + SUCCESS_COLOR + ';" onclick="window._bookCloseSession(\'' + esc(sessionId) + '\')">Close Session' + (unclosedCount > 0 ? ' (' + unclosedCount + ' auto-completed)' : '') + '</button>';
       }
       if (isClosed && session.classClosedAt) {
-        html += '<span style="color:' + SUCCESS_COLOR + ';font-size:0.85rem;">&#10003; Session completed ' + new Date(session.classClosedAt).toLocaleString() + '</span>';
+        html += '<span style="color:' + SUCCESS_COLOR + ';font-size:0.85rem;">&#10003; Session completed ' + MastFormat.dateTime(session.classClosedAt) + '</span>';
       }
       html += '</div>';
 

@@ -221,7 +221,7 @@ function renderImageLibrary() {
     var isVideo = img.type === 'video' || (img.contentType && img.contentType.indexOf('video') === 0);
     var thumb = img.thumbnailUrl || (isVideo ? '' : img.url) || '';
     var tags = (img.tags || []).join(', ') || (img.description ? img.description.substring(0, 60) : '');
-    var date = img.uploadedAt ? new Date(img.uploadedAt).toLocaleDateString() : (img.uploadDate || '');
+    var date = img.uploadedAt ? MastFormat.date(img.uploadedAt) : (img.uploadDate || '');
 
     html += '<div class="img-lib-card" onclick="viewLibraryImage(\'' + esc(id) + '\')">' +
       (thumb
@@ -293,7 +293,7 @@ function viewLibraryImage(imageId) {
         })() + '</span>' +
         '<span style="color:var(--warm-gray);">Dimensions</span><span>' + (img.resolution || dims) + '</span>' +
         '<span style="color:var(--warm-gray);">Tags</span><span>' + esc(tags) + '</span>' +
-        '<span style="color:var(--warm-gray);">Uploaded</span><span>' + (img.uploadedAt ? new Date(img.uploadedAt).toLocaleString() : (img.uploadDate || 'unknown')) + '</span>' +
+        '<span style="color:var(--warm-gray);">Uploaded</span><span>' + (img.uploadedAt ? MastFormat.dateTime(img.uploadedAt) : (img.uploadDate || 'unknown')) + '</span>' +
         '<span style="color:var(--warm-gray);">On Website</span><span>' + (u.onWebsite ? 'Yes (' + MastFormat.countNoun(u.galleryCount, 'placement') + ')' : 'No') + '</span>' +
         '<span style="color:var(--warm-gray);">Products</span><span>' + (u.products.length > 0 ? esc(u.products.join(', ')) : 'None') + '</span>' +
       '</div>' +

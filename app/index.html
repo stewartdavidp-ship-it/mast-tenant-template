@@ -17078,7 +17078,7 @@ window.submitPasswordReset = submitPasswordReset;
 function showExpiredScreen(expiryDate) {
   var msg = document.getElementById('expiredScreenMessage');
   if (msg && expiryDate) {
-    msg.textContent = 'Your guest access expired on ' + new Date(expiryDate).toLocaleDateString() + '. Contact the studio owner to renew.';
+    msg.textContent = 'Your guest access expired on ' + MastFormat.date(expiryDate) + '. Contact the studio owner to renew.';
   }
   document.getElementById('authScreen').style.display = 'none';
   document.getElementById('deniedScreen').style.display = 'none';
@@ -19975,7 +19975,7 @@ var MODULE_MANIFEST = {
   finance: { src: 'modules/finance.js', v: '9eb3fde6675c', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
   // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
   // (no top-level route). Empty routes[] keeps it lazy-loadable via MastAdmin.loadModule('accounting').
-  accounting: { src: 'modules/accounting.js', v: '00ea2b321ef4', routes: [] },
+  accounting: { src: 'modules/accounting.js', v: '76dc54f9143e', routes: [] },
   // accounting-v2 (QBO-1): flag-gated (?ui=1) V2 twin of the QuickBooks sub-views
   // (COA Map / Sync Log / Conflicts / Backfill). No route — mounted into the
   // QuickBooks settings inner-tab body via switchQboInnerTab when opted in. V1 is
@@ -19985,8 +19985,8 @@ var MODULE_MANIFEST = {
   // MastIntake provider catalog — the vendor knowledge (ProviderDefinitions) the
   // secure-intake engine looks up. No route (a data catalog, not a view); lazy-
   // loaded on demand by settings areas via MastAdmin.loadModule('connections-providers').
-  'connections-providers': { src: 'modules/connections-providers.js', v: '04b778b661f9', routes: [] },
-  'shows-v2': { src: 'modules/shows-v2.js', v: '0087aff71bb8', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2', 'show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] }, // Shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin. shows.js (V1) RETIRED (T6): its ShowsBridge + DOM-free write cores were absorbed into shows-v2.js, and the bare #show* routes now resolve here directly (no MAST_V2_ROUTE_MAP remap).
+  'connections-providers': { src: 'modules/connections-providers.js', v: '9a7fbfe27c01', routes: [] },
+  'shows-v2': { src: 'modules/shows-v2.js', v: '6c3da4f16bf0', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2', 'show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] }, // Shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin. shows.js (V1) RETIRED (T6): its ShowsBridge + DOM-free write cores were absorbed into shows-v2.js, and the bare #show* routes now resolve here directly (no MAST_V2_ROUTE_MAP remap).
   production: { src: 'modules/production.js', v: '746f04797b23', routes: ['jobs', 'production', 'stories', 'forecast'] },
   // procurement.js (V1) manifest row REMOVED (T6): its ProcurementBridge + VendorsBridge + receive→stock→QBO engine absorbed into procurement-v2.js, which owns the bare #procurement route below.
   // contacts.js (V1) manifest row REMOVED (T6): its ContactsBridge + cores absorbed into contacts-v2.js, which owns the bare #contacts route below.
@@ -19998,7 +19998,7 @@ var MODULE_MANIFEST = {
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: 'a8e6475587d6', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
   'calendar-v2': { src: 'modules/calendar-v2.js', v: '51ba114722f7', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
   'promotions-v2': { src: 'modules/promotions-v2.js', v: '1c378ee3ca12', routes: ['promotions-v2', 'promotions'] }, // promotions; owns the legacy 'promotions' route too (V1 promotions.js retired, T6)
-  'trips-v2': { src: 'modules/trips-v2.js', v: 'fbb0191aeda9', routes: ['trips-v2', 'trips'] }, // Trips hub (read history + delegated start/end/retroactive flows + tax report + app-wide active-trip banner). trips.js (V1) RETIRED (T6): the entire trips engine is absorbed here, so the bare #trips route resolves here directly (no MAST_V2_ROUTE_MAP remap).
+  'trips-v2': { src: 'modules/trips-v2.js', v: 'a3df00d38dfc', routes: ['trips-v2', 'trips'] }, // Trips hub (read history + delegated start/end/retroactive flows + tax report + app-wide active-trip banner). trips.js (V1) RETIRED (T6): the entire trips engine is absorbed here, so the bare #trips route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', v: '39d8e2578c7c', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
   'team-v2': { src: 'modules/team-v2.js', v: 'df52be5a680f', routes: ['team-v2', 'team'] }, // Team roster/employee + HR sub-surfaces (time clock / PTO / labor burden / docs / onboarding). team.js (V1) RETIRED (T6): its TeamBridge + TeamPanels + full handler closure were absorbed into team-v2.js, and the bare #team route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'procurement-v2': { src: 'modules/procurement-v2.js', v: '61dbb10909dd', routes: ['procurement-v2', 'procurement'] }, // Procurement hub (POs + Needs-reorder lens + receiving + vendors via vendors-v2). procurement.js (V1) RETIRED (T6): its ProcurementBridge + VendorsBridge + receive→stock→QBO engine absorbed here, so the bare #procurement route resolves here directly (no remap).
@@ -20048,8 +20048,8 @@ var MODULE_MANIFEST = {
   'rma-v2': { src: 'modules/rma-v2.js', v: 'cfc0b6378ce2', routes: ['rma-v2'] }, // sales-v2 wave 1: returns (transaction archetype + return workflow, flag-gated, side-by-side)
   'pos-v2': { src: 'modules/pos-v2.js', v: '0a0250f51351', routes: ['pos-v2'] }, // sales-v2 wave 2: sales ledger (transaction archetype over in-person orders, flag-gated, side-by-side)
   'commission-terms-v2': { src: 'modules/commission-terms-v2.js', v: '5357294c47f7', routes: ['commission-terms-v2', 'commission-terms'] }, // versioned commission terms; owns the legacy 'commission-terms' route too (V1 commission-terms.js retired, T6)
-  'receipts-v2': { src: 'modules/receipts-v2.js', v: '4b05752caba1', routes: ['receipts-v2'] }, // sales-v2 wave 3: day close reconciliation (record archetype + match view, flag-gated, side-by-side)
-  'lookbooks-v2': { src: 'modules/lookbooks-v2.js', v: '128d9ccf76ec', routes: ['lookbooks-v2', 'lookbooks'] }, // sales-v2 wave 3: line sheets / lookbooks. Owns the legacy 'lookbooks' route too (V1 lookbooks.js retired, T6).
+  'receipts-v2': { src: 'modules/receipts-v2.js', v: '6a610e0bc23e', routes: ['receipts-v2'] }, // sales-v2 wave 3: day close reconciliation (record archetype + match view, flag-gated, side-by-side)
+  'lookbooks-v2': { src: 'modules/lookbooks-v2.js', v: 'dfb283f79173', routes: ['lookbooks-v2', 'lookbooks'] }, // sales-v2 wave 3: line sheets / lookbooks. Owns the legacy 'lookbooks' route too (V1 lookbooks.js retired, T6).
   'campaigns-v2': { src: 'modules/campaigns-v2.js', v: '95948ae7d70d', routes: ['campaigns-v2', 'campaigns'] }, // Marketing campaigns hub (list + read detail + native create/edit/refs/delete). campaigns.js (V1) RETIRED (T6): its CampaignsBridge was absorbed here, so the bare #campaigns route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'email-log-v2': { src: 'modules/email-log-v2.js', v: '8273b9e43c8d', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
   'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', v: 'f18703b4dec4', routes: ['marketing-calendar-v2', 'marketing-calendar'] }, // marketing calendar; owns the legacy 'marketing-calendar' route too (V1 marketing-calendar.js retired, T6)
@@ -20059,31 +20059,31 @@ var MODULE_MANIFEST = {
   'passes-v2': { src: 'modules/passes-v2.js', v: '90b434ec29c0', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)
   'resources-v2': { src: 'modules/resources-v2.js', v: '55a55e4f7dce', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
   'newsletter-v2': { src: 'modules/newsletter-v2.js', v: '35044acc5df0', routes: ['newsletter-v2', 'newsletter'] }, // Newsletter hub (issues + subscribers + native composer). newsletter.js (V1) RETIRED (T6): its NewsletterBridge + rich-text helpers + newsletterOpenFromContent were absorbed here; the bare #newsletter route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
-  sales: { src: 'modules/sales.js', v: 'ef2a1f5b29e2', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
-  fulfillment: { src: 'modules/fulfillment.js', v: '2e485f0df2c1', routes: ['pack', 'ship', 'fulfillment'] },
-  eventsAdmin: { src: 'modules/events.js', v: 'c8509a9e932b', routes: ['events-shows', 'events-settings'] },
+  sales: { src: 'modules/sales.js', v: '6c490b77972d', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
+  fulfillment: { src: 'modules/fulfillment.js', v: '7546d2688407', routes: ['pack', 'ship', 'fulfillment'] },
+  eventsAdmin: { src: 'modules/events.js', v: '0d7e11f363f6', routes: ['events-shows', 'events-settings'] },
   'website-core': { src: 'modules/website-core.js', v: '081d4169440d', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module website write layer (WebsiteBridge + the destructive template-switch cascade wpConfirmSwitch/computeGalleryMigration/executeGalleryMigration + category manager openManageCategoriesDialog/wpCat* + markUnpublished) lifted out of website.js so V2 consumers (website-v2, index.html category dialogs, gallery-metadata-modal) load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'website-import': { src: 'modules/website-import.js', v: '6fe2a431ab8b', routes: ['website-import'] }, // T6 rip-and-replace PR2: AI catalog-import wizard (analyze→crawl→cherry-pick→import→enrich→review/publish→draft templates) relocated VERBATIM out of website.js into its own lazy module (MastEntity does not fit an async multi-step job flow). The 3 import doors (setup-wizard, "View Report", website-v2 Card 3) route here; backend CFs (analyzeExistingSite/runEnrichment/processImportJob) unchanged. Wires a real listener detach (the V1 leak).
   emailLog: { src: 'modules/email-log.js', v: '56fd83804238', routes: ['email-log'] },
-  maker: { src: 'modules/maker.js', v: 'ff97df4f6249', routes: ['materials', 'products'] },
+  maker: { src: 'modules/maker.js', v: 'f18b9f8e5286', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: '5737d83dd7ac', routes: ['galleries'] },
-  book: { src: 'modules/book.js', v: 'eea1f23cce81', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
+  book: { src: 'modules/book.js', v: '59b3928df350', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', v: 'ac83779d846e', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'f0c8d58c4fb1', routes: ['studio'] },
-  'customer-service': { src: 'modules/customer-service.js', v: '5d6f6d5566fe', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
+  'customer-service': { src: 'modules/customer-service.js', v: '8f0be086cdf8', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
-  engagementInbox: { src: 'modules/engagement-inbox.js', v: 'c5cf75b5824f', routes: ['engagement-inbox'] },
+  engagementInbox: { src: 'modules/engagement-inbox.js', v: '03fbd5e277fb', routes: ['engagement-inbox'] },
   composer: { src: 'modules/composer.js', v: 'fac71133333b', routes: ['composer'] },
   // W2.3 — Commission terms editor (admin-side; storefront accept flow is
   // separate and lives on the public side).
   // J12 — Tenant feedback on Mast audit findings (suppression management page;
   // menus exposed via window.AuditFeedbackUI for J13 to wire into surfaces).
-  auditFeedback: { src: 'modules/audit-feedback.js', v: '437fa5f97ba2', routes: ['suppressions'] },
+  auditFeedback: { src: 'modules/audit-feedback.js', v: 'feb69753fed5', routes: ['suppressions'] },
   // J13 — Audit UI surface. NET-NEW module; NOT the transactional auditLog
   // viewer (different collection, different concept). Reads audit_results,
   // rule_suppressions, public/products, channel_config. Wires feedback
   // actions through window.AuditFeedbackUI primitives.
-  audit: { src: 'modules/audit.js', v: 'e96bbaa3ee41', routes: ['audit'] },
+  audit: { src: 'modules/audit.js', v: 'b3da44b5359f', routes: ['audit'] },
   // J11 — Assisted product↔listing mapping UI. Full-page interstitial after
   // first channel connect (auto-fired by post-boot trigger via
   // window.MastMappingFlow.checkAndMaybeShow). 'mapping' route is the
@@ -20094,16 +20094,16 @@ var MODULE_MANIFEST = {
   // before they render. See docs/workflow-engine-design.md.
   'social-v2': { src: 'modules/social-v2.js', v: '7d41d49357b5', routes: ['social-v2', 'social'] }, // native social pipeline; owns the legacy 'social' route too (V1 social.js retired, T6)
   'composer-v2': { src: 'modules/composer-v2.js', v: '4f382042fc61', routes: ['composer-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
-  'engagement-inbox-v2': { src: 'modules/engagement-inbox-v2.js', v: 'ae7074515108', routes: ['engagement-inbox-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'engagement-inbox-v2': { src: 'modules/engagement-inbox-v2.js', v: '035e659e1d94', routes: ['engagement-inbox-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'mapping-v2': { src: 'modules/mapping-v2.js', v: '8996b35a8ba9', routes: ['mapping-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'audit-v2': { src: 'modules/audit-v2.js', v: '27eeb2404414', routes: ['audit-v2', 'audit-muted-v2'] }, // audit queue + Muted-rules lens (absorbed audit-suppressions-v2)
   'studio-v2': { src: 'modules/studio-v2.js', v: '22c94d062544', routes: ['studio-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'employees-v2': { src: 'modules/employees-v2.js', v: 'dd93f4e479f0', routes: ['employees-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
-  'auditlog-v2': { src: 'modules/auditlog-v2.js', v: 'adccbb8d3337', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'auditlog-v2': { src: 'modules/auditlog-v2.js', v: 'b2001546137e', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'diagnostics': { src: 'modules/diagnostics.js', v: '51d79b65b215', routes: ['diagnostics'] }, // L3 self-diagnosis surface (admin-gated)
   'subscription-v2': { src: 'modules/subscription-v2.js', v: '4fe160832575', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
-  'analytics-v2': { src: 'modules/analytics-v2.js', v: '03b0d349d25a', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
-  'advisor-v2': { src: 'modules/advisor-v2.js', v: '6364c14f5a50', routes: ['advisor-v2', 'advisor'] }, // Business-Plan advisor; owns the legacy 'advisor' route too (V1 advisor.js retired, T6). Entity writes via MastDB.businessEntity.* — no bridge.
+  'analytics-v2': { src: 'modules/analytics-v2.js', v: '430b29209f0c', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
+  'advisor-v2': { src: 'modules/advisor-v2.js', v: '23113d9fdd45', routes: ['advisor-v2', 'advisor'] }, // Business-Plan advisor; owns the legacy 'advisor' route too (V1 advisor.js retired, T6). Entity writes via MastDB.businessEntity.* — no bridge.
   // Unified Business Entity read-only dashboard (D-22) — no route; lazy-loaded
   // on demand by the 'business' route setup (decomposition Track 1, recipe A).
   'business-view': { src: 'modules/business-view.js', v: '1690937591d7', routes: [] },
@@ -20115,7 +20115,7 @@ var MODULE_MANIFEST = {
   addVariantDialog: { src: 'modules/add-variant-dialog.js', v: '129e614bfcb4', routes: [] },
   // Coin/token wallet modal — no route; lazy-loaded on demand via the eager
   // openCoinPurchaseModal shim (decomposition Track 1).
-  coinWalletModal: { src: 'modules/coin-wallet-modal.js', v: '2aa464b9266c', routes: [] },
+  coinWalletModal: { src: 'modules/coin-wallet-modal.js', v: '709831b7d46e', routes: [] },
   // Create-Role modal — no route; lazy-loaded via the eager openCreateRoleModal
   // shim (decomposition Track 1).
   createRoleModal: { src: 'modules/create-role-modal.js', v: '8419154c17c4', routes: [] },
@@ -20129,10 +20129,10 @@ var MODULE_MANIFEST = {
   // Settings sub-panel loaders (Engagement / Tax & Legal / Plaid banks) — no route;
   // lazy-loaded from switchSettingsSubView branches + the eager connectPlaidAccount
   // resume shim (decomposition Track 1).
-  settingsPanels: { src: 'modules/settings-panels.js', v: '90d6f78cc171', routes: [] },
+  settingsPanels: { src: 'modules/settings-panels.js', v: '8abf22a054d9', routes: [] },
   // Maker Settings (Settings → Develop) sub-panel — no route; lazy-loaded from the
   // switchSettingsSubView 'maker' branch (decomposition Track 1, recipe A).
-  'maker-settings': { src: 'modules/maker-settings.js', v: '331f343e9ed5', routes: [] },
+  'maker-settings': { src: 'modules/maker-settings.js', v: '1419d1d9b9ce', routes: [] },
   // Variant / product-detail tab + section renderers — no route; lazy-loaded
   // via the _fillVariantSectionMount (product detail) and _fillVariantDrillMount
   // (inventory drill-down) async-fill shims (decomposition Track 1).
@@ -20148,7 +20148,7 @@ var MODULE_MANIFEST = {
   // Image modal (add/edit gallery image) — no route; lazy-loaded via the eager
   // openImageModal shim (Track 1).
   imageModal: { src: 'modules/image-modal.js', v: '7bb5a1e086ad', routes: [] },
-  imageLibrary: { src: 'modules/image-library.js', v: '32260b8dd733', routes: [] },
+  imageLibrary: { src: 'modules/image-library.js', v: '9248d27fcb93', routes: [] },
   // Setup wizard — first-login onboarding flow; no route, lazy-loaded via the
   // eager MastAdmin.loadModule('setupWizard') call in the auth funnel, gated on
   // tenantStatus === 'onboarding' (Track 1, recipe A).
@@ -20168,7 +20168,7 @@ var MODULE_MANIFEST = {
   inventoryAskAi: { src: 'modules/inventory-ask-ai.js', v: 'd5ffb5afbc88', routes: [] },
   // Unified drift dialog — no route; lazy-loaded via the eager
   // openUnifiedDriftDialog shim (the "Review drift" button) (Track 1).
-  unifiedDriftDialog: { src: 'modules/unified-drift-dialog.js', v: 'ba2dc2ed5259', routes: [] },
+  unifiedDriftDialog: { src: 'modules/unified-drift-dialog.js', v: 'ec927d75b11d', routes: [] },
   // Match-confirm modal — no route; lazy-loaded via the eager
   // openMatchConfirmModal shim (cross-module caller: accounting.js) (Track 1).
   matchConfirmModal: { src: 'modules/match-confirm-modal.js', v: '08a4aad6d7b7', routes: [] },
@@ -20178,7 +20178,7 @@ var MODULE_MANIFEST = {
   addToSaleDialog: { src: 'modules/add-to-sale-dialog.js', v: '38cf9d3fc585', routes: [] },
   // Email preview drawer — no route; lazy-loaded via the eager
   // openEmailPreviewDrawer / closeEmailPreviewDrawer shims (Track 1).
-  emailPreviewDrawer: { src: 'modules/email-preview-drawer.js', v: 'a6e244e53c8c', routes: [] },
+  emailPreviewDrawer: { src: 'modules/email-preview-drawer.js', v: '45cc764e81db', routes: [] },
   // Send-Feedback dialog — no route; lazy-loaded via the eager
   // openFeedbackDialog shim (the feedback FAB + avatar-menu item). (Track 1.)
   feedbackDialog: { src: 'modules/feedback-dialog.js', v: '511b33706cb6', routes: [] },
@@ -20896,11 +20896,11 @@ function _renderChannelCardHtml(p, rec) {
   if (rec) {
     if (rec.shopDomain) detailParts.push(rec.shopDomain);
     if (rec.env && p.id === 'square') detailParts.push('env: ' + rec.env);
-    if (rec.connectedAt) detailParts.push('Connected ' + new Date(rec.connectedAt).toLocaleDateString());
+    if (rec.connectedAt) detailParts.push('Connected ' + MastFormat.date(rec.connectedAt));
     if (typeof rec.webhookSubscriptionCount === 'number' && rec.webhookSubscriptionCount > 0) {
       detailParts.push(MastFormat.countNoun(rec.webhookSubscriptionCount, 'webhook'));
     }
-    if (rec.lastSyncAt) detailParts.push('Last sync ' + new Date(rec.lastSyncAt).toLocaleString());
+    if (rec.lastSyncAt) detailParts.push('Last sync ' + MastFormat.dateTime(rec.lastSyncAt));
     else if (status === 'connected') detailParts.push('No manual sync yet');
     if (rec.expiresAt) {
       var expMs = Date.parse(rec.expiresAt);
@@ -22908,7 +22908,7 @@ async function _loadRenewalsInAppNotifications() {
           '<div style="flex:1;">' +
             '<div style="font-weight:600;font-size:0.9rem;color:' + sevColor + ';">' + esc(n.title || 'Renewal reminder') + '</div>' +
             '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">' + esc(n.body || '') + '</div>' +
-            '<div style="font-size:0.72rem;color:var(--warm-gray-light,#666);margin-top:4px;">' + esc(n.createdAt ? new Date(n.createdAt).toLocaleString() : '') + '</div>' +
+            '<div style="font-size:0.72rem;color:var(--warm-gray-light,#666);margin-top:4px;">' + esc(n.createdAt ? MastFormat.dateTime(n.createdAt) : '') + '</div>' +
           '</div>' +
           '<div style="display:flex;gap:4px;">' +
             (!n.readAt && !n.dismissedAt ? '<button class="btn btn-small" style="font-size:0.72rem;padding:3px 8px;" onclick="markRenewalNotifRead(\'' + esc(n.id || '') + '\')">Mark read</button>' : '') +
@@ -23090,7 +23090,7 @@ function loadAlertHistory() {
       var isRead = !!alert.readAt;
       var borderTop = idx > 0 ? 'border-top:1px solid rgba(255,255,255,0.06);' : '';
       var bg = isRead ? 'transparent' : 'rgba(59,130,246,0.06)';
-      var date = alert.createdAt ? new Date(alert.createdAt).toLocaleString() : '—';
+      var date = alert.createdAt ? MastFormat.dateTime(alert.createdAt) : '—';
 
       h += '<div style="padding:10px 16px;background:' + bg + ';' + borderTop + 'display:flex;align-items:center;gap:10px;">';
       h += '<span style="width:8px;height:8px;border-radius:50%;background:' + (isRead ? 'transparent' : severityColor) + ';flex-shrink:0;border:1px solid ' + severityColor + ';"></span>';
@@ -26549,8 +26549,8 @@ function renderAiKeys(keys) {
   var h = '';
   entries.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
   entries.forEach(function(key) {
-    var created = key.createdAt ? new Date(key.createdAt).toLocaleDateString() : '—';
-    var lastUsed = key.lastUsedAt ? new Date(key.lastUsedAt).toLocaleDateString() : 'Never';
+    var created = key.createdAt ? MastFormat.date(key.createdAt) : '—';
+    var lastUsed = key.lastUsedAt ? MastFormat.date(key.lastUsedAt) : 'Never';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--cream,#faf8f5);border:1px solid var(--cream-dark,#e8e0d4);border-radius:8px;margin-bottom:8px;">';
     h += '<div>';
     h += '<div style="font-family:monospace;font-size:0.9rem;color:var(--text-primary);">' + esc(key.keyPreview || 'mast_...') + '</div>';
@@ -26914,7 +26914,7 @@ function loadStripeConfig() {
     // Show test banner if test environment
     var banner = document.getElementById('stripeTestBanner');
     if (banner) banner.style.display = config.environment === 'test' ? 'block' : 'none';
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : 'unknown') + '</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? MastFormat.date(config.updatedAt) : 'unknown') + '</span>';
   }).catch(function(err) {
     console.warn('Stripe config read failed:', err.message);
     if (statusEl) statusEl.innerHTML = '<span style="color:var(--warm-gray-light);">Could not load Stripe config.</span>';
@@ -27072,7 +27072,7 @@ function loadSquareConfig() {
     // Sandbox indicators
     onSquareEnvToggle();
 
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? new Date(config.updatedAt).toLocaleDateString() : 'unknown') + '</span>';
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Configured (' + config.environment + ') — updated ' + (config.updatedAt ? MastFormat.date(config.updatedAt) : 'unknown') + '</span>';
   }).catch(function(err) {
     // Fallback to direct RTDB read (pre-migration)
     console.warn('channelSettings read failed, falling back to RTDB:', err.message);
@@ -27476,7 +27476,7 @@ function loadShippingConfig() {
     if (config.shippingRules) {
       if (config.shippingRules.retail) loadRuleSetToUI('retail', config.shippingRules.retail);
       if (config.shippingRules.wholesale) loadRuleSetToUI('wholesale', config.shippingRules.wholesale);
-      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Rules configured — updated ' + new Date(config.updatedAt).toLocaleDateString() + '</span>';
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--teal);">&#10003; Rules configured — updated ' + MastFormat.date(config.updatedAt) + '</span>';
       return;
     }
 
@@ -28123,7 +28123,7 @@ function loadEtsyConfig() {
       if (disconnectedEl) disconnectedEl.style.display = 'none';
       if (connectedEl) connectedEl.style.display = 'block';
       var shopName = config.shopName || 'Shop #' + config.shopId;
-      var lastSync = config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : 'Never';
+      var lastSync = config.lastSyncAt ? MastFormat.dateTime(config.lastSyncAt) : 'Never';
       if (statusEl) statusEl.innerHTML =
         '<span style="color:var(--teal);">&#10003; Connected to <strong>' + esc(shopName) + '</strong></span>' +
         '<br><span style="color:var(--warm-gray);">Last sync: ' + esc(lastSync) + '</span>';
@@ -28143,7 +28143,7 @@ function loadEtsyConfig() {
         if (disconnectedEl) disconnectedEl.style.display = 'none';
         if (connectedEl) connectedEl.style.display = 'block';
         var shopName = config.shopName || 'Shop #' + config.shopId;
-        var lastSync = config.lastSyncAt ? new Date(config.lastSyncAt).toLocaleString() : 'Never';
+        var lastSync = config.lastSyncAt ? MastFormat.dateTime(config.lastSyncAt) : 'Never';
         if (statusEl) statusEl.innerHTML =
           '<span style="color:var(--teal);">&#10003; Connected to <strong>' + esc(shopName) + '</strong></span>' +
           '<br><span style="color:var(--warm-gray);">Last sync: ' + esc(lastSync) + '</span>';
@@ -28351,7 +28351,7 @@ function loadShopifyConfig() {
       disconnectedEl.style.display = 'none';
       connectedEl.style.display = 'block';
       var shopName = config.shopName || config.shopDomain;
-      var lastTest = config.lastTestAt ? new Date(config.lastTestAt).toLocaleString() : 'Never';
+      var lastTest = config.lastTestAt ? MastFormat.dateTime(config.lastTestAt) : 'Never';
       var lastResult = config.lastTestResult || '';
       var resultColor = lastResult === 'ok' ? 'var(--teal)' : (lastResult.indexOf('error') === 0 ? '#ef4444' : 'var(--warm-gray)');
       if (statusEl) statusEl.innerHTML =
@@ -28366,7 +28366,7 @@ function loadShopifyConfig() {
           '<div><strong>Shop:</strong> ' + esc(shopName) + '</div>' +
           '<div><strong>Domain:</strong> ' + esc(config.shopDomain) + '.myshopify.com</div>' +
           '<div><strong>API version:</strong> ' + esc(config.apiVersion || '2024-10') + '</div>' +
-          '<div><strong>Connected:</strong> ' + esc(config.connectedAt ? new Date(config.connectedAt).toLocaleString() : 'Unknown') + '</div>' +
+          '<div><strong>Connected:</strong> ' + esc(config.connectedAt ? MastFormat.dateTime(config.connectedAt) : 'Unknown') + '</div>' +
           '<div><strong>Last test:</strong> ' + esc(lastTest) + ' <span style="color:' + resultColor + ';">' + esc(lastResult) + '</span></div>' +
           '<div><strong>Webhook HMAC:</strong> ' + webhookSecretStatus +
             (config.webhookSecretConfigured ? '' : ' <button class="btn btn-small" style="font-size:0.72rem;padding:2px 8px;margin-left:6px;" onclick="showSetWebhookSecret()">Set Secret</button>') +
@@ -29408,7 +29408,7 @@ function loadShopifyWebhookStatus() {
       var w = kv[1];
       var topic = (w && w.topic) || topicKey.replace('_', '/');
       var wid = (w && w.id) || '—';
-      var created = (w && w.createdAt) ? new Date(w.createdAt).toLocaleString() : '—';
+      var created = (w && w.createdAt) ? MastFormat.dateTime(w.createdAt) : '—';
       return '<tr><td style="padding:4px 10px 4px 0;">' + esc(topic) + '</td>' +
         '<td style="padding:4px 10px 4px 0;color:var(--warm-gray);">#' + esc(String(wid)) + '</td>' +
         '<td style="padding:4px 0;color:var(--warm-gray);">' + esc(created) + '</td></tr>';
@@ -32676,7 +32676,7 @@ function renderInventoryHistory() {
     '<th style="text-align:left;padding:6px 8px;color:var(--warm-gray);">Detail</th>' +
   '</tr></thead><tbody>';
   entries.slice(0, 25).forEach(function(e) {
-    var date = e.timestamp ? new Date(e.timestamp).toLocaleDateString() + ' ' + new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
+    var date = e.timestamp ? MastFormat.date(e.timestamp) + ' ' + new Date(e.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '—';
     var actionLabel = actionLabels[e.action] || esc(e.action || '—');
     var qtyStr = '';
     if (typeof e.qty === 'number' && e.qty !== 0) {
@@ -32966,7 +32966,7 @@ function openPublishToChannelDialog(pid) {
 function renderPublishUndoBanner(pid) {
   var state = window.__mastPublishState[pid];
   if (!state) return '';
-  var when = state.startedAt ? new Date(state.startedAt).toLocaleTimeString() : '';
+  var when = state.startedAt ? MastFormat.time(state.startedAt) : '';
   var linkHtml = state.externalUrl
     ? '<a href="' + esc(state.externalUrl) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">View on Shopify</a> · '
     : '';
@@ -33079,7 +33079,7 @@ function renderRecipeReadyBanner(product) {
   html += '<div style="flex:1;min-width:240px;">';
   html += '<div style="font-size:0.9rem;font-weight:600;color:var(--teal);margin-bottom:4px;">Recipe v' + esc(String(meta.version)) + ' ready to apply</div>';
   html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">';
-  html += esc(meta.name || 'Linked recipe') + ' was staged ' + (meta.lastPublishedAt ? new Date(meta.lastPublishedAt).toLocaleString() : 'recently') + '. ';
+  html += esc(meta.name || 'Linked recipe') + ' was staged ' + (meta.lastPublishedAt ? MastFormat.dateTime(meta.lastPublishedAt) : 'recently') + '. ';
   html += 'Currently applied: v' + ackVersion + '.';
   html += '</div>';
   html += '<table style="border-collapse:collapse;font-family:monospace;">';
@@ -33221,7 +33221,7 @@ function renderDriftAlertBannerLegacy(pid) {
     html += '<div class="mast-drift-alert-banner" style="margin:8px 0;padding:10px 14px;border:1px solid var(--danger);border-radius:6px;background:rgba(220,53,69,0.25);">' +
       '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">' +
         '<span style="font-size:0.85rem;font-weight:600;color:var(--danger);">Shopify data has drifted from Mast <span style="font-size:0.72rem;color:var(--warm-gray);font-weight:400;">(legacy banner)</span></span>' +
-        '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(d.detectedAt ? new Date(d.detectedAt).toLocaleString() : '') + '</span>' +
+        '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(d.detectedAt ? MastFormat.dateTime(d.detectedAt) : '') + '</span>' +
       '</div>' +
       '<div id="driftDiffDetail_' + esc(d.driftId) + '" style="display:none;margin-bottom:8px;">' + diffLines + '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
@@ -33691,7 +33691,7 @@ function renderDriftReviewQueueUnified(tab) {
       var sv = phase4SeverityVisual(rowSev);
       var fieldLabels = fieldNames.map(function(f) { return MAST_PHASE4_FIELD_LABELS[f] || f; }).join(', ');
       var date = d.detectedAt
-        ? (new Date(d.detectedAt).toLocaleDateString() + ' ' + new Date(d.detectedAt).toLocaleTimeString())
+        ? (MastFormat.date(d.detectedAt) + ' ' + MastFormat.time(d.detectedAt))
         : '';
 
       var badgeBg, badgeColor;
@@ -33827,7 +33827,7 @@ function renderSyncRulesUnified() {
     MAST_PHASE4_FIELDS.forEach(function(field) {
       var rule = chRules[field] || {};
       var currentAction = rule.action || 'notify';
-      var updatedAt = rule.updatedAt ? new Date(rule.updatedAt).toLocaleDateString() : null;
+      var updatedAt = rule.updatedAt ? MastFormat.date(rule.updatedAt) : null;
       var updatedBy = rule.updatedBy || null;
       var sev = getFieldSeverity(field);
       var sv = phase4SeverityVisual(sev);
@@ -33943,7 +33943,7 @@ function renderChannelSyncBadges(product, opts) {
     var title = 'Synced to ' + meta.label;
     if (ref.lastSyncedAt) {
       var d = new Date(ref.lastSyncedAt);
-      title += ' \u00b7 Last sync: ' + d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+      title += ' \u00b7 Last sync: ' + MastFormat.date(d) + ' ' + MastFormat.time(d);
     }
     html += '<span title="' + esc(title) + '" style="' +
       'display:inline-flex;align-items:center;gap:3px;' +
@@ -34295,7 +34295,7 @@ function renderDriftReviewQueueLegacy(tab) {
     html += '<div style="display:flex;flex-direction:column;gap:8px;">';
     filtered.forEach(function(d) {
       var fields = (d.diffs || []).map(function(df) { return df.field; }).join(', ');
-      var date = d.detectedAt ? new Date(d.detectedAt).toLocaleDateString() + ' ' + new Date(d.detectedAt).toLocaleTimeString() : '';
+      var date = d.detectedAt ? MastFormat.date(d.detectedAt) + ' ' + MastFormat.time(d.detectedAt) : '';
 
       // Status badge using design system
       var badgeBg, badgeColor;
@@ -34417,7 +34417,7 @@ function renderSyncLog() {
       var triggerLabel = esc(d.trigger || 'manual');
 
       var fields = (d.fieldsChanged || []).join(', ');
-      var ts = d.timestamp ? new Date(d.timestamp).toLocaleDateString() + ' ' + new Date(d.timestamp).toLocaleTimeString() : '';
+      var ts = d.timestamp ? MastFormat.date(d.timestamp) + ' ' + MastFormat.time(d.timestamp) : '';
 
       html += '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;' + (isUndone ? 'opacity:0.5;font-style:italic;' : '') + 'transition:background 0.15s;" onmouseover="this.style.background=\'rgba(196,133,60,0.08)\'" onmouseout="this.style.background=\'var(--cream)\'">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
@@ -34431,7 +34431,7 @@ function renderSyncLog() {
       html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Fields: ' + esc(fields) + '</div>';
 
       if (isUndone) {
-        var undoneTs = new Date(d.undoneAt).toLocaleDateString() + ' ' + new Date(d.undoneAt).toLocaleTimeString();
+        var undoneTs = MastFormat.date(d.undoneAt) + ' ' + MastFormat.time(d.undoneAt);
         html += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:4px;">Undone ' + esc(undoneTs) + '</div>';
       } else if (d.previousValues && d.trigger !== 'undo') {
         html += '<div style="margin-top:6px;"><button class="btn btn-secondary btn-small" onclick="undoSyncEntry(\'' + esc(d.logId) + '\')">Undo</button></div>';
@@ -34513,7 +34513,7 @@ function renderSyncRulesLegacy() {
   SYNC_RULE_FIELDS.forEach(function(field) {
     var rule = rules[field] || {};
     var currentAction = rule.action || 'notify';
-    var updatedAt = rule.updatedAt ? new Date(rule.updatedAt).toLocaleDateString() : null;
+    var updatedAt = rule.updatedAt ? MastFormat.date(rule.updatedAt) : null;
     var updatedBy = rule.updatedBy || null;
 
     html += '<tr style="border-bottom:1px solid var(--cream-dark);">';

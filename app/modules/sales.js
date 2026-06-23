@@ -545,7 +545,7 @@ async function renderDayCloseUnified() {
     var html = '';
     rows.forEach(function(r) {
       var t = new Date(r.ts);
-      var timeStr = isNaN(t.getTime()) ? '—' : t.toLocaleTimeString();
+      var timeStr = isNaN(t.getTime()) ? '—' : MastFormat.time(t);
       var num = (window.getOrderDisplayNumber && r.order) ? window.getOrderDisplayNumber(r.order) : (r.id || '').substring(0, 8);
       var procColor = r.processor === 'Stripe' ? '#635BFF' : (r.processor === 'Square' ? '#006AFF' : 'var(--warm-gray)');
       html += '<tr>' +
@@ -649,7 +649,7 @@ function renderSquarePayments() {
     var isMatched = !!p.matchedSaleId;
     var statusColor = isMatched ? 'var(--teal)' : '#FF9800';
     var statusText = isMatched ? 'Matched' : 'Unmatched';
-    var timeStr = p.createdAt ? new Date(p.createdAt).toLocaleString() : '-';
+    var timeStr = p.createdAt ? MastFormat.dateTime(p.createdAt) : '-';
     var sourceLabel = (p.sourceType || 'unknown').replace(/_/g, ' ');
 
     rows += '<tr>' +
@@ -673,7 +673,7 @@ function renderSquarePayments() {
     var isMatched = !!p.matchedSaleId;
     var statusColor = isMatched ? 'var(--teal)' : '#FF9800';
     var statusText = isMatched ? 'Matched' : 'Unmatched';
-    var timeStr = p.createdAt ? new Date(p.createdAt).toLocaleString() : '-';
+    var timeStr = p.createdAt ? MastFormat.dateTime(p.createdAt) : '-';
     var sourceLabel = (p.sourceType || 'unknown').replace(/_/g, ' ');
 
     cards += '<div class="order-card" style="border-left:3px solid ' + statusColor + ';">' +
@@ -731,7 +731,7 @@ function openManualMatchModal(paymentKey) {
       // A mismatch row is still matchable, but executeManualMatch now requires an
       // explicit danger-confirm before overwriting the sale's recognized revenue.
       var amountMatch = c.amount === (payment.amount || 0);
-      var timeStr = s.timestamp ? new Date(s.timestamp).toLocaleString() : '-';
+      var timeStr = s.timestamp ? MastFormat.dateTime(s.timestamp) : '-';
       var deltaStr = c.deltaMin < 1 ? '<1 min' : Math.round(c.deltaMin) + ' min';
 
       optionsHtml += '<div onclick="executeManualMatch(\'' + esc(paymentKey) + '\', \'' + esc(c.saleId) + '\')" ' +
@@ -762,7 +762,7 @@ function openManualMatchModal(paymentKey) {
       '<div style="background:var(--cream);border-radius:8px;padding:12px;margin-bottom:16px;">' +
         '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Square Payment</div>' +
         '<div style="font-weight:600;font-size:1.15rem;">' + formatCents(payment.amount || 0) + '</div>' +
-        '<div style="font-size:0.85rem;color:var(--warm-gray);">' + (payment.createdAt ? new Date(payment.createdAt).toLocaleString() : '-') + '</div>' +
+        '<div style="font-size:0.85rem;color:var(--warm-gray);">' + (payment.createdAt ? MastFormat.dateTime(payment.createdAt) : '-') + '</div>' +
       '</div>' +
       '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Select a sale to match:</div>' +
       optionsHtml +
@@ -2238,7 +2238,7 @@ async function exitPackingMode() {
 
     // Last published
     if (tc.lastPublishedAt) {
-      html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-align:right;">Last published: ' + esc(new Date(tc.lastPublishedAt).toLocaleString()) + '</div>';
+      html += '<div style="font-size:0.78rem;color:var(--warm-gray);text-align:right;">Last published: ' + esc(MastFormat.dateTime(tc.lastPublishedAt)) + '</div>';
     }
 
     html += '</div>';
@@ -2613,7 +2613,7 @@ async function exitPackingMode() {
       '<p style="font-size:0.9rem;"><strong>' + totalPacked + '</strong> items across <strong>' + pids.length + '</strong> products</p>' +
       '<table><thead><tr><th>Product</th><th style="text-align:center;">Qty</th><th style="text-align:center;width:60px;">Check</th></tr></thead>' +
       '<tbody>' + lines + '</tbody></table>' +
-      '<p style="margin-top:24px;font-size:0.78rem;color:#999;">Generated ' + new Date().toLocaleDateString() + '</p>' +
+      '<p style="margin-top:24px;font-size:0.78rem;color:#999;">Generated ' + MastFormat.date() + '</p>' +
       '<button onclick="window.print()" style="margin-top:12px;padding:8px 16px;cursor:pointer;">Print</button>' +
       '</body></html>';
 

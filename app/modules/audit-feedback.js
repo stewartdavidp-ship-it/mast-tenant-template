@@ -784,7 +784,7 @@
   }
 
   function renderRowHtml(r) {
-    var when = r.createdAt ? new Date(r.createdAt).toLocaleDateString() : '';
+    var when = r.createdAt ? MastFormat.date(r.createdAt) : '';
     var reasonChip = '<span class="status-badge" style="background:rgba(196,133,60,0.30);color:var(--amber);margin-right:8px;">' + esc(reasonLabel(r.reason)) + '</span>';
     var scopeStr = (r.scope === 'tenant')
       ? scopeLabel(r.scope)

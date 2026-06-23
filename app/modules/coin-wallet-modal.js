@@ -156,7 +156,7 @@
     var w = getTokenWallet();
     var sub = getTenantSubscription();
     var tier = TIER_CONFIG[sub.tier] || {};
-    var resetDate = w.lastResetAt ? new Date(new Date(w.lastResetAt).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString() : 'next billing cycle';
+    var resetDate = w.lastResetAt ? MastFormat.date(new Date(w.lastResetAt).getTime() + 30 * 24 * 60 * 60 * 1000) : 'next billing cycle';
 
     var h = '<div style="padding:20px;position:relative;">';
     h += '<button class="modal-close" onclick="closeModal()" style="position:absolute;top:12px;right:12px;">&times;</button>';

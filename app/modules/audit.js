@@ -1372,7 +1372,7 @@
     html.push('</div>');
 
     var lastSent = pref.lastSentAt
-      ? 'Last digest queued: ' + esc(new Date(pref.lastSentAt).toLocaleString())
+      ? 'Last digest queued: ' + esc(MastFormat.dateTime(pref.lastSentAt))
       : 'No digest sent yet.';
     html.push('<div style="font-size:0.78rem;color:var(--warm-gray);">' + lastSent + '</div>');
 

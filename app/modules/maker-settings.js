@@ -199,7 +199,7 @@ function renderMakerSettings() {
   if (latest && latest.record && !latest.record.error) {
     var scannedAt = latest.record.scannedAt || latest.date;
     var scanDate;
-    try { scanDate = new Date(scannedAt).toLocaleString(); } catch (e) { scanDate = scannedAt; }
+    try { scanDate = MastFormat.dateTime(scannedAt); } catch (e) { scanDate = scannedAt; }
     var driftCount = Number(latest.record.driftCount || 0);
     var pieces = ['Last price drift scan: <strong>' + esc(scanDate) + '</strong>'];
     if (driftCount === 0) {

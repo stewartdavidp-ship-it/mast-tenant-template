@@ -62,7 +62,7 @@
     if (hrs < 24) return hrs + 'h ago';
     var days = Math.floor(hrs / 24);
     if (days < 30) return days + 'd ago';
-    return new Date(iso).toLocaleDateString();
+    return MastFormat.date(iso);
   }
 
   async function loadAll() {

@@ -109,7 +109,7 @@ function renderUnifiedDriftDialogCard(pid, group) {
 
   // Per-drift diff blocks
   drifts.forEach(function(d) {
-    var detDate = d.detectedAt ? new Date(d.detectedAt).toLocaleString() : '';
+    var detDate = d.detectedAt ? MastFormat.dateTime(d.detectedAt) : '';
     html += '<div style="border-top:1px dashed var(--cream-dark);padding-top:10px;margin-top:10px;">';
     html += '<div style="font-size:0.72rem;color:var(--warm-gray);margin-bottom:6px;">Detected ' + esc(detDate) + ' \u00b7 drift id ' + esc(d.driftId) + '</div>';
     (d.diffs || []).forEach(function(df) {
