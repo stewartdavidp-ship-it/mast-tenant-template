@@ -167,7 +167,12 @@
           el.textContent = location ? (name + ' \u2022 ' + location) : name;
           break;
         case 'description':
-          if (el.hasAttribute('data-content') && el.getAttribute('data-content-applied')) break;
+          // If this element is also bound to a data-content key (e.g. the About
+          // body, which storefront-content.js fills from sections.about.body),
+          // that source is authoritative — defer to it entirely and NEVER hide
+          // here. Hiding on empty brand.description used to win an ordering race
+          // against storefront-content.js, leaving a populated body display:none.
+          if (el.hasAttribute('data-content')) break;
           if (brand.description) el.textContent = brand.description;
           else el.style.display = 'none';
           break;

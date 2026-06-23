@@ -96,6 +96,22 @@
 
     if (sections.gallery) {
       if (sections.gallery.heading) contentMap['gallery-heading'] = sections.gallery.heading;
+
+      // Honor the merchant's gallery layout + column count (admin "Gallery"
+      // section settings). The storefront otherwise only applies the template
+      // manifest's galleryVariant, silently ignoring these saved choices.
+      // The `masonry` class (`.gallery-grid.masonry`, specificity 0,2,0) wins
+      // over the base `.gallery-grid` and over storefront-theme.js's
+      // data-variant attribute, so order of execution doesn't matter.
+      var galleryGrid = document.getElementById('galleryGrid');
+      if (galleryGrid) {
+        if (sections.gallery.layout === 'masonry') galleryGrid.classList.add('masonry');
+        else if (sections.gallery.layout === 'grid') galleryGrid.classList.remove('masonry');
+        var galleryCols = parseInt(sections.gallery.columns, 10);
+        if (galleryCols >= 1 && galleryCols <= 6) {
+          galleryGrid.style.setProperty('--gallery-columns', String(galleryCols));
+        }
+      }
     }
 
     if (sections.contact) {
