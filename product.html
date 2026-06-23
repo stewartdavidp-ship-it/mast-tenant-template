@@ -1301,14 +1301,29 @@
       // If product has options[] but no top-level variants[], synthesize one so
       // findVariant() can resolve a stable id for cart line items.
       if (p.variants && p.variants.length > 0) {
-        window._productVariants = p.variants;
+        // Normalize legacy import-shape variants ({name, price, sku}) to the
+        // canonical shape the rest of this page expects ({id, combo, priceCents}).
+        // Weebly imports produce flat single-option variants with `price` (cents)
+        // and no combo, which otherwise break price (Math.min -> Infinity), option
+        // rendering, and add-to-cart. Already-canonical variants pass through.
+        var _vslug = function(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
+        var _optLabel0 = (p.options && p.options[0]) ? (p.options[0].label || p.options[0].name || 'Option') : 'Option';
+        window._productVariants = p.variants.map(function(v) {
+          var pc = (typeof v.priceCents === 'number' && v.priceCents > 0) ? v.priceCents
+            : (typeof v.price === 'number' && v.price > 0 ? v.price
+            : (typeof p.priceCents === 'number' ? p.priceCents : 0));
+          var combo = v.combo || v.options;
+          if (!combo && v.name) { combo = {}; combo[_optLabel0] = v.name; }
+          var id = v.id || (combo ? Object.keys(combo).map(function(k) { return _vslug(combo[k]); }).join('-') : (v.sku || _vslug(v.name || '')));
+          return Object.assign({}, v, { priceCents: pc, combo: combo, options: combo, id: id });
+        });
       } else if (p.options && p.options.length > 0) {
         var slugify = function(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
         var combos = [{}];
         for (var oi = 0; oi < p.options.length; oi++) {
           var opt = p.options[oi];
-          var label = opt.label || ('Option' + (oi + 1));
-          var choices = opt.choices || [];
+          var label = opt.label || opt.name || ('Option' + (oi + 1));
+          var choices = opt.choices || opt.values || [];
           var next = [];
           for (var ci = 0; ci < combos.length; ci++) {
             for (var cj = 0; cj < choices.length; cj++) {
@@ -1529,7 +1544,7 @@
 
       if (p.options && p.options.length) {
         var normalizedOptions = p.options.map(function(o) {
-          return { label: o.label || 'Option', choices: o.choices || [] };
+          return { label: o.label || o.name || 'Option', choices: o.choices || o.values || [] };
         });
         window._requiredOptions = normalizedOptions.map(function(o) { return o.label; });
         var optHtml = '';
