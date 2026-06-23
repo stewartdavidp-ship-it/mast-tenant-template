@@ -401,7 +401,7 @@
     if (typeof p.wholesalePriceCents === 'number' && p.wholesalePriceCents > 0) rows.push({ k: 'Wholesale', v: N.money(p.wholesalePriceCents / 100) });
     rows.push({ k: 'Cost basis', v: p.recipeId ? 'From recipe (see Recipe tab)' : 'Manually priced' });
     var nOv = realVariants(p).filter(function (v) { return variantOverridden(p, v); }).length;
-    rows.push({ k: 'Variant overrides', v: nOv ? (nOv + ' variant' + (nOv > 1 ? 's' : '')) : 'none' });
+    rows.push({ k: 'Variant overrides', v: nOv ? (MastFormat.countNoun(nOv, 'variant')) : 'none' });
     return U.card('Pricing · Default (base)', U.kv(rows), { headerRight: editBtn }) + '<div class="pv2-pnote">Base price propagates to every non-overridden variant. Set a variant’s own price on its Pricing tab.</div>';
   }
   // Inline edit of the customer-facing price (direct priceCents — the model most
@@ -1256,7 +1256,7 @@
         // Default (the base every variant inherits) — not a single variant.
         var nv = variantCount(p);
         var defaultBanner = nv > 0
-          ? '<div style="margin:0 0 10px;padding:7px 12px;border-radius:8px;background:color-mix(in srgb,var(--info) 13%,transparent);color:var(--info);font-size:0.85rem;font-weight:600;">◆ Default — base for all ' + nv + ' variant' + (nv > 1 ? 's' : '') + '. Edits here apply to every variant unless it overrides.</div>'
+          ? '<div style="margin:0 0 10px;padding:7px 12px;border-radius:8px;background:color-mix(in srgb,var(--info) 13%,transparent);color:var(--info);font-size:0.85rem;font-weight:600;">◆ Default — base for all ' + MastFormat.countNoun(nv, 'variant') + '. Edits here apply to every variant unless it overrides.</div>'
           : '';
         // Product image thumbnail on the header — click for the full-size picture.
         // Header strip: product image thumbnail + the variant switcher pill.

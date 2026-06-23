@@ -322,7 +322,7 @@
       inner += '<div style="color:var(--warm-gray);font-size:0.85rem;">No contractors paid over $600 in ' + V2.taxYear + '. (1099-NEC threshold is $600.01+.)</div>';
     } else {
       var missing = list.filter(function (c) { return !c.hasTaxId; }).length;
-      if (missing) inner += '<div style="font-size:0.78rem;color:var(--amber);margin-bottom:8px;">' + missing + ' contractor' + (missing > 1 ? 's' : '') + ' missing a Tax ID — request a W-9 before filing.</div>';
+      if (missing) inner += '<div style="font-size:0.78rem;color:var(--amber);margin-bottom:8px;">' + MastFormat.countNoun(missing, 'contractor') + ' missing a Tax ID — request a W-9 before filing.</div>';
       inner += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">1099-NEC forms are due to contractors by January 31, ' + (V2.taxYear + 1) + '.</div>';
       inner += table([
         { label: 'Contractor', render: function (c) { return esc(c.name); } },

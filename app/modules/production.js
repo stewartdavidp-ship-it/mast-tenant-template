@@ -935,7 +935,7 @@ async function transitionProductionJob(jobId, newStatus) {
     await MastDB.productionJobs.update(jobId, updates);
     await writeAudit('update', 'jobs', jobId);
     if (newStatus === 'completed' && invCount > 0) {
-      showToast('Job completed — ' + invCount + ' product' + (invCount > 1 ? 's' : '') + ' updated in inventory');
+      showToast('Job completed — ' + MastFormat.countNoun(invCount, 'product') + ' updated in inventory');
     } else {
       showToast('Job status updated to ' + newStatus);
     }
@@ -2192,7 +2192,7 @@ function renderStoriesList() {
         '</div>' +
         '<div style="font-size:0.85rem;color:var(--warm-gray);">' +
           (jobName ? '🔗 ' + esc(jobName) + ' · ' : '') +
-          entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') +
+          MastFormat.countNoun(entryCount, 'entry', 'entries') +
         '</div>' +
         '<div style="margin-top:4px;">' + publishedInfo + '</div>' +
       '</div>' +
@@ -2326,7 +2326,7 @@ function renderStoryDetail(storyId) {
     '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">' +
       '<span class="status-badge prod-status-pill" style="background:' + statusColor + ';color:white;">' + statusLabel + '</span>' +
       (jobName ? '<span style="font-size:0.85rem;color:var(--warm-gray);">🔗 From job: <strong style="color:var(--text);">' + esc(jobName) + '</strong></span>' : '') +
-      '<span style="font-size:0.85rem;color:var(--warm-gray);">' + entryCount + ' entr' + (entryCount === 1 ? 'y' : 'ies') + '</span>' +
+      '<span style="font-size:0.85rem;color:var(--warm-gray);">' + MastFormat.countNoun(entryCount, 'entry', 'entries') + '</span>' +
       (story.publishedAt ? '<span style="font-size:0.85rem;color:var(--warm-gray);">Published ' + getTimeAgo(story.publishedAt) + '</span>' : '') +
     '</div>' +
     '<div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;">' + actions + '</div>';

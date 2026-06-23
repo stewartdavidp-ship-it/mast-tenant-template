@@ -63,7 +63,7 @@
   function eligibilityText(p) {
     var ids = p && p.allowedClassIds;
     if (!ids || !ids.length) return 'Any class';
-    return ids.length + ' class' + (ids.length === 1 ? '' : 'es');
+    return MastFormat.countNoun(ids.length, 'class', 'classes');
   }
   // Sales aggregate doc (admin/passDefinitionAggregates/{id}) attached to the
   // record before open; null until the one-shot read resolves / if never computed.

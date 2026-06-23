@@ -6083,7 +6083,7 @@
         return '<tr>' +
           '<td><strong>' + esc(t.name || id) + '</strong>' + (t.description ? '<div style="color:var(--warm-gray);font-size:0.78rem;">' + esc(t.description) + '</div>' : '') + '</td>' +
           '<td>' + esc(validity) + '</td>' +
-          '<td>' + classCount + ' class' + (classCount === 1 ? '' : 'es') + '</td>' +
+          '<td>' + MastFormat.countNoun(classCount, 'class', 'classes') + '</td>' +
           '<td>' + status + '</td>' +
           '<td style="text-align:right;"><button class="btn btn-link" onclick="window._certTypeEdit(\'' + esc(id) + '\')">Edit</button>' +
             (t.archivedAt

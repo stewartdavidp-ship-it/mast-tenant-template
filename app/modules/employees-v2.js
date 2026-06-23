@@ -157,7 +157,7 @@
           }).join('');
           return '<details style="margin-bottom:10px;border:1px solid var(--cream-dark);border-radius:8px;padding:10px 14px;">' +
             '<summary style="font-weight:600;font-size:0.9rem;cursor:pointer;">' + esc(g.label) +
-            (ovCount ? ' <span style="color:var(--amber);font-size:0.72rem;font-weight:600;">(' + ovCount + ' override' + (ovCount > 1 ? 's' : '') + ')</span>' : '') +
+            (ovCount ? ' <span style="color:var(--amber);font-size:0.72rem;font-weight:600;">(' + MastFormat.countNoun(ovCount, 'override') + ')</span>' : '') +
             '</summary><div style="margin-top:8px;">' + rows + '</div></details>';
         }).join('');
         html += '<div style="font-weight:600;font-size:0.9rem;margin:14px 0 6px;">Sensitive actions</div>';

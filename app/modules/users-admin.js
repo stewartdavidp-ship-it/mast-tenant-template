@@ -572,7 +572,7 @@ function openUserPermissionsPanel(uid, seedMode) {
     modulesHtml += '<div class="mod-access-group" data-mod-section="' + esc(g.section) + '">' +
       '<div class="mod-access-header" onclick="toggleModuleAccordion(\'' + esc(g.section) + '\')">' +
         '<span><span class="mod-access-caret">›</span>' + esc(g.label) +
-          (overrideCount ? ' <span style="color:var(--amber,rgba(196,133,60,1));font-size:0.72rem;font-weight:600;">(' + overrideCount + ' override' + (overrideCount > 1 ? 's' : '') + ')</span>' : '') + '</span>' +
+          (overrideCount ? ' <span style="color:var(--amber,rgba(196,133,60,1));font-size:0.72rem;font-weight:600;">(' + MastFormat.countNoun(overrideCount, 'override') + ')</span>' : '') + '</span>' +
       '</div>' +
       '<div class="mod-access-body"><table class="perm-matrix" style="width:100%;min-width:0;"><tbody>' + rows + '</tbody></table></div>' +
     '</div>';
