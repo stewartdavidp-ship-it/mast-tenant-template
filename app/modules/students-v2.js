@@ -320,7 +320,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Students',
-        count: N.count(V2.rows.length) + ' student' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'student'),
         actionsHtml: '<button class="btn btn-primary" onclick="StudentsV2.create()">+ New student</button>' +
           '<button class="btn btn-secondary" onclick="StudentsV2.exportCsv()">↓ Export</button>' +
           // Tenant-level config (waiver templates / clearance types / business

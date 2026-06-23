@@ -287,7 +287,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Composer',
-        count: N.count(V2.rows.length) + ' piece' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'piece'),
         subtitle: 'Write once, publish to Blog / Social / Newsletter / Story. Per-channel editors stay available for one-offs.',
         actionsHtml:
           (canDo('edit') ? '<button class="btn btn-primary" onclick="ComposerV2.create()">+ New draft</button>' : '') +

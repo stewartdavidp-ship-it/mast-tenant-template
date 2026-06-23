@@ -543,7 +543,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Sales Events',
-        count: N.count(V2.rows.length) + ' event' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'event'),
         actionsHtml: '<button class="btn btn-primary" onclick="SalesEventsV2.create()">+ New event</button>' +
           '<button class="btn btn-secondary" onclick="SalesEventsV2.exportCsv()">↓ Export</button>'
       }) +

@@ -285,7 +285,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Resources',
-        count: N.count(V2.rows.length) + ' resource' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'resource'),
         actionsHtml: '<button class="btn btn-primary" onclick="ResourcesV2.create()">+ New resource</button>' +
           '<button class="btn btn-secondary" onclick="ResourcesV2.exportCsv()">↓ Export</button>'
       }) +

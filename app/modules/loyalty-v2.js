@@ -435,7 +435,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Loyalty members',
-        count: N.count(V2.rows.length) + ' member' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'member'),
         actionsHtml: '<button class="btn btn-secondary" onclick="LoyaltyV2.exportCsv()">&darr; Export</button>'
       }) +
       '<div style="margin:12px 0;">' + settingsCard() + '</div>' +

@@ -122,7 +122,7 @@
         '<div style="color:var(--warm-gray);font-size:0.85rem;">No traffic sources captured in this range yet — UTMs appear here once visitors land with utm_source params.</div>');
     }
     var chips = entries.slice(0, 3).map(function (e) {
-      return '<span style="background:var(--cream);padding:4px 10px;border-radius:4px;font-size:0.85rem;margin-right:8px;"><strong>' + esc(e[0]) + '</strong> $' + (e[1].revenueCents / 100).toFixed(2) + ' (' + e[1].orderCount + ' order' + (e[1].orderCount !== 1 ? 's' : '') + ')</span>';
+      return '<span style="background:var(--cream);padding:4px 10px;border-radius:4px;font-size:0.85rem;margin-right:8px;"><strong>' + esc(e[0]) + '</strong> $' + (e[1].revenueCents / 100).toFixed(2) + ' (' + e[1].orderCount + ' ' + MastFormat.plural(e[1].orderCount, 'order') + ')</span>';
     }).join('');
     var rows = entries.map(function (e) {
       return '<div style="display:flex;gap:12px;padding:6px 0;border-bottom:1px solid var(--cream-dark);font-size:0.85rem;align-items:baseline;">' +

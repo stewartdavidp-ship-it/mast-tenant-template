@@ -983,7 +983,7 @@
       (V2.requestsExpanded ? 'Hide' : 'Show') + '</button>';
     if (!V2.requestsExpanded) {
       return U.card('Build requests', '<p style="color:var(--warm-gray);margin:0;">' +
-        esc(U.Num.count(pending.length)) + ' pending build request' + (pending.length === 1 ? '' : 's') +
+        esc(U.Num.count(pending.length)) + ' ' + MastFormat.plural(pending.length, 'pending build request') +
         ' from orders awaiting a production job.</p>', { headerRight: headerRight });
     }
     var jobs = assignableJobs();

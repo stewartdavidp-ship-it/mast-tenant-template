@@ -78,7 +78,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Schedule',
-        count: N.count(CAL.sessions.length) + ' session' + (CAL.sessions.length === 1 ? '' : 's')
+        count: N.count(CAL.sessions.length) + ' ' + MastFormat.plural(CAL.sessions.length, 'session')
       }) + lensPills +
       U.calendar({
         year: CAL.year, month: CAL.month, entriesByDate: entriesByDate(),

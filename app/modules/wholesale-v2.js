@@ -626,7 +626,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Wholesale',
-        count: N.count(V2.rows.length) + ' account' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'account'),
         actionsHtml: '<button class="btn btn-primary" onclick="WholesaleV2.create()">+ New account</button>' +
           '<button class="btn btn-secondary" onclick="WholesaleV2.exportCsv()">↓ Export</button>'
       }) +

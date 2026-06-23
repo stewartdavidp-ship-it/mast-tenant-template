@@ -1226,7 +1226,7 @@
     }).join(' ');
     var clipsNote = (V2.pendingClips && canEdit())
       ? '<div style="margin:12px 0;padding:12px 14px;border:1px solid var(--cream-dark);border-radius:8px;">' +
-          '<div style="font-size:0.9rem;margin-bottom:8px;">📎 ' + N.count(V2.pendingClips) + ' clip' + (V2.pendingClips === 1 ? '' : 's') +
+          '<div style="font-size:0.9rem;margin-bottom:8px;">📎 ' + N.count(V2.pendingClips) + ' ' + MastFormat.plural(V2.pendingClips, 'clip') +
             ' uploaded but not yet posted — finish one into a post.</div>' +
           '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
             V2.pendingClipDocs.map(function (c) {
@@ -1245,7 +1245,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Social Media',
-        count: N.count(V2.rows.length) + ' post' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'post'),
         subtitle: 'Captions, signals and the posting record.',
         actionsHtml:
           (canEdit() ? '<button class="btn btn-primary" onclick="SocialV2.create()">+ New post</button>' : '') +

@@ -367,7 +367,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Enrollments',
-        count: N.count(V2.rows.length) + ' enrollment' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'enrollment'),
         actionsHtml: (can('enrollments', 'edit') ? '<button class="btn btn-primary" onclick="EnrollmentsV2.create()">+ New enrollment</button>' : '') +
           '<button class="btn btn-secondary" onclick="EnrollmentsV2.exportCsv()">↓ Export</button>'
       }) +

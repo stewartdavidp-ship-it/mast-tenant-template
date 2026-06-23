@@ -1036,8 +1036,8 @@
     var expanded = !!reviewHistoryExpanded[reviewId];
     var label;
     if (hasDelete && standalone) label = 'Response was deleted · view history (' + transitions + ')';
-    else if (hasDelete) label = 'Edited ' + (transitions - 1) + ' time' + (transitions - 1 === 1 ? '' : 's') + ' · includes deletion';
-    else label = 'Edited ' + (transitions - 1) + ' time' + (transitions - 1 === 1 ? '' : 's');
+    else if (hasDelete) label = 'Edited ' + (transitions - 1) + ' ' + MastFormat.plural(transitions - 1, 'time') + ' · includes deletion';
+    else label = 'Edited ' + (transitions - 1) + ' ' + MastFormat.plural(transitions - 1, 'time');
     var wrapStyle = standalone
       ? 'border-left:3px solid var(--warm-gray);padding:10px 12px;margin-bottom:10px;background:rgba(0,0,0,0.03);border-radius:0 8px 8px 0;'
       : 'margin-top:8px;padding-top:6px;border-top:1px dashed var(--cream-dark);';
@@ -1858,7 +1858,7 @@
     var html = '';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">';
     html += '<div style="font-size:0.85rem;">' +
-      _esc(String(filtered.length)) + ' of ' + _esc(String(totalCount)) + ' response' + (totalCount === 1 ? '' : 's') + ' · ' +
+      _esc(String(filtered.length)) + ' of ' + _esc(String(totalCount)) + ' ' + MastFormat.plural(totalCount, 'response') + ' · ' +
       _esc(String(completedCount)) + ' completed' +
       // Build 9 — VoC digest button
       ' · <a href="#" onclick="event.preventDefault();csGenerateVocDigest();" style="color:var(--teal);text-decoration:underline;">✨ Generate VoC digest</a>' +

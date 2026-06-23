@@ -191,7 +191,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Gift cards',
-        count: N.count(V2.rows.length) + ' card' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'card'),
         actionsHtml:
           (canIssue() ? '<button class="btn btn-primary" onclick="GiftCardsV2.issue()">+ Issue gift card</button>' +
             '<button class="btn btn-secondary" onclick="GiftCardsV2.promo()">+ Promo credit</button>' : '') +

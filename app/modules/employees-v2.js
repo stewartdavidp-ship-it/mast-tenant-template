@@ -100,7 +100,7 @@
         ]);
         var ovNote = overrides
           ? UI.card('Personal overrides', '<div style="font-size:0.85rem;color:var(--warm-gray);line-height:1.5;">' +
-              N.count(overrides) + ' permission override' + (overrides === 1 ? '' : 's') + ' on top of the ' +
+              N.count(overrides) + ' ' + MastFormat.plural(overrides, 'permission override') + ' on top of the ' +
               esc(roleDisplay(r.role)) + ' role. Use Edit to change them.</div>')
           : '';
         var archBtn = '';
@@ -513,8 +513,8 @@
       U.pageHeader({
         title: 'Team access',
         count: isMembers
-          ? N.count(activeMembers.length) + ' member' + (activeMembers.length === 1 ? '' : 's')
-          : N.count(V2.roles.length) + ' role' + (V2.roles.length === 1 ? '' : 's'),
+          ? N.count(activeMembers.length) + ' ' + MastFormat.plural(activeMembers.length, 'member')
+          : N.count(V2.roles.length) + ' ' + MastFormat.plural(V2.roles.length, 'role'),
         actionsHtml: actions
       }) +
       '<div style="margin:14px 0;">' +

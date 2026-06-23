@@ -590,7 +590,7 @@
         Promise.resolve(b.addProducts(channelId, pids)).then(function (res) {
           if (typeof closeModal === 'function') closeModal();
           if (window.writeAudit) writeAudit('update', 'channels', channelId);
-          if (window.showToast) showToast((res.added || 0) + ' product' + (res.added === 1 ? '' : 's') + ' added');
+          if (window.showToast) showToast((res.added || 0) + ' ' + MastFormat.plural(res.added, 'product') + ' added');
           reopenAfterLoad(channelId);
         }).catch(function (e) {
           if (window.showToast) showToast('Could not add products: ' + (e && e.message || e), true);

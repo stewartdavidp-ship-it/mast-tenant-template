@@ -331,7 +331,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Consignments',
-        count: N.count(V2.rows.length) + ' placement' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'placement'),
         actionsHtml: '<button class="btn btn-secondary" onclick="ConsignmentsV2.exportCsv()">↓ Export</button>'
       }) +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">' + filters + '</div>' +
