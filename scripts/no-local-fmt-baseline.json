@@ -21,6 +21,9 @@
   "app/modules/audit-feedback.js": {
     "localeDate": 1
   },
+  "app/modules/audit-log.js": {
+    "localeDate": 3
+  },
   "app/modules/audit.js": {
     "localeDate": 1
   },
