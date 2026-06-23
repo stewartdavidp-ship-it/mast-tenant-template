@@ -828,7 +828,7 @@
       name: document.getElementById('evbf_name').value.trim(),
       size: document.getElementById('evbf_size').value.trim(),
       type: document.getElementById('evbf_type').value,
-      price: Math.round(parseFloat(document.getElementById('evbf_price').value) * 100) || 0,
+      price: MastFormat.parseCents(document.getElementById('evbf_price').value) || 0,
       location: document.getElementById('evbf_location').value.trim(),
       provided: document.getElementById('evbf_provided').value.split(',').map(function(s) { return s.trim(); }).filter(Boolean),
       required: document.getElementById('evbf_required').value.split(',').map(function(s) { return s.trim(); }).filter(Boolean),
@@ -881,7 +881,7 @@
     var prefix = document.getElementById('evbbf_prefix').value || 'Booth ';
     var size = document.getElementById('evbbf_size').value || '10x10';
     var type = document.getElementById('evbbf_type').value || 'standard';
-    var price = Math.round(parseFloat(document.getElementById('evbbf_price').value) * 100) || 0;
+    var price = MastFormat.parseCents(document.getElementById('evbbf_price').value) || 0;
     var now = nowISO();
     var updates = {};
     for (var i = 0; i < count; i++) {

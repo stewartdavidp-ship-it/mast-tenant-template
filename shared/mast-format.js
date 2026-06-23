@@ -114,6 +114,28 @@
     return null;
   }
 
+  // ── Money PARSE — the inverse of money()/moneyRaw(): a user-entered string
+  // ("$1,234.50", "1234.5") -> a number, the centralized replacement for ad-hoc
+  // `parseFloat(input.value)`. Strips $, thousands commas, and whitespace; returns
+  // null (not NaN/0) for empty/non-numeric so callers can distinguish "blank" from
+  // "zero". A number passes through (idempotent). en-US only (comma = thousands).
+  function parseMoney(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'number') return isFinite(v) ? v : null;
+    var s = String(v).replace(/[$,\s]/g, '');
+    if (s === '' || s === '-' || s === '.') return null;
+    var n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  }
+
+  // parseCents(str) -> integer CENTS, or null. The float-safe dollars→cents idiom
+  // (Math.round defuses 0.1*100 = 10.000000000000002), centralizing the ~16
+  // hand-rolled `Math.round(parseFloat(x) * 100)` sites. Pair with money(n,{cents}).
+  function parseCents(v) {
+    var n = parseMoney(v);
+    return n == null ? null : Math.round(n * 100);
+  }
+
   // ── _toLocalDate — calendar-aware coercion to a JS Date (SHARED by all the date
   // formatters below, so they apply the off-by-one fix identically). Routes through
   // coerceDate so a Firestore Timestamp (raw {seconds,nanoseconds} or .toDate())
@@ -276,6 +298,8 @@
     moneyRaw: moneyRaw,
     moneyVal: moneyVal,
     lineTotalVal: lineTotalVal,
+    parseMoney: parseMoney,
+    parseCents: parseCents,
     date: date,
     dateShort: dateShort,
     dateLong: dateLong,

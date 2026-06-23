@@ -1258,7 +1258,7 @@ function renderCostTracking(jobId, job) {
  */
 async function setLineItemActual(jobId, lineItemId, kind, value) {
   try {
-    var cents = (value === '' || value == null) ? null : Math.round(parseFloat(value) * 100);
+    var cents = (value === '' || value == null) ? null : MastFormat.parseCents(value);
     if (cents != null && (isNaN(cents) || cents < 0)) {
       showToast('Invalid amount', true);
       return;
