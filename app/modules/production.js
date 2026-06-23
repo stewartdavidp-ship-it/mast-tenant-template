@@ -2407,10 +2407,8 @@ function printStoryQR(dataUrl, productName) {
 }
 
 function copyStoryQRUrl(url) {
-  navigator.clipboard.writeText(url).then(function() {
-    showToast('Product URL copied');
-  }).catch(function() {
-    mastCopyFallback('Copy this URL', url);
+  window.MastUI.copy(url, { okMsg: 'Product URL copied', errMsg: false }).then(function (ok) {
+    if (!ok) mastCopyFallback('Copy this URL', url);
   });
 }
 

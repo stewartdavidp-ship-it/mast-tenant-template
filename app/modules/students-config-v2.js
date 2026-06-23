@@ -597,9 +597,9 @@
     copyTemplateLink: function (id) {
       var domain = (window.TENANT_CONFIG && window.TENANT_CONFIG.domain) || window.location.hostname;
       var url = 'https://' + domain + '/waiver.html?t=' + encodeURIComponent(id);
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(function () { if (window.showToast) showToast('Waiver link copied'); });
-      } else if (typeof mastCopyFallback === 'function') { mastCopyFallback('Copy this link', url); }
+      window.MastUI.copy(url, { okMsg: 'Waiver link copied', errMsg: false }).then(function (ok) {
+        if (!ok && typeof mastCopyFallback === 'function') mastCopyFallback('Copy this link', url);
+      });
     },
 
     // Signatures viewer — read-only. Bounded by templateId. Renders each signature

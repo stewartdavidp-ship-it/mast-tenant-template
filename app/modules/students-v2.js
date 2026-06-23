@@ -614,10 +614,9 @@
         .then(function (res) {
           var url = res && res.data && res.data.url;
           if (!url) throw new Error('No link returned');
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            return navigator.clipboard.writeText(url).then(function () { if (window.showToast) showToast('Per-student waiver link copied'); });
-          }
-          if (typeof mastCopyFallback === 'function') mastCopyFallback('Copy this waiver link', url);
+          return window.MastUI.copy(url, { okMsg: 'Per-student waiver link copied', errMsg: false }).then(function (ok) {
+            if (!ok && typeof mastCopyFallback === 'function') mastCopyFallback('Copy this waiver link', url);
+          });
         })
         .catch(function (err) {
           var msg = (err && (err.message || (err.details && err.details.message))) || 'Failed to generate link';

@@ -1508,8 +1508,8 @@
     createCopyHashtags: function () {
       if (!CREATE || !CREATE.hashtags) return;
       var all = [].concat(CREATE.hashtags.niche || [], CREATE.hashtags.mid || [], CREATE.hashtags.broad || []);
-      if (all.length && navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(all.join(' ')).then(function () { if (window.showToast) showToast('Hashtags copied.'); });
+      if (all.length) {
+        window.MastUI.copy(all.join(' '), { okMsg: 'Hashtags copied.' });
       }
     },
     // (C) S6 — coupon attach. Pick from active window.coupons, append the claim

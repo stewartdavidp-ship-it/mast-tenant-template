@@ -2417,14 +2417,9 @@
     copyLink: function () {
       var url = liveUrl();
       if (!url) { if (window.showToast) showToast('Live URL unavailable', true); return; }
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(url).then(
-          function () { if (window.showToast) showToast('Live link copied'); },
-          function () { if (typeof window.mastCopyFallback === 'function') mastCopyFallback('Copy this link', url); }
-        );
-      } else if (typeof window.mastCopyFallback === 'function') {
-        mastCopyFallback('Copy this link', url);
-      }
+      window.MastUI.copy(url, { okMsg: 'Live link copied', errMsg: false }).then(function (ok) {
+        if (!ok && typeof window.mastCopyFallback === 'function') mastCopyFallback('Copy this link', url);
+      });
     }
   };
 
