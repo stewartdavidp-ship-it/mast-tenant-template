@@ -172,4 +172,38 @@ t('dateLong: null/garbage → "" (AR reminder then falls back to "as soon as pos
   assert.strictEqual(F.dateLong('xyz'), '');
 });
 
+// ── dateTime / time — the TIME-bearing renderers (replace hand-rolled
+// .toLocaleString() / .toLocaleTimeString()). Unlike the date-only formatters they
+// render the actual instant (no calendar-midnight rewrite), so a real Date built
+// from LOCAL components asserts a fixed wall-clock under the pinned NY zone. The
+// Timestamp cases prove the crash-proofing: .toLocaleString() on a raw
+// {seconds,nanoseconds} object throws — dateTime()/time() coerce first.
+t('dateTime: real Date → "Jun 7, 2026, 3:45 PM" (date + 12h time)', () =>
+  assert.strictEqual(F.dateTime(new Date(2026, 5, 7, 15, 45, 0)), 'Jun 7, 2026, 3:45 PM'));
+t('dateTime: midnight local → "12:00 AM" (not blank, not noon)', () =>
+  assert.strictEqual(F.dateTime(new Date(2026, 5, 7, 0, 0, 0)), 'Jun 7, 2026, 12:00 AM'));
+t('dateTime: {seconds,nanoseconds} Timestamp (noon EDT) → "Jun 7, 2026, 12:00 PM"', () =>
+  assert.strictEqual(F.dateTime({ seconds: MIDDAY_2026_06_07, nanoseconds: 0 }), 'Jun 7, 2026, 12:00 PM'));
+t('dateTime: Timestamp with .toDate() → coerced, no throw', () =>
+  assert.strictEqual(
+    F.dateTime({ seconds: MIDDAY_2026_06_07, toDate() { return new Date(MIDDAY_2026_06_07 * 1000); } }),
+    'Jun 7, 2026, 12:00 PM'));
+t('dateTime: epoch-ms number → rendered', () =>
+  assert.strictEqual(F.dateTime(MIDDAY_2026_06_07 * 1000), 'Jun 7, 2026, 12:00 PM'));
+t('dateTime: ISO string with explicit offset → local wall-clock', () =>
+  assert.strictEqual(F.dateTime('2026-06-07T12:00:00-04:00'), 'Jun 7, 2026, 12:00 PM'));
+t('dateTime: null/empty/garbage → "" (caller renders an em-dash, never epoch)', () => {
+  assert.strictEqual(F.dateTime(null), '');
+  assert.strictEqual(F.dateTime(''), '');
+  assert.strictEqual(F.dateTime('xyz'), '');
+});
+t('time: real Date → "3:45 PM" (no date)', () =>
+  assert.strictEqual(F.time(new Date(2026, 5, 7, 15, 45, 0)), '3:45 PM'));
+t('time: {seconds} Timestamp (noon EDT) → "12:00 PM"', () =>
+  assert.strictEqual(F.time({ seconds: MIDDAY_2026_06_07, nanoseconds: 0 }), '12:00 PM'));
+t('time: null/garbage → ""', () => {
+  assert.strictEqual(F.time(null), '');
+  assert.strictEqual(F.time('xyz'), '');
+});
+
 console.log(`\n${pass} mast-format assertions passed.`);

@@ -167,6 +167,37 @@
     return dt.toISOString().slice(0, 10);
   }
 
+  // ── _toInstant — coerce to a JS Date for the TIME-bearing formatters. Unlike
+  // _toLocalDate (which rewrites a bare calendar date to LOCAL midnight for the
+  // off-by-one fix), the datetime/time renderers want the actual instant, so a
+  // string flows through native (local) parsing. Routes through coerceDate, so a
+  // Firestore Timestamp (raw {seconds,nanoseconds} or .toDate()) resolves instead
+  // of throwing — the recurring "toLocaleString on a Timestamp object" crash class.
+  function _toInstant(d) {
+    var c = coerceDate(d);
+    if (c == null) return null;
+    var dt = (c instanceof Date) ? c : new Date(c);
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
+  // dateTime: ISO/Date/Timestamp -> "Jun 23, 2026, 3:45 PM" (date() format + 12h
+  // wall-clock time). Timestamp-safe via coerceDate. For audit/event timestamps
+  // and any "when did this happen" readout where the time of day matters; the
+  // centralized, crash-proof replacement for hand-rolled `.toLocaleString()`.
+  function dateTime(d) {
+    var dt = _toInstant(d);
+    return dt == null ? '' : dt.toLocaleString('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+    });
+  }
+
+  // time: ISO/Date/Timestamp -> "3:45 PM" (12h wall-clock, no date). Timestamp-safe.
+  // The centralized replacement for hand-rolled `.toLocaleTimeString()`.
+  function time(d) {
+    var dt = _toInstant(d);
+    return dt == null ? '' : dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+
   var api = {
     money: money,
     moneyRaw: moneyRaw,
@@ -176,6 +207,8 @@
     dateShort: dateShort,
     dateLong: dateLong,
     dateRaw: dateRaw,
+    dateTime: dateTime,
+    time: time,
     coerceDate: coerceDate
   };
 
