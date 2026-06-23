@@ -234,7 +234,7 @@
 
         // Seed the additional-staff editor scratch state (cloned so cancel can't
         // mutate the on-disk record). Rendered into #sessV2StaffList post-DOM.
-        SessionsV2._staffState = Array.isArray(s.additionalStaff) ? JSON.parse(JSON.stringify(s.additionalStaff)) : [];
+        SessionsV2._staffState = Array.isArray(s.additionalStaff) ? MastUtil.clone(s.additionalStaff) : [];
         setTimeout(function () { SessionsV2._renderStaff(); }, 0);
 
         var cap = capacityOf(s);
