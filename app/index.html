@@ -13590,7 +13590,7 @@ function renderTokenBalanceIndicator() {
     primary = '<strong>' + total.toLocaleString() + '</strong> tokens';
   }
   var coinBadge = (w.coinBalance > 0)
-    ? ' <span style="opacity:0.7;font-size:0.72rem;">(+' + w.coinBalance + ' coin' + (w.coinBalance === 1 ? '' : 's') + ')</span>'
+    ? ' <span style="opacity:0.7;font-size:0.72rem;">(+' + MastFormat.countNoun(w.coinBalance, 'coin') + ')</span>'
     : '';
 
   var html = '<span style="cursor:pointer;display:flex;align-items:center;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(122,139,111,0.1);font-size:0.78rem;color:' + statusColor + ';" title="Click to view billing usage" onclick="navigateTo(\'subscription\')">' +
@@ -20556,7 +20556,7 @@ async function saveDeclaredChannels() {
     await MastDB.businessEntity.update('presence', { declaredChannels: selected });
     if (statusEl) {
       statusEl.textContent = selected.length > 0
-        ? 'Saved ' + selected.length + ' channel' + (selected.length === 1 ? '' : 's') + '.'
+        ? 'Saved ' + MastFormat.countNoun(selected.length, 'channel') + '.'
         : 'Saved. No channels declared.';
       statusEl.style.color = 'var(--success,#22c55e)';
     }
@@ -20897,7 +20897,7 @@ function _renderChannelCardHtml(p, rec) {
     if (rec.env && p.id === 'square') detailParts.push('env: ' + rec.env);
     if (rec.connectedAt) detailParts.push('Connected ' + new Date(rec.connectedAt).toLocaleDateString());
     if (typeof rec.webhookSubscriptionCount === 'number' && rec.webhookSubscriptionCount > 0) {
-      detailParts.push(rec.webhookSubscriptionCount + ' webhook' + (rec.webhookSubscriptionCount === 1 ? '' : 's'));
+      detailParts.push(MastFormat.countNoun(rec.webhookSubscriptionCount, 'webhook'));
     }
     if (rec.lastSyncAt) detailParts.push('Last sync ' + new Date(rec.lastSyncAt).toLocaleString());
     else if (status === 'connected') detailParts.push('No manual sync yet');
@@ -22316,7 +22316,7 @@ window.seedRenewalsFromComplianceBanner = async function() {
       if (window.mastAlert) mastAlert('No compliance items with expiry dates to seed from. Add expiresAt dates and try again.', { title: 'Nothing to seed' });
       return;
     }
-    var msg = 'This will create ' + proposed + ' renewal reminder' + (proposed === 1 ? '' : 's') + ' from your compliance items. You can edit reminder cadence in Settings > Notifications afterward.';
+    var msg = 'This will create ' + MastFormat.countNoun(proposed, 'renewal reminder') + ' from your compliance items. You can edit reminder cadence in Settings > Notifications afterward.';
     var ok = await mastConfirm(msg, { title: 'Create ' + proposed + ' reminders?', confirmLabel: 'Create reminders', cancelLabel: 'Cancel' });
     if (!ok) { if (statusEl) statusEl.textContent = ''; return; }
     var res = await MastDB.businessEntity.renewals.seedFromCompliance(false);
@@ -24047,7 +24047,7 @@ function renderTrialDecisionPanel(sub, elId) {
     var daysLeft = _trialDaysLeft(sub.trialEndsAt);
     var endDate = _trialFmtDate(sub.trialEndsAt);
     h += '<div style="background:rgba(196,133,60,0.10);border:1px solid rgba(196,133,60,0.35);border-radius:8px;padding:18px 20px;">';
-    h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' left in your free trial</div>';
+    h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:600;color:var(--text-primary);margin-bottom:4px;">' + MastFormat.countNoun(daysLeft, 'day') + ' left in your free trial</div>';
     h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:14px;">Your trial runs at full Starter capability through <strong>' + esc(endDate) + '</strong>. Choose how to continue — your choice takes effect when the trial ends, and you keep full access until then.</div>';
     var pending = sub.trialDecision && sub.trialDecision.choice;
     if (pending === 'free' || pending === 'cancel') {
@@ -24066,7 +24066,7 @@ function renderTrialDecisionPanel(sub, elId) {
     var delDays = _trialDaysLeft(sub.deletionScheduledAt);
     h += '<div style="background:rgba(198,40,40,0.08);border:1px solid rgba(198,40,40,0.35);border-radius:8px;padding:18px 20px;">';
     h += '<div style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:600;color:var(--danger);margin-bottom:4px;">Your account is scheduled to close</div>';
-    h += '<div style="font-size:0.85rem;color:var(--text-primary);margin-bottom:14px;">Your free trial ended without a plan selection, so your account will be deleted on <strong>' + esc(delDate) + '</strong> (' + delDays + ' day' + (delDays === 1 ? '' : 's') + '). Your data is safe until then. Your admin is <strong>read-only</strong> — you can export your data or reactivate by choosing a plan.</div>';
+    h += '<div style="font-size:0.85rem;color:var(--text-primary);margin-bottom:14px;">Your free trial ended without a plan selection, so your account will be deleted on <strong>' + esc(delDate) + '</strong> (' + MastFormat.countNoun(delDays, 'day') + '). Your data is safe until then. Your admin is <strong>read-only</strong> — you can export your data or reactivate by choosing a plan.</div>';
     h += _trialPaidGridHtml(canEdit, 'Reactivate on a paid plan');
     h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;align-items:center;">';
     h += '<button class="btn btn-secondary"' + (canEdit ? '' : ' disabled') + ' onclick="trialChooseFree()">Reactivate on Free</button>';
@@ -27725,7 +27725,7 @@ async function saveEmailConfig() {
       try {
         var connectRes = await firebase.functions().httpsCallable('byoResendConnect')({ apiKey: apiKey });
         var data = connectRes && connectRes.data ? connectRes.data : {};
-        showToast('Resend connected (' + (data.keyMasked || 'key saved') + (data.domainCount != null ? ', ' + data.domainCount + ' domain' + (data.domainCount === 1 ? '' : 's') : '') + ').');
+        showToast('Resend connected (' + (data.keyMasked || 'key saved') + (data.domainCount != null ? ', ' + MastFormat.countNoun(data.domainCount, 'domain') : '') + ').');
       } catch (err) {
         var msg = (err && err.message) ? err.message : String(err);
         showToast('Resend key rejected: ' + msg, true);
@@ -27876,7 +27876,7 @@ function loadByoResendStatus() {
       lines.push('<div style="font-size:0.78rem;margin-top:4px;">Connected ' + (isNaN(d.getTime()) ? esc(s.connectedAt) : d.toLocaleString()) + '</div>');
     }
     if (s.domainCount != null) {
-      lines.push('<div style="font-size:0.78rem;">' + s.domainCount + ' domain' + (s.domainCount === 1 ? '' : 's') + ' on your Resend account</div>');
+      lines.push('<div style="font-size:0.78rem;">' + MastFormat.countNoun(s.domainCount, 'domain') + ' on your Resend account</div>');
     }
     info.innerHTML = lines.join('');
     block.style.display = 'block';
@@ -28522,7 +28522,7 @@ async function loadAskAiUsage() {
     var mast = modes.mast || 0;
     var byo = modes.byo || 0;
     var fb = modes['mast-fallback'] || 0;
-    var html = '<div>' + total + ' call' + (total === 1 ? '' : 's') + ' this month: ';
+    var html = '<div>' + MastFormat.countNoun(total, 'call') + ' this month: ';
     var parts = [];
     if (byo) parts.push('<strong>' + byo + '</strong> via your key');
     if (mast) parts.push('<strong>' + mast + '</strong> via Mast tokens');
@@ -29905,7 +29905,7 @@ function renderSetupBanner() {
     var dashTab = document.getElementById('dashboardTab');
     if (dashTab) dashTab.insertBefore(banner, dashTab.firstChild);
   }
-  banner.innerHTML = incomplete.length + ' setup step' + (incomplete.length > 1 ? 's' : '') +
+  banner.innerHTML = MastFormat.countNoun(incomplete.length, 'setup step') +
     ' remaining — <a href="#settings" onclick="navigateTo(\'settings\');return false;">Complete Setup</a>';
 }
 
@@ -30124,7 +30124,7 @@ function renderDashCardSetupShop() {
     h += '<div id="nextStepsExpanded" style="display:none;">';
     remaining.forEach(function(step) { h += renderStep(step); });
     h += '</div>';
-    h += '<div id="nextStepsToggle" onclick="var exp=document.getElementById(\'nextStepsExpanded\');var tog=document.getElementById(\'nextStepsToggle\');if(exp.style.display===\'none\'){exp.style.display=\'block\';tog.textContent=\'Show less\';}else{exp.style.display=\'none\';tog.textContent=\'+ ' + remaining.length + ' more step' + (remaining.length !== 1 ? 's' : '') + '\';}" style="text-align:center;padding-top:8px;font-size:0.85rem;color:var(--teal, var(--teal));cursor:pointer;">+ ' + remaining.length + ' more step' + (remaining.length !== 1 ? 's' : '') + '</div>';
+    h += '<div id="nextStepsToggle" onclick="var exp=document.getElementById(\'nextStepsExpanded\');var tog=document.getElementById(\'nextStepsToggle\');if(exp.style.display===\'none\'){exp.style.display=\'block\';tog.textContent=\'Show less\';}else{exp.style.display=\'none\';tog.textContent=\'+ ' + MastFormat.countNoun(remaining.length, 'more step') + '\';}" style="text-align:center;padding-top:8px;font-size:0.85rem;color:var(--teal, var(--teal));cursor:pointer;">+ ' + MastFormat.countNoun(remaining.length, 'more step') + '</div>';
   }
 
   container.innerHTML = renderDashboardCard(cardConfig, todo.length, h);
@@ -32948,7 +32948,7 @@ function renderPublishToChannelButton(product) {
     ? 'Update Channels (' + publishedTo.length + ')'
     : 'Publish to Channel…';
   var title = publishedTo.length > 0
-    ? 'Push latest Mast data to ' + publishedTo.length + ' connected channel' + (publishedTo.length === 1 ? '' : 's')
+    ? 'Push latest Mast data to ' + MastFormat.countNoun(publishedTo.length, 'connected channel')
     : 'Pick a connected channel to publish this product to';
   return '<button class="btn btn-secondary btn-small" title="' + esc(title) + '" onclick="openPublishToChannelDialog(\'' + esc(product.pid) + '\')">' + esc(label) + '</button>';
 }
@@ -33557,7 +33557,7 @@ function renderUnifiedDriftBanner(pid) {
     var cv = phase4SeverityVisual(cSev);
     summaryChips.push(
       '<span class="status-badge" style="background:' + cv.bg + ';color:' + cv.label + ';border:1px solid ' + cv.border + ';">' +
-        esc(driftChannelLabel(g.resolved)) + ' \u00b7 ' + g.fields.length + ' field' + (g.fields.length === 1 ? '' : 's') +
+        esc(driftChannelLabel(g.resolved)) + ' \u00b7 ' + MastFormat.countNoun(g.fields.length, 'field') +
       '</span>'
     );
   });
@@ -36566,7 +36566,7 @@ async function saveProduct(pid) {
       await writeAudit('stage_revision', 'products', targetPid);
       // Skip the normal full save path — pending changes are the source of truth
       // until Apply.
-      showToast('Staged ' + Object.keys(staged).length + ' change' + (Object.keys(staged).length === 1 ? '' : 's') + ' (Apply to go live)');
+      showToast('Staged ' + Object.keys(staged).length + ' ' + MastFormat.plural(Object.keys(staged).length, 'change') + ' (Apply to go live)');
       // Update in-memory product so subsequent re-renders see staged changes
       var pdIdxR = productsData.findIndex(function(p) { return p.pid === targetPid; });
       if (pdIdxR >= 0) {
@@ -36999,7 +36999,7 @@ async function renderTrafficBySource() {
       top3El.innerHTML = '<span style="color:var(--warm-gray);">Top sources (last ' + rangeDays + 'd):</span> ' +
         top.map(function(e) {
           var k = e[0], v = e[1];
-          return '<span style="background:var(--cream);padding:4px 10px;border-radius:4px;"><strong>' + esc(k) + '</strong> $' + (v.revenueCents / 100).toFixed(2) + ' (' + v.orderCount + ' order' + (v.orderCount !== 1 ? 's' : '') + ')</span>';
+          return '<span style="background:var(--cream);padding:4px 10px;border-radius:4px;"><strong>' + esc(k) + '</strong> $' + (v.revenueCents / 100).toFixed(2) + ' (' + MastFormat.countNoun(v.orderCount, 'order') + ')</span>';
         }).join(' ');
     }
   }
@@ -37953,7 +37953,7 @@ function renderGallery() {
     });
     html += '<div style="margin-top:16px;padding:12px 16px;background:color-mix(in srgb, var(--amber, var(--amber)) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber, var(--amber)) 25%, transparent);border-radius:8px;">';
     html += '<div style="font-size:0.85rem;font-weight:600;color:var(--amber, var(--amber));margin-bottom:4px;">';
-    html += templateHiddenEntries.length + ' image' + (templateHiddenEntries.length !== 1 ? 's' : '') + ' hidden by template switch</div>';
+    html += MastFormat.countNoun(templateHiddenEntries.length, 'image') + ' hidden by template switch</div>';
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);">These images are from sections not supported by your current template. ';
     html += 'They will reappear if you switch to a template that supports their sections.</div>';
     html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:6px;">';
@@ -39058,7 +39058,7 @@ function renderCoupons() {
   if (bannerEl) {
     if (hasUrlFilter) {
       var bParts = [];
-      if (urlCodes.length) bParts.push(urlCodes.length + ' selected coupon' + (urlCodes.length === 1 ? '' : 's'));
+      if (urlCodes.length) bParts.push(MastFormat.countNoun(urlCodes.length, 'selected coupon'));
       if (urlStatus) bParts.push('status: ' + urlStatus);
       bannerEl.style.cssText = 'background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;';
       bannerEl.innerHTML =
@@ -40583,7 +40583,7 @@ function renderImportStatusBanner() {
       var actionNeeded = gaRows.filter(function(r) { return r.status === 'action-needed' || r.status === 'partial'; }).length;
       var summaryText = items.length > 0 ? items.join(', ') + ' ready for review.' : 'Content ready for review.';
       if (actionNeeded > 0) {
-        summaryText += ' ' + actionNeeded + ' item' + (actionNeeded !== 1 ? 's' : '') + ' need attention.';
+        summaryText += ' ' + MastFormat.countNoun(actionNeeded, 'item') + ' need attention.';
       }
 
       html = '<div style="background:var(--teal);color:white;padding:12px 16px;border-radius:8px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">';
@@ -41174,8 +41174,8 @@ function renderDashCardActiveSales() {
             '<div style="font-weight:500;font-size:0.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(sale.name || 'Untitled Sale') + '</div>' +
             '<div style="font-size:0.78rem;color:var(--warm-gray);display:flex;gap:10px;flex-wrap:wrap;">' +
               '<span>' + esc(discountText) + '</span>' +
-              '<span>' + productCount + ' product' + (productCount !== 1 ? 's' : '') + '</span>' +
-              '<span style="color:var(--teal,var(--teal));font-weight:500;">' + txCount + ' order' + (txCount !== 1 ? 's' : '') + '</span>' +
+              '<span>' + MastFormat.countNoun(productCount, 'product') + '</span>' +
+              '<span style="color:var(--teal,var(--teal));font-weight:500;">' + MastFormat.countNoun(txCount, 'order') + '</span>' +
             '</div>' +
           '</div>' +
           '<div style="font-size:0.78rem;color:var(--warm-gray-light);white-space:nowrap;margin-left:8px;">' + esc(endText) + '</div>' +
