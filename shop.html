@@ -599,8 +599,10 @@ window.TENANT_READY.then(function() {
   }
 
   function calcSalePrice(originalCents, discountType, discountValue) {
+    if (typeof discountValue !== 'number') return originalCents; // malformed — no discount
     if (discountType === 'percent') return Math.round(originalCents * (1 - discountValue / 100));
-    return Math.max(0, originalCents - discountValue); // fixed in cents
+    if (discountType === 'fixed') return Math.max(0, originalCents - discountValue); // cents
+    return originalCents; // unknown type (e.g. quantity-tier) — no flat per-unit price
   }
 
   // Badge resolver — mirrors product.html resolveBadge
@@ -661,12 +663,18 @@ window.TENANT_READY.then(function() {
       products.forEach(function(entry) {
         var pid = typeof entry === 'string' ? entry : entry.pid;
         if (!pid) return;
-        saleLookup[pid] = {
-          saleName: sale.name,
-          discountType: sale.discountType,
-          discountValue: sale.discountValue,
-          variants: typeof entry === 'object' && entry.variants ? entry.variants : null
-        };
+        // Only flat per-unit discounts (percent/fixed with a numeric value) yield a
+        // displayable sale price. quantity-tier (bulk) discounts have no single sale
+        // price — they apply at cart by quantity — so skip them here; otherwise the
+        // grid renders "$NaN" (calcSalePrice got an undefined discountValue).
+        if ((sale.discountType === 'percent' || sale.discountType === 'fixed') && typeof sale.discountValue === 'number') {
+          saleLookup[pid] = {
+            saleName: sale.name,
+            discountType: sale.discountType,
+            discountValue: sale.discountValue,
+            variants: typeof entry === 'object' && entry.variants ? entry.variants : null
+          };
+        }
       });
     });
   }

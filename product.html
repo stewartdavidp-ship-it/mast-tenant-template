@@ -1147,7 +1147,10 @@
         var products = sale.products || [];
         products.forEach(function(entry) {
           var entryPid = typeof entry === 'string' ? entry : entry.pid;
-          if (entryPid === pid) {
+          // Only flat per-unit discounts (percent/fixed with a numeric value) yield a
+          // displayable sale price. quantity-tier (bulk) discounts apply at cart by
+          // quantity and have no single sale price — skip so we don't render "$NaN".
+          if (entryPid === pid && (sale.discountType === 'percent' || sale.discountType === 'fixed') && typeof sale.discountValue === 'number') {
             _productSaleInfo = {
               saleName: sale.name,
               discountType: sale.discountType,
@@ -1160,9 +1163,10 @@
       window._productSaleInfo = _productSaleInfo;
 
       function _calcSalePrice(cents) {
-        if (!_productSaleInfo || !cents) return null;
+        if (!_productSaleInfo || !cents || typeof _productSaleInfo.discountValue !== 'number') return null;
         if (_productSaleInfo.discountType === 'percent') return Math.round(cents * (1 - _productSaleInfo.discountValue / 100));
-        return Math.max(0, cents - _productSaleInfo.discountValue);
+        if (_productSaleInfo.discountType === 'fixed') return Math.max(0, cents - _productSaleInfo.discountValue);
+        return null;
       }
       window._calcSalePrice = _calcSalePrice;
 
