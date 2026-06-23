@@ -514,9 +514,7 @@
       var text = emails.join(', ');
       var ok = function () { if (window.showToast) showToast('Copied ' + MastFormat.countNoun(emails.length, 'email')); };
       var fb = function () { if (typeof mastCopyFallback === 'function') mastCopyFallback('Copy emails', text); };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(ok).catch(fb);
-      } else { fb(); }
+      window.MastUI.copy(text, { okMsg: false, errMsg: false }).then(function (success) { if (success) ok(); else fb(); });
     },
     _cohortDownloadCsv: function () {
       var rows = PassesV2._cohortRows();

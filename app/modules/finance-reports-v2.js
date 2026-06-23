@@ -224,7 +224,7 @@
       if (!id) { showToast('Pick a customer first', true); return; }
       withFinance(function () { return bridge().mintStatementLink(id, 30); }).then(function (url) {
         V2.statementLink = url;
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).catch(function () {});
+        window.MastUI.copy(url, { okMsg: false, errMsg: false });
         render();
         var sel = document.getElementById('frV2StmtCustomer');
         if (sel) sel.value = id;
