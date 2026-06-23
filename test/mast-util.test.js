@@ -52,4 +52,28 @@ t('slugify: byte-identical to name.toLowerCase().replace(/[^a-z0-9]+/g,"-").repl
     assert.strictEqual(slugify(s), idiom(s)));
 });
 
+// ── clone ──────────────────────────────────────────────────────────────────
+const { clone } = require('../shared/mast-util.js');
+t('clone: deep copy is equal but not the same reference', () => {
+  const src = { a: 1, b: { c: [2, 3] } };
+  const out = clone(src);
+  assert.deepStrictEqual(out, src);
+  assert.notStrictEqual(out, src);
+  assert.notStrictEqual(out.b, src.b);
+  out.b.c.push(4);
+  assert.deepStrictEqual(src.b.c, [2, 3]); // original untouched
+});
+t('clone: primitives/null pass through (idiom-identical)', () => {
+  assert.strictEqual(clone(5), 5);
+  assert.strictEqual(clone('x'), 'x');
+  assert.strictEqual(clone(null), null);
+  assert.strictEqual(clone(true), true);
+});
+t('clone: undefined → undefined (null-safe; raw idiom would throw)', () =>
+  assert.strictEqual(clone(undefined), undefined));
+t('clone: byte-identical to JSON.parse(JSON.stringify(x)) for plain data', () => {
+  [{ a: 1 }, [1, { b: 2 }], { d: new Date(0).toISOString(), n: null }].forEach(x =>
+    assert.deepStrictEqual(clone(x), JSON.parse(JSON.stringify(x))));
+});
+
 console.log('\n' + pass + ' MastUtil assertions passed.');

@@ -790,7 +790,7 @@
       } catch (e) {}
       // Deep-ish copy of the theme doc (flat scalar fields — JSON-safe).
       var themeCopy = {};
-      try { themeCopy = JSON.parse(JSON.stringify(theme)); } catch (e) { themeCopy = theme || {}; }
+      try { themeCopy = MastUtil.clone(theme); } catch (e) { themeCopy = theme || {}; }
       return {
         capturedAt: new Date().toISOString(),
         theme: themeCopy,
@@ -852,7 +852,7 @@
       //    field the switch added that isn't in the snapshot.
       await MastDB.set('public/config/theme', snapTheme);
       // keep the module cache coherent for any later legacy render
-      try { themeConfig = JSON.parse(JSON.stringify(snapTheme)); } catch (e) { themeConfig = snapTheme; }
+      try { themeConfig = MastUtil.clone(snapTheme); } catch (e) { themeConfig = snapTheme; }
       showCustomColors = !themeConfig.colorSchemeId && !!themeConfig.primaryColor;
 
       // 2) reverse the gallery visibility flips.

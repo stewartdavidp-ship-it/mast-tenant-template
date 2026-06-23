@@ -966,7 +966,7 @@
       recipe.variants = recipe.variants || {};
       if (!recipe.variants[vid] || !recipe.variants[vid].lineItems) {
         recipe.variants[vid] = {
-          lineItems: JSON.parse(JSON.stringify(recipe.lineItems || {})),
+          lineItems: MastUtil.clone(recipe.lineItems || {}),
           laborMinutes: recipe.laborMinutes || 0,
           otherCost: recipe.otherCost || 0
         };
@@ -1483,7 +1483,7 @@
       var def = (bs.variants && bs.variants.default) || {};
       src = def.lineItems || bs.lineItems || {};
     }
-    slot.lineItems = JSON.parse(JSON.stringify(src));
+    slot.lineItems = MastUtil.clone(src);
     return slot.lineItems;
   }
 
@@ -1512,7 +1512,7 @@
     // and it handles non-serializable values gracefully). Fall back for older browsers.
     var cloneFn = (typeof structuredClone === 'function')
       ? function(v) { return structuredClone(v); }
-      : function(v) { return JSON.parse(JSON.stringify(v)); };
+      : function(v) { return MastUtil.clone(v); };
     pvs.forEach(function(pv) {
       var slot = bs.variants[pv.id] || {};
       if (slot.lineItems == null) {
@@ -2850,7 +2850,7 @@
     defineProductId = pid;
     defineMode = atype;
     // Deep-copy product slice so user can edit without committing
-    defineState = JSON.parse(JSON.stringify(product));
+    defineState = MastUtil.clone(product);
     if (!defineState.defineSpec) defineState.defineSpec = {};
     if (!defineState.defineSpec[atype]) {
       if (atype === 'var') {
@@ -4223,7 +4223,7 @@
       categories: Array.isArray(src.categories) ? src.categories.slice() : [],
       slug: (src.slug ? src.slug + '-v' + nextVersion : ''),
       acquisitionType: src.acquisitionType || 'build',
-      defineSpec: src.defineSpec ? JSON.parse(JSON.stringify(src.defineSpec)) : {},
+      defineSpec: src.defineSpec ? MastUtil.clone(src.defineSpec) : {},
       markupConfig: src.markupConfig ? Object.assign({}, src.markupConfig) : null,
       // Cost shape: copy as starting point — recalc happens on first edit
       materialCost: src.materialCost || 0,
@@ -4256,7 +4256,7 @@
       images: [],
       imageIds: [],
       variants: null,
-      options: src.options ? JSON.parse(JSON.stringify(src.options)) : [],
+      options: src.options ? MastUtil.clone(src.options) : [],
       // Listings + inventory deliberately NOT copied — fresh mappings expected
       externalRefs: null,
       channelBindings: null,
@@ -4884,7 +4884,7 @@
     }
 
     // Initialize builder state from recipe
-    builderState = JSON.parse(JSON.stringify(recipe));
+    builderState = MastUtil.clone(recipe);
     editingRecipeId = recipeId;
     piecesView = 'builder';
     // If product has variants, hydrate so each variant is an independent recipe slot
@@ -4910,7 +4910,7 @@
         status: 'draft'
       });
       editingRecipeId = recipe.recipeId;
-      builderState = JSON.parse(JSON.stringify(recipe));
+      builderState = MastUtil.clone(recipe);
       piecesView = 'builder';
       renderRecipeBuilder();
       MastAdmin.showToast('Recipe created for ' + productName);
@@ -5487,7 +5487,7 @@
       // If default slot is empty (legacy recipe being saved for the first time in new UI),
       // seed it from the recipe-root fields so calculate_price has something to work with.
       if (defaultSlot.lineItems === undefined && builderState.lineItems) {
-        defaultSlot.lineItems = JSON.parse(JSON.stringify(builderState.lineItems));
+        defaultSlot.lineItems = MastUtil.clone(builderState.lineItems);
       }
       if (defaultSlot.laborMinutes === undefined && builderState.laborMinutes != null) {
         defaultSlot.laborMinutes = builderState.laborMinutes;
@@ -5542,7 +5542,7 @@
       // Update builder state with recalculated values
       var fresh = await MastDB.recipes.get(editingRecipeId);
       if (fresh) {
-        builderState = JSON.parse(JSON.stringify(fresh));
+        builderState = MastUtil.clone(fresh);
       }
       renderRecipeBuilder();
       MastAdmin.showToast('Recipe saved and recalculated');
@@ -5559,7 +5559,7 @@
   async function duplicateRecipe(recipeId) {
     var src = recipesData[recipeId];
     if (!src) throw new Error('Recipe not found: ' + recipeId);
-    var clone = JSON.parse(JSON.stringify(src));
+    var clone = MastUtil.clone(src);
     // Reassign IDs and reset link fields
     delete clone.recipeId;
     clone.productId = '';
@@ -5614,7 +5614,7 @@
       MastAdmin.showToast('Duplicated as "' + clone.name + '"');
       // Open the clone for editing
       editingRecipeId = clone.recipeId;
-      builderState = JSON.parse(JSON.stringify(clone));
+      builderState = MastUtil.clone(clone);
       renderRecipeBuilder();
     } catch (err) {
       MastAdmin.showToast('Error: ' + err.message, true);
@@ -5653,7 +5653,7 @@
       await recalculateRecipe(editingRecipeId);
       var fresh = await MastDB.recipes.get(editingRecipeId);
       if (fresh) {
-        builderState = JSON.parse(JSON.stringify(fresh));
+        builderState = MastUtil.clone(fresh);
       }
       renderRecipeBuilder();
       MastAdmin.showToast('Recipe recalculated');
@@ -5672,7 +5672,7 @@
       // Refresh builder state
       var fresh = await MastDB.recipes.get(editingRecipeId);
       if (fresh) {
-        builderState = JSON.parse(JSON.stringify(fresh));
+        builderState = MastUtil.clone(fresh);
       }
       renderRecipeBuilder();
       MastAdmin.showToast(tier.charAt(0).toUpperCase() + tier.slice(1) + ' tier set as active price');
@@ -5966,7 +5966,7 @@
       await recalculateRecipe(editingRecipeId);
       var result = await publishRecipe(editingRecipeId);
       var fresh = await MastDB.recipes.get(editingRecipeId);
-      if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
+      if (fresh) builderState = MastUtil.clone(fresh);
       await loadVolatilePricingData();
       renderRecipeBuilder();
       MastAdmin.showToast('Staged v' + result.version + ' \u2014 open product to apply');
@@ -5994,7 +5994,7 @@
       await saveRecipeBuilder();
       var result = await publishRecipe(editingRecipeId);
       var fresh = await MastDB.recipes.get(editingRecipeId);
-      if (fresh) builderState = JSON.parse(JSON.stringify(fresh));
+      if (fresh) builderState = MastUtil.clone(fresh);
       renderRecipeBuilder();
       MastAdmin.showToast('Staged v' + result.version + ' \u2014 Wholesale $' + MastFormat.moneyRaw(result.prices.wholesale) + ', Direct $' + MastFormat.moneyRaw(result.prices.direct) + ', Retail $' + MastFormat.moneyRaw(result.prices.retail) + '. Open product to apply.');
     } catch (err) {
@@ -6381,7 +6381,7 @@
         if (pv.id === currentVariantId) return;
         if (!builderState.variants[pv.id]) builderState.variants[pv.id] = {};
         var dst = builderState.variants[pv.id];
-        dst.lineItems = JSON.parse(JSON.stringify(src.lineItems || {}));
+        dst.lineItems = MastUtil.clone(src.lineItems || {});
         dst.laborMinutes = src.laborMinutes || 0;
         dst.otherCost = src.otherCost || 0;
       });
@@ -7621,7 +7621,7 @@
       var pid = 'p' + Date.now().toString(36);
       var slug = MastUtil.slugify(name);
       var now = new Date().toISOString();
-      function clone(v) { return (v == null) ? v : JSON.parse(JSON.stringify(v)); }
+      function clone(v) { return (v == null) ? v : MastUtil.clone(v); }
       // Variants → new ids; preserve combo/price/sku/name/imageIndex only.
       var variants = (Array.isArray(src.variants) ? src.variants : []).map(function (v) {
         var nv = { id: 'v_' + MastDB.newKey('products'), combo: clone(v.combo) || {} };

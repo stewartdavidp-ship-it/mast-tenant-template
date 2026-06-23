@@ -36,7 +36,18 @@
       .replace(/^-+|-+$/g, '');
   }
 
-  var api = { genId: genId, slugify: slugify };
+  // clone(v) -> a JSON-safe deep copy: the centralized form of the ~22 inline
+  // `JSON.parse(JSON.stringify(x))` sites. SAME semantics as that idiom (strips
+  // functions/undefined, Dates serialize to ISO strings) so conversions are
+  // behavior-identical — but null/primitive-safe, where the raw idiom throws on
+  // `undefined`. For a structural clone that preserves Dates/Maps/cycles, use the
+  // platform structuredClone directly; this intentionally matches the lossy idiom.
+  function clone(v) {
+    if (v == null || typeof v !== 'object') return v;
+    return JSON.parse(JSON.stringify(v));
+  }
+
+  var api = { genId: genId, slugify: slugify, clone: clone };
 
   if (typeof window !== 'undefined') {
     window.MastUtil = api;
