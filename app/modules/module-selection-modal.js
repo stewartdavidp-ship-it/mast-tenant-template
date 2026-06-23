@@ -84,7 +84,7 @@ function renderModuleSelectionModalCards() {
     var ready = state.selected.length === state.limit;
     btn.disabled = !ready;
     btn.textContent = ready
-      ? 'Activate ' + state.selected.length + ' Module' + (state.selected.length !== 1 ? 's' : '')
+      ? 'Activate ' + MastFormat.countNoun(state.selected.length, 'Module')
       : 'Select ' + (state.limit - state.selected.length) + ' more';
     btn.style.opacity = ready ? '1' : '0.6';
   }

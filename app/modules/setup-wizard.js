@@ -3359,7 +3359,7 @@ function wizardUpdateModuleBtn() {
   var ready = _wizardSelectedModules.length === limit;
   btn.disabled = !ready;
   btn.textContent = ready
-    ? 'Activate ' + _wizardSelectedModules.length + ' Module' + (_wizardSelectedModules.length !== 1 ? 's' : '')
+    ? 'Activate ' + MastFormat.countNoun(_wizardSelectedModules.length, 'Module')
     : 'Select ' + (limit - _wizardSelectedModules.length) + ' more';
   btn.style.opacity = ready ? '1' : '0.6';
 }

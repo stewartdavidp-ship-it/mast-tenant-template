@@ -103,7 +103,7 @@ async function renderAddToMast() {
   // can't be shown from here — point the owner at the control that governs them.
   if (surfaceExcludedCount > 0) {
     html += '<div style="margin-top:6px;font-size:0.85rem;">';
-    html += '<strong style="color:var(--warn,rgba(179,117,47,1));">' + surfaceExcludedCount + '</strong> module' + (surfaceExcludedCount === 1 ? '' : 's') + ' excluded by your Engagement surface';
+    html += '<strong style="color:var(--warn,rgba(179,117,47,1));">' + surfaceExcludedCount + '</strong> ' + MastFormat.plural(surfaceExcludedCount, 'module') + ' excluded by your Engagement surface';
     if (canEditSettingsHdr) {
       html += ' &middot; <button type="button" data-amt-action="open-engagement-settings" style="background:transparent;border:0;color:var(--teal,rgba(42,124,111,1));font-weight:600;font-size:0.85rem;cursor:pointer;padding:0;text-decoration:underline;">Manage in Settings &rarr; Engagement</button>';
     }

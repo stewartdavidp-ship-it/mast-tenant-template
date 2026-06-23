@@ -1391,7 +1391,7 @@
                 html += '<span style="color:var(--warm-gray);">Counting recipients…</span>';
               } else {
                 var capped = preview > 25;
-                html += '<strong>' + esc(String(preview)) + '</strong> matching customer' + (preview === 1 ? '' : 's') +
+                html += '<strong>' + esc(String(preview)) + '</strong> ' + MastFormat.plural(preview, 'matching customer') +
                   (capped ? '<span style="color:var(--amber);"> — capped to 25 per send (re-run to continue)</span>' : '');
               }
               html += '</div>';
