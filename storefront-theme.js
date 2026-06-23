@@ -311,7 +311,23 @@
       dividers[d].style.display = 'none';
     }
 
-    // Reorder: append flow sections in order (moves them in DOM)
+    // Determine whether the flow sections are ALREADY in the target relative order
+    // in the DOM. If so, skip the appendChild moves below: re-appending a node that
+    // is already correctly placed still detaches/re-attaches it, which RESTARTS any
+    // CSS animations on it and its descendants. That is what made the hero logo
+    // (heroFadeIn) "double-paint" ~0.5s after load — this runs after the async
+    // sectionOrder fetch and re-appended sections that were already in order.
+    // Templates are authored in manifest order, so the common case is now a no-op.
+    var flowEls = [];
+    for (var fi = 0; fi < flow.length; fi++) { if (slotMap[flow[fi]]) flowEls.push(slotMap[flow[fi]]); }
+    var domOrder = [];
+    for (var ci = 0; ci < container.children.length; ci++) {
+      if (flowEls.indexOf(container.children[ci]) !== -1) domOrder.push(container.children[ci]);
+    }
+    var alreadyOrdered = domOrder.length === flowEls.length &&
+      domOrder.every(function (el, idx) { return el === flowEls[idx]; });
+
+    // Reorder: append flow sections in order (moves them in DOM) — only when needed
     for (var j = 0; j < flow.length; j++) {
       var slotEl = slotMap[flow[j]];
       if (slotEl) {
@@ -322,13 +338,13 @@
         if (slotEl.style.display === 'none' && !slotEl.hasAttribute('data-default-hidden')) {
           slotEl.style.display = '';
         }
-        container.appendChild(slotEl);
+        if (!alreadyOrdered) container.appendChild(slotEl);
       }
     }
 
     // Re-append any remaining content (footer, scripts) that should stay at the end
     var footer = container.querySelector('footer, .site-footer');
-    if (footer) container.appendChild(footer);
+    if (footer && !alreadyOrdered) container.appendChild(footer);
   }
 
   /**
