@@ -4212,13 +4212,10 @@
   window._passCohortCopyEmails = function() {
     var emails = _passCohortMatchedInstances().map(function(i) { return i.customerEmail; }).filter(Boolean);
     var text = emails.join(', ');
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(function() {
-        if (window.mastToast) window.mastToast('Copied ' + MastFormat.countNoun(emails.length, 'email'));
-      });
-    } else {
-      window.prompt('Copy emails:', text);
-    }
+    window.MastUI.copy(text, { okMsg: false, errMsg: false }).then(function (ok) {
+      if (ok) { if (window.mastToast) window.mastToast('Copied ' + MastFormat.countNoun(emails.length, 'email')); }
+      else window.prompt('Copy emails:', text);
+    });
   };
   window._passCohortDownloadCsv = function() {
     var rows = _passCohortMatchedInstances();

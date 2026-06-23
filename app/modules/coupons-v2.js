@@ -447,9 +447,7 @@
           try { document.execCommand('copy'); } catch (e) {}
           document.body.removeChild(ta); setStatus(okMsg);
         }
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(text).then(function () { setStatus(okMsg); }).catch(fallback);
-        } else { fallback(); }
+        window.MastUI.copy(text, { okMsg: false, errMsg: false }).then(function (cok) { if (cok) setStatus(okMsg); else fallback(); });
       }
 
       var copyLinkBtn = document.getElementById('cpV2ShareCopyLink');
@@ -467,10 +465,7 @@
         btn.disabled = true; btn.textContent = 'Generating…';
         MCC.renderToCanvas(couponObj, { showQr: true, source: 'share' }).then(function (canvas) {
           canvas.toBlob(function (blob) {
-            var a = document.createElement('a');
-            a.href = URL.createObjectURL(blob); a.download = 'coupon-' + code + '.png';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-            URL.revokeObjectURL(a.href);
+            MastExport.downloadBlob('coupon-' + code + '.png', blob);
             btn.disabled = false; btn.innerHTML = label; setStatus('Image downloaded!');
           }, 'image/png');
         }).catch(function (e) {
@@ -486,10 +481,7 @@
         btn.disabled = true; btn.textContent = 'Downloading…';
         var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(claimUrl);
         fetch(qrUrl).then(function (r) { return r.blob(); }).then(function (blob) {
-          var a = document.createElement('a');
-          a.href = URL.createObjectURL(blob); a.download = 'coupon-qr-' + code + '.png';
-          document.body.appendChild(a); a.click(); document.body.removeChild(a);
-          URL.revokeObjectURL(a.href);
+          MastExport.downloadBlob('coupon-qr-' + code + '.png', blob);
           btn.disabled = false; btn.innerHTML = label; setStatus('QR code downloaded!');
         }).catch(function (e) {
           console.error('[coupons-v2] share qr', e);

@@ -2227,13 +2227,14 @@
       if (!f) return;
       var val = (V2.ai.mapping[f.name] || {}).value || '';
       if (!val) return;
-      navigator.clipboard.writeText(val).then(function () {
+      window.MastUI.copy(val, { okMsg: false, errMsg: false }).then(function (ok) {
+        if (!ok) { toast('Copy failed — select manually', true); return; }
         V2.ai.copyIdx = idx + 1;
         toast('Copied: ' + f.name);
         rerenderAiStep();
         var next = document.getElementById('showV2AiField_' + (idx + 1));
         if (next) next.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }).catch(function () { toast('Copy failed — select manually', true); });
+      });
     },
     aiLaunchApp: function () {
       var s = aiShow();
@@ -2244,11 +2245,12 @@
       if (f) {
         var val = (V2.ai.mapping[f.name] || {}).value || '';
         if (val) {
-          navigator.clipboard.writeText(val).then(function () {
+          window.MastUI.copy(val, { okMsg: false, errMsg: false }).then(function (ok) {
+            if (!ok) return;
             V2.ai.copyIdx = Math.max(0, V2.ai.copyIdx) + 1;
             toast('Copied "' + f.name + '" — paste it in the form');
             rerenderAiStep();
-          }).catch(function () {});
+          });
         }
       }
       window.open(url, '_blank');
@@ -2258,10 +2260,7 @@
       fetch(url).then(function (resp) { return resp.blob(); }).then(function (blob) {
         var ext = blob.type.indexOf('png') >= 0 ? '.png' : '.jpg';
         var filename = String(slotName || 'photo').toLowerCase().replace(/[^a-z0-9]+/g, '-') + ext;
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob); a.download = filename;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
+        MastExport.downloadBlob(filename, blob);
         toast('Downloaded: ' + filename);
       }).catch(function () { window.open(url, '_blank'); toast('Opened in new tab — right-click to save'); });
     },

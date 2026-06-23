@@ -313,15 +313,10 @@
 
   window._qboCopyWebhookUrl = function() {
     try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(QBO_WEBHOOK_URL).then(function() {
-          toastOk('Webhook URL copied');
-        }, function() {
-          toastErr('Copy blocked — select the URL and copy manually');
-        });
-      } else {
-        toastErr('Clipboard API unavailable — select the URL and copy manually');
-      }
+      window.MastUI.copy(QBO_WEBHOOK_URL, { okMsg: false, errMsg: false }).then(function (ok) {
+        if (ok) toastOk('Webhook URL copied');
+        else toastErr('Copy blocked — select the URL and copy manually');
+      });
     } catch (err) {
       toastErr('Copy failed: ' + (err && err.message));
     }

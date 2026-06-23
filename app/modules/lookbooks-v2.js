@@ -519,8 +519,7 @@
       var el = document.getElementById('lbv2ShareUrl'); if (!el) return;
       try { el.select(); } catch (e) {}
       try {
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(el.value);
-        else document.execCommand('copy');
+        window.MastUI.copy(el.value, { okMsg: false });
         if (window.showToast) showToast('Copied to clipboard.');
       } catch (e2) { if (window.showToast) showToast('Copy failed — select and copy manually.', true); }
     },

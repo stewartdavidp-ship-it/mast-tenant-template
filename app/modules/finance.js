@@ -5749,13 +5749,9 @@ window.finPrintLoanReport = function() {
 
 window.finCopyMetrics = function() {
   if (!_loanReportMetrics) { showToast('Generate the report first', true); return; }
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(_loanReportMetrics).then(function() {
-      showToast('Key metrics copied to clipboard');
-    }).catch(function() { showToast('Copy failed — select text manually', true); });
-  } else {
-    showToast('Clipboard not available in this browser', true);
-  }
+  window.MastUI.copy(_loanReportMetrics, { okMsg: 'Key metrics copied to clipboard', errMsg: false }).then(function (ok) {
+    if (!ok) showToast('Copy failed — select text manually', true);
+  });
 };
 
 window.finSetReportYear = function(year) { _reportYear = parseInt(year); };

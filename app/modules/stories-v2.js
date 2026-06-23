@@ -598,7 +598,7 @@
       }).catch(function (e) { console.error('[stories-v2] unpublish', e); if (window.showToast) showToast('Error.', true); });
     },
     qrPrint: function (dataUrl, name) { if (typeof window.printStoryQR === 'function') window.printStoryQR(dataUrl, name); },
-    qrCopy: function (url) { if (typeof window.copyStoryQRUrl === 'function') window.copyStoryQRUrl(url); else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { if (window.showToast) showToast('URL copied'); }); },
+    qrCopy: function (url) { if (typeof window.copyStoryQRUrl === 'function') window.copyStoryQRUrl(url); else window.MastUI.copy(url, { okMsg: 'URL copied' }); },
     qrCard: function (pid, name, url) { if (typeof window.printProductCard === 'function') window.printProductCard(pid, name, url); else if (window.showToast) showToast('Print Card unavailable', true); },
     // Create a story NATIVELY (title → draft skeleton); the write delegates to
     // StoriesBridge.create. Photos / captions / publishing are then added in the

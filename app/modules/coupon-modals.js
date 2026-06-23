@@ -78,11 +78,7 @@ function openCouponShareModal(code) {
     btn.disabled = true; btn.textContent = 'Generating...';
     window.MastCouponCard.renderToCanvas(couponObj, { showQr: true, source: 'share' }).then(function(canvas) {
       canvas.toBlob(function(blob) {
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'coupon-' + code + '.png';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
+        MastExport.downloadBlob('coupon-' + code + '.png', blob);
         btn.disabled = false; btn.textContent = '\uD83D\uDDBC\uFE0F Download Coupon Image (with QR)';
         showCsmStatus('Image downloaded!');
       }, 'image/png');
@@ -95,11 +91,7 @@ function openCouponShareModal(code) {
     btn.disabled = true; btn.textContent = 'Downloading...';
     var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(claimUrl);
     fetch(qrUrl).then(function(r) { return r.blob(); }).then(function(blob) {
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'coupon-qr-' + code + '.png';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      URL.revokeObjectURL(a.href);
+      MastExport.downloadBlob('coupon-qr-' + code + '.png', blob);
       btn.disabled = false; btn.textContent = '\uD83D\uDCF1 Download QR Code';
       showCsmStatus('QR code downloaded!');
     }).catch(function() {
