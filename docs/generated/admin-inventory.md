@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **41,410** lines
-- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,858** lines combined
+- **Core shell:** `app/index.html` — **41,380** lines
+- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,888** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -124,7 +124,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/sales.js` | 3,424 | pos, receipts, events, salesEvents, terms |
 | `modules/sessions-v2.js` | 706 | sessions-v2 |
 | `modules/settings-panels.js` | 645 | — |
-| `modules/settings-tabs.js` | 798 | — |
+| `modules/settings-tabs.js` | 789 | — |
 | `modules/setup-wizard.js` | 4,869 | — |
 | `modules/shopify-harness.js` | 440 | — |
 | `modules/shows-v2.js` | 3,097 | shows-v2, show-find-v2, show-apply-v2, show-prep-v2, show-execute-v2, show-history-v2, show, show-find, show-apply, show-prep, show-execute, show-history |
@@ -148,7 +148,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/website-core.js` | 943 | — |
 | `modules/website-import.js` | 1,750 | website-import |
 | `modules/website-media.js` | 506 | — |
-| `modules/website-v2.js` | 4,425 | website-v2, website, homepage, brand |
+| `modules/website-v2.js` | 4,464 | website-v2, website, homepage, brand |
 | `modules/wholesale-v2.js` | 862 | wholesale-v2, wholesale |
 | `modules/workflows/commissions.workflow.js` | 266 | — |
 | `modules/workflows/jobs.workflow.js` | 118 | — |

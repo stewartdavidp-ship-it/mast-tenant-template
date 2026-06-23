@@ -38,7 +38,8 @@ window.switchIntegrationsTab = switchIntegrationsTab;
 
 // ── Settings → Storefront → General: tabbed view (canonical view-tabs pattern).
 // Each item in General is its own tab so the page can't become a long undifferentiated list.
-var GENERAL_TABS = ['businessSetup','githubPat','siteVisibility','activePages','featurePages','homepageEvents','publicFeedback'];
+// siteVisibility + homepageEvents relocated to My Website › Visibility & pages (PR3).
+var GENERAL_TABS = ['businessSetup','githubPat','activePages','featurePages','publicFeedback'];
 
 function switchGeneralTab(tab) {
   window.__generalActiveTab = tab;
@@ -106,11 +107,7 @@ function refreshGeneralTabStatus() {
   setDot('githubPat', hasToken ? 'ok' : 'missing');
   setPill('githubPat', hasToken ? 'ok' : 'missing', hasToken ? 'Configured' : 'Not configured');
 
-  // siteVisibility — reflect current value.
-  var pubEl = document.getElementById('visibilityPublic');
-  var isPublic = !!(pubEl && pubEl.checked);
-  setDot('siteVisibility', 'ok');
-  setPill('siteVisibility', 'ok', isPublic ? 'Public' : 'Private');
+  // siteVisibility + homepageEvents moved to My Website › Visibility & pages (PR3).
 
   // activePages — informational.
   setDot('activePages', 'info');
@@ -120,12 +117,6 @@ function refreshGeneralTabStatus() {
   var fpTotal = document.querySelectorAll('#featurePageToggles input[type="checkbox"]').length;
   setDot('featurePages', fpChecked > 0 ? 'ok' : 'partial');
   setPill('featurePages', fpChecked > 0 ? 'ok' : 'partial', fpTotal ? (fpChecked + ' of ' + fpTotal + ' enabled') : 'Pick pages');
-
-  // homepageEvents — value pill.
-  var evInput = document.getElementById('eventsCountInput');
-  var evVal = evInput && evInput.value ? parseInt(evInput.value, 10) : 3;
-  setDot('homepageEvents', 'ok');
-  setPill('homepageEvents', 'ok', evVal + (evVal === 1 ? ' event' : ' events'));
 
   // Boolean toggles — dot amber/none, pill On/Off.
   function syncToggle(tabKey, inputId) {
