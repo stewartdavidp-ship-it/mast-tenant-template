@@ -51,24 +51,39 @@
   // The 4 builder cards, in scroll order. Each card body mounts into a stable
   // element id (CARD_MOUNTS below) that the PR3–PR6 builders fill. Keep ids stable
   // — later PRs target them.
+  // Cards are grouped into AREAS (sub-nav panes) below — the builder renders one
+  // area at a time, not one long scroll. Each card has a render mount; AREAS maps
+  // area → ordered card keys.
   var CARDS = [
     { key: 'lookfeel', title: 'Look & feel', mount: 'wv2LookFeelBody',
       blurb: 'Template, colors, and fonts for your whole site.', pr: 'this builder' },
-    { key: 'words', title: 'Your words & pictures', mount: 'wv2WordsBody',
-      blurb: 'Homepage sections — your headline, story, photos, and contact info.', pr: 'this builder' },
-    { key: 'shop', title: 'Your shop', mount: 'wv2ShopBody',
-      blurb: 'How your products and storefront appear to customers.', pr: 'this builder' },
-    { key: 'live', title: 'See it live & share', mount: 'wv2LiveBody',
-      blurb: 'Preview your site, publish changes, and share the link.', pr: 'this builder' },
-    // Relocated from Settings (PR2): storefront-facing config now lives here.
+    { key: 'words', title: 'Homepage blocks', mount: 'wv2WordsBody',
+      blurb: 'The blocks that appear on your homepage — headline, story, photos, contact. Toggle “show on homepage” per block. To turn a whole page on/off, use Pages.', pr: 'this builder' },
+    { key: 'pages', title: 'Storefront pages', mount: 'wv2PagesBody',
+      blurb: 'Which pages your storefront has — shop, blog, schedule, classes, wholesale, commissions, gift cards, and the My Wallet page.', pr: 'this builder' },
+    { key: 'shop', title: 'Categories & import', mount: 'wv2ShopBody',
+      blurb: 'Product categories (the shop filter pills) and importing your catalog.', pr: 'this builder' },
+    { key: 'live', title: 'Live preview', mount: 'wv2LiveBody',
+      blurb: 'Preview your site and share the link. Every change here is already live.', pr: 'this builder' },
     { key: 'display', title: 'Product page display', mount: 'wv2DisplayBody',
       blurb: 'Lead time, commission CTA, badge labels, and legal links on product pages.', pr: 'this builder' },
     { key: 'domains', title: 'Domains', mount: 'wv2DomainsBody',
       blurb: 'Connect a custom domain you own to your storefront.', pr: 'this builder' },
-    { key: 'visibility', title: 'Visibility & pages', mount: 'wv2VisibilityBody',
+    { key: 'visibility', title: 'Visibility', mount: 'wv2VisibilityBody',
       blurb: 'Search-engine visibility and how many events show on your homepage.', pr: 'this builder' },
     { key: 'wallet', title: 'Wallet & loyalty', mount: 'wv2WalletBody',
-      blurb: 'Gift cards, your loyalty program, and the My Wallet page.', pr: 'this builder' }
+      blurb: 'Gift cards and your loyalty program. (The My Wallet page toggle lives under Pages.)', pr: 'this builder' }
+  ];
+
+  // Sub-nav areas — the builder shows ONE area at a time (replaces the long
+  // single scroll). Each area lists the card keys (above) it contains, in order.
+  var AREAS = [
+    { key: 'design',   label: 'Design',              cards: ['lookfeel'] },
+    { key: 'homepage', label: 'Homepage',            cards: ['words'] },
+    { key: 'pages',    label: 'Pages',               cards: ['pages'] },
+    { key: 'shop',     label: 'Shop & products',     cards: ['shop', 'display'] },
+    { key: 'programs', label: 'Programs & settings', cards: ['wallet', 'domains', 'visibility'] },
+    { key: 'preview',  label: 'Preview',             cards: ['live'] }
   ];
 
   // Module config state — cold-safe defaults so the header renders before load().
@@ -1520,7 +1535,8 @@
     { id: 'classes',    label: 'Classes',     def: false, hint: 'Bookable classes. Needs the booking module.' },
     { id: 'wholesale',  label: 'Wholesale',   def: false, hint: 'B2B catalog. Needs wholesale pricing on products.' },
     { id: 'commission', label: 'Commissions', def: false, hint: 'Let visitors request custom commission work.' },
-    { id: 'giftcards',  label: 'Gift Cards',  def: false, hint: 'Sell gift cards. Needs gift cards enabled in Wallet.' }
+    { id: 'giftcards',  label: 'Gift Cards',  def: false, hint: 'Sell gift cards. Needs gift cards enabled in Wallet & loyalty.' },
+    { id: 'wallet',     label: 'My Wallet page', def: false, hint: 'Customer page for credits, gift cards & loyalty points (requires sign-in).' }
   ];
 
   function capabilityEnabled(id, def) {
@@ -1557,13 +1573,22 @@
     var listHtml = cats.length
       ? '<div class="wv2-catlist">' + cats.map(function (c, i) { return shopCatRow(c, i, cats.length); }).join('') + '</div>'
       : '<div class="mu-sub" style="padding:6px 0;">No categories yet. Add your first product category below — it becomes a filter pill on your shop.</div>';
-    return capabilitiesBlockHtml() +
-      '<div class="wv2-sub"><div class="wv2-sub-h">Shop categories</div>' +
+    // Capabilities moved to the Pages area (mountPages) — this card is now just
+    // categories + import.
+    return '<div class="wv2-sub"><div class="wv2-sub-h">Shop categories</div>' +
         '<div class="mu-sub" style="margin-bottom:8px;">Categories become the filter pills customers tap on your shop page. Drag order is display order.</div>' +
         listHtml + shopAddHtml() +
       '</div>' +
       shopSuggestionsHtml() +
       '<div class="wv2-sub">' + shopImportDoorHtml() + '</div>';
+  }
+
+  // Pages area — the storefront capability set (which pages/nav links exist).
+  // Toggles write public/config/nav/sections via WebsiteV2.toggleCapability.
+  function mountPages() {
+    var host = document.getElementById('wv2PagesBody'); if (!host) return;
+    if (!canEdit()) { host.innerHTML = '<div class="mu-sub">You do not have permission to edit your storefront pages.</div>'; return; }
+    host.innerHTML = capabilitiesBlockHtml();
   }
 
   // Mount Card 3 into its scaffold body (wv2ShopBody) — replaces the PR2
@@ -1714,6 +1739,12 @@
         'padding:5px 11px;border-radius:999px;background:color-mix(in srgb,var(--success) 14%,transparent);}' +
       '.wv2-pip-dot{width:8px;height:8px;border-radius:50%;background:var(--success);box-shadow:0 0 0 3px color-mix(in srgb,var(--success) 22%,transparent);}' +
       '.wv2-stack{display:flex;flex-direction:column;gap:16px;}' +
+      // Sub-nav (area tabs) — replaces the long single scroll.
+      '.wv2-subnav{display:flex;flex-wrap:wrap;gap:4px;margin:14px 0 18px;border-bottom:1px solid var(--border);padding-bottom:0;}' +
+      '.wv2-subnav-item{appearance:none;background:none;border:none;border-bottom:2px solid transparent;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.9rem;font-weight:600;padding:8px 14px;margin-bottom:-1px;border-radius:6px 6px 0 0;}' +
+      '.wv2-subnav-item:hover{color:var(--text-primary);}' +
+      '.wv2-subnav-item.on{color:var(--teal);border-bottom-color:var(--teal);}' +
+      '.wv2-pane{display:block;}' +
       '.wv2-coming{font-style:italic;opacity:0.75;padding:6px 0;}' +
       // instant-apply pip "Saving…" state (the dot pulses amber while writing)
       '.wv2-pip.saving{background:color-mix(in srgb,var(--amber,var(--teal)) 14%,transparent);color:var(--text-secondary,var(--warm-gray));}' +
@@ -1896,27 +1927,46 @@
     (document.head || document.documentElement).appendChild(st);
   }
 
+  // Mount dispatch — fill one card's body once its scaffold is in the DOM.
+  function mountCard(key) {
+    try {
+      if (key === 'lookfeel') mountLookFeel();
+      else if (key === 'words') mountWords();
+      else if (key === 'pages') mountPages();
+      else if (key === 'shop') mountShop();
+      else if (key === 'display') mountProductDisplay();
+      else if (key === 'wallet') mountWallet();
+      else if (key === 'domains') mountDomains();
+      else if (key === 'visibility') mountVisibility();
+      else if (key === 'live') mountLive();
+    } catch (e) { /* a single card must never break the pane */ }
+  }
+  function currentArea() {
+    return AREAS.filter(function (a) { return a.key === V2.area; })[0] || AREAS[0];
+  }
+  // Render the active area's cards into the pane, then mount each.
+  function renderPane() {
+    var pane = document.getElementById('wv2Pane'); if (!pane) return;
+    var area = currentArea();
+    pane.innerHTML = '<div class="wv2-stack">' + area.cards.map(function (k) {
+      var c = CARDS.filter(function (x) { return x.key === k; })[0];
+      return c ? cardHtml(c) : '';
+    }).join('') + '</div>';
+    area.cards.forEach(mountCard);
+  }
   function render() {
     var tab = ensureTab();
     ensureStyles();
-    var header = headerHtml();
-    // 4 cards in a single vertical scroll (NOT tabs — U.tabs is intentionally not
-    // used; this is one scrolling page).
-    var stack = '<div class="wv2-stack">' + CARDS.map(cardHtml).join('') + '</div>';
+    if (!V2.area || !AREAS.some(function (a) { return a.key === V2.area; })) V2.area = 'design';
+    // Sub-nav (one area at a time) — replaces the old single mega-scroll.
+    var nav = '<div class="wv2-subnav" role="tablist">' + AREAS.map(function (a) {
+      var on = (a.key === V2.area);
+      return '<button type="button" role="tab" class="wv2-subnav-item' + (on ? ' on' : '') + '" aria-selected="' + on + '" onclick="WebsiteV2.setArea(\'' + a.key + '\')">' + esc(a.label) + '</button>';
+    }).join('') + '</div>';
     tab.innerHTML =
-      U.pageHeader({ title: 'Your website', subtitle: 'Everything your visitors see — in one place.' }) +
-      header + stack;
-    // Fill Card 1 (Look & feel) + Card 2 (Your words & pictures) + Card 3 (Your
-    // shop) + Card 4 (See it live & share) into their mounts now that the scaffold
-    // is in the DOM.
-    mountLookFeel();
-    mountWords();
-    mountShop();
-    mountLive();
-    mountProductDisplay();
-    mountDomains();
-    mountVisibility();
-    mountWallet();
+      U.pageHeader({ title: 'Your website', subtitle: 'Everything your visitors see — organized by area.' }) +
+      headerHtml() + nav + '<div id="wv2Pane" class="wv2-pane"></div>';
+    renderPane();
   }
 
   // ── Card 5 · Product page display (relocated from Settings, PR2) ────
@@ -2057,7 +2107,6 @@
   }
   function walletControlsHtml(c) {
     c = c || {};
-    var walletPageOn = !!(V2.nav && V2.nav.wallet && V2.nav.wallet.enabled);
     return '<div class="wv2-sub"><div class="wv2-sub-h">Gift cards</div>' +
         '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;"><input type="checkbox" id="wcGiftEnabled"' + (c.giftCardsEnabled ? ' checked' : '') + '><span style="font-size:0.85rem;">Sell gift cards</span></label>' +
         '<div class="form-group"><label style="font-size:0.78rem;">Denominations (dollars, comma-separated)</label><input type="text" id="wcGiftDenoms" value="' + esc(dollarsList(c.giftCardDenominations)) + '" placeholder="25, 50, 75, 100" style="font-size:0.85rem;"></div>' +
@@ -2080,10 +2129,6 @@
         '<div class="form-group"><label style="font-size:0.78rem;">Excluded categories (comma-separated, optional)</label><input type="text" id="wcLoyaltyExclude" value="' + esc(Array.isArray(c.loyaltyExclusions) ? c.loyaltyExclusions.join(', ') : '') + '" style="font-size:0.85rem;"></div>' +
         '<button class="btn btn-primary" onclick="WebsiteV2.saveLoyalty()">Save loyalty</button>' +
         '<div id="wcLoyaltyStatus" style="margin-top:8px;font-size:0.85rem;"></div>' +
-      '</div>' +
-      '<div class="wv2-sub"><div class="wv2-sub-h">My Wallet page</div>' +
-        '<div class="mu-sub" style="margin-bottom:8px;">Show the storefront My Wallet page where customers see their credits, gift cards, and points.</div>' +
-        '<label class="toggle-switch" onclick="event.stopPropagation();"><input type="checkbox"' + (walletPageOn ? ' checked' : '') + ' onchange="WebsiteV2.toggleCapability(\'wallet\', this.checked)"><span class="toggle-slider"></span></label>' +
       '</div>';
   }
   function mountWallet() {
@@ -2101,9 +2146,17 @@
   window.WebsiteV2 = {
     refresh: function () { render(); },
 
-    // Card 3 · Storefront pages & features toggle → public/config/nav/sections/{id}/enabled
-    // via the shared hpToggleSection writer (handles the webPresence mirror +
-    // markUnpublished). Updates V2.nav optimistically then re-mounts the shop card.
+    // Sub-nav: switch which area (pane) is shown. Re-renders the whole tab so the
+    // nav active state + pane stay in sync.
+    setArea: function (key) {
+      if (!AREAS.some(function (a) { return a.key === key; })) return;
+      V2.area = key;
+      render();
+    },
+
+    // Pages area · capability toggle → public/config/nav/sections/{id}/enabled via
+    // the shared hpToggleSection writer (handles the webPresence mirror +
+    // markUnpublished). Updates V2.nav optimistically then repaints the active pane.
     toggleCapability: async function (id, enabled) {
       if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
       if (!window.hpToggleSection) { if (window.showToast) showToast('Site editor still loading — try again', true); return; }
@@ -2115,7 +2168,7 @@
       } catch (e) {
         if (window.showToast) showToast('Could not update: ' + (e && e.message || e), true);
       }
-      mountShop();
+      renderPane();
     },
 
     // Card 8 · Gift-card config → admin/walletConfig (MastDB.walletConfig.update —
