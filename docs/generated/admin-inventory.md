@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **45,192** lines
-- **Feature modules:** **140** files in `app/modules/` (**91** routed), **139,024** lines combined
+- **Core shell:** `app/index.html` — **44,475** lines
+- **Feature modules:** **141** files in `app/modules/` (**91** routed), **139,752** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -73,6 +73,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance-statements-v2.js` | 470 | financials-v2, finance-revenue-v2, finance-pl-v2, finance-cash-flow-v2, finance-tax-v2 |
 | `modules/finance.js` | 8,696 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/forecast-job-modal.js` | 116 | — |
+| `modules/forecast.js` | 728 | — |
 | `modules/fulfillment-v2.js` | 614 | pack-v2, ship-v2 |
 | `modules/fulfillment.js` | 2,154 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 657 | galleries-v2 |
