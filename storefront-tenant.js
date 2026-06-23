@@ -353,26 +353,18 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       });
   }
 
-  // Use early prefetch from inline <head> script if available.
-  // This fetch started during HTML parsing — before this script downloaded.
-  var tenantPromise;
-  if (window.__earlyTenant) {
-    tenantPromise = window.__earlyTenant.then(function(result) {
-      if (!result) {
-        // Early fetch hit tenantsByDomain and found nothing (e.g. web.app URL) — try pattern fallback.
-        if (webAppMatch) return resolveWebAppTenant(webAppMatch[1]);
-        throw new Error('No tenant found for hostname: ' + hostname);
-      }
-      return result;
-    });
-  } else if (webAppMatch) {
-    // Direct resolution for mast-{tenantId}.web.app — no domain registry lookup needed.
-    tenantPromise = resolveWebAppTenant(webAppMatch[1]);
-  } else {
-    // Fallback: fetch directly (pages without the inline prefetch)
+  // Direct domain -> tenant resolution against the per-pod platform project.
+  // Reads MAST_POD_PLATFORM_PROJECT at call time so it targets the correct pod
+  // even if this file (or the inline <head> prefetch) parsed before pod-config.js
+  // set it. The inline prefetch defaults to 'mast-platform-prod' when it runs
+  // before pod-config.js — which 404s for tenants homed on a regional pod
+  // (east-1/west-1) and produced a storefront-wide "Shop Not Found" on cold /
+  // deep-link loads of every page except the homepage.
+  function directResolveTenant() {
+    var projId = (typeof window !== 'undefined' && window.MAST_POD_PLATFORM_PROJECT) || PLATFORM_PROJECT_ID;
+    var base = 'https://firestore.googleapis.com/v1/projects/' + projId + '/databases/(default)/documents';
     var escapedHost = escapeHostname(hostname);
-    var domainUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenantsByDomain/' + escapedHost;
-    tenantPromise = fetch(domainUrl)
+    return fetch(base + '/platform_tenantsByDomain/' + escapedHost)
       .then(function(resp) {
         if (!resp.ok) throw new Error('Domain lookup failed: ' + resp.status);
         return resp.json();
@@ -381,8 +373,7 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
         var fields = doc && doc.fields ? unwrapFirestoreFields(doc.fields) : null;
         var tenantId = fields ? unwrapContainerDoc(fields) : null;
         if (typeof tenantId !== 'string' || !tenantId) throw new Error('No tenant found for hostname: ' + hostname);
-        var configUrl = PLATFORM_FIRESTORE_BASE + '/platform_tenantPublicConfigs/' + tenantId;
-        return fetch(configUrl).then(function(resp) {
+        return fetch(base + '/platform_tenantPublicConfigs/' + tenantId).then(function(resp) {
           if (!resp.ok) throw new Error('Config lookup failed: ' + resp.status);
           return resp.json();
         }).then(function(configDoc) {
@@ -391,6 +382,30 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
           return { tenantId: tenantId, publicConfig: publicConfig };
         });
       });
+  }
+
+  // Use early prefetch from inline <head> script if available.
+  // This fetch started during HTML parsing — before this script downloaded.
+  var tenantPromise;
+  if (window.__earlyTenant) {
+    tenantPromise = window.__earlyTenant.then(function(result) {
+      // The early prefetch returns null on a miss — which INCLUDES the case where
+      // it queried the wrong (default) platform project because it ran before
+      // pod-config.js set MAST_POD_PLATFORM_PROJECT. Retry directly against the
+      // correct pod, then fall back to the web.app pattern.
+      if (result) return result;
+      if (webAppMatch) return resolveWebAppTenant(webAppMatch[1]);
+      return directResolveTenant();
+    }).catch(function() {
+      if (webAppMatch) return resolveWebAppTenant(webAppMatch[1]);
+      return directResolveTenant();
+    });
+  } else if (webAppMatch) {
+    // Direct resolution for mast-{tenantId}.web.app — no domain registry lookup needed.
+    tenantPromise = resolveWebAppTenant(webAppMatch[1]);
+  } else {
+    // Fallback: fetch directly (pages without the inline prefetch)
+    tenantPromise = directResolveTenant();
   }
 
   tenantPromise
