@@ -255,6 +255,22 @@
     return n > 0 ? ('in ' + n + ' days') : (Math.abs(n) + ' days ago');
   }
 
+  // ── Pluralization — the centralized replacement for the inline
+  // `word + (n === 1 ? '' : 's')` ternary copy-pasted hundreds of times. Default
+  // plural appends 's'; pass an explicit `many` for irregulars ("gallery" →
+  // "galleries"). Only n === 1 is singular (0 and negatives take the plural, per
+  // English: "0 items").
+  //
+  //   plural(n, singular[, many])  -> just the NOUN ("collision" / "collisions")
+  //   countNoun(n, singular[, many]) -> "<n> NOUN"  ("3 collisions", "1 gallery")
+  function plural(n, singular, many) {
+    if (Number(n) === 1) return singular;
+    return (many != null) ? many : (singular + 's');
+  }
+  function countNoun(n, singular, many) {
+    return n + ' ' + plural(n, singular, many);
+  }
+
   var api = {
     money: money,
     moneyRaw: moneyRaw,
@@ -272,6 +288,8 @@
     addDays: addDays,
     relative: relative,
     MS_PER_DAY: MS_PER_DAY,
+    plural: plural,
+    countNoun: countNoun,
     coerceDate: coerceDate
   };
 

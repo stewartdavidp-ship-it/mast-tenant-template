@@ -257,4 +257,22 @@ t('relative: null/garbage → ""', () => {
   assert.strictEqual(F.relative('xyz'), '');
 });
 
+// ── plural / countNoun — replace the inline `word + (n===1?'':'s')` ternary.
+t('plural: 1 → singular; 0/2/negative → +s', () => {
+  assert.strictEqual(F.plural(1, 'collision'), 'collision');
+  assert.strictEqual(F.plural(2, 'collision'), 'collisions');
+  assert.strictEqual(F.plural(0, 'collision'), 'collisions');
+  assert.strictEqual(F.plural(-1, 'collision'), 'collisions');
+});
+t('plural: explicit irregular many form ("gallery" → "galleries")', () => {
+  assert.strictEqual(F.plural(1, 'gallery', 'galleries'), 'gallery');
+  assert.strictEqual(F.plural(3, 'gallery', 'galleries'), 'galleries');
+});
+t('countNoun: "<n> noun" with correct form', () => {
+  assert.strictEqual(F.countNoun(1, 'module'), '1 module');
+  assert.strictEqual(F.countNoun(5, 'module'), '5 modules');
+  assert.strictEqual(F.countNoun(0, 'override'), '0 overrides');
+  assert.strictEqual(F.countNoun(2, 'entry', 'entries'), '2 entries');
+});
+
 console.log(`\n${pass} mast-format assertions passed.`);
