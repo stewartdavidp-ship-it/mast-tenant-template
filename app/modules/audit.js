@@ -131,7 +131,7 @@
     var hr  = Math.round(min / 60);
     if (hr  < 24)   return hr  + ' h ago';
     var day = Math.round(hr / 24);
-    if (day < 30)   return day + ' day' + (day === 1 ? '' : 's') + ' ago';
+    if (day < 30)   return MastFormat.countNoun(day, 'day') + ' ago';
     var mo = Math.round(day / 30);
     if (mo < 12)    return mo + ' mo ago';
     return Math.round(mo / 12) + ' yr ago';
@@ -143,8 +143,8 @@
     if (hours < 1) return '< 1 hour';
     var days = Math.floor(hours / 24);
     var rem  = hours - (days * 24);
-    if (days < 1) return hours + ' hour' + (hours === 1 ? '' : 's');
-    return days + ' day' + (days === 1 ? '' : 's') + ', ' + rem + ' hour' + (rem === 1 ? '' : 's');
+    if (days < 1) return MastFormat.countNoun(hours, 'hour');
+    return MastFormat.countNoun(days, 'day') + ', ' + MastFormat.countNoun(rem, 'hour');
   }
 
   // Map a violation to category. Prefers explicit `category` field; falls
@@ -656,7 +656,7 @@
       '    </div>',
             (inv   ? '<div>🟡 ' + inv   + ' possible inventory mismatch'  + (inv   === 1 ? '' : 'es') + '</div>' : ''),
             (price ? '<div>🟡 ' + price + ' possible price mismatch'      + (price === 1 ? '' : 'es') + '</div>' : ''),
-            (other ? '<div>🟡 ' + other + ' possible cross-channel issue' + (other === 1 ? '' : 's')  + '</div>' : ''),
+            (other ? '<div>🟡 ' + MastFormat.countNoun(other, 'possible cross-channel issue')  + '</div>' : ''),
             (!inv && !price && !other ? '<div style="color:var(--warm-gray);">No provisional drift detected yet.</div>' : ''),
       '  </div>',
       '</div>'
@@ -694,7 +694,7 @@
     var total = pickedQ.length + pickedH.length + pickedC.length;
     var heading = total === 0
       ? 'You’re all caught up.'
-      : total + ' thing' + (total === 1 ? '' : 's') + ' to consider this week';
+      : MastFormat.countNoun(total, 'thing') + ' to consider this week';
 
     var bucketCol = function(label, icon, groups, bucketId) {
       var inner = '';
@@ -1108,7 +1108,7 @@
       '  <button type="button" class="btn btn-secondary" data-audit-action="back-home" style="font-size:0.85rem;margin-bottom:12px;">&larr; Audit</button>',
       '  <h2 style="margin:0 0 4px;">' + esc(CATEGORY_LABEL[cat]) + '</h2>',
       '  <div style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:16px;">',
-            ruleGroups.length + ' active rule' + (ruleGroups.length === 1 ? '' : 's'),
+            MastFormat.countNoun(ruleGroups.length, 'active rule'),
       '  </div>',
       '</div>',
       '<div style="padding:0 24px;">' + rows + '</div>',
@@ -1131,7 +1131,7 @@
       '  <div style="flex:1;min-width:0;">',
       '    <div style="font-weight:500;color:var(--text-primary);font-size:0.9rem;">' + esc(title) + '</div>',
       '    <div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">',
-      '      Rule ' + esc(g.ruleId) + ' &middot; ' + n + ' product' + (n === 1 ? '' : 's') + ' affected',
+      '      Rule ' + esc(g.ruleId) + ' &middot; ' + MastFormat.countNoun(n, 'product') + ' affected',
       '    </div>',
       '  </div>',
       '  <button type="button" class="btn btn-secondary" data-audit-action="open-rule-pop" ',
@@ -1207,7 +1207,7 @@
       var pid = g.productId;
       var pTitle = getProductTitle(pid);
       var sub = g.violations.length > 1
-        ? g.violations.length + ' instance' + (g.violations.length === 1 ? '' : 's')
+        ? MastFormat.countNoun(g.violations.length, 'instance')
         : '';
       rows += [
         '<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid var(--cream-dark);">',
@@ -1226,7 +1226,7 @@
       '  <button type="button" class="btn btn-secondary" data-audit-action="back-home" style="font-size:0.85rem;margin-bottom:12px;">&larr; Audit</button>',
       '  <h2 style="margin:0 0 4px;">' + esc(title) + '</h2>',
       '  <div style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:8px;">',
-      '    Rule ' + esc(ruleId) + ' &middot; ' + n + ' product' + (n === 1 ? '' : 's') + ' affected',
+      '    Rule ' + esc(ruleId) + ' &middot; ' + MastFormat.countNoun(n, 'product') + ' affected',
       '  </div>',
             (detail ? '<p style="color:var(--text-primary);font-size:0.9rem;margin:0 0 16px;max-width:760px;">' + esc(detail) + '</p>' : ''),
       '  <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap;">',
@@ -1530,7 +1530,7 @@
     }
     var overflowMsg = overflow > 0
       ? '<div style="padding:8px 16px;font-size:0.85rem;color:var(--warm-gray);font-style:italic;">'
-        + '+ ' + overflow + ' more finding' + (overflow === 1 ? '' : 's') + ' — addressed via "Audit this listing" below.'
+        + '+ ' + MastFormat.countNoun(overflow, 'more finding') + ' — addressed via "Audit this listing" below.'
         + '</div>'
       : '';
     return head + cards + overflowMsg;

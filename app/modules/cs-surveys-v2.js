@@ -100,7 +100,7 @@
           var qCount = grp ? (grp.questionIds || []).length : 0;
           var h = U.tiles([
             { k: 'Status', v: U.badge(SV_STATUS_LABEL[st] || st, SV_STATUS_TONE[st] || 'neutral'), hero: true },
-            { k: 'Question set', v: esc(groupName(s.groupId)) + ' <span class="mu-sub">(' + qCount + ' question' + (qCount === 1 ? '' : 's') + ')</span>' },
+            { k: 'Question set', v: esc(groupName(s.groupId)) + ' <span class="mu-sub">(' + MastFormat.countNoun(qCount, 'question') + ')</span>' },
             { k: 'Responses', v: String(responseCountFor(s.id)) },
             { k: 'Closes', v: s.closesAt ? N.date(s.closesAt) : 'Open-ended' }
           ]);
@@ -576,7 +576,7 @@
         if (btn) { btn.textContent = 'Send to group'; btn.disabled = true; }
         if (sel) sel.value = '';
         var msg = res.total === 0 ? 'No recipients matched the group.'
-          : 'Sent ' + res.sent + ' of ' + res.total + ' invite' + (res.total === 1 ? '' : 's') +
+          : 'Sent ' + res.sent + ' of ' + MastFormat.countNoun(res.total, 'invite') +
             (res.failed ? ' (' + res.failed + ' failed)' : '') +
             (res.remaining ? ' · ' + res.remaining + ' more in the group — re-run to send the next batch' : '');
         showToast(msg, res.failed > 0);
@@ -641,7 +641,7 @@
       var g = V2.groups[id]; if (!g) return;
       var used = surveysUsingGroup(id);
       var msg = used.length
-        ? '"' + (g.name || 'This set') + '" is used by ' + used.length + ' survey' + (used.length === 1 ? '' : 's') + ' (' + used.map(function (s) { return s.name; }).join(', ') + ') — those surveys will stop working until they get a new set. Delete anyway?'
+        ? '"' + (g.name || 'This set') + '" is used by ' + MastFormat.countNoun(used.length, 'survey') + ' (' + used.map(function (s) { return s.name; }).join(', ') + ') — those surveys will stop working until they get a new set. Delete anyway?'
         : 'Delete the question set "' + (g.name || '') + '"?';
       mastConfirm(msg, { title: 'Delete question set', confirmLabel: 'Delete', danger: true }).then(function (ok) {
         if (!ok) return;
@@ -657,7 +657,7 @@
       var q = V2.questions[id]; if (!q) return;
       var inSets = setsUsingQuestion(id);
       var msg = inSets.length
-        ? 'This question is in ' + inSets.length + ' question set' + (inSets.length === 1 ? '' : 's') + ' (' + inSets.map(function (g) { return g.name; }).join(', ') + ') — it will disappear from them. Delete anyway?'
+        ? 'This question is in ' + MastFormat.countNoun(inSets.length, 'question set') + ' (' + inSets.map(function (g) { return g.name; }).join(', ') + ') — it will disappear from them. Delete anyway?'
         : 'Delete this question?';
       mastConfirm(msg, { title: 'Delete question', confirmLabel: 'Delete', danger: true }).then(function (ok) {
         if (!ok) return;

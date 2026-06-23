@@ -2668,7 +2668,7 @@ function wizardShowSitePathPicker(data) {
   var foundHtml = '';
   if (productCount > 0 || brandName) {
     var parts = [];
-    if (productCount > 0) parts.push(productCount + ' product' + (productCount !== 1 ? 's' : ''));
+    if (productCount > 0) parts.push(MastFormat.countNoun(productCount, 'product'));
     if (brandName) parts.push('brand info for <strong>' + esc(brandName) + '</strong>');
     foundHtml = '<div style="background:rgba(42,124,111,0.08);border:1px solid var(--teal);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:0.9rem;color:var(--text-primary);">' +
       '&#10003; Found ' + parts.join(' and ') + ' — ready to import.' +
@@ -3292,7 +3292,7 @@ function wizardRenderModuleCards() {
   var subtitleEl = document.getElementById('wizardModuleSubtext');
   var tierName = tierConfig.name || sub.tier;
   if (subtitleEl) {
-    subtitleEl.textContent = 'Your ' + tierName + ' plan lets you pick ' + limit + ' module' + (limit !== 1 ? 's' : '') + '. Detected tools are pre-selected.';
+    subtitleEl.textContent = 'Your ' + tierName + ' plan lets you pick ' + MastFormat.countNoun(limit, 'module') + '. Detected tools are pre-selected.';
   }
 
   var atLimit = _wizardSelectedModules.length >= limit;
@@ -3530,7 +3530,7 @@ function showWizardImportTimeline() {
 
         if (remaining > 60) {
           var mins = Math.ceil(remaining / 60);
-          if (labelEl) labelEl.textContent = '~' + mins + ' minute' + (mins !== 1 ? 's' : '') + ' remaining...';
+          if (labelEl) labelEl.textContent = '~' + MastFormat.countNoun(mins, 'minute') + ' remaining...';
         } else if (remaining > 0) {
           if (labelEl) labelEl.textContent = '~' + Math.ceil(remaining) + 's remaining...';
         } else {
@@ -3728,14 +3728,14 @@ function wizardRenderCollectionReport(report) {
       var manualGaps = gaps.filter(function(g) { return g.cost === 'manual'; });
 
       if (freeGaps.length > 0) {
-        h += '<div style="font-size:0.85rem;color:var(--teal);margin-bottom:4px;">&#10003; ' + freeGaps.length + ' field' + (freeGaps.length !== 1 ? 's' : '') + ' can be enriched for free (' + freeGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
+        h += '<div style="font-size:0.85rem;color:var(--teal);margin-bottom:4px;">&#10003; ' + MastFormat.countNoun(freeGaps.length, 'field') + ' can be enriched for free (' + freeGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
       }
       if (paidGaps.length > 0) {
-        h += '<div style="font-size:0.85rem;color:var(--amber);margin-bottom:4px;">&#10024; ' + paidGaps.length + ' field' + (paidGaps.length !== 1 ? 's' : '') + ' available with AI enrichment (' + paidGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
+        h += '<div style="font-size:0.85rem;color:var(--amber);margin-bottom:4px;">&#10024; ' + MastFormat.countNoun(paidGaps.length, 'field') + ' available with AI enrichment (' + paidGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
         wizardShowEnrichmentOffer(paidGaps, cost);
       }
       if (manualGaps.length > 0) {
-        h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;">&#9675; ' + manualGaps.length + ' field' + (manualGaps.length !== 1 ? 's' : '') + ' best added manually (' + manualGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
+        h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;">&#9675; ' + MastFormat.countNoun(manualGaps.length, 'field') + ' best added manually (' + manualGaps.map(function(g) { return g.field; }).join(', ') + ')</div>';
       }
     }
   }
@@ -4014,9 +4014,9 @@ function wizardRenderGapSummary(job, report) {
   var s = report.summary || {};
   var imp = job.imported || {};
   var items = [];
-  if (imp.products && imp.products.done) items.push(imp.products.done + ' product' + (imp.products.done !== 1 ? 's' : ''));
-  if (imp.images && imp.images.done) items.push(imp.images.done + ' image' + (imp.images.done !== 1 ? 's' : ''));
-  if (imp.events && imp.events.done) items.push(imp.events.done + ' event' + (imp.events.done !== 1 ? 's' : ''));
+  if (imp.products && imp.products.done) items.push(MastFormat.countNoun(imp.products.done, 'product'));
+  if (imp.images && imp.images.done) items.push(MastFormat.countNoun(imp.images.done, 'image'));
+  if (imp.events && imp.events.done) items.push(MastFormat.countNoun(imp.events.done, 'event'));
 
   var scoreColor = s.qualityScore >= 80 ? 'var(--teal)' : s.qualityScore >= 60 ? 'var(--amber)' : 'var(--danger)';
 

@@ -855,7 +855,7 @@
       var el = document.getElementById('blogV2WordCount'); if (!el) return;
       var text = (ed.textContent || '').replace(/📷 Image \d+/g, '').replace(/🏷️ [^\s]+/g, '').trim();
       var words = text ? text.split(/\s+/).filter(function (w) { return w.length > 0; }).length : 0;
-      el.textContent = words + ' word' + (words !== 1 ? 's' : '') + ' · ' + Math.max(1, Math.ceil(words / 225)) + ' min read';
+      el.textContent = MastFormat.countNoun(words, 'word') + ' · ' + Math.max(1, Math.ceil(words / 225)) + ' min read';
     },
     // Save/restore the body caret across a modal/picker that steals focus.
     _saveBodyRange: function () {

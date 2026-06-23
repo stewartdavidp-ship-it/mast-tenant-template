@@ -216,7 +216,7 @@
       withFinance(function () { return bridge().statementRows(id, start, end); }).then(function (st) {
         var fname = 'statement-' + (st.customer.displayName || id).replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
         bridge().downloadCsv(fname, st.rows, 'Statement for ' + (st.customer.displayName || id) + ' · ' + start + ' to ' + end);
-        showToast('Statement exported (' + st.orderCount + ' order' + (st.orderCount === 1 ? '' : 's') + ')');
+        showToast('Statement exported (' + MastFormat.countNoun(st.orderCount, 'order') + ')');
       }).catch(fail);
     },
     statementLink: function () {

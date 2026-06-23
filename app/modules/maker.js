@@ -1094,7 +1094,7 @@
     if (Object.keys(updates).length > 0) {
       await MastDB.multiUpdate(updates);
       var count = Object.keys(updates).length / 2; // each recipe has 2 update fields
-      MastAdmin.showToast(count + ' recipe' + (count === 1 ? '' : 's') + ' flagged for recalculation');
+      MastAdmin.showToast(MastFormat.countNoun(count, 'recipe') + ' flagged for recalculation');
     }
   }
 
@@ -1982,7 +1982,7 @@
     }
     var sign = preview.avgImpactPct >= 0 ? '+' : '';
     var color = preview.avgImpactPct > 0 ? '#dc2626' : preview.avgImpactPct < 0 ? '#16a34a' : 'var(--warm-gray)';
-    readout.innerHTML = '<span style="color:var(--warm-gray);">In ' + preview.recipeCount + ' recipe' + (preview.recipeCount === 1 ? '' : 's') +
+    readout.innerHTML = '<span style="color:var(--warm-gray);">In ' + MastFormat.countNoun(preview.recipeCount, 'recipe') +
       ' &middot; est. avg COGS impact: <span style="color:' + color + ';font-weight:600;">' + sign + preview.avgImpactPct.toFixed(1) + '%</span></span>';
   };
 
@@ -4033,7 +4033,7 @@
       var live = readNestedField(p, k);
       return k + ': ' + fmtPendingValue(live) + ' → ' + fmtPendingValue(changes[k]);
     });
-    var msg = 'Apply ' + keys.length + ' change' + (keys.length === 1 ? '' : 's') + ' to this live product?\n\n' + diffLines.join('\n');
+    var msg = 'Apply ' + MastFormat.countNoun(keys.length, 'change') + ' to this live product?\n\n' + diffLines.join('\n');
     var ok = await window.mastConfirm(msg, { title: 'Apply Pending Changes', confirmLabel: 'Apply' });
     if (!ok) return;
 
@@ -4089,7 +4089,7 @@
       // listing (the live-write equivalent of bridgeSetProductFields' direct path).
       maybeSyncEtsyOnRetailChange(p, keys);
 
-      MastAdmin.showToast('Applied ' + keys.length + ' change' + (keys.length === 1 ? '' : 's') + ' ✓');
+      MastAdmin.showToast('Applied ' + MastFormat.countNoun(keys.length, 'change') + ' ✓');
       // Re-render whichever surface is open
       if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
         window.renderProductDetail(pid);
@@ -4123,7 +4123,7 @@
       return;
     }
     var diffLines = keys.map(function(k) { return k + ': → ' + fmtPendingValue(changes[k]); });
-    var msg = 'Discard ' + keys.length + ' pending change' + (keys.length === 1 ? '' : 's') + '?\n\n' + diffLines.join('\n');
+    var msg = 'Discard ' + MastFormat.countNoun(keys.length, 'pending change') + '?\n\n' + diffLines.join('\n');
     var ok = await window.mastConfirm(msg, { title: 'Discard Pending Changes', confirmLabel: 'Discard' });
     if (!ok) return;
 
@@ -4134,7 +4134,7 @@
       p.pendingChanges = null;
       p.hasPendingRevision = false;
       MastAdmin.writeAudit('discard_pending_changes', 'products', pid);
-      MastAdmin.showToast('Discarded ' + keys.length + ' change' + (keys.length === 1 ? '' : 's'));
+      MastAdmin.showToast('Discarded ' + MastFormat.countNoun(keys.length, 'change'));
       if (typeof window.renderProductDetail === 'function' && window.selectedProductPid === pid) {
         window.renderProductDetail(pid);
       } else if (piecesView === 'define') {
@@ -4338,7 +4338,7 @@
       var pendingCount = product.pendingChanges ? Object.keys(product.pendingChanges).length : 0;
       if (product.hasPendingRevision) {
         parts.push(pendingCount > 0
-          ? (pendingCount + ' pending change' + (pendingCount === 1 ? '' : 's'))
+          ? (MastFormat.countNoun(pendingCount, 'pending change'))
           : 'revision mode (no edits yet)');
       }
     }
@@ -5630,7 +5630,7 @@
       MastAdmin.showToast('No recipes need recalculation');
       return;
     }
-    if (!await mastConfirm('Recalculate ' + dirtyIds.length + ' flagged recipe' + (dirtyIds.length === 1 ? '' : 's') + '? This refreshes material costs and updates totals.', { title: 'Recalculate Recipes' })) {
+    if (!await mastConfirm('Recalculate ' + MastFormat.countNoun(dirtyIds.length, 'flagged recipe') + '? This refreshes material costs and updates totals.', { title: 'Recalculate Recipes' })) {
       return;
     }
     var ok = 0, fail = 0;
@@ -5875,7 +5875,7 @@
     html += '<div id="repriceOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id===\'repriceOverlay\')makerCloseRepriceAll()">';
     html += '<div style="background:var(--cream);border-radius:10px;max-width:680px;width:92%;max-height:88vh;overflow-y:auto;padding:20px 24px;">';
     html += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">';
-    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">↻ Reprice ' + candidates.length + ' recipe' + (candidates.length === 1 ? '' : 's') + '</h3>';
+    html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">↻ Reprice ' + MastFormat.countNoun(candidates.length, 'recipe') + '</h3>';
     html += '<button style="background:none;border:none;font-size:1.15rem;cursor:pointer;color:var(--warm-gray);" onclick="makerCloseRepriceAll()">✕</button>';
     html += '</div>';
     html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">Drift threshold: ' + repricingThresholdPct + '%. Each reprice runs calculate_price + propagates the active tier price to the linked product + resets the drift baseline.</p>';
@@ -6374,7 +6374,7 @@
     if (!src) return;
     var srcLabel = variantDisplayName(pvs.find(function(p){ return p.id === currentVariantId; }));
     var otherCount = pvs.length - 1;
-    var msg = 'Copy Parts, Labor minutes, and Other Costs from "' + srcLabel + '" to the other ' + otherCount + ' variant' + (otherCount === 1 ? '' : 's') + '? Their current values will be overwritten.';
+    var msg = 'Copy Parts, Labor minutes, and Other Costs from "' + srcLabel + '" to the other ' + MastFormat.countNoun(otherCount, 'variant') + '? Their current values will be overwritten.';
     window.mastConfirm(msg, { title: 'Apply to all variants', confirmLabel: 'Apply', cancelLabel: 'Cancel' }).then(function(ok) {
       if (!ok) return;
       pvs.forEach(function(pv) {
@@ -6385,7 +6385,7 @@
         dst.laborMinutes = src.laborMinutes || 0;
         dst.otherCost = src.otherCost || 0;
       });
-      MastAdmin.showToast('Applied to ' + otherCount + ' variant' + (otherCount === 1 ? '' : 's') + '. Save and recalculate to propagate pricing.');
+      MastAdmin.showToast('Applied to ' + MastFormat.countNoun(otherCount, 'variant') + '. Save and recalculate to propagate pricing.');
       renderRecipeBuilder();
     });
   };

@@ -208,7 +208,7 @@ function navProfileSaveConfirmClick() {
   var result = saveCurrentNavProfile(name);
   if (result && result.success) {
     if (typeof showToast === 'function') {
-      showToast('Saved profile "' + result.profile.name + '" (' + result.count + ' module' + (result.count === 1 ? '' : 's') + ')' +
+      showToast('Saved profile "' + result.profile.name + '" (' + MastFormat.countNoun(result.count, 'module') + ')' +
                 (result.replaced ? ' — replaced the previous one.' : '.'));
     }
     renderAddToMast();
@@ -224,7 +224,7 @@ async function applyNavProfileClick(id) {
   if (!profile) return;
   var count = (profile.visibleRoutes && profile.visibleRoutes.length) || 0;
   var prompt = 'Apply profile "' + profile.name + '"? Your sidebar will switch to the ' +
-               count + ' module' + (count === 1 ? '' : 's') + ' saved in it. You can change it any time.';
+               MastFormat.countNoun(count, 'module') + ' saved in it. You can change it any time.';
   var ok = await mastConfirm(prompt, { title: 'Apply profile', confirmLabel: 'Apply' });
   if (!ok) return;
   try {

@@ -56,7 +56,7 @@
   function placementTitle(p) {
     var t = placementTotals(p);
     var name = galleryName(p);
-    return t.placed ? (name + ' — ' + t.placed + ' piece' + (t.placed === 1 ? '' : 's')) : name;
+    return t.placed ? (name + ' — ' + MastFormat.countNoun(t.placed, 'piece')) : name;
   }
 
   // Per-placement totals (mirror consignment.js calculatePlacementTotals AND the

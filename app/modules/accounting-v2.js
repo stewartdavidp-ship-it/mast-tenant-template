@@ -289,7 +289,7 @@
       '</div>';
     }).join('');
     return U.card(
-      pending.length + ' bank-feed collision' + (pending.length === 1 ? '' : 's') + ' detected',
+      MastFormat.countNoun(pending.length, 'bank-feed collision') + ' detected',
       '<div style="font-size:0.78rem;color:var(--warm-gray);line-height:1.4;margin-bottom:8px;">' +
         esc('One or more QBO bank accounts share a routing/last-4 with a Plaid-connected account. Acknowledging marks the collision reviewed; it does not auto-resolve the duplicate-feed risk.') +
       '</div>' + rows,
@@ -312,7 +312,7 @@
     var allowBackfill = doc && doc.allowBackfill === true;
     var disabled = false, reason = '';
     if (!itemBridgeReady) { disabled = true; reason = 'Set the Default Sales Item on the COA Map tab first'; }
-    else if (pendingCollisions > 0) { disabled = true; reason = 'Acknowledge ' + pendingCollisions + ' pending bank-feed collision' + (pendingCollisions === 1 ? '' : 's') + ' above first'; }
+    else if (pendingCollisions > 0) { disabled = true; reason = 'Acknowledge ' + MastFormat.countNoun(pendingCollisions, 'pending bank-feed collision') + ' above first'; }
     else if (!allowBackfill) { disabled = true; reason = 'Enable Backfill in admin/integrations/qbo.allowBackfill (operator-set kill switch)'; }
     if (!canEdit()) { disabled = true; reason = reason || 'You don\'t have permission to run a backfill'; }
 

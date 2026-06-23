@@ -370,7 +370,7 @@
       var cls = (status === 'connected') ? 'bz-chip' : (status === 'expired' || status === 'error' || status === 'revoked') ? 'bz-chip danger' : 'bz-chip muted';
       var sub = [];
       if (c.shopDomain || c.shopId) sub.push(esc(c.shopDomain || c.shopId));
-      if (typeof c.webhookSubscriptionCount === 'number') sub.push(c.webhookSubscriptionCount + ' webhook' + (c.webhookSubscriptionCount === 1 ? '' : 's'));
+      if (typeof c.webhookSubscriptionCount === 'number') sub.push(MastFormat.countNoun(c.webhookSubscriptionCount, 'webhook'));
       if (c.lastSyncAt) sub.push('Synced ' + esc(timeAgo(c.lastSyncAt)));
       var val = '<span class="' + cls + '" style="text-transform:uppercase;font-weight:700;letter-spacing:0.04em;">' + esc(status) + '</span>';
       if (sub.length) val += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-top:4px;">' + sub.join(' &middot; ') + '</div>';

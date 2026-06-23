@@ -221,7 +221,7 @@
           '<div class="form-group" id="cpV2MaxUsesGroup"' + (c.isOneOff ? ' style="display:none;"' : '') + '><label class="form-label">Max uses</label><input class="form-input" type="number" id="cpV2MaxUses" min="1" value="' + (c.maxUses != null && !c.isOneOff ? c.maxUses : '') + '" style="width:100%;" placeholder="Unlimited"></div>' +
           fg('Description (admin note)', '<input class="form-input" id="cpV2Desc" value="' + esc(c.description || '') + '" style="width:100%;" placeholder="e.g. Summer promo for returning customers">') +
           '<div class="form-group"><label class="form-label" style="display:flex;align-items:center;gap:8px;font-weight:400;"><input type="checkbox" id="cpV2ExcludeSale"' + (c.excludeSaleItems ? ' checked' : '') + '> Exclude sale items (won\'t apply to products already on sale)</label></div>' +
-          (isEdit ? '<div class="mu-sub" style="margin-top:8px;">Claimed: ' + claimed + ' time' + (claimed !== 1 ? 's' : '') + '</div>' : '');
+          (isEdit ? '<div class="mu-sub" style="margin-top:8px;">Claimed: ' + MastFormat.countNoun(claimed, 'time') + '</div>' : '');
       }
     },
     // Native onSave — replicates the inline saveCoupon write EXACTLY: same

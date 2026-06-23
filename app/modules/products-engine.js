@@ -191,7 +191,7 @@ function renderProducts() {
     if (!bannerEl) return;
     if (hasUrlFilter) {
       var parts = [];
-      if (urlIdSet.length) parts.push(urlIdSet.length + ' selected product' + (urlIdSet.length === 1 ? '' : 's'));
+      if (urlIdSet.length) parts.push(MastFormat.countNoun(urlIdSet.length, 'selected product'));
       if (urlStatus) parts.push('status: ' + String(urlStatus).replace(/_/g, ' '));
       if (urlCategory) parts.push('category: ' + urlCategory);
       if (urlDateFrom && urlDateTo) parts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
@@ -911,7 +911,7 @@ function renderInventoryOverview() {
   var bannerHtml = '';
   if (_invHasUrlFilter) {
     var bParts = [];
-    if (_invUrlIds.length) bParts.push(_invUrlIds.length + ' selected product' + (_invUrlIds.length === 1 ? '' : 's'));
+    if (_invUrlIds.length) bParts.push(MastFormat.countNoun(_invUrlIds.length, 'selected product'));
     if (_invUrlLowStock) bParts.push('low stock only');
     if (_invUrlAtRisk) bParts.push('$ at risk (top 20% of no-demand-90d)');
     if (_invUrlAging60) bParts.push('aging >60d');

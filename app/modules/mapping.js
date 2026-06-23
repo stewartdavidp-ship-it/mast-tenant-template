@@ -1654,7 +1654,7 @@
     if (days === 1) return 'yesterday';
     if (days < 30) return days + ' days ago';
     var mo = Math.floor(days / 30);
-    return mo + ' month' + (mo === 1 ? '' : 's') + ' ago';
+    return MastFormat.countNoun(mo, 'month') + ' ago';
   }
 
   function exportMappingsCsv() {

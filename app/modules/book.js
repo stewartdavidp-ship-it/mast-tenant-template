@@ -1538,7 +1538,7 @@
     if (bannerEl) {
       if (hasUrlFilter) {
         var parts = [];
-        if (urlIds.length) parts.push(urlIds.length + ' selected enrollment' + (urlIds.length === 1 ? '' : 's'));
+        if (urlIds.length) parts.push(MastFormat.countNoun(urlIds.length, 'selected enrollment'));
         if (urlStatus) parts.push('status: ' + urlStatus);
         if (urlClassId) parts.push('class: ' + urlClassId);
         if (urlSessionId) parts.push('session: ' + urlSessionId);
@@ -2120,7 +2120,7 @@
     var html = '';
     if (hasUrlFilter) {
       var bparts = [];
-      if (urlIds.length) bparts.push(urlIds.length + ' selected instructor' + (urlIds.length === 1 ? '' : 's'));
+      if (urlIds.length) bparts.push(MastFormat.countNoun(urlIds.length, 'selected instructor'));
       if (urlStatus) bparts.push('status: ' + urlStatus);
       html += '<div id="bookInstructorsUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
         '<span>\ud83d\udc69\u200d\ud83c\udfeb Showing ' + bparts.join(', ') + ' (' + filtered.length + ')</span>' +
@@ -2654,7 +2654,7 @@
     var html = '';
     if (hasUrlFilter) {
       var bparts = [];
-      if (urlIds.length) bparts.push(urlIds.length + ' selected resource' + (urlIds.length === 1 ? '' : 's'));
+      if (urlIds.length) bparts.push(MastFormat.countNoun(urlIds.length, 'selected resource'));
       if (urlType) bparts.push('type: ' + urlType);
       if (urlStatus) bparts.push('status: ' + urlStatus);
       html += '<div id="bookResourcesUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
@@ -2950,7 +2950,7 @@
     var html = '';
     if (hasUrlFilter) {
       var bparts = [];
-      if (urlIds.length) bparts.push(urlIds.length + ' selected definition' + (urlIds.length === 1 ? '' : 's'));
+      if (urlIds.length) bparts.push(MastFormat.countNoun(urlIds.length, 'selected definition'));
       if (urlType) bparts.push('type: ' + urlType);
       if (urlStatus) bparts.push('status: ' + urlStatus);
       html += '<div id="bookPassesUrlFilterBanner" style="background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);color:#F59E0B;padding:8px 12px;margin-bottom:12px;border-radius:6px;display:flex;align-items:center;gap:12px;font-size:0.85rem;">' +
@@ -3163,7 +3163,7 @@
     var exportBar = '<div style="display:flex;gap:8px;align-items:center;margin-top:12px;">' +
       '<button class="btn btn-secondary btn-small" onclick="window._passCohortCopyEmails()"' + (emails.length ? '' : ' disabled') + '>Copy emails (' + emails.length + ')</button>' +
       '<button class="btn btn-secondary btn-small" onclick="window._passCohortDownloadCsv()"' + (matched.length ? '' : ' disabled') + '>Download CSV</button>' +
-      '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + matched.length + ' instance' + (matched.length === 1 ? '' : 's') + '</span>' +
+      '<span style="font-size:0.78rem;color:var(--warm-gray);margin-left:auto;">' + MastFormat.countNoun(matched.length, 'instance') + '</span>' +
     '</div>';
     return '<div style="margin-top:24px;border:1px solid var(--cream-dark);border-radius:10px;padding:16px;background:var(--surface-card,#fff);">' +
       '<h4 style="margin:0 0 12px;font-size:0.9rem;font-weight:600;">Cohorts</h4>' +
@@ -4214,7 +4214,7 @@
     var text = emails.join(', ');
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function() {
-        if (window.mastToast) window.mastToast('Copied ' + emails.length + ' email' + (emails.length === 1 ? '' : 's'));
+        if (window.mastToast) window.mastToast('Copied ' + MastFormat.countNoun(emails.length, 'email'));
       });
     } else {
       window.prompt('Copy emails:', text);
@@ -4521,7 +4521,7 @@
         }).join(', ');
         html += '<span>Also: ' + staffSummary + '</span>';
       }
-      html += '<span style="margin-left:auto;">' + students.length + ' student' + (students.length !== 1 ? 's' : '') + '</span>';
+      html += '<span style="margin-left:auto;">' + MastFormat.countNoun(students.length, 'student') + '</span>';
       html += '</div>';
 
       // ── Walk-in enrollment (check-in & in-progress phases) ──
@@ -4998,7 +4998,7 @@
           count++;
         }
       }
-      MastAdmin.showToast(count + ' student' + (count !== 1 ? 's' : '') + ' checked in');
+      MastAdmin.showToast(MastFormat.countNoun(count, 'student') + ' checked in');
       window._bookManageSession(sessionId, opsClassId);
     } catch (err) {
       MastAdmin.showToast('Failed: ' + err.message, true);
@@ -5091,7 +5091,7 @@
           count++;
         }
       }
-      MastAdmin.showToast(count + ' student' + (count !== 1 ? 's' : '') + ' closed out');
+      MastAdmin.showToast(MastFormat.countNoun(count, 'student') + ' closed out');
       window._bookManageSession(sessionId, opsClassId);
     } catch (err) {
       MastAdmin.showToast('Failed: ' + err.message, true);
@@ -5419,7 +5419,7 @@
       // Phase 10: selected-day bg uses amber-glow token (was literal rgba(196,133,60,0.15))
       var cellBg = isSelected ? 'rgba(245,213,168,0.15)' : 'var(--surface-card)';
       var borderStyle = isToday ? 'box-shadow:inset 0 0 0 2px var(--primary);' : '';
-      var ariaLabel = formatDate(dateStr) + (daySessions.length ? ', ' + daySessions.length + ' session' + (daySessions.length === 1 ? '' : 's') : ', no sessions');
+      var ariaLabel = formatDate(dateStr) + (daySessions.length ? ', ' + MastFormat.countNoun(daySessions.length, 'session') : ', no sessions');
 
       html += '<div style="background:' + cellBg + ';min-height:80px;padding:6px;cursor:pointer;' + borderStyle + '" ' +
         'onclick="window._calSelectDay(\'' + dateStr + '\')" role="button" tabindex="0" ' +
@@ -5863,7 +5863,7 @@
         html += '<div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface-card,#fff);border:1px solid var(--border,#E8E0D4);border-radius:6px;padding:10px 12px;color:var(--text);">';
         html += '<div style="min-width:0;">';
         html += '<div style="font-weight:600;font-size:0.9rem;">' + esc(className) + '</div>';
-        html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(s.date) + (s.startTime ? ' &middot; ' + esc(s.startTime) : '') + ' &middot; ' + daysLate + ' day' + (daysLate === 1 ? '' : 's') + ' overdue</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);">' + esc(s.date) + (s.startTime ? ' &middot; ' + esc(s.startTime) : '') + ' &middot; ' + MastFormat.countNoun(daysLate, 'day') + ' overdue</div>';
         html += '</div>';
         html += '<div style="display:flex;gap:6px;flex-shrink:0;">';
         html += '<button class="btn btn-small btn-primary" onclick="window._bookManageSession(\'' + esc(s.id) + '\', \'' + esc(s.classId) + '\')">Open Session</button>';

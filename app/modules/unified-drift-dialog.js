@@ -65,7 +65,7 @@ async function openUnifiedDriftDialog(pid) {
     '<div class="modal" style="background:var(--cream);border-radius:10px;max-width:720px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,0.2);padding:20px 24px;max-height:90vh;overflow-y:auto;">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;">' +
         '<div>' +
-          '<h3 id="unifiedDriftDialogTitle" style="margin:0;font-size:1.15rem;font-weight:600;">Drift across ' + order.length + ' channel' + (order.length === 1 ? '' : 's') + '</h3>' +
+          '<h3 id="unifiedDriftDialogTitle" style="margin:0;font-size:1.15rem;font-weight:600;">Drift across ' + MastFormat.countNoun(order.length, 'channel') + '</h3>' +
           '<p style="margin:4px 0 0;font-size:0.78rem;color:var(--warm-gray);">Review per-channel diffs and pick an action. Rules can be updated in the Rules tab.</p>' +
         '</div>' +
         '<button class="btn btn-secondary btn-small" aria-label="Close" onclick="document.getElementById(\'unifiedDriftDialog\').remove()">Close</button>' +

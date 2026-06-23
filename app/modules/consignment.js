@@ -552,7 +552,7 @@
       if (galleries.length === 0 && unlinkedPlacementCount > 0) {
         html += '<div style="color:var(--warm-gray);padding:20px;text-align:left;font-size:0.85rem;line-height:1.5;">' +
           '<strong>No Gallery entities created yet.</strong><br>' +
-          'You have <strong>' + unlinkedPlacementCount + ' placement' + (unlinkedPlacementCount === 1 ? '' : 's') + '</strong> using the legacy <code>locationName</code> string. To use the payout register, either:' +
+          'You have <strong>' + MastFormat.countNoun(unlinkedPlacementCount, 'placement') + '</strong> using the legacy <code>locationName</code> string. To use the payout register, either:' +
           '<ul style="margin:8px 0 0 18px;padding:0;">' +
           '<li>Create Gallery entities one-by-one at <a href="#galleries?subView=galleries" style="color:var(--teal);text-decoration:underline;">Galleries → Entities</a>, then assign each placement to a gallery, OR</li>' +
           '<li>Run <code>scripts/backfill-gallery-fk.js --apply --tenant ' + esc(window.TENANT_ID || '<tid>') + '</code> for an operator-approval-per-group migration.</li>' +
@@ -1231,7 +1231,7 @@
 
     if (hasUrlFilter) {
       var bparts = [];
-      if (urlIds.length) bparts.push(urlIds.length + ' selected placement' + (urlIds.length === 1 ? '' : 's'));
+      if (urlIds.length) bparts.push(MastFormat.countNoun(urlIds.length, 'selected placement'));
       if (urlStatus) bparts.push('status: ' + urlStatus);
       if (urlDateFrom && urlDateTo) bparts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
       else if (urlDateFrom) bparts.push('from ' + urlDateFrom + ' onward');
@@ -1269,7 +1269,7 @@
             '<div>' +
               '<div style="font-weight:500;font-size:0.9rem;">' + esc(p.locationName) + '</div>' +
               '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' +
-                totals.totalItemsPlaced + ' item' + (totals.totalItemsPlaced !== 1 ? 's' : '') + ' placed · ' +
+                MastFormat.countNoun(totals.totalItemsPlaced, 'item') + ' placed · ' +
                 Math.round((p.commissionRate || 0) * 100) + '% commission' +
               '</div>' +
             '</div>' +

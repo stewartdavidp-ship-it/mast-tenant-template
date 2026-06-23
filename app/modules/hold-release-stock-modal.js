@@ -72,7 +72,7 @@
       }
       await syncStockInfoToPublic(pid);
       closeModal();
-      showToast(qty + ' unit' + (qty !== 1 ? 's' : '') + ' held (' + reason.replace(/_/g, ' ') + ')');
+      showToast(MastFormat.countNoun(qty, 'unit') + ' held (' + reason.replace(/_/g, ' ') + ')');
       renderProductDetail(pid);
     } catch (err) {
       showToast('Error holding stock: ' + err.message, true);
@@ -126,7 +126,7 @@
       }
       await syncStockInfoToPublic(pid);
       closeModal();
-      showToast(qty + ' unit' + (qty !== 1 ? 's' : '') + ' released from hold');
+      showToast(MastFormat.countNoun(qty, 'unit') + ' released from hold');
       renderProductDetail(pid);
     } catch (err) {
       showToast('Error releasing hold: ' + err.message, true);

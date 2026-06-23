@@ -657,7 +657,7 @@
       h += '<span style="font-weight:600;">From expenses</span>';
       h += '<span style="font-weight:600;">' + fmtDollars(overheadExpenseTotal) + '</span>';
       h += '</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray,var(--warm-gray));margin-top:4px;">' + overheadExpenseCount + ' expense' + (overheadExpenseCount !== 1 ? 's' : '') + ' tagged as studio overhead in <a href="#expenses" onclick="navigateTo(\'expenses\')" style="color:var(--teal,var(--teal));">Expenses</a></div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray,var(--warm-gray));margin-top:4px;">' + MastFormat.countNoun(overheadExpenseCount, 'expense') + ' tagged as studio overhead in <a href="#expenses" onclick="navigateTo(\'expenses\')" style="color:var(--teal,var(--teal));">Expenses</a></div>';
       h += '</div>';
     }
 

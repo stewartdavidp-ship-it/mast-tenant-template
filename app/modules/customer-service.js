@@ -204,7 +204,7 @@
     html += '<h2 style="margin:0;">' + (isInbox ? 'Inbox' : 'Tickets') + '</h2>';
     html += '<div style="display:flex;align-items:center;gap:8px;">';
     html += '<span style="font-size:0.85rem;color:var(--warm-gray);">' +
-      filtered.length + ' ticket' + (filtered.length !== 1 ? 's' : '') + '</span>';
+      MastFormat.countNoun(filtered.length, 'ticket') + '</span>';
     html += '<button class="btn btn-secondary btn-small" onclick="csRefreshTickets()">Refresh</button>';
     html += '<button class="btn btn-primary btn-small" onclick="csOpenCreate()">New Ticket</button>';
     html += '</div>';
@@ -1481,7 +1481,7 @@
       html += '<div style="border:1px solid var(--cream-dark);border-radius:8px;padding:12px 16px;background:var(--surface-card);display:flex;align-items:center;gap:10px;">';
       html += '<div style="flex:1;"><span style="font-weight:600;">' + _esc(g.name) + '</span>';
       if (g.eventType) html += '<span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">' + _esc(g.eventType) + '</span>';
-      html += '<span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">' + qc + ' question' + (qc !== 1 ? 's' : '') + '</span>';
+      html += '<span style="margin-left:8px;font-size:0.78rem;color:var(--warm-gray);">' + MastFormat.countNoun(qc, 'question') + '</span>';
       if (g.isActive === false) html += '<span style="margin-left:8px;background:rgba(220,38,38,0.15);color:var(--danger);padding:1px 8px;border-radius:10px;font-size:0.78rem;">inactive</span>';
       html += '</div><button class="btn btn-secondary btn-small" onclick="csEditGroup(\'' + _esc(g.id) + '\')">Edit</button>';
       html += '<button class="btn btn-danger btn-small" onclick="csDeleteGroup(\'' + _esc(g.id) + '\')">Delete</button></div>';
@@ -1728,7 +1728,7 @@
     }
 
     sendInProgress = false;
-    var summary = 'Sent ' + sendProgress.sent + ' of ' + sendProgress.total + ' invite' + (sendProgress.total === 1 ? '' : 's');
+    var summary = 'Sent ' + sendProgress.sent + ' of ' + MastFormat.countNoun(sendProgress.total, 'invite');
     if (sendProgress.failed > 0) summary += ' (' + sendProgress.failed + ' failed)';
     if (members.length > SEND_BATCH_CAP) {
       summary += ' · ' + (members.length - SEND_BATCH_CAP) + ' more left in segment — re-run to send next batch';
@@ -2100,7 +2100,7 @@
       if (topThemes.length > 0) {
         lines.push('## Top themes (from survey free-text)');
         topThemes.forEach(function(t, i) {
-          lines.push((i + 1) + '. **' + t.tag + '** — ' + t.count + ' response' + (t.count === 1 ? '' : 's'));
+          lines.push((i + 1) + '. **' + t.tag + '** — ' + MastFormat.countNoun(t.count, 'response'));
           t.sampleQuotes.forEach(function(q) { lines.push('   > "' + q + '"'); });
         });
         lines.push('');
@@ -2113,14 +2113,14 @@
       if (topProds.length > 0) {
         lines.push('## Most-reviewed products');
         topProds.forEach(function(p) {
-          lines.push('- **' + p.name + '** — ' + p.count + ' review' + (p.count === 1 ? '' : 's') + (p.avg != null ? ' · ' + p.avg.toFixed(2) + ' ★' : ''));
+          lines.push('- **' + p.name + '** — ' + MastFormat.countNoun(p.count, 'review') + (p.avg != null ? ' · ' + p.avg.toFixed(2) + ' ★' : ''));
         });
         lines.push('');
       }
       if (atRisk + lapsed > 0) {
         lines.push('## Action items');
-        if (atRisk > 0) lines.push('- **' + atRisk + ' at-risk customer' + (atRisk === 1 ? '' : 's') + '** — reach out before cadence breaks fully');
-        if (lapsed > 0) lines.push('- **' + lapsed + ' lapsed customer' + (lapsed === 1 ? '' : 's') + '** — win-back outreach candidates');
+        if (atRisk > 0) lines.push('- **' + MastFormat.countNoun(atRisk, 'at-risk customer') + '** — reach out before cadence breaks fully');
+        if (lapsed > 0) lines.push('- **' + MastFormat.countNoun(lapsed, 'lapsed customer') + '** — win-back outreach candidates');
       }
       var markdown = lines.join('\n');
 

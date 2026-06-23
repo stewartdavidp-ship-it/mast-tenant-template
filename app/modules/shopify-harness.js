@@ -120,10 +120,10 @@ function renderShopifySeedReport(data, kind) {
   var html = '';
   html += '<div style="background:var(--cream,#faf8f5);border:1px solid #e8e0d4;border-radius:8px;padding:12px 14px;font-size:0.85rem;">';
   if (list.length > 0) {
-    html += '<div style="font-weight:600;margin-bottom:6px;color:var(--teal);">' + (kind === 'created' ? '&#10003; Created' : '&#10003; Deleted') + ' ' + list.length + ' product' + (list.length === 1 ? '' : 's') + '</div>';
+    html += '<div style="font-weight:600;margin-bottom:6px;color:var(--teal);">' + (kind === 'created' ? '&#10003; Created' : '&#10003; Deleted') + ' ' + MastFormat.countNoun(list.length, 'product') + '</div>';
     html += '<ul style="margin:0;padding-left:20px;">';
     list.forEach(function(p) {
-      html += '<li><code style="font-size:0.78rem;">' + esc(p.id || '') + '</code> — ' + esc(p.title || '') + (p.variantCount != null ? ' <span style="color:var(--warm-gray);">(' + p.variantCount + ' variant' + (p.variantCount === 1 ? '' : 's') + ')</span>' : '') + '</li>';
+      html += '<li><code style="font-size:0.78rem;">' + esc(p.id || '') + '</code> — ' + esc(p.title || '') + (p.variantCount != null ? ' <span style="color:var(--warm-gray);">(' + MastFormat.countNoun(p.variantCount, 'variant') + ')</span>' : '') + '</li>';
     });
     html += '</ul>';
   } else {

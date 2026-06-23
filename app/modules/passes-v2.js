@@ -490,7 +490,7 @@
         var exportBar = '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">' +
           '<button class="btn btn-secondary btn-small" onclick="PassesV2._cohortCopyEmails()"' + (nEmails ? '' : ' disabled') + '>Copy emails (' + nEmails + ')</button>' +
           '<button class="btn btn-secondary btn-small" onclick="PassesV2._cohortDownloadCsv()"' + (rows.length ? '' : ' disabled') + '>Download CSV</button>' +
-          '<span class="mu-sub" style="margin-left:auto;">' + rows.length + ' holder' + (rows.length === 1 ? '' : 's') + '</span>' +
+          '<span class="mu-sub" style="margin-left:auto;">' + MastFormat.countNoun(rows.length, 'holder') + '</span>' +
         '</div>';
         var el2 = document.getElementById('pv2Holders');
         if (el2) el2.innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">' + pills + '</div>' + tbl + exportBar;
@@ -512,7 +512,7 @@
       var emails = PassesV2._cohortRows().map(function (i) { return i.customerEmail; }).filter(Boolean);
       if (!emails.length) return;
       var text = emails.join(', ');
-      var ok = function () { if (window.showToast) showToast('Copied ' + emails.length + ' email' + (emails.length === 1 ? '' : 's')); };
+      var ok = function () { if (window.showToast) showToast('Copied ' + MastFormat.countNoun(emails.length, 'email')); };
       var fb = function () { if (typeof mastCopyFallback === 'function') mastCopyFallback('Copy emails', text); };
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(ok).catch(fb);

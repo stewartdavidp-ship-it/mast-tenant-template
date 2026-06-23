@@ -148,7 +148,7 @@
         if (res && res.needsConfirm) {
           var orphans = res.orphans || [];
           var names = orphans.map(function (o) { return '• ' + (o.label || 'Variant'); }).join('\n');
-          var msg = 'This option change removes ' + orphans.length + ' variant' + (orphans.length === 1 ? '' : 's') +
+          var msg = 'This option change removes ' + MastFormat.countNoun(orphans.length, 'variant') +
             ' you sell:\n\n' + names + '\n\nThose variants will be deleted. Continue?';
           if (typeof window.mastConfirm === 'function') {
             Promise.resolve(window.mastConfirm(msg, { title: 'Remove variants?', confirmLabel: 'Remove ' + orphans.length + ' & save', danger: true }))
@@ -159,7 +159,7 @@
         if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
         var rec = V2.byId[id];
         if (rec) { rec.options = res.options; if (Array.isArray(res.variants)) rec.variants = res.variants; }
-        if (res.prunedCount) { MastAdmin.showToast('Removed ' + res.prunedCount + ' orphaned variant' + (res.prunedCount === 1 ? '' : 's')); markListDirty(); }
+        if (res.prunedCount) { MastAdmin.showToast('Removed ' + MastFormat.countNoun(res.prunedCount, 'orphaned variant')); markListDirty(); }
         rerenderVariantsEditor(id);
       }, function (e) { console.error('[products-v2] setOptions', e); MastAdmin.showToast('Failed', true); });
     });
@@ -265,7 +265,7 @@
       addMore = '<div style="color:var(--warm-gray);font-size:0.85rem;padding:6px 0;">Every combination already exists.</div>';
     }
     var base = '<div class="pv2-pnote" style="margin-top:12px;">Your <strong>◆ Default</strong> is the base — price, photo, and recipe are inherited by every variant unless you override them on that variant.</div>';
-    var head = '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);">You sell · ' + variants.length + ' variant' + (variants.length === 1 ? '' : 's') + '</div>';
+    var head = '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--warm-gray);">You sell · ' + MastFormat.countNoun(variants.length, 'variant') + '</div>';
     return U.card('Step 2 · Pick combinations', head + sell + counts + addMore + base);
   }
   function variantsEditorInner(p) {
@@ -1086,7 +1086,7 @@
     if (V2.editFulfill === pid) return fulfillmentEditForm(p);
     var si = p.stockInfo || {};
     var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editFulfillment(\'' + esc(pid) + '\')">Edit</button>' : '';
-    var lead = (si.productionLeadTimeDays != null ? si.productionLeadTimeDays + ' day' + (si.productionLeadTimeDays === 1 ? '' : 's') : '—');
+    var lead = (si.productionLeadTimeDays != null ? MastFormat.countNoun(si.productionLeadTimeDays, 'day') : '—');
     var dims = productDimensions(p);
     return U.card('Fulfillment', U.kv([
       { k: 'Stock mode', v: (si.stockType ? esc(si.stockType) : '—') },
@@ -2515,7 +2515,7 @@
       if (st.spot == null) return '<div class="mu-sub" style="text-align:center;padding:12px;">No spot prices available yet. Refresh metals pricing first.</div>';
       var results = st.results || [];
       if (!results.length) return '<div class="mu-sub" style="text-align:center;padding:12px;">No spot-linked recipes are affected by this shift.</div>';
-      var h = '<div class="mu-sub" style="margin-bottom:6px;">' + results.length + ' recipe' + (results.length === 1 ? '' : 's') + ' affected (sorted by cost impact):</div>';
+      var h = '<div class="mu-sub" style="margin-bottom:6px;">' + MastFormat.countNoun(results.length, 'recipe') + ' affected (sorted by cost impact):</div>';
       h += '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr>' +
         '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Recipe</th>' +
         '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Current</th>' +
@@ -2632,7 +2632,7 @@
       var h = '<div style="text-align:center;padding:20px 10px;">' +
         '<div style="font-size:1.6rem;margin-bottom:8px;">' + (d.failed ? '⚠️' : '✅') + '</div>' +
         '<p style="font-weight:500;margin:0 0 6px;">Reprice complete</p>' +
-        '<p class="mu-sub" style="margin:0;">' + d.succeeded + ' product' + (d.succeeded === 1 ? '' : 's') + ' repriced' + (d.failed ? ', ' + d.failed + ' failed' : '') + '.</p>';
+        '<p class="mu-sub" style="margin:0;">' + MastFormat.countNoun(d.succeeded, 'product') + ' repriced' + (d.failed ? ', ' + d.failed + ' failed' : '') + '.</p>';
       if (d.errors && d.errors.length) {
         h += '<div style="text-align:left;margin-top:14px;font-size:0.78rem;color:var(--danger);">';
         d.errors.slice(0, 8).forEach(function (e) { h += '<div>• ' + esc(e.name) + ': ' + esc(e.error) + '</div>'; });
@@ -2658,7 +2658,7 @@
         body = '<div class="mu-sub" style="text-align:center;padding:12px;">No recipe-linked products need repricing — all are within the ' + (st.thresholdPct != null ? st.thresholdPct + '% ' : '') + 'drift threshold.</div>';
         foot = '<button class="btn btn-secondary" onclick="ProductsV2.repriceClose()">Close</button>';
       } else {
-        body = '<div class="mu-sub" style="margin-bottom:12px;">' + st.candidates.length + ' recipe-linked product' + (st.candidates.length === 1 ? '' : 's') + ' drifted past the ' + (st.thresholdPct != null ? st.thresholdPct + '% ' : '') + 'threshold. Each recipe is recosted, then its prices are written to the linked product through the standard recipe-apply path (variant tier prices + Etsy sync).</div>' + tableHtml();
+        body = '<div class="mu-sub" style="margin-bottom:12px;">' + MastFormat.countNoun(st.candidates.length, 'recipe-linked product') + ' drifted past the ' + (st.thresholdPct != null ? st.thresholdPct + '% ' : '') + 'threshold. Each recipe is recosted, then its prices are written to the linked product through the standard recipe-apply path (variant tier prices + Etsy sync).</div>' + tableHtml();
         foot = '<button class="btn btn-secondary" onclick="ProductsV2.repriceClose()">Cancel</button>' +
           '<button class="btn btn-primary" onclick="ProductsV2.repriceRun()">Reprice all ' + st.candidates.length + '</button>';
       }
@@ -2757,7 +2757,7 @@
       if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
       Promise.resolve(window.MakerProductBridge.productImportRecords(valid, st.filename)).then(function (res) {
         if (!res || !res.ok) { MastAdmin.showToast('Import failed' + (res && res.error ? ': ' + res.error : ''), true); if (btn) { btn.disabled = false; btn.textContent = 'Import'; } return; }
-        MastAdmin.showToast(res.imported + ' product' + (res.imported === 1 ? '' : 's') + ' imported' + (res.skipped ? ', ' + res.skipped + ' skipped' : ''));
+        MastAdmin.showToast(MastFormat.countNoun(res.imported, 'product') + ' imported' + (res.skipped ? ', ' + res.skipped + ' skipped' : ''));
         close();
         Promise.resolve(window.loadProducts ? window.loadProducts() : null).then(function () { load(); });
       }).catch(function (e) {
@@ -2818,7 +2818,7 @@
       records.forEach(function (r) { if (r._valid !== false) valid.push(r); else invalid++; });
       var fs = fields().filter(function (f) { return st.mappings[f.key] !== undefined || f.required; });
       var h = '<div style="font-weight:600;margin-bottom:8px;">Step 3 · Preview &amp; confirm</div>';
-      h += '<div class="mu-sub" style="margin-bottom:12px;">' + valid.length + ' valid row' + (valid.length === 1 ? '' : 's') + ' ready' + (invalid ? ', ' + invalid + ' will be skipped (missing required fields)' : '') + '. Imported products land as <strong>draft</strong>.</div>';
+      h += '<div class="mu-sub" style="margin-bottom:12px;">' + MastFormat.countNoun(valid.length, 'valid row') + ' ready' + (invalid ? ', ' + invalid + ' will be skipped (missing required fields)' : '') + '. Imported products land as <strong>draft</strong>.</div>';
       h += '<div style="overflow-x:auto;margin-bottom:14px;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr>';
       fs.forEach(function (f) { h += '<th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;font-weight:600;">' + esc(f.label) + '</th>'; });
       h += '</tr></thead><tbody>';
@@ -2842,7 +2842,7 @@
         : '<button class="btn btn-secondary" onclick="ProductsV2.importClose()">Cancel</button>';
       foot += st.step < 3
         ? '<button class="btn btn-primary" onclick="ProductsV2.importStep(1)">Continue</button>'
-        : '<button class="btn btn-primary" id="pv2ImportBtn" onclick="ProductsV2.importRun()"' + (validCount ? '' : ' disabled') + '>Import ' + validCount + ' product' + (validCount === 1 ? '' : 's') + '</button>';
+        : '<button class="btn btn-primary" id="pv2ImportBtn" onclick="ProductsV2.importRun()"' + (validCount ? '' : ' disabled') + '>Import ' + MastFormat.countNoun(validCount, 'product') + '</button>';
       foot += '</div>';
       openModal(
         '<div style="max-width:760px;">' +
@@ -3168,7 +3168,7 @@
             if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
             var rec = V2.byId[id]; if (rec) rec.variants = res.variants;
             var n = res.addedCount || missing.length;
-            MastAdmin.showToast('Added ' + n + ' variant' + (n === 1 ? '' : 's'));
+            MastAdmin.showToast('Added ' + MastFormat.countNoun(n, 'variant'));
             rerenderVariantsEditor(id); markListDirty();
           }, function (e) { console.error('[products-v2] addVariants', e); MastAdmin.showToast('Failed', true); });
         });
@@ -3329,7 +3329,7 @@
           if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (!res.staged) Object.assign(rec, changed);
           V2.editPricing = null; rerenderPricingPane(pid); markListDirty();
-          MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
+          MastAdmin.showToast(res.staged ? 'Staged ' + MastFormat.countNoun(res.changed, 'change') + ' (Apply to go live)' : 'Saved');
         }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
       });
     },
@@ -3657,7 +3657,7 @@
               tEl.textContent = tEl.textContent.replace(prevName, changed.name);
             }
           }
-          MastAdmin.showToast(res.staged ? 'Staged ' + res.changed + ' change' + (res.changed === 1 ? '' : 's') + ' (Apply to go live)' : 'Saved');
+          MastAdmin.showToast(res.staged ? 'Staged ' + MastFormat.countNoun(res.changed, 'change') + ' (Apply to go live)' : 'Saved');
         }, function (e) { console.error('[products-v2] saveInfo', e); MastAdmin.showToast('Save failed', true); });
       });
     },

@@ -889,7 +889,7 @@
       if (!CMP || !window.NewsletterBridge || !NewsletterBridge.matchRecipients) return;
       var el = document.getElementById('cmpRecipCount'); if (!el) return;
       Promise.resolve(NewsletterBridge.matchRecipients(CMP.issue.audienceSegmentId || '__all')).then(function (recips) {
-        var n = (recips || []).length; el.textContent = n + ' recipient' + (n === 1 ? '' : 's');
+        var n = (recips || []).length; el.textContent = MastFormat.countNoun(n, 'recipient');
       }).catch(function () { if (el) el.textContent = '—'; });
     },
     cmpAbToggle: function (on) {

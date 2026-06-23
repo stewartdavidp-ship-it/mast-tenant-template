@@ -920,12 +920,12 @@
               : esc(r.name);
         } },
         { label: 'When', render: function (r) { return r.when; } },
-        { label: 'Overdue', align: 'right', render: function (r) { return r.late + ' day' + (r.late === 1 ? '' : 's'); } }
+        { label: 'Overdue', align: 'right', render: function (r) { return MastFormat.countNoun(r.late, 'day'); } }
       ], overdueRows);
       var moreNote = overdueSessions.length > overdueRows.length
         ? '<div class="mu-sub" style="text-align:center;padding:4px;">+ ' + (overdueSessions.length - overdueRows.length) + ' more not shown</div>' : '';
       overdueSection = U.cardTable(
-        '⚠ ' + overdueSessions.length + ' session' + (overdueSessions.length === 1 ? '' : 's') + ' awaiting completion report',
+        '⚠ ' + MastFormat.countNoun(overdueSessions.length, 'session') + ' awaiting completion report',
         '<div class="mu-sub" style="margin-bottom:10px;">Past-date sessions still marked “scheduled”. Open the session to submit a completion report or cancel it.</div>' +
         overdueTable + moreNote
       );

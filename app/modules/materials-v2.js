@@ -375,7 +375,7 @@
       var btn = document.getElementById('matV2ImportBtn');
       if (btn) { btn.disabled = true; btn.textContent = 'Importing…'; }
       Promise.resolve(window.MakerMaterialsBridge.importMaterialRecords(valid, st.filename)).then(function (res) {
-        if (window.showToast) showToast(res.imported + ' material' + (res.imported === 1 ? '' : 's') + ' imported' + (res.skipped ? ', ' + res.skipped + ' skipped' : ''));
+        if (window.showToast) showToast(MastFormat.countNoun(res.imported, 'material') + ' imported' + (res.skipped ? ', ' + res.skipped + ' skipped' : ''));
         close(); reloadSoon();
       }).catch(function (e) {
         console.error('[materials-v2] import', e);
@@ -439,7 +439,7 @@
       records.forEach(function (r) { if (r._valid !== false) valid.push(r); else invalid++; });
       var fs = fields().filter(function (f) { return st.mappings[f.key] !== undefined || f.required; });
       var h = '<div style="font-weight:600;margin-bottom:8px;">Step 3 · Preview &amp; confirm</div>';
-      h += '<div class="mu-sub" style="margin-bottom:12px;">' + valid.length + ' valid row' + (valid.length === 1 ? '' : 's') + ' ready' + (invalid ? ', ' + invalid + ' will be skipped (missing required fields)' : '') + '. Imported materials land as <strong>draft</strong>.</div>';
+      h += '<div class="mu-sub" style="margin-bottom:12px;">' + MastFormat.countNoun(valid.length, 'valid row') + ' ready' + (invalid ? ', ' + invalid + ' will be skipped (missing required fields)' : '') + '. Imported materials land as <strong>draft</strong>.</div>';
       h += '<div style="overflow-x:auto;margin-bottom:14px;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr>';
       fs.forEach(function (f) { h += '<th style="padding:6px 8px;text-align:left;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;font-weight:600;">' + esc(f.label) + '</th>'; });
       h += '</tr></thead><tbody>';
@@ -463,7 +463,7 @@
         : '<button class="btn btn-secondary" onclick="MaterialsV2.importClose()">Cancel</button>';
       foot += st.step < 3
         ? '<button class="btn btn-primary" onclick="MaterialsV2.importStep(1)">Continue</button>'
-        : '<button class="btn btn-primary" id="matV2ImportBtn" onclick="MaterialsV2.importRun()"' + (validCount ? '' : ' disabled') + '>Import ' + validCount + ' material' + (validCount === 1 ? '' : 's') + '</button>';
+        : '<button class="btn btn-primary" id="matV2ImportBtn" onclick="MaterialsV2.importRun()"' + (validCount ? '' : ' disabled') + '>Import ' + MastFormat.countNoun(validCount, 'material') + '</button>';
       foot += '</div>';
       openModal(
         '<div style="max-width:760px;">' +
