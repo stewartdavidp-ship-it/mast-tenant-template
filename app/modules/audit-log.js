@@ -167,7 +167,7 @@ function renderAuditLog() {
   var tbody = document.getElementById('auditTableBody');
   tbody.innerHTML = '';
   filtered.forEach(function(e) {
-    var time = e.time ? new Date(_auditTimeMs(e)).toLocaleString() : '—';
+    var time = e.time ? MastFormat.dateTime(_auditTimeMs(e)) : '—';
     var actor = (e.actor && e.actor.displayName) || 'Unknown';
     var action = (e.event && e.event.action) || '—';
     var entity = (e.event && e.event.entity) || '—';
@@ -191,7 +191,7 @@ function renderAuditLog() {
   // Mobile cards
   cardsEl.innerHTML = '';
   filtered.forEach(function(e) {
-    var time = e.time ? new Date(_auditTimeMs(e)).toLocaleString() : '—';
+    var time = e.time ? MastFormat.dateTime(_auditTimeMs(e)) : '—';
     var actor = (e.actor && e.actor.displayName) || 'Unknown';
     var action = (e.event && e.event.action) || '—';
     var entity = (e.event && e.event.entity) || '—';
@@ -251,7 +251,7 @@ async function renderRecordHistory(entity, entityId) {
     var html = '<div class="record-history">' +
       '<div class="record-history-title">Change History</div>';
     entries.forEach(function(e) {
-      var time = e.time ? new Date(_auditTimeMs(e)).toLocaleString() : '—';
+      var time = e.time ? MastFormat.dateTime(_auditTimeMs(e)) : '—';
       var actor = (e.actor && e.actor.displayName) || 'Unknown';
       var action = (e.event && e.event.action) || '—';
       html += '<div class="record-history-item">' +
