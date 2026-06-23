@@ -195,7 +195,7 @@
        scripts/bump-modules-version.sh (these are static <head> tags loaded
        before the JS var exists, so they can't read it at runtime). Without
        this, the engines were frozen at ?v=1 and never cache-busted on deploy. -->
-  <script src="../shared/mast-ui.js?v=914450ded6a2"></script>
+  <script src="../shared/mast-ui.js?v=a6a3f9f7163a"></script>
   <script src="../shared/mast-io.js?v=84d9249da0cb"></script>
   <script src="../shared/mast-entity.js?v=d76451846c29"></script>
   <!-- Canonical product readiness gate (computeReadinessChecklist / productMarkupConfig).
@@ -20091,7 +20091,7 @@ var MODULE_MANIFEST = {
   // Workflow engine — reusable gated-workflow primitive. No routes; loaded
   // on-demand by consuming surfaces (commissions, pick/ship, RMA, etc.)
   // before they render. See docs/workflow-engine-design.md.
-  'social-v2': { src: 'modules/social-v2.js', v: 'a3a67a703767', routes: ['social-v2', 'social'] }, // native social pipeline; owns the legacy 'social' route too (V1 social.js retired, T6)
+  'social-v2': { src: 'modules/social-v2.js', v: 'de638efc7a8e', routes: ['social-v2', 'social'] }, // native social pipeline; owns the legacy 'social' route too (V1 social.js retired, T6)
   'composer-v2': { src: 'modules/composer-v2.js', v: '80f8e8f074cd', routes: ['composer-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'engagement-inbox-v2': { src: 'modules/engagement-inbox-v2.js', v: 'ae7074515108', routes: ['engagement-inbox-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'mapping-v2': { src: 'modules/mapping-v2.js', v: '8996b35a8ba9', routes: ['mapping-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
@@ -20143,7 +20143,7 @@ var MODULE_MANIFEST = {
   productsEngine: { src: 'modules/products-engine.js', v: '3c21040c9ffa', routes: [] },
   // Coupon dialogs (add/edit / share / delete) — no route; lazy-loaded via the
   // eager openCouponModal / openCouponShareModal / confirmDeleteCoupon shims (Track 1).
-  couponModals: { src: 'modules/coupon-modals.js', v: 'f4dfbb6333b8', routes: [] },
+  couponModals: { src: 'modules/coupon-modals.js', v: 'b5dbc52a757f', routes: [] },
   // Image modal (add/edit gallery image) — no route; lazy-loaded via the eager
   // openImageModal shim (Track 1).
   imageModal: { src: 'modules/image-modal.js', v: '7bb5a1e086ad', routes: [] },
@@ -26648,21 +26648,17 @@ function copyAiSnippet(elId, btn) {
 }
 
 function copyText(text, btn) {
-  navigator.clipboard.writeText(text).then(function() {
-    showToast('Copied to clipboard.');
-    if (btn) { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 2000); }
-  }).catch(function() { showToast('Select and copy manually.'); });
+  // Delegates to the canonical MastUI.copy (feature-detect + execCommand fallback).
+  window.MastUI.copy(text, { btn: btn });
 }
 
 function copyStartupPrompt() {
   var el = document.getElementById('aiStartupPrompt');
   if (!el) return;
-  navigator.clipboard.writeText(el.textContent).then(function() {
-    showToast('Startup prompt copied to clipboard.');
-    var btn = document.getElementById('copyStartupPromptBtn');
-    if (btn) { btn.textContent = 'Copied!'; setTimeout(function() { btn.textContent = 'Copy'; }, 2000); }
-  }).catch(function() {
-    showToast('Select and copy the prompt manually.');
+  window.MastUI.copy(el.textContent, {
+    okMsg: 'Startup prompt copied to clipboard.',
+    errMsg: 'Select and copy the prompt manually.',
+    btn: document.getElementById('copyStartupPromptBtn')
   });
 }
 

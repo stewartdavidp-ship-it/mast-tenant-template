@@ -3,7 +3,7 @@
  * Run: node test/mast-ui.test.js
  */
 const assert = require('assert');
-const { Num, badge, tabs, list, esc, pageHeader, card, launchCard, cardGrid, sanitizeHtml, _safeUrl } = require('../shared/mast-ui.js');
+const { Num, badge, tabs, list, esc, pageHeader, card, launchCard, cardGrid, sanitizeHtml, _safeUrl, copy } = require('../shared/mast-ui.js');
 
 let pass = 0;
 function t(name, fn) { fn(); pass++; console.log('  ✓ ' + name); }
@@ -268,4 +268,57 @@ t('emptyState escapes icon, title AND hint (XSS-safe)', () => {
   assert.ok(!h.includes('<b>t</b>') && !h.includes('<i>h</i>'));
 });
 
-console.log('\n' + pass + ' passed (incl. statusBadge + emptyState)');
+// ── copy() — the centralized clipboard write (async; stub navigator + showToast).
+async function tA(name, fn) { await fn(); pass++; console.log('  ✓ ' + name); }
+(async () => {
+  var written, toasted;
+  // Node 21+ ships a read-only built-in `navigator` global (no .clipboard), so a
+  // plain assignment is ignored — force the stub via defineProperty.
+  function setNavigator(v) { Object.defineProperty(globalThis, 'navigator', { value: v, configurable: true, writable: true }); }
+  setNavigator({ clipboard: { writeText: function (s) { written = s; return Promise.resolve(); } } });
+  global.showToast = function (m) { toasted = m; };
+
+  await tA('copy: writes text, default success toast, resolves true', async () => {
+    written = toasted = undefined;
+    const r = await copy('hello');
+    assert.strictEqual(written, 'hello');
+    assert.strictEqual(toasted, 'Copied to clipboard.');
+    assert.strictEqual(r, true);
+  });
+  await tA('copy: coerces non-string + honors custom okMsg', async () => {
+    written = toasted = undefined;
+    const r = await copy(42, { okMsg: 'ID copied' });
+    assert.strictEqual(written, '42');
+    assert.strictEqual(toasted, 'ID copied');
+    assert.strictEqual(r, true);
+  });
+  await tA('copy: okMsg:false mutes the toast', async () => {
+    written = toasted = undefined;
+    await copy('x', { okMsg: false });
+    assert.strictEqual(written, 'x');
+    assert.strictEqual(toasted, undefined);
+  });
+  await tA('copy: btn label flips to "Copied!" then restores', async () => {
+    var btn = { textContent: 'Copy' };
+    await copy('y', { btn: btn, okMsg: false });
+    assert.strictEqual(btn.textContent, 'Copied!');
+    await new Promise(function (r) { setTimeout(r, 2010); });
+    assert.strictEqual(btn.textContent, 'Copy');
+  });
+  await tA('copy: null/undefined input → empty string, still resolves true', async () => {
+    written = undefined;
+    const r = await copy(null, { okMsg: false });
+    assert.strictEqual(written, '');
+    assert.strictEqual(r, true);
+  });
+
+  // No clipboard API AND no DOM (node) → fallback can't run → resolves false, never throws.
+  setNavigator(undefined);
+  await tA('copy: no clipboard/document → resolves false (never throws)', async () => {
+    const r = await copy('z', { errMsg: false });
+    assert.strictEqual(r, false);
+  });
+  delete global.showToast;
+
+  console.log('\n' + pass + ' passed (incl. statusBadge + emptyState + copy)');
+})();
