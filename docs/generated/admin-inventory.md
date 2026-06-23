@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **41,518** lines
-- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,805** lines combined
+- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,795** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -65,7 +65,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/engagement-inbox-v2.js` | 383 | engagement-inbox-v2 |
 | `modules/engagement-inbox.js` | 525 | engagement-inbox |
 | `modules/enrollments-v2.js` | 492 | enrollments-v2 |
-| `modules/events.js` | 1,937 | events-shows, events-settings |
+| `modules/events.js` | 1,935 | events-shows, events-settings |
 | `modules/feedback-dialog.js` | 274 | — |
 | `modules/finance-close-v2.js` | 588 | finance-period-close-v2, finance-amendments-v2 |
 | `modules/finance-expenses-v2.js` | 484 | finance-expenses-v2 |
@@ -111,7 +111,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/permission-matrix.js` | 211 | — |
 | `modules/pos-v2.js` | 182 | pos-v2 |
 | `modules/procurement-v2.js` | 3,278 | procurement-v2, procurement |
-| `modules/production.js` | 3,828 | jobs, production, stories, forecast |
+| `modules/production.js` | 3,826 | jobs, production, stories, forecast |
 | `modules/products-engine.js` | 1,937 | — |
 | `modules/products-v2.js` | 3,881 | products-v2 |
 | `modules/promotions-v2.js` | 456 | promotions-v2, promotions |
@@ -131,7 +131,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/social-v2.js` | 1,795 | social-v2, social |
 | `modules/stories-v2.js` | 640 | stories-v2 |
 | `modules/students-config-v2.js` | 687 | students-config-v2 |
-| `modules/students-v2.js` | 971 | students-v2, students |
+| `modules/students-v2.js` | 970 | students-v2, students |
 | `modules/studio-locations.js` | 281 | — |
 | `modules/studio-v2.js` | 446 | studio-v2 |
 | `modules/studio.js` | 823 | studio |
@@ -148,7 +148,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/website-core.js` | 943 | — |
 | `modules/website-import.js` | 1,750 | website-import |
 | `modules/website-media.js` | 506 | — |
-| `modules/website-v2.js` | 4,298 | website-v2, website, homepage, brand |
+| `modules/website-v2.js` | 4,293 | website-v2, website, homepage, brand |
 | `modules/wholesale-v2.js` | 862 | wholesale-v2, wholesale |
 | `modules/workflows/commissions.workflow.js` | 266 | — |
 | `modules/workflows/jobs.workflow.js` | 118 | — |

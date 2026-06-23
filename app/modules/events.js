@@ -576,11 +576,9 @@
     if (!show || !show.slug) return;
     var domain = window.location.hostname;
     var url = 'https://' + domain + '/show/' + show.slug;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(function() { showToast('URL copied!'); });
-    } else {
-      mastCopyFallback('Copy this URL', url);
-    }
+    window.MastUI.copy(url, { okMsg: 'URL copied!', errMsg: false }).then(function (ok) {
+      if (!ok) mastCopyFallback('Copy this URL', url);
+    });
   }
 
   function downloadShowQR(showId) {
