@@ -1589,8 +1589,9 @@
     var h = vp === 'mobile' ? '720px' : '600px';
     // sandbox mirrors the legacy preview shell (scripts + same-origin so the
     // storefront boots + reads config; popups so in-iframe links can open).
-    return '<iframe id="wv2PreviewFrame" class="wv2-prev-frame" title="Live preview of your website" ' +
-        'src="' + esc(url) + '" loading="lazy" ' +
+    return '<div class="wv2-prev-loading" id="wv2PrevLoading"><span class="wv2-spinner" aria-hidden="true"></span><span>Loading preview…</span></div>' +
+      '<iframe id="wv2PreviewFrame" class="wv2-prev-frame" title="Live preview of your website" ' +
+        'src="' + esc(url) + '" loading="lazy" onload="WebsiteV2.onPreviewLoad()" ' +
         'style="width:' + w + ';height:' + h + ';" ' +
         'sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>';
   }
@@ -1643,6 +1644,9 @@
         existing.style.width = PREVIEW_WIDTHS[vp];
         existing.style.height = vp === 'mobile' ? '720px' : '600px';
         stage.replaceChild(existing, fresh);
+        // The preserved frame is already loaded and won't re-fire `onload`, so the
+        // freshly-rendered loading overlay would hang — hide it now.
+        var l = document.getElementById('wv2PrevLoading'); if (l) l.style.display = 'none';
       }
     }
   }
@@ -1652,7 +1656,12 @@
   function reloadPreviewNow() {
     V2.previewNonce++;
     var frame = document.getElementById('wv2PreviewFrame');
-    if (frame) { try { frame.src = previewUrl(); } catch (e) {} }
+    if (frame) {
+      // Reshow the loading overlay for the reload; onload (WebsiteV2.onPreviewLoad)
+      // hides it once the storefront repaints.
+      var l = document.getElementById('wv2PrevLoading'); if (l) l.style.display = '';
+      try { frame.src = previewUrl(); } catch (e) {}
+    }
   }
   // Tier-2 instant live theme preview (PR7): post a COLOR/FONT delta straight to
   // the Card 4 preview iframe via postMessage so the storefront repaints in
@@ -1870,10 +1879,14 @@
       '.wv2-vp.on{background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal);}' +
       '.wv2-prev-refresh{background:none;border:1px solid var(--border);border-radius:8px;color:var(--text-secondary,var(--warm-gray));cursor:pointer;font-size:0.78rem;padding:5px 12px;}' +
       '.wv2-prev-refresh:hover{color:var(--text-primary);border-color:var(--teal);}' +
-      '.wv2-prev-stage{display:flex;justify-content:center;overflow:auto;background:var(--surface-dark,color-mix(in srgb,var(--text-primary) 6%,transparent));border:1px solid var(--border);border-radius:10px;padding:12px;}' +
+      '.wv2-prev-stage{position:relative;display:flex;justify-content:center;overflow:auto;background:var(--surface-dark,color-mix(in srgb,var(--text-primary) 6%,transparent));border:1px solid var(--border);border-radius:10px;padding:12px;}' +
       // Light placeholder background before the storefront paints (the preview is
       // forced light, so a white canvas matches — `white` keyword avoids the hex ratchet).
       '.wv2-prev-frame{max-width:100%;border:1px solid var(--border);border-radius:6px;background:white;transition:width 0.18s ease;}' +
+      // Loading overlay shown until the preview iframe fires `load` (storefront paints).
+      '.wv2-prev-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:10px;font-size:0.85rem;color:var(--text-secondary,var(--warm-gray));background:color-mix(in srgb,var(--surface-card) 72%,transparent);border-radius:10px;z-index:2;}' +
+      '.wv2-spinner{width:20px;height:20px;border:2px solid color-mix(in srgb,var(--text-primary) 22%,transparent);border-top-color:var(--teal);border-radius:50%;animation:wv2spin 0.8s linear infinite;}' +
+      '@keyframes wv2spin{to{transform:rotate(360deg);}}' +
       '.wv2-prev-empty{padding:32px 12px;text-align:center;}';
     var st = document.createElement('style'); st.id = 'wv2-styles'; st.textContent = css;
     (document.head || document.documentElement).appendChild(st);
@@ -2580,6 +2593,8 @@
     },
     // Card 4 · manual refresh — force the iframe to refetch the live storefront.
     refreshPreview: function () { reloadPreviewNow(); },
+    // iframe onload → hide the "Loading preview…" overlay once the storefront paints.
+    onPreviewLoad: function () { var l = document.getElementById('wv2PrevLoading'); if (l) l.style.display = 'none'; },
 
     copyLink: function () {
       var url = liveUrl();
