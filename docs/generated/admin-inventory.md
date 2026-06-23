@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **41,380** lines
-- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,888** lines combined
+- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,991** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -30,7 +30,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/business-view.js` | 640 | — |
 | `modules/calendar-v2.js` | 108 | calendar-v2 |
 | `modules/campaigns-v2.js` | 539 | campaigns-v2, campaigns |
-| `modules/cart.js` | 1,639 | wallet, gift-cards, loyalty, membership |
+| `modules/cart.js` | 1,643 | wallet, gift-cards, loyalty, membership |
 | `modules/channels-v2.js` | 1,007 | channels-v2, channels |
 | `modules/classes-v2.js` | 1,276 | classes-v2, book-reports-v2, classes-rooms-v2, classes-settings-v2 |
 | `modules/clone-product-dialog.js` | 111 | — |
@@ -93,7 +93,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/link-recipe-dialog.js` | 107 | — |
 | `modules/lookbooks-v2.js` | 561 | lookbooks-v2, lookbooks |
 | `modules/lots-v2.js` | 178 | lots-v2 |
-| `modules/loyalty-v2.js` | 500 | loyalty-v2 |
+| `modules/loyalty-v2.js` | 495 | loyalty-v2 |
 | `modules/maker-settings.js` | 353 | — |
 | `modules/maker.js` | 7,887 | materials, products |
 | `modules/mapping-v2.js` | 382 | mapping-v2 |
@@ -148,7 +148,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/website-core.js` | 943 | — |
 | `modules/website-import.js` | 1,750 | website-import |
 | `modules/website-media.js` | 506 | — |
-| `modules/website-v2.js` | 4,464 | website-v2, website, homepage, brand |
+| `modules/website-v2.js` | 4,568 | website-v2, website, homepage, brand |
 | `modules/wholesale-v2.js` | 862 | wholesale-v2, wholesale |
 | `modules/workflows/commissions.workflow.js` | 266 | — |
 | `modules/workflows/jobs.workflow.js` | 118 | — |

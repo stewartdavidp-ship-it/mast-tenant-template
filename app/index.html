@@ -19877,7 +19877,7 @@ var MODULE_MANIFEST = {
   // no longer load. The legacy host modules brand / homepage still load — they own
   // BrandBridge / HomepageBridge + writers the builder delegates to (hp*,
   // hpToggleTestimonialVisible). website.js (V1) is RETIRED (T6 PR3): its WebsiteBridge write layer moved to the lazy website-core.
-  'website-v2': { src: 'modules/website-v2.js', v: 'c3c5499dd574', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
+  'website-v2': { src: 'modules/website-v2.js', v: 'fd4bda55d86f', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
   'commissions-v2': { src: 'modules/commissions-v2.js', v: '3d50623dc6d2', routes: ['commissions-v2', 'commissions'] }, // UI-redesign Process surface: commissions lifecycle. orders.js (V1) commission slice RETIRED (T6 PR2): its CommissionsBridge + write cores were absorbed here; the bare #commissions route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'products-v2': { src: 'modules/products-v2.js', v: 'ec87df621dce', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: 'db17beb55ab7', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
@@ -19887,7 +19887,7 @@ var MODULE_MANIFEST = {
   'membership-v2': { src: 'modules/membership-v2.js', v: '57782352aa3f', routes: ['membership-v2'] }, // UI-redesign conversion: membership members read detail (flag-gated)
   'cs-reviews-v2': { src: 'modules/cs-reviews-v2.js', v: '3914ec83b5a8', routes: ['cs-reviews-v2'] }, // UI-redesign conversion: CS reviews read detail (flag-gated)
   'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', v: 'bd608c382417', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
-  'loyalty-v2': { src: 'modules/loyalty-v2.js', v: '7ffc70a040b6', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
+  'loyalty-v2': { src: 'modules/loyalty-v2.js', v: '6f715c03fe81', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
   'stories-v2': { src: 'modules/stories-v2.js', v: '91be6e792090', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
   'jobs-v2': { src: 'modules/jobs-v2.js', v: '8d92eff15148', routes: ['jobs-v2'] }, // UI-redesign conversion: Jobs (production) B1 scaffold — list + read-only detail (flag-gated, side-by-side)
   'cs-members-v2': { src: 'modules/cs-members-v2.js', v: 'c1d3cd3ffa7d', routes: ['cs-members-v2'] }, // UI-redesign conversion: CS members read detail (flag-gated)
@@ -19930,7 +19930,7 @@ var MODULE_MANIFEST = {
   maker: { src: 'modules/maker.js', v: 'f18b9f8e5286', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: '5737d83dd7ac', routes: ['galleries'] },
   book: { src: 'modules/book.js', v: '5ed3d3eee5d5', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
-  cart: { src: 'modules/cart.js', v: 'ac83779d846e', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
+  cart: { src: 'modules/cart.js', v: '2108fbbe368f', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'f0c8d58c4fb1', routes: ['studio'] },
   'customer-service': { src: 'modules/customer-service.js', v: '8ecc2009915c', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules

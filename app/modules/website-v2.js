@@ -66,7 +66,9 @@
     { key: 'domains', title: 'Domains', mount: 'wv2DomainsBody',
       blurb: 'Connect a custom domain you own to your storefront.', pr: 'this builder' },
     { key: 'visibility', title: 'Visibility & pages', mount: 'wv2VisibilityBody',
-      blurb: 'Search-engine visibility and how many events show on your homepage.', pr: 'this builder' }
+      blurb: 'Search-engine visibility and how many events show on your homepage.', pr: 'this builder' },
+    { key: 'wallet', title: 'Wallet & loyalty', mount: 'wv2WalletBody',
+      blurb: 'Gift cards, your loyalty program, and the My Wallet page.', pr: 'this builder' }
   ];
 
   // Module config state — cold-safe defaults so the header renders before load().
@@ -1914,6 +1916,7 @@
     mountProductDisplay();
     mountDomains();
     mountVisibility();
+    mountWallet();
   }
 
   // ── Card 5 · Product page display (relocated from Settings, PR2) ────
@@ -2042,6 +2045,58 @@
     }
   }
 
+  // ── Card 8 · Wallet & loyalty (config home; relocated from the admin Wallet
+  // module, PR4) ────────────────────────────────────────────────────────────
+  // Gift cards write admin/walletConfig via MastDB.walletConfig.update; loyalty
+  // writes via the global LoyaltyBridge.saveProgramConfig (shared validation +
+  // audit). The admin loyalty/gift-card "Settings" openers now redirect here.
+  // Distinct wc* ids (the admin modals use gcConfig*/loyaltyConfig*). Loaders are
+  // authed-gated for boot-smoke/cold safety.
+  function dollarsList(centsArr) {
+    return (Array.isArray(centsArr) ? centsArr : []).map(function (c) { return MastFormat.moneyRaw(c, { cents: true }); }).join(', ');
+  }
+  function walletControlsHtml(c) {
+    c = c || {};
+    var walletPageOn = !!(V2.nav && V2.nav.wallet && V2.nav.wallet.enabled);
+    return '<div class="wv2-sub"><div class="wv2-sub-h">Gift cards</div>' +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;"><input type="checkbox" id="wcGiftEnabled"' + (c.giftCardsEnabled ? ' checked' : '') + '><span style="font-size:0.85rem;">Sell gift cards</span></label>' +
+        '<div class="form-group"><label style="font-size:0.78rem;">Denominations (dollars, comma-separated)</label><input type="text" id="wcGiftDenoms" value="' + esc(dollarsList(c.giftCardDenominations)) + '" placeholder="25, 50, 75, 100" style="font-size:0.85rem;"></div>' +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;"><input type="checkbox" id="wcGiftCustom"' + (c.giftCardCustomEnabled ? ' checked' : '') + '><span style="font-size:0.85rem;">Allow custom amounts</span></label>' +
+        '<div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+          '<div><label style="font-size:0.78rem;">Custom min ($)</label><input type="number" id="wcGiftMin" min="0" step="1" value="' + esc(c.giftCardCustomMin ? MastFormat.moneyRaw(c.giftCardCustomMin, { cents: true }) : 10) + '" style="font-size:0.85rem;"></div>' +
+          '<div><label style="font-size:0.78rem;">Custom max ($)</label><input type="number" id="wcGiftMax" min="0" step="1" value="' + esc(c.giftCardCustomMax ? MastFormat.moneyRaw(c.giftCardCustomMax, { cents: true }) : 500) + '" style="font-size:0.85rem;"></div>' +
+        '</div>' +
+        '<button class="btn btn-primary" onclick="WebsiteV2.saveGiftCards()">Save gift cards</button>' +
+        '<div id="wcGiftStatus" style="margin-top:8px;font-size:0.85rem;"></div>' +
+      '</div>' +
+      '<div class="wv2-sub"><div class="wv2-sub-h">Loyalty program</div>' +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:8px;"><input type="checkbox" id="wcLoyaltyEnabled"' + (c.loyaltyEnabled ? ' checked' : '') + '><span style="font-size:0.85rem;">Run a points-based loyalty program</span></label>' +
+        '<div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">' +
+          '<div><label style="font-size:0.78rem;">Points name</label><input type="text" id="wcLoyaltyName" value="' + esc(c.loyaltyPointName || 'Points') + '" style="font-size:0.85rem;"></div>' +
+          '<div><label style="font-size:0.78rem;">Earn rate (points per $1)</label><input type="number" id="wcLoyaltyEarn" min="0.1" step="0.1" value="' + esc(c.loyaltyEarnRate || 1) + '" style="font-size:0.85rem;"></div>' +
+          '<div><label style="font-size:0.78rem;">Redemption (points per $1)</label><input type="number" id="wcLoyaltyRedeem" min="1" step="1" value="' + esc(c.loyaltyRedemptionRate || 50) + '" style="font-size:0.85rem;"></div>' +
+          '<div><label style="font-size:0.78rem;">Points expire after (days)</label><input type="number" id="wcLoyaltyExpiry" min="0" step="1" value="' + esc(c.loyaltyExpiryDays || 365) + '" style="font-size:0.85rem;"></div>' +
+        '</div>' +
+        '<div class="form-group"><label style="font-size:0.78rem;">Excluded categories (comma-separated, optional)</label><input type="text" id="wcLoyaltyExclude" value="' + esc(Array.isArray(c.loyaltyExclusions) ? c.loyaltyExclusions.join(', ') : '') + '" style="font-size:0.85rem;"></div>' +
+        '<button class="btn btn-primary" onclick="WebsiteV2.saveLoyalty()">Save loyalty</button>' +
+        '<div id="wcLoyaltyStatus" style="margin-top:8px;font-size:0.85rem;"></div>' +
+      '</div>' +
+      '<div class="wv2-sub"><div class="wv2-sub-h">My Wallet page</div>' +
+        '<div class="mu-sub" style="margin-bottom:8px;">Show the storefront My Wallet page where customers see their credits, gift cards, and points.</div>' +
+        '<label class="toggle-switch" onclick="event.stopPropagation();"><input type="checkbox"' + (walletPageOn ? ' checked' : '') + ' onchange="WebsiteV2.toggleCapability(\'wallet\', this.checked)"><span class="toggle-slider"></span></label>' +
+      '</div>';
+  }
+  function mountWallet() {
+    var host = document.getElementById('wv2WalletBody'); if (!host) return;
+    if (!canEdit()) { host.innerHTML = '<div class="mu-sub">You do not have permission to edit wallet settings.</div>'; return; }
+    var authed = !!(window.firebase && firebase.auth && firebase.auth().currentUser);
+    if (!authed) { host.innerHTML = walletControlsHtml({}); return; }
+    host.innerHTML = '<div class="mu-sub">Loading…</div>';
+    Promise.resolve(MastDB.walletConfig.get()).then(function (c) {
+      host.innerHTML = walletControlsHtml(c || {});
+    }).catch(function () { host.innerHTML = walletControlsHtml({}); });
+  }
+
   // ── public API ─────────────────────────────────────────────────────
   window.WebsiteV2 = {
     refresh: function () { render(); },
@@ -2061,6 +2116,55 @@
         if (window.showToast) showToast('Could not update: ' + (e && e.message || e), true);
       }
       mountShop();
+    },
+
+    // Card 8 · Gift-card config → admin/walletConfig (MastDB.walletConfig.update —
+    // the same store + shallow-merge the admin module writes; loyalty slice survives).
+    saveGiftCards: async function () {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit wallet settings.', true); return; }
+      var enabled = !!(document.getElementById('wcGiftEnabled') || {}).checked;
+      var custom = !!(document.getElementById('wcGiftCustom') || {}).checked;
+      var denoms = ((document.getElementById('wcGiftDenoms') || {}).value || '').split(',')
+        .map(function (s) { return Math.round(parseFloat(s.trim()) * 100); })
+        .filter(function (n) { return n > 0 && !isNaN(n); });
+      if (enabled && denoms.length === 0 && !custom) {
+        if (window.showToast) showToast('Add at least one denomination or allow custom amounts.', true); return;
+      }
+      var minVal = parseFloat((document.getElementById('wcGiftMin') || {}).value) || 0;
+      var maxVal = parseFloat((document.getElementById('wcGiftMax') || {}).value) || 0;
+      try {
+        await MastDB.walletConfig.update({
+          giftCardsEnabled: enabled, giftCardDenominations: denoms, giftCardCustomEnabled: custom,
+          giftCardCustomMin: Math.round(minVal * 100), giftCardCustomMax: Math.round(maxVal * 100),
+          updatedAt: new Date().toISOString()
+        });
+        if (typeof window.writeAudit === 'function') { try { await writeAudit('update', 'wallet-config', 'giftCards'); } catch (e) {} }
+        var s = document.getElementById('wcGiftStatus'); if (s) s.innerHTML = '<span style="color:var(--teal);">&#10003; Saved</span>';
+        if (window.showToast) showToast('Gift card settings saved');
+      } catch (err) { if (window.showToast) showToast('Could not save: ' + (err && err.message || err), true); }
+    },
+
+    // Card 8 · Loyalty config → the shared LoyaltyBridge.saveProgramConfig (same
+    // write + validation + audit the admin loyalty page uses).
+    saveLoyalty: async function () {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit wallet settings.', true); return; }
+      if (!window.LoyaltyBridge || !LoyaltyBridge.saveProgramConfig) {
+        if (window.MastAdmin && MastAdmin.loadModule) { try { await MastAdmin.loadModule('cart'); } catch (e) {} }
+      }
+      if (!window.LoyaltyBridge || !LoyaltyBridge.saveProgramConfig) { if (window.showToast) showToast('Loyalty engine still loading — try again', true); return; }
+      var d = {
+        enabled: !!(document.getElementById('wcLoyaltyEnabled') || {}).checked,
+        pointName: (document.getElementById('wcLoyaltyName') || {}).value || 'Points',
+        earnRate: (document.getElementById('wcLoyaltyEarn') || {}).value,
+        redeemRate: (document.getElementById('wcLoyaltyRedeem') || {}).value,
+        expiryDays: (document.getElementById('wcLoyaltyExpiry') || {}).value,
+        exclusions: (document.getElementById('wcLoyaltyExclude') || {}).value || ''
+      };
+      try {
+        var saved = await LoyaltyBridge.saveProgramConfig(d);
+        var s = document.getElementById('wcLoyaltyStatus');
+        if (s) s.innerHTML = saved ? '<span style="color:var(--teal);">&#10003; Saved</span>' : '';
+      } catch (err) { if (window.showToast) showToast('Could not save loyalty: ' + (err && err.message || err), true); }
     },
 
     // Card 1 · Color scheme tile → HomepageBridge.setColorScheme (clears custom
