@@ -1375,7 +1375,7 @@
       } else if (d.choice === 'retired') {
         patch = { intendedChannels: [], offChannelReason: 'retired' };
       } else if (d.choice === 'indev') {
-        patch = { offChannelReason: 'in-development', offChannelSnoozeUntil: new Date(Date.now() + 90 * 86400000).toISOString() };
+        patch = { offChannelReason: 'in-development', offChannelSnoozeUntil: MastFormat.addDays(new Date(), 90).toISOString() };
       } else if (d.choice === 'flag') {
         // Explicit "do flag" — ensure intendedChannels lists connected retail channels.
         patch = { intendedChannels: connectedChannels };

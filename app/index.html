@@ -225,7 +225,7 @@
        lives only inside the MastUI engine. Eager (peer of MastUI) so any module
        can adopt it without load-order risk. Not yet adopted (next PR).
        ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
-  <script src="../shared/mast-format.js?v=a78608159360"></script>
+  <script src="../shared/mast-format.js?v=edfdaca0b130"></script>
   <!-- Centralized CSV-export core (Track 5). window.MastExport — toCsv()/download()
        with RFC-4180 quoting + formula-injection defense; prefers window.Papa when
        present, falls back to a built-in serializer. Eager so adopters can call it
@@ -20066,8 +20066,8 @@ var MODULE_MANIFEST = {
   emailLog: { src: 'modules/email-log.js', v: '56fd83804238', routes: ['email-log'] },
   maker: { src: 'modules/maker.js', v: '828d1f5f5940', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: 'c401d0269d99', routes: ['galleries'] },
-  book: { src: 'modules/book.js', v: '6989b28f020b', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
-  cart: { src: 'modules/cart.js', v: '089b810a2bba', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
+  book: { src: 'modules/book.js', v: 'e0e6d2b89535', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
+  cart: { src: 'modules/cart.js', v: '5c6b2904781a', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'ec2784aaf153', routes: ['studio'] },
   'customer-service': { src: 'modules/customer-service.js', v: 'd9ee502932c5', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
@@ -20087,7 +20087,7 @@ var MODULE_MANIFEST = {
   // first channel connect (auto-fired by post-boot trigger via
   // window.MastMappingFlow.checkAndMaybeShow). 'mapping' route is the
   // Settings re-entry surface for later edits + new-listing deltas.
-  mapping: { src: 'modules/mapping.js', v: 'fa4e0e7d3634', routes: ['mapping'] },
+  mapping: { src: 'modules/mapping.js', v: '1eafd690a25b', routes: ['mapping'] },
   // Workflow engine — reusable gated-workflow primitive. No routes; loaded
   // on-demand by consuming surfaces (commissions, pick/ship, RMA, etc.)
   // before they render. See docs/workflow-engine-design.md.
@@ -20102,7 +20102,7 @@ var MODULE_MANIFEST = {
   'diagnostics': { src: 'modules/diagnostics.js', v: '894983fe40c7', routes: ['diagnostics'] }, // L3 self-diagnosis surface (admin-gated)
   'subscription-v2': { src: 'modules/subscription-v2.js', v: '4fe160832575', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
   'analytics-v2': { src: 'modules/analytics-v2.js', v: 'b4e95e781311', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
-  'advisor-v2': { src: 'modules/advisor-v2.js', v: '52e14fe7a4dd', routes: ['advisor-v2', 'advisor'] }, // Business-Plan advisor; owns the legacy 'advisor' route too (V1 advisor.js retired, T6). Entity writes via MastDB.businessEntity.* — no bridge.
+  'advisor-v2': { src: 'modules/advisor-v2.js', v: '7a7a5a53a6bc', routes: ['advisor-v2', 'advisor'] }, // Business-Plan advisor; owns the legacy 'advisor' route too (V1 advisor.js retired, T6). Entity writes via MastDB.businessEntity.* — no bridge.
   // Unified Business Entity read-only dashboard (D-22) — no route; lazy-loaded
   // on demand by the 'business' route setup (decomposition Track 1, recipe A).
   'business-view': { src: 'modules/business-view.js', v: '450f422b8c30', routes: [] },

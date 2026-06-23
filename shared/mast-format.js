@@ -198,6 +198,63 @@
     return dt == null ? '' : dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 
+  // ── Day math — the centralized replacement for the `/ 86400000` magic number
+  // copy-pasted ~80× (idle-days, age-days, days-overdue, expiry windows). Raw
+  // `(Date.now() - ms) / 86400000` is DST-fragile (a spring-forward day is 23h, so
+  // a true 24h span rounds down) and Timestamp-unsafe. These compute CALENDAR-day
+  // differences off local-midnight-normalized dates, so "days between Mar 8 and
+  // Mar 9" is 1 across a DST boundary, not 0.96.
+  var MS_PER_DAY = 86400000;
+
+  // Local-midnight floor of any date-ish input (shares date()'s calendar handling).
+  function _midnight(d) {
+    var dt = _toLocalDate(d);
+    if (dt == null) return null;
+    return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  }
+
+  // daysBetween(from, to) -> signed whole CALENDAR days from `from` to `to`
+  // (to - from). Positive = `to` is later. null if either side is unparseable.
+  // Rounding absorbs the ±1h DST drift between the two local midnights.
+  function daysBetween(from, to) {
+    var a = _midnight(from), b = _midnight(to);
+    if (a == null || b == null) return null;
+    return Math.round((b.getTime() - a.getTime()) / MS_PER_DAY);
+  }
+
+  // daysSince(d) -> whole calendar days from d until today (>=0 for past dates).
+  function daysSince(d) { return daysBetween(d, new Date()); }
+  // daysUntil(d) -> whole calendar days from today until d (>=0 for future dates).
+  function daysUntil(d) { return daysBetween(new Date(), d); }
+
+  // addDays(d, n) -> a new Date n calendar days after d (n may be negative). Built
+  // on local date parts (not raw ms) so it stays on the same wall-clock across DST.
+  // Routes through _toLocalDate so a bare calendar string ('2026-06-07') advances by
+  // calendar day (not a UTC-midnight instant); a Date/timestamp keeps its time of
+  // day. Returns null if d is unparseable. Pair with dateRaw()/date() to render.
+  function addDays(d, n) {
+    var dt = _toLocalDate(d);
+    if (dt == null) return null;
+    return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() + (Number(n) || 0),
+      dt.getHours(), dt.getMinutes(), dt.getSeconds(), dt.getMilliseconds());
+  }
+
+  // relative(d[, opts]) -> human calendar-relative label vs now: "today",
+  // "yesterday", "tomorrow", "3 days ago", "in 2 days". Beyond +/-opts.maxDays
+  // (default 30) it falls back to date() ("Jun 7, 2026") so distant dates stay
+  // legible. '' for null/garbage. The centralized replacement for hand-rolled
+  // "<n> day<s> ago" / "in <n> days" strings.
+  function relative(d, opts) {
+    var n = daysUntil(d);
+    if (n == null) return '';
+    var maxDays = (opts && opts.maxDays != null) ? opts.maxDays : 30;
+    if (n === 0) return 'today';
+    if (n === 1) return 'tomorrow';
+    if (n === -1) return 'yesterday';
+    if (Math.abs(n) > maxDays) return date(d);
+    return n > 0 ? ('in ' + n + ' days') : (Math.abs(n) + ' days ago');
+  }
+
   var api = {
     money: money,
     moneyRaw: moneyRaw,
@@ -209,6 +266,12 @@
     dateRaw: dateRaw,
     dateTime: dateTime,
     time: time,
+    daysBetween: daysBetween,
+    daysSince: daysSince,
+    daysUntil: daysUntil,
+    addDays: addDays,
+    relative: relative,
+    MS_PER_DAY: MS_PER_DAY,
     coerceDate: coerceDate
   };
 

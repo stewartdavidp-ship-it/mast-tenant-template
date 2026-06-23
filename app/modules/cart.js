@@ -898,7 +898,7 @@
       var tenantId = MastDB.tenantId();
       if (!db || !tenantId) { showToast('Not connected.', true); return false; }
       var now = new Date().toISOString();
-      var oneYear = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+      var oneYear = MastFormat.dateRaw(MastFormat.addDays(new Date(), 365));
       var memberData = {
         status: 'active',
         startDate: now.slice(0, 10),
@@ -949,7 +949,7 @@
       var tenantId = MastDB.tenantId();
       if (!db || !tenantId) { showToast('Not connected.', true); return false; }
       var now = new Date().toISOString();
-      var oneYear = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+      var oneYear = MastFormat.dateRaw(MastFormat.addDays(new Date(), 365));
       var updates = {
         status: 'active',
         startDate: now.slice(0, 10),
