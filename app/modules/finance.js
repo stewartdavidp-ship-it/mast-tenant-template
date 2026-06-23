@@ -492,14 +492,7 @@ function _finDownloadCsv(viewName, rows, periodLine) {
   var csv = lines.join('\n') + '\n';
   var tenantId = (MastDB.tenantId && MastDB.tenantId()) || window.TENANT_ID || 'tenant';
   var fname = tenantId + '_' + viewName + '_' + todayStr() + '.csv';
-  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url;
-  a.download = fname;
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+  MastExport.downloadBlob(fname, csv, 'text/csv;charset=utf-8;');
 }
 window._finDownloadCsv = _finDownloadCsv;
 
@@ -5979,12 +5972,7 @@ function downloadCsv(rows, filename) {
   var csv = rows.map(function(row) {
     return row.map(function(cell) { return cellFn(cell); }).join(',');
   }).join('\n');
-  var blob = new Blob([csv], { type:'text/csv;charset=utf-8;' });
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement('a');
-  a.href = url; a.download = filename; a.style.display = 'none';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+  MastExport.downloadBlob(filename, csv, 'text/csv;charset=utf-8;');
 }
 
 function injectFinPrintCss(elementId) {

@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **41,518** lines
-- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,795** lines combined
+- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,758** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -25,7 +25,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit.js` | 1,721 | audit |
 | `modules/auditlog-v2.js` | 243 | auditlog-v2 |
 | `modules/blog-v2.js` | 1,900 | blog-v2, blog |
-| `modules/book.js` | 6,678 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
+| `modules/book.js` | 6,672 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/business-setup.js` | 277 | — |
 | `modules/business-view.js` | 640 | — |
 | `modules/calendar-v2.js` | 108 | calendar-v2 |
@@ -72,11 +72,11 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance-openitems-v2.js` | 545 | finance-ar-v2, finance-ap-v2 |
 | `modules/finance-reports-v2.js` | 258 | finance-reports-v2 |
 | `modules/finance-statements-v2.js` | 470 | financials-v2, finance-revenue-v2, finance-pl-v2, finance-cash-flow-v2, finance-tax-v2 |
-| `modules/finance.js` | 8,696 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
+| `modules/finance.js` | 8,684 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/forecast-job-modal.js` | 116 | — |
 | `modules/forecast.js` | 728 | — |
 | `modules/fulfillment-v2.js` | 614 | pack-v2, ship-v2 |
-| `modules/fulfillment.js` | 2,154 | pack, ship, fulfillment |
+| `modules/fulfillment.js` | 2,146 | pack, ship, fulfillment |
 | `modules/galleries-v2.js` | 657 | galleries-v2 |
 | `modules/gallery-metadata-modal.js` | 169 | — |
 | `modules/gift-cards-v2.js` | 298 | gift-cards-v2 |
@@ -105,9 +105,9 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/migration-plan.js` | 657 | — |
 | `modules/module-selection-modal.js` | 147 | — |
 | `modules/nav-profiles.js` | 263 | — |
-| `modules/newsletter-v2.js` | 1,758 | newsletter-v2, newsletter |
+| `modules/newsletter-v2.js` | 1,753 | newsletter-v2, newsletter |
 | `modules/orders-v2.js` | 1,433 | orders-v2, orders |
-| `modules/passes-v2.js` | 547 | passes-v2 |
+| `modules/passes-v2.js` | 541 | passes-v2 |
 | `modules/permission-matrix.js` | 211 | — |
 | `modules/pos-v2.js` | 182 | pos-v2 |
 | `modules/procurement-v2.js` | 3,278 | procurement-v2, procurement |

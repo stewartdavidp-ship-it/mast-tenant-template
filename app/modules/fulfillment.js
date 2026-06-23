@@ -606,15 +606,7 @@
     var o = orders[orderId];
     if (!o) return;
     var csv = generateAdminPirateShipCSV(o);
-    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    var link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = 'pirateship-' + (o.orderNumber || orderId) + '.csv';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(link.href);
+    MastExport.downloadBlob('pirateship-' + (o.orderNumber || orderId) + '.csv', csv, 'text/csv;charset=utf-8;');
   }
 
   function openPirateShip(orderId) {
