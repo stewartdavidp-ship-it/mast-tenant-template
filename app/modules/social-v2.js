@@ -1501,8 +1501,8 @@
     createCopyCaption: function () {
       if (!CREATE) return;
       var cap = CREATE.captions[CREATE.selectedCaptionIdx];
-      if (cap && cap.text && navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(cap.text).then(function () { if (window.showToast) showToast('Caption copied.'); });
+      if (cap && cap.text) {
+        window.MastUI.copy(cap.text, { okMsg: 'Caption copied.' });
       }
     },
     createCopyHashtags: function () {
@@ -1683,9 +1683,7 @@
     copyCaption: function (id) {
       var rec = V2.byId[id]; if (!rec) return;
       var text = (rec.caption || '') + (rec.hashtags ? '\n\n' + rec.hashtags : '');
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(function () { if (window.showToast) showToast('Caption copied.'); });
-      }
+      window.MastUI.copy(text, { okMsg: 'Caption copied.' });
     },
     exportCsv: function () { return MastEntity.exportRows('social-v2', visibleRows(), V2.statusFilter); }
   };

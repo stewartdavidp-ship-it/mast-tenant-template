@@ -1070,6 +1070,47 @@
     });
   }
 
+  // copy(text[, opts]) -> Promise<boolean>. The centralized clipboard write: tries
+  // navigator.clipboard.writeText, then falls back to a synchronous execCommand
+  // ('copy') via an off-screen textarea — so it still works in non-secure contexts
+  // and older browsers where navigator.clipboard is absent (many hand-rolled call
+  // sites skip that fallback and silently no-op there). Optional feedback:
+  //   opts.okMsg  toast on success (default "Copied to clipboard."; pass false to mute)
+  //   opts.errMsg toast on failure (default "Select and copy manually."; false to mute)
+  //   opts.btn    a button element whose label flips to opts.btnLabel ("Copied!")
+  //               for 2s, then restores. Resolves true on success, false otherwise.
+  function copy(text, opts) {
+    opts = opts || {};
+    var str = (text == null) ? '' : String(text);
+    function toast(msg, isErr) { if (msg !== false && typeof showToast === 'function') showToast(msg, isErr); }
+    function onOk() {
+      toast(opts.okMsg != null ? opts.okMsg : 'Copied to clipboard.', false);
+      var btn = opts.btn;
+      if (btn) {
+        var prev = btn.textContent;
+        btn.textContent = opts.btnLabel || 'Copied!';
+        setTimeout(function () { btn.textContent = prev; }, 2000);
+      }
+      return true;
+    }
+    function onErr() { toast(opts.errMsg != null ? opts.errMsg : 'Select and copy manually.', false); return false; }
+    function legacy() {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = str; ta.setAttribute('readonly', '');
+        ta.style.cssText = 'position:fixed;top:-1000px;left:-1000px;opacity:0;';
+        document.body.appendChild(ta); ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok ? onOk() : onErr();
+      } catch (e) { return onErr(); }
+    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(str).then(onOk).catch(legacy);
+    }
+    return Promise.resolve(legacy());
+  }
+
   if (typeof window !== 'undefined') {
     injectStyles(); wireDelegates();
     window.MastUI = {
@@ -1079,12 +1120,12 @@
       stickyHead: stickyHead, toggleCover: toggleCover, calendar: calendar, pageHeader: pageHeader,
       launchCard: launchCard, cardGrid: cardGrid,
       repeatRows: repeatRows, repeatRowsAdd: repeatRowsAdd, validate: validate,
-      debounce: debounce, bindInstant: bindInstant, colorInput: colorInput, swatchGrid: swatchGrid
+      debounce: debounce, bindInstant: bindInstant, colorInput: colorInput, swatchGrid: swatchGrid, copy: copy
     };
   }
 
   // CommonJS export for node-based unit tests of the pure helpers.
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { Num: Num, badge: badge, statusBadge: statusBadge, emptyState: emptyState, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid, repeatRows: repeatRows, validate: validate, sanitizeHtml: sanitizeHtml, _safeUrl: safeUrl, _sanitizeAllowed: SANITIZE_ALLOWED, debounce: debounce, bindInstant: bindInstant, colorInput: colorInput, swatchGrid: swatchGrid };
+    module.exports = { Num: Num, badge: badge, statusBadge: statusBadge, emptyState: emptyState, tabs: tabs, list: list, esc: esc, tiles: tiles, kv: kv, timeline: timeline, relatedTable: relatedTable, pageHeader: pageHeader, card: card, launchCard: launchCard, cardGrid: cardGrid, repeatRows: repeatRows, validate: validate, sanitizeHtml: sanitizeHtml, _safeUrl: safeUrl, _sanitizeAllowed: SANITIZE_ALLOWED, debounce: debounce, bindInstant: bindInstant, colorInput: colorInput, swatchGrid: swatchGrid, copy: copy };
   }
 })();

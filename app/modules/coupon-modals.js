@@ -59,13 +59,7 @@ function openCouponShareModal(code) {
 
   // Copy Claim Link
   document.getElementById('csm-copy-link').addEventListener('click', function() {
-    navigator.clipboard.writeText(claimUrl).then(function() {
-      showCsmStatus('Link copied to clipboard!');
-    }).catch(function() {
-      // Fallback
-      var ta = document.createElement('textarea');
-      ta.value = claimUrl; document.body.appendChild(ta); ta.select();
-      document.execCommand('copy'); document.body.removeChild(ta);
+    window.MastUI.copy(claimUrl, { okMsg: false, errMsg: false }).then(function() {
       showCsmStatus('Link copied to clipboard!');
     });
   });
@@ -73,13 +67,8 @@ function openCouponShareModal(code) {
   // Copy HTML Embed
   document.getElementById('csm-copy-html').addEventListener('click', function() {
     var embedHtml = window.MastCouponCard.renderHtml(couponObj, { emailSafe: true, showCta: true, source: 'share' });
-    navigator.clipboard.writeText(embedHtml).then(function() {
+    window.MastUI.copy(embedHtml, { okMsg: false, errMsg: false }).then(function() {
       showCsmStatus('HTML embed copied! Paste into any email builder or CMS.');
-    }).catch(function() {
-      var ta = document.createElement('textarea');
-      ta.value = embedHtml; document.body.appendChild(ta); ta.select();
-      document.execCommand('copy'); document.body.removeChild(ta);
-      showCsmStatus('HTML embed copied!');
     });
   });
 
