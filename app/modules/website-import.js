@@ -1308,7 +1308,7 @@
   window.wpDeleteSelectedProducts = function() {
     var count = selectedProductIds.size;
     if (count === 0) return;
-    showConfirmDialog('Delete ' + count + ' Product' + (count !== 1 ? 's' : ''), 'Delete ' + MastFormat.countNoun(count, 'selected product') + '? This cannot be undone.', async function() {
+    showConfirmDialog('Delete ' + MastFormat.countNoun(count, 'Product'), 'Delete ' + MastFormat.countNoun(count, 'selected product') + '? This cannot be undone.', async function() {
       try {
         var pids = Array.from(selectedProductIds);
         console.log('[wpDeleteSelectedProducts] Deleting', pids.length, 'products:', pids);

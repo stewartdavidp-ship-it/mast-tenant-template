@@ -19972,7 +19972,7 @@ var MAST_MODULES_V = '20260621-041500-pos0ride';
 var MODULE_MANIFEST = {
   // trips.js (V1) manifest row REMOVED (T6): the entire trips engine absorbed into trips-v2.js, which owns the bare #trips route below.
   // wholesale.js (V1) manifest row REMOVED (T6): its WholesaleBridge absorbed into wholesale-v2.js, which owns the bare #wholesale route below.
-  finance: { src: 'modules/finance.js', v: '2af31a64a2ea', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
+  finance: { src: 'modules/finance.js', v: 'eefe01b72b64', routes: ['finance-revenue', 'finance-expenses', 'finance-pl', 'finance-cash-flow', 'finance-ar', 'finance-ap', 'finance-tax', 'finance-reports', 'customer-portfolio', 'financials', 'finance-period-close', 'finance-amendments'] },
   // Accounting module now loaded on demand from Settings → Integrations → QuickBooks
   // (no top-level route). Empty routes[] keeps it lazy-loadable via MastAdmin.loadModule('accounting').
   accounting: { src: 'modules/accounting.js', v: 'dba78438ff48', routes: [] },
@@ -19993,7 +19993,7 @@ var MODULE_MANIFEST = {
   // customers.js (V1) manifest row REMOVED (T6 PR5): the 3.5K-line V1 Customers UI is deleted; the bare #customers route is now owned by the customers-v2 row below.
   'customers-core': { src: 'modules/customers-core.js', v: '18031ab169c6', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module customer write layer (CustomersBridge, wallet-adjust, merge, add-contact, open-detail) lifted out of customers.js so V2 consumers load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'rma-admin': { src: 'modules/rma-admin.js', v: 'b2b67d189bb4', routes: ['rma'] }, // RMA/Returns lifecycle admin (admin/rma records via the transitionRma CF). orders.js (V1) RETIRED (T6 PR4b): the orders route went to orders-v2 (PR3), commissions to commissions-v2 (PR2), and this RMA lifecycle UI was relocated here VERBATIM and un-gated, so the bare #rma route resolves here directly for ALL users (no MAST_V2_ROUTE_MAP remap). rma-v2.js (#rma-v2) is a separate flag-gated returns lens over orders/{id} return_* statuses.
-  'orders-v2': { src: 'modules/orders-v2.js', v: 'f0c9d541e221', routes: ['orders-v2', 'orders'] }, // Orders surface (UI-redesign). Owns the bare #orders route (T6 PR3 — absorbed OrdersBridge from orders.js).
+  'orders-v2': { src: 'modules/orders-v2.js', v: 'aa45fa7d4eb8', routes: ['orders-v2', 'orders'] }, // Orders surface (UI-redesign). Owns the bare #orders route (T6 PR3 — absorbed OrdersBridge from orders.js).
   'customers-v2': { src: 'modules/customers-v2.js', v: 'b76a3ca3aa7e', routes: ['customers-v2', 'customers'] }, // Customers surface (MastEntity engine). customers.js (V1) RETIRED (T6 rip-and-replace PR1-PR5): the write layer moved to customers-core, certs/filters/sorts/activity were rebuilt on the engine, and this twin now owns the bare #customers route directly for ALL users (un-gated, no MAST_V2_ROUTE_MAP remap).
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: 'a8e6475587d6', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
   'calendar-v2': { src: 'modules/calendar-v2.js', v: '51ba114722f7', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
@@ -20001,7 +20001,7 @@ var MODULE_MANIFEST = {
   'trips-v2': { src: 'modules/trips-v2.js', v: 'a3df00d38dfc', routes: ['trips-v2', 'trips'] }, // Trips hub (read history + delegated start/end/retroactive flows + tax report + app-wide active-trip banner). trips.js (V1) RETIRED (T6): the entire trips engine is absorbed here, so the bare #trips route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', v: '39d8e2578c7c', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
   'team-v2': { src: 'modules/team-v2.js', v: 'df52be5a680f', routes: ['team-v2', 'team'] }, // Team roster/employee + HR sub-surfaces (time clock / PTO / labor burden / docs / onboarding). team.js (V1) RETIRED (T6): its TeamBridge + TeamPanels + full handler closure were absorbed into team-v2.js, and the bare #team route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
-  'procurement-v2': { src: 'modules/procurement-v2.js', v: '61dbb10909dd', routes: ['procurement-v2', 'procurement'] }, // Procurement hub (POs + Needs-reorder lens + receiving + vendors via vendors-v2). procurement.js (V1) RETIRED (T6): its ProcurementBridge + VendorsBridge + receive→stock→QBO engine absorbed here, so the bare #procurement route resolves here directly (no remap).
+  'procurement-v2': { src: 'modules/procurement-v2.js', v: '1b03fd771aec', routes: ['procurement-v2', 'procurement'] }, // Procurement hub (POs + Needs-reorder lens + receiving + vendors via vendors-v2). procurement.js (V1) RETIRED (T6): its ProcurementBridge + VendorsBridge + receive→stock→QBO engine absorbed here, so the bare #procurement route resolves here directly (no remap).
   'lots-v2': { src: 'modules/lots-v2.js', v: '182c811e7879', routes: ['lots-v2'] }, // Tier 1.5 P2: inventory lots (material+product) list + detail (flag-gated)
   'materials-v2': { src: 'modules/materials-v2.js', v: '15c5a4d95c74', routes: ['materials-v2'] }, // UI-redesign conversion: maker materials (flag-gated, side-by-side)
   'cs-support-v2': { src: 'modules/cs-support-v2.js', v: '9da15d6e725d', routes: ['cs-inbox-v2', 'cs-tickets-v2'] }, // ONE support hub: Inbox/Tickets are two lenses of the same conversation queue — route picks the entry lens (customer-service-v2-build-plan.md)
@@ -20015,7 +20015,7 @@ var MODULE_MANIFEST = {
   // no longer load. The legacy host modules brand / homepage still load — they own
   // BrandBridge / HomepageBridge + writers the builder delegates to (hp*,
   // hpToggleTestimonialVisible). website.js (V1) is RETIRED (T6 PR3): its WebsiteBridge write layer moved to the lazy website-core.
-  'website-v2': { src: 'modules/website-v2.js', v: '438389e6859a', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
+  'website-v2': { src: 'modules/website-v2.js', v: '31f34d824c29', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
   'commissions-v2': { src: 'modules/commissions-v2.js', v: '3d50623dc6d2', routes: ['commissions-v2', 'commissions'] }, // UI-redesign Process surface: commissions lifecycle. orders.js (V1) commission slice RETIRED (T6 PR2): its CommissionsBridge + write cores were absorbed here; the bare #commissions route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'products-v2': { src: 'modules/products-v2.js', v: 'ec87df621dce', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: 'db17beb55ab7', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
@@ -20060,17 +20060,17 @@ var MODULE_MANIFEST = {
   'resources-v2': { src: 'modules/resources-v2.js', v: '55a55e4f7dce', routes: ['resources-v2'] }, // UI-redesign conversion: class resources read detail (flag-gated, side-by-side)
   'newsletter-v2': { src: 'modules/newsletter-v2.js', v: '35044acc5df0', routes: ['newsletter-v2', 'newsletter'] }, // Newsletter hub (issues + subscribers + native composer). newsletter.js (V1) RETIRED (T6): its NewsletterBridge + rich-text helpers + newsletterOpenFromContent were absorbed here; the bare #newsletter route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   sales: { src: 'modules/sales.js', v: '6c490b77972d', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
-  fulfillment: { src: 'modules/fulfillment.js', v: '7546d2688407', routes: ['pack', 'ship', 'fulfillment'] },
+  fulfillment: { src: 'modules/fulfillment.js', v: '580420aaa5ba', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', v: '0d7e11f363f6', routes: ['events-shows', 'events-settings'] },
   'website-core': { src: 'modules/website-core.js', v: '081d4169440d', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module website write layer (WebsiteBridge + the destructive template-switch cascade wpConfirmSwitch/computeGalleryMigration/executeGalleryMigration + category manager openManageCategoriesDialog/wpCat* + markUnpublished) lifted out of website.js so V2 consumers (website-v2, index.html category dialogs, gallery-metadata-modal) load this, not the 3.5K-line V1 UI. Non-routed lazy core.
-  'website-import': { src: 'modules/website-import.js', v: '6fe2a431ab8b', routes: ['website-import'] }, // T6 rip-and-replace PR2: AI catalog-import wizard (analyze→crawl→cherry-pick→import→enrich→review/publish→draft templates) relocated VERBATIM out of website.js into its own lazy module (MastEntity does not fit an async multi-step job flow). The 3 import doors (setup-wizard, "View Report", website-v2 Card 3) route here; backend CFs (analyzeExistingSite/runEnrichment/processImportJob) unchanged. Wires a real listener detach (the V1 leak).
+  'website-import': { src: 'modules/website-import.js', v: 'dbc4b7d9f84e', routes: ['website-import'] }, // T6 rip-and-replace PR2: AI catalog-import wizard (analyze→crawl→cherry-pick→import→enrich→review/publish→draft templates) relocated VERBATIM out of website.js into its own lazy module (MastEntity does not fit an async multi-step job flow). The 3 import doors (setup-wizard, "View Report", website-v2 Card 3) route here; backend CFs (analyzeExistingSite/runEnrichment/processImportJob) unchanged. Wires a real listener detach (the V1 leak).
   emailLog: { src: 'modules/email-log.js', v: '56fd83804238', routes: ['email-log'] },
   maker: { src: 'modules/maker.js', v: 'f18b9f8e5286', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: '5737d83dd7ac', routes: ['galleries'] },
-  book: { src: 'modules/book.js', v: 'e26b626a1fe0', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
+  book: { src: 'modules/book.js', v: '5ed3d3eee5d5', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', v: 'ac83779d846e', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'f0c8d58c4fb1', routes: ['studio'] },
-  'customer-service': { src: 'modules/customer-service.js', v: '8f0be086cdf8', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
+  'customer-service': { src: 'modules/customer-service.js', v: '8ecc2009915c', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
   engagementInbox: { src: 'modules/engagement-inbox.js', v: '03fbd5e277fb', routes: ['engagement-inbox'] },
   composer: { src: 'modules/composer.js', v: 'fac71133333b', routes: ['composer'] },
@@ -20103,7 +20103,7 @@ var MODULE_MANIFEST = {
   'diagnostics': { src: 'modules/diagnostics.js', v: '51d79b65b215', routes: ['diagnostics'] }, // L3 self-diagnosis surface (admin-gated)
   'subscription-v2': { src: 'modules/subscription-v2.js', v: '4fe160832575', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
   'analytics-v2': { src: 'modules/analytics-v2.js', v: '430b29209f0c', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
-  'advisor-v2': { src: 'modules/advisor-v2.js', v: '23113d9fdd45', routes: ['advisor-v2', 'advisor'] }, // Business-Plan advisor; owns the legacy 'advisor' route too (V1 advisor.js retired, T6). Entity writes via MastDB.businessEntity.* — no bridge.
+  'advisor-v2': { src: 'modules/advisor-v2.js', v: '25c5999c2c6f', routes: ['advisor-v2', 'advisor'] }, // Business-Plan advisor; owns the legacy 'advisor' route too (V1 advisor.js retired, T6). Entity writes via MastDB.businessEntity.* — no bridge.
   // Unified Business Entity read-only dashboard (D-22) — no route; lazy-loaded
   // on demand by the 'business' route setup (decomposition Track 1, recipe A).
   'business-view': { src: 'modules/business-view.js', v: '1690937591d7', routes: [] },
@@ -20129,7 +20129,7 @@ var MODULE_MANIFEST = {
   // Settings sub-panel loaders (Engagement / Tax & Legal / Plaid banks) — no route;
   // lazy-loaded from switchSettingsSubView branches + the eager connectPlaidAccount
   // resume shim (decomposition Track 1).
-  settingsPanels: { src: 'modules/settings-panels.js', v: '8abf22a054d9', routes: [] },
+  settingsPanels: { src: 'modules/settings-panels.js', v: '366e18aa4969', routes: [] },
   // Maker Settings (Settings → Develop) sub-panel — no route; lazy-loaded from the
   // switchSettingsSubView 'maker' branch (decomposition Track 1, recipe A).
   'maker-settings': { src: 'modules/maker-settings.js', v: '1419d1d9b9ce', routes: [] },
@@ -20141,7 +20141,7 @@ var MODULE_MANIFEST = {
   // renderers) — no route; lazy-loaded via the eager renderProducts /
   // renderInventoryOverview / switchProductTab / renderProductDetail shims
   // (decomposition Track 1, coupled-cluster tier, recipe B).
-  productsEngine: { src: 'modules/products-engine.js', v: 'a7984ca8e584', routes: [] },
+  productsEngine: { src: 'modules/products-engine.js', v: '36fb1bf2a151', routes: [] },
   // Coupon dialogs (add/edit / share / delete) — no route; lazy-loaded via the
   // eager openCouponModal / openCouponShareModal / confirmDeleteCoupon shims (Track 1).
   couponModals: { src: 'modules/coupon-modals.js', v: '79e8904d3a56', routes: [] },
@@ -20152,7 +20152,7 @@ var MODULE_MANIFEST = {
   // Setup wizard — first-login onboarding flow; no route, lazy-loaded via the
   // eager MastAdmin.loadModule('setupWizard') call in the auth funnel, gated on
   // tenantStatus === 'onboarding' (Track 1, recipe A).
-  setupWizard: { src: 'modules/setup-wizard.js', v: '725e0ebdee59', routes: [] },
+  setupWizard: { src: 'modules/setup-wizard.js', v: 'ef232b105e25', routes: [] },
   // Shopify dev/test harness — no route; lazy-loaded via the eager
   // runShopifyHarness / runShopifySeed / runShopifyCleanup / runShopifyPhase2..8
   // shims (the static "Run …" buttons on the Shopify settings page) (Track 1).
@@ -20174,7 +20174,7 @@ var MODULE_MANIFEST = {
   matchConfirmModal: { src: 'modules/match-confirm-modal.js', v: '08a4aad6d7b7', routes: [] },
   // Module-selection modal (first-login "Choose Your Module(s)" overlay) — no
   // route; lazy-loaded via the eager showModuleSelectionModal shim (Track 1).
-  moduleSelectionModal: { src: 'modules/module-selection-modal.js', v: '1f7152916042', routes: [] },
+  moduleSelectionModal: { src: 'modules/module-selection-modal.js', v: '79b03fea9c6f', routes: [] },
   addToSaleDialog: { src: 'modules/add-to-sale-dialog.js', v: '38cf9d3fc585', routes: [] },
   // Email preview drawer — no route; lazy-loaded via the eager
   // openEmailPreviewDrawer / closeEmailPreviewDrawer shims (Track 1).

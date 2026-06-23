@@ -255,11 +255,11 @@ function renderProducts() {
     notice.style.cssText = 'margin:6px 0 10px 0;padding:8px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.35);border-radius:6px;font-size:0.85rem;color:var(--text-primary);display:flex;justify-content:space-between;align-items:center;gap:12px;';
     if (window.productsUnnamedOnly === true) {
       notice.innerHTML =
-        '<span>Showing <strong>' + unnamed.length + '</strong> unnamed product' + (unnamed.length === 1 ? '' : 's') + ' — give each a name to remove placeholders from co-buy lists.</span>' +
+        '<span>Showing <strong>' + unnamed.length + '</strong> ' + MastFormat.plural(unnamed.length, 'unnamed product') + ' — give each a name to remove placeholders from co-buy lists.</span>' +
         '<button type="button" onclick="window.productsUnnamedOnly=false;renderProducts();" style="background:transparent;border:1px solid var(--warm-gray,#888);color:var(--text,inherit);padding:3px 10px;border-radius:999px;font-size:0.78rem;cursor:pointer;">Show all</button>';
     } else {
       notice.innerHTML =
-        '<span><strong>' + unnamed.length + '</strong> unnamed product' + (unnamed.length === 1 ? '' : 's') + ' detected — these are hidden from customer-signal co-buy lists until named.</span>' +
+        '<span><strong>' + unnamed.length + '</strong> ' + MastFormat.plural(unnamed.length, 'unnamed product') + ' detected — these are hidden from customer-signal co-buy lists until named.</span>' +
         '<button type="button" onclick="window.productsUnnamedOnly=true;renderProducts();" style="background:transparent;border:1px solid #f59e0b;color:#f59e0b;padding:3px 10px;border-radius:999px;font-size:0.78rem;cursor:pointer;font-weight:600;">Fix names</button>';
     }
     host.parentNode.insertBefore(notice, host.nextSibling);

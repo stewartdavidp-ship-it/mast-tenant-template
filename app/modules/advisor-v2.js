@@ -753,7 +753,7 @@
 
     if (pendingActions.length > 0) {
       h += '<div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:8px;padding:12px 16px;margin-bottom:14px;">';
-      h += '<div style="font-size:0.78rem;font-weight:600;color:' + C_WARN + ';margin-bottom:6px;">' + pendingActions.length + ' Pending Action' + (pendingActions.length > 1 ? 's' : '') + '</div>';
+      h += '<div style="font-size:0.78rem;font-weight:600;color:' + C_WARN + ';margin-bottom:6px;">' + MastFormat.countNoun(pendingActions.length, 'Pending Action') + '</div>';
       pendingActions.slice(0, 5).forEach(function (a) {
         h += '<div class="advisorv2-action-item">';
         h += '<div class="advisorv2-action-status pending">&#9679;</div>';

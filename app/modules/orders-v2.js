@@ -1088,7 +1088,7 @@
       var skipped = keys.length - eligible.length;
       if (!eligible.length) { toast('All selected orders are Etsy — they ship via Etsy and were skipped.', true); return; }
       var msg = 'Mark ' + MastFormat.countNoun(eligible.length, 'order') + ' as shipped?' +
-        (skipped ? ' (' + skipped + ' Etsy order' + (skipped === 1 ? '' : 's') + ' will be skipped.)' : '') +
+        (skipped ? ' (' + MastFormat.countNoun(skipped, 'Etsy order') + ' will be skipped.)' : '') +
         ' This deducts inventory and emails each customer their shipping notification.';
       confirmThen(msg, function () {
         ensureBridge().then(function (bridge) {

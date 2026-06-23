@@ -421,7 +421,7 @@ async function loadPlaidBanksForSettings() {
 
     if (keys.length === 0) {
       container.innerHTML = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:12px 14px;font-size:0.85rem;color:var(--warm-gray);">' +
-        '0 of ' + includedLimit + ' Plaid account' + (includedLimit !== 1 ? 's' : '') + ' connected' +
+        '0 of ' + MastFormat.countNoun(includedLimit, 'Plaid account') + ' connected' +
         (includedLimit > 0 ? '. Each connected account reserves ' + PLAID_TOKEN_RATE + ' tokens/month from your allocation at the next reset.' : ' (your tier does not include Plaid — upgrade to Starter or higher).') +
         '</div>';
       return;

@@ -329,14 +329,14 @@
     if (total === 0) {
       galleryLines = '<li>You have no gallery images yet — nothing to move.</li>';
     } else {
-      galleryLines += '<li><strong>' + keep + '</strong> gallery image' + (keep === 1 ? '' : 's') + ' fit the new layout and stay visible.</li>';
+      galleryLines += '<li><strong>' + keep + '</strong> ' + MastFormat.plural(keep, 'gallery image') + ' fit the new layout and stay visible.</li>';
       if (hide > 0) {
-        galleryLines += '<li><strong>' + hide + '</strong> image' + (hide === 1 ? '' : 's') + ' won’t fit the new layout, so ' +
+        galleryLines += '<li><strong>' + hide + '</strong> ' + MastFormat.plural(hide, 'image') + ' won’t fit the new layout, so ' +
           (hide === 1 ? 'it' : 'they') + '’ll be <strong>hidden</strong> — not deleted, and you can switch back to bring ' +
           (hide === 1 ? 'it' : 'them') + ' right back.</li>';
       }
       if (restore > 0) {
-        galleryLines += '<li><strong>' + restore + '</strong> previously hidden image' + (restore === 1 ? '' : 's') +
+        galleryLines += '<li><strong>' + restore + '</strong> ' + MastFormat.plural(restore, 'previously hidden image') +
           ' will reappear in this Look.</li>';
       }
     }
@@ -777,7 +777,7 @@
     // photo-count badge (parity with the legacy section card's image badge).
     var b = window.HomepageBridge;
     var nImg = (b && b.images && b.images.isCapable && b.images.isCapable(sec.id) && b.images.count) ? b.images.count(sec.id) : 0;
-    var badge = nImg > 0 ? '<span class="wv2-sec-count">' + nImg + ' photo' + (nImg === 1 ? '' : 's') + '</span>' : '';
+    var badge = nImg > 0 ? '<span class="wv2-sec-count">' + MastFormat.countNoun(nImg, 'photo') + '</span>' : '';
     return '<div class="wv2-sec-row"' + (ed ? ' role="button" tabindex="0" onclick="' + open + '" onkeydown="if(event.key===\'Enter\'){' + open + '}"' : '') + '>' +
         '<div class="wv2-sec-id"><span class="wv2-sec-name">' + esc(sec.label || sec.id) + '</span> ' + pill + badge + '</div>' +
         '<div class="wv2-sec-actions">' + reorder + toggle + (ed ? '<span class="wv2-sec-go">Edit ›</span>' : '') + '</div>' +
@@ -926,7 +926,7 @@
   function photosManagerHtml(secId, items, cats, focus, ed) {
     var b = window.HomepageBridge;
     var tplHidden = (b && b.images && b.images.hiddenCount) ? b.images.hiddenCount(secId) : 0;
-    var tplNote = tplHidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + tplHidden + ' photo' + (tplHidden === 1 ? '' : 's') + ' hidden by a template switch.</div>' : '';
+    var tplNote = tplHidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + MastFormat.countNoun(tplHidden, 'photo') + ' hidden by a template switch.</div>' : '';
     var showHidden = !!WV2_PHOTOS.showHidden;
     var hiddenItems = items.filter(function (e) { return e[1].visible === false; });
     var displayItems = showHidden ? items : items.filter(function (e) { return e[1].visible !== false; });
@@ -949,7 +949,7 @@
           (isVid ? '<span class="wv2-phototile-vid">▶</span>' : '') + '</button>';
       }).join('') + '</div>';
     var hiddenToggle = (ed && hiddenItems.length) ? '<div style="margin-top:10px;"><button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.photoToggleHidden()">' +
-      (showHidden ? 'Hide hidden photos' : ('Show ' + hiddenItems.length + ' hidden photo' + (hiddenItems.length === 1 ? '' : 's'))) + '</button></div>' : '';
+      (showHidden ? 'Hide hidden photos' : ('Show ' + MastFormat.countNoun(hiddenItems.length, 'hidden photo'))) + '</button></div>' : '';
     var photosCard = U.card('Photos (' + items.length + ')', addBar + grid + hiddenToggle + tplNote);
     return photosCard + (focus ? photoSelectedCardHtml(secId, items, cats, focus, ed) : '');
   }
@@ -1355,7 +1355,7 @@
     var cid = esc(cat.id);
     var count = (V2.productCatCounts && V2.productCatCounts[String(cat.id).toLowerCase()]) || 0;
     var countPill = count > 0
-      ? '<span class="wv2-cat-count" title="' + count + ' product' + (count === 1 ? '' : 's') + ' in this category">' + count + '</span>'
+      ? '<span class="wv2-cat-count" title="' + MastFormat.countNoun(count, 'product') + ' in this category">' + count + '</span>'
       : '';
     var upDis = idx === 0 ? ' disabled' : '';
     var dnDis = idx === total - 1 ? ' disabled' : '';
@@ -1461,7 +1461,7 @@
     var sug = V2.suggestions;
     if (!Array.isArray(sug) || !sug.length || !canEdit()) return '';
     var chips = sug.slice(0, 8).map(function (s) {
-      return '<button type="button" class="wv2-sug-chip" onclick="WebsiteV2.addSuggestedCat(\'' + esc(s.slug) + '\')" title="' + s.count + ' product' + (s.count === 1 ? '' : 's') + ' use this category">' +
+      return '<button type="button" class="wv2-sug-chip" onclick="WebsiteV2.addSuggestedCat(\'' + esc(s.slug) + '\')" title="' + MastFormat.countNoun(s.count, 'product') + ' use this category">' +
         '+ ' + esc(titleSlug(s.slug)) + ' <span class="wv2-sug-n">' + s.count + '</span></button>';
     }).join('');
     return '<div class="wv2-suggest">' +
@@ -3262,7 +3262,7 @@
     }).length;
     if (hiddenCount > 0) {
       html += '<div style="margin-top:8px;padding:8px 12px;background:color-mix(in srgb, var(--amber, var(--amber)) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber, var(--amber)) 25%, transparent);border-radius:6px;font-size:0.78rem;color:var(--warm-gray);">';
-      html += hiddenCount + ' image' + (hiddenCount !== 1 ? 's' : '') + ' hidden by template switch';
+      html += MastFormat.countNoun(hiddenCount, 'image') + ' hidden by template switch';
       html += '</div>';
     }
 

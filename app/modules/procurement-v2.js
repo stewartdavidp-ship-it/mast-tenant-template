@@ -436,7 +436,7 @@
     var withVendor = sug.filter(function (s) { return s.vendorId; });
     var vendorCount = Object.keys(withVendor.reduce(function (a, s) { a[s.vendorId] = 1; return a; }, {})).length;
     var action = withVendor.length
-      ? '<button class="btn btn-primary" onclick="ProcurementV2.createDrafts()">Create ' + vendorCount + ' draft PO' + (vendorCount === 1 ? '' : 's') + ' (' + MastFormat.countNoun(withVendor.length, 'item') + ')</button>'
+      ? '<button class="btn btn-primary" onclick="ProcurementV2.createDrafts()">Create ' + MastFormat.countNoun(vendorCount, 'draft PO') + ' (' + MastFormat.countNoun(withVendor.length, 'item') + ')</button>'
       : '';
     var hint = '<div class="mu-sub" style="margin:12px 0;">Items at or below their reorder point. Click one to draft a PO for it, or create grouped drafts for all — each opens in its process for review before sending.</div>';
     var listHtml = sug.length
@@ -694,7 +694,7 @@
       var byVendor = {};
       withVendor.forEach(function (s) { (byVendor[s.vendorId] = byVendor[s.vendorId] || []).push(reorderLine(s)); });
       var groups = Object.keys(byVendor).map(function (vid) { return { vendorId: vid, lines: byVendor[vid] }; });
-      var msg = 'Create ' + groups.length + ' draft PO' + (groups.length === 1 ? '' : 's') + ' from ' + MastFormat.countNoun(withVendor.length, 'low item') + '? Each opens for review before sending.';
+      var msg = 'Create ' + MastFormat.countNoun(groups.length, 'draft PO') + ' from ' + MastFormat.countNoun(withVendor.length, 'low item') + '? Each opens for review before sending.';
       if (typeof window.mastConfirm === 'function') Promise.resolve(window.mastConfirm(msg)).then(function (ok) { if (ok) createDraftGroups(groups); });
       else createDraftGroups(groups);
     },
@@ -808,7 +808,7 @@
       return;
     }
     ProcurementBridge.createDraftPOs(groups).then(function (ids) {
-      if (window.showToast) showToast('Created ' + ids.length + ' draft PO' + (ids.length === 1 ? '' : 's'));
+      if (window.showToast) showToast('Created ' + MastFormat.countNoun(ids.length, 'draft PO'));
       return load().then(function () {
         V2.statusFilter = 'draft'; render();
         var rec = ids && ids[0] && V2.byId[ids[0]];

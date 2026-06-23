@@ -2315,7 +2315,7 @@ async function renderDayCloseV2(dateParam) {
     });
     if (dcConflicts.length > 0) {
       h += '<div style="background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.45);border-radius:8px;padding:10px 14px;margin-bottom:12px;color:#ef4444;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">';
-      h += '<div>⚠ This close has <strong>' + dcConflicts.length + '</strong> disputed receipt' + (dcConflicts.length === 1 ? '' : 's') + ' — QBO values diverge from Mast.</div>';
+      h += '<div>⚠ This close has <strong>' + dcConflicts.length + '</strong> ' + MastFormat.plural(dcConflicts.length, 'disputed receipt') + ' — QBO values diverge from Mast.</div>';
       h += '<button class="btn btn-secondary btn-small" onclick="navigateTo(\'settings\'); setTimeout(function(){ try { switchSettingsSubView(\'integrations\'); setTimeout(function(){ try { switchQboInnerTab(\'conflicts\'); } catch(_) {} }, 50); } catch(_) {} }, 50);">Review in Conflicts tab</button>';
       h += '</div>';
     }

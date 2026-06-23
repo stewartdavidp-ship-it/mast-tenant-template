@@ -774,7 +774,7 @@
       var bundle = bundles[bundleId];
       if (!bundle) return;
       var count = (bundle.orderIds || []).length;
-      var name = count + ' Package' + (count !== 1 ? 's' : '') + ' Drop-off ' + carrier;
+      var name = MastFormat.countNoun(count, 'Package') + ' Drop-off ' + carrier;
       await MastDB.bundles.update(bundleId, {
         carrier: carrier,
         dropOffLocation: location || null,

@@ -5840,7 +5840,7 @@
       html += '<div style="background:rgba(239,154,154,0.08);border:1px solid ' + DANGER_COLOR + ';border-left-width:4px;border-radius:6px;padding:14px 16px;margin-bottom:1.5rem;">';
       html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">';
       html += '<div>';
-      html += '<h3 style="margin:0;font-size:1rem;color:' + DANGER_COLOR + ';">&#9888; ' + overdueSessions.length + ' Session' + (overdueSessions.length === 1 ? '' : 's') + ' Awaiting Completion Report</h3>';
+      html += '<h3 style="margin:0;font-size:1rem;color:' + DANGER_COLOR + ';">&#9888; ' + MastFormat.countNoun(overdueSessions.length, 'Session') + ' Awaiting Completion Report</h3>';
       html += '<p style="margin:4px 0 0;font-size:0.78rem;color:var(--warm-gray);">Past-date sessions still marked &ldquo;scheduled&rdquo;. Submit a completion report or cancel the session to clear.</p>';
       html += '</div>';
       html += '</div>';
