@@ -206,4 +206,55 @@ t('time: null/garbage → ""', () => {
   assert.strictEqual(F.time('xyz'), '');
 });
 
+// ── Day math — daysBetween / daysSince / daysUntil / addDays / relative. These
+// replace the `/ 86400000` magic number (~80 sites). Calendar-day semantics off
+// local midnight (DST-safe): the now-relative cases assert via offsets from the
+// real today so they don't drift, and addDays month/DST rollover is pinned.
+t('daysBetween: 2026-06-07 → 2026-06-10 = 3', () =>
+  assert.strictEqual(F.daysBetween('2026-06-07', '2026-06-10'), 3));
+t('daysBetween: reversed = -3 (signed)', () =>
+  assert.strictEqual(F.daysBetween('2026-06-10', '2026-06-07'), -3));
+t('daysBetween: same day = 0', () =>
+  assert.strictEqual(F.daysBetween('2026-06-07', '2026-06-07'), 0));
+t('daysBetween: across spring-forward DST = whole days (not 0.96→0)', () =>
+  // 2026 US DST starts Sun Mar 8; Mar 7 → Mar 9 is 2 calendar days despite a 23h day.
+  assert.strictEqual(F.daysBetween('2026-03-07', '2026-03-09'), 2));
+t('daysBetween: {seconds} Timestamp (Jun 7 noon EDT) → 2026-06-10 = 3', () =>
+  assert.strictEqual(F.daysBetween({ seconds: MIDDAY_2026_06_07, nanoseconds: 0 }, '2026-06-10'), 3));
+t('daysBetween: null/garbage side → null', () => {
+  assert.strictEqual(F.daysBetween(null, '2026-06-10'), null);
+  assert.strictEqual(F.daysBetween('2026-06-07', 'xyz'), null);
+});
+t('addDays: bare calendar string advances by calendar day → "2026-06-10"', () =>
+  assert.strictEqual(F.dateRaw(F.addDays('2026-06-07', 3)), '2026-06-10'));
+t('addDays: month rollover (Jan 31 + 1 → Feb 1)', () =>
+  assert.strictEqual(F.dateRaw(F.addDays('2026-01-31', 1)), '2026-02-01'));
+t('addDays: negative n goes back', () =>
+  assert.strictEqual(F.dateRaw(F.addDays('2026-06-07', -7)), '2026-05-31'));
+t('addDays: null → null', () => assert.strictEqual(F.addDays(null, 3), null));
+t('daysSince/daysUntil round-trip via addDays from today', () => {
+  var today = new Date();
+  assert.strictEqual(F.daysUntil(F.addDays(today, 5)), 5);
+  assert.strictEqual(F.daysSince(F.addDays(today, -4)), 4);
+});
+t('relative: today / tomorrow / yesterday', () => {
+  var today = new Date();
+  assert.strictEqual(F.relative(today), 'today');
+  assert.strictEqual(F.relative(F.addDays(today, 1)), 'tomorrow');
+  assert.strictEqual(F.relative(F.addDays(today, -1)), 'yesterday');
+});
+t('relative: "in N days" / "N days ago"', () => {
+  var today = new Date();
+  assert.strictEqual(F.relative(F.addDays(today, 3)), 'in 3 days');
+  assert.strictEqual(F.relative(F.addDays(today, -5)), '5 days ago');
+});
+t('relative: beyond maxDays falls back to date()', () => {
+  var today = new Date();
+  assert.strictEqual(F.relative(F.addDays(today, 400)), F.date(F.addDays(today, 400)));
+});
+t('relative: null/garbage → ""', () => {
+  assert.strictEqual(F.relative(null), '');
+  assert.strictEqual(F.relative('xyz'), '');
+});
+
 console.log(`\n${pass} mast-format assertions passed.`);

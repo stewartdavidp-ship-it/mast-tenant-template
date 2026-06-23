@@ -6335,7 +6335,7 @@
 
     var now = new Date().toISOString();
     var expiresAt = (typeof certType.validityDays === 'number' && certType.validityDays > 0)
-      ? new Date(Date.now() + certType.validityDays * 86400000).toISOString()
+      ? MastFormat.addDays(new Date(), certType.validityDays).toISOString()
       : null;
 
     var grantedByEmpId = (window.MastAdmin && MastAdmin.currentUser && MastAdmin.currentUser.uid) || 'system';

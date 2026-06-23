@@ -936,7 +936,7 @@
   async function snoozeRenewal(itemId, days) {
     if (!canEdit()) { if (window.showToast) showToast('Edit access required.', true); return; }
     if (!days || days <= 0) return;
-    var until = new Date(Date.now() + days * 86400000).toISOString();
+    var until = MastFormat.addDays(new Date(), days).toISOString();
     try {
       await MastDB.businessEntity.renewals.snooze(itemId, until);
       if (window.showToast) showToast('Snoozed ' + days + ' day' + (days === 1 ? '' : 's'));
