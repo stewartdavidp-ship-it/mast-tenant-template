@@ -118,7 +118,7 @@
 
   function newBatchId() {
     if (window.MastDB && MastDB.newKey) return MastDB.newKey('rule_suppressions');
-    return 'bat_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    return MastUtil.genId('bat_');
   }
 
   // ============================================================
@@ -214,7 +214,7 @@
     validateSuppressionInput(input);
     var suppId = (window.MastDB && MastDB.newKey)
       ? MastDB.newKey('rule_suppressions')
-      : 'sup_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      : MastUtil.genId('sup_');
     var doc = {
       ruleId:    input.ruleId,
       scope:     input.scope,

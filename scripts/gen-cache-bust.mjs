@@ -42,6 +42,7 @@ const INDEX_HTML = join(APP_DIR, 'index.html');
 // lockstep with the global). Keys are the basename without `.js`.
 const LOCKSTEP_SHARED = new Set([
   'mast-error',
+  'mast-util',
   'mastdb',
   'mast-ui',
   'mast-io',

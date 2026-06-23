@@ -893,7 +893,7 @@
       if (sharing.length > 0) {
         console.warn('[channels] Multi-channel on platform "' + platform + '" — order attribution falls back to first match until Phase 3 webhook reverse-routing lands.');
       }
-      var id = 'ch_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+      var id = MastUtil.genId('ch_');
       var now = new Date().toISOString();
       var derivedType = deriveLegacyType(route, platform) || 'dtc_online';
       var t = CHANNEL_TYPES[derivedType] || {};

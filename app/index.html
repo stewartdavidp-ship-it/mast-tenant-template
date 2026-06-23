@@ -175,6 +175,7 @@
   </script>
   <!-- Diagnostics L1: load FIRST so the data layer + every engine can call MastError.capture. -->
   <script src="../shared/mast-error.js?v=0ce22dda04cf"></script>
+  <script src="../shared/mast-util.js?v=7ddb4a1631b9"></script>
   <script src="../shared/mastdb.js?v=75498bac3aaa"></script>
   <script src="../shared/business-entity-constants.js?v=6"></script>
   <!-- E1 (Idea -OtEQoFvlPAu90ghkDXu): Add-to-Mast page module copy + schema validator.
@@ -20014,7 +20015,7 @@ var MODULE_MANIFEST = {
   // no longer load. The legacy host modules brand / homepage still load — they own
   // BrandBridge / HomepageBridge + writers the builder delegates to (hp*,
   // hpToggleTestimonialVisible). website.js (V1) is RETIRED (T6 PR3): its WebsiteBridge write layer moved to the lazy website-core.
-  'website-v2': { src: 'modules/website-v2.js', v: '63bfa32ebc53', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
+  'website-v2': { src: 'modules/website-v2.js', v: '897227565187', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
   'commissions-v2': { src: 'modules/commissions-v2.js', v: '51a62f1726c7', routes: ['commissions-v2', 'commissions'] }, // UI-redesign Process surface: commissions lifecycle. orders.js (V1) commission slice RETIRED (T6 PR2): its CommissionsBridge + write cores were absorbed here; the bare #commissions route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'products-v2': { src: 'modules/products-v2.js', v: 'ec87df621dce', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: 'db17beb55ab7', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
@@ -20023,7 +20024,7 @@ var MODULE_MANIFEST = {
   'vendors-v2': { src: 'modules/vendors-v2.js', v: '10cce171f101', routes: ['vendors-v2'] }, // UI-redesign conversion: vendors read detail (flag-gated)
   'membership-v2': { src: 'modules/membership-v2.js', v: '57782352aa3f', routes: ['membership-v2'] }, // UI-redesign conversion: membership members read detail (flag-gated)
   'cs-reviews-v2': { src: 'modules/cs-reviews-v2.js', v: '3914ec83b5a8', routes: ['cs-reviews-v2'] }, // UI-redesign conversion: CS reviews read detail (flag-gated)
-  'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', v: '350b80606f25', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
+  'cs-faqs-v2': { src: 'modules/cs-faqs-v2.js', v: 'bd608c382417', routes: ['cs-faqs-v2'] }, // UI-redesign conversion: CS FAQs read detail (flag-gated)
   'loyalty-v2': { src: 'modules/loyalty-v2.js', v: '7ffc70a040b6', routes: ['loyalty-v2'] }, // UI-redesign conversion: loyalty members read detail (flag-gated)
   'stories-v2': { src: 'modules/stories-v2.js', v: '7901b1c74202', routes: ['stories-v2'] }, // UI-redesign conversion: stories read detail (flag-gated)
   'jobs-v2': { src: 'modules/jobs-v2.js', v: '8d92eff15148', routes: ['jobs-v2'] }, // UI-redesign conversion: Jobs (production) B1 scaffold — list + read-only detail (flag-gated, side-by-side)
@@ -20052,7 +20053,7 @@ var MODULE_MANIFEST = {
   'campaigns-v2': { src: 'modules/campaigns-v2.js', v: '95948ae7d70d', routes: ['campaigns-v2', 'campaigns'] }, // Marketing campaigns hub (list + read detail + native create/edit/refs/delete). campaigns.js (V1) RETIRED (T6): its CampaignsBridge was absorbed here, so the bare #campaigns route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'email-log-v2': { src: 'modules/email-log-v2.js', v: '8273b9e43c8d', routes: ['email-log-v2'] }, // UI-redesign conversion: email send log (read-only Flat Record)
   'marketing-calendar-v2': { src: 'modules/marketing-calendar-v2.js', v: 'f18703b4dec4', routes: ['marketing-calendar-v2', 'marketing-calendar'] }, // marketing calendar; owns the legacy 'marketing-calendar' route too (V1 marketing-calendar.js retired, T6)
-  'channels-v2': { src: 'modules/channels-v2.js', v: '424486943e1c', routes: ['channels-v2', 'channels'] }, // sales channels surface; owns the legacy 'channels' route too (V1 channels.js retired, T6 — ChannelsBridge + MastChannelShim + channelReconnect absorbed, no MAST_V2_ROUTE_MAP remap)
+  'channels-v2': { src: 'modules/channels-v2.js', v: '2de6dbb2f4e6', routes: ['channels-v2', 'channels'] }, // sales channels surface; owns the legacy 'channels' route too (V1 channels.js retired, T6 — ChannelsBridge + MastChannelShim + channelReconnect absorbed, no MAST_V2_ROUTE_MAP remap)
   'contacts-v2': { src: 'modules/contacts-v2.js', v: '70d7fcfab21c', routes: ['contacts-v2', 'contacts'] }, // Contacts/CRM hub (read detail + native create/edit/interactions/inquiry-reply/Google-sync). contacts.js (V1) RETIRED (T6): its ContactsBridge + state-free cores absorbed here, so the bare #contacts route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'enrollments-v2': { src: 'modules/enrollments-v2.js', v: '73e9f386b5be', routes: ['enrollments-v2'] }, // UI-redesign conversion: enrollments roster read detail (read-focused Faceted Record)
   'passes-v2': { src: 'modules/passes-v2.js', v: '7e309438eb17', routes: ['passes-v2'] }, // UI-redesign conversion: class passes read detail (flag-gated, side-by-side)
@@ -20061,15 +20062,15 @@ var MODULE_MANIFEST = {
   sales: { src: 'modules/sales.js', v: '677841815e14', routes: ['pos', 'receipts', 'events', 'salesEvents', 'terms'] },
   fulfillment: { src: 'modules/fulfillment.js', v: 'db76b92f01b6', routes: ['pack', 'ship', 'fulfillment'] },
   eventsAdmin: { src: 'modules/events.js', v: '354e941721ed', routes: ['events-shows', 'events-settings'] },
-  'website-core': { src: 'modules/website-core.js', v: '60267e6a40f8', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module website write layer (WebsiteBridge + the destructive template-switch cascade wpConfirmSwitch/computeGalleryMigration/executeGalleryMigration + category manager openManageCategoriesDialog/wpCat* + markUnpublished) lifted out of website.js so V2 consumers (website-v2, index.html category dialogs, gallery-metadata-modal) load this, not the 3.5K-line V1 UI. Non-routed lazy core.
+  'website-core': { src: 'modules/website-core.js', v: '1fa14c397d22', routes: [] }, // T6 rip-and-replace PR1 keystone: cross-module website write layer (WebsiteBridge + the destructive template-switch cascade wpConfirmSwitch/computeGalleryMigration/executeGalleryMigration + category manager openManageCategoriesDialog/wpCat* + markUnpublished) lifted out of website.js so V2 consumers (website-v2, index.html category dialogs, gallery-metadata-modal) load this, not the 3.5K-line V1 UI. Non-routed lazy core.
   'website-import': { src: 'modules/website-import.js', v: '6fe2a431ab8b', routes: ['website-import'] }, // T6 rip-and-replace PR2: AI catalog-import wizard (analyze→crawl→cherry-pick→import→enrich→review/publish→draft templates) relocated VERBATIM out of website.js into its own lazy module (MastEntity does not fit an async multi-step job flow). The 3 import doors (setup-wizard, "View Report", website-v2 Card 3) route here; backend CFs (analyzeExistingSite/runEnrichment/processImportJob) unchanged. Wires a real listener detach (the V1 leak).
   emailLog: { src: 'modules/email-log.js', v: '56fd83804238', routes: ['email-log'] },
-  maker: { src: 'modules/maker.js', v: 'ff2066fabf37', routes: ['materials', 'products'] },
+  maker: { src: 'modules/maker.js', v: '09204ff2ea05', routes: ['materials', 'products'] },
   consignment: { src: 'modules/consignment.js', v: '5737d83dd7ac', routes: ['galleries'] },
-  book: { src: 'modules/book.js', v: '60b25f447ce5', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
+  book: { src: 'modules/book.js', v: '3ed7fdd9cf9e', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', v: 'ac83779d846e', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'af62dd99a2a1', routes: ['studio'] },
-  'customer-service': { src: 'modules/customer-service.js', v: '8da51b2ec63e', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
+  'customer-service': { src: 'modules/customer-service.js', v: 'fc55bbf85cdd', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
   engagementInbox: { src: 'modules/engagement-inbox.js', v: 'c5cf75b5824f', routes: ['engagement-inbox'] },
   composer: { src: 'modules/composer.js', v: 'fac71133333b', routes: ['composer'] },
@@ -20077,7 +20078,7 @@ var MODULE_MANIFEST = {
   // separate and lives on the public side).
   // J12 — Tenant feedback on Mast audit findings (suppression management page;
   // menus exposed via window.AuditFeedbackUI for J13 to wire into surfaces).
-  auditFeedback: { src: 'modules/audit-feedback.js', v: '880b29502aae', routes: ['suppressions'] },
+  auditFeedback: { src: 'modules/audit-feedback.js', v: '437fa5f97ba2', routes: ['suppressions'] },
   // J13 — Audit UI surface. NET-NEW module; NOT the transactional auditLog
   // viewer (different collection, different concept). Reads audit_results,
   // rule_suppressions, public/products, channel_config. Wires feedback

@@ -6181,7 +6181,7 @@
         });
         return typeId;
       }
-      var newId = 'cert_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      var newId = MastUtil.genId('cert_');
       await MastDB.set('admin/certTypes/' + newId, {
         id: newId, name: name, description: (data.description || '').trim() || null,
         validityDays: validity, autoGrantOnClassIds: autoGrantIds,
@@ -6225,7 +6225,7 @@
         });
         MastAdmin && MastAdmin.showToast('Cert type updated');
       } else {
-        var newId = 'cert_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        var newId = MastUtil.genId('cert_');
         await MastDB.set('admin/certTypes/' + newId, {
           id: newId,
           name: name.trim(),
@@ -6379,7 +6379,7 @@
       return { certId: existingId, regranted: true };
     }
 
-    var newId = 'cert_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    var newId = MastUtil.genId('cert_');
     await MastDB.set('admin/customers/' + customerId + '/certifications/' + newId, {
       id: newId,
       typeId: typeId,
