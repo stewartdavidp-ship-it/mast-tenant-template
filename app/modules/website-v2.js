@@ -64,7 +64,9 @@
     { key: 'display', title: 'Product page display', mount: 'wv2DisplayBody',
       blurb: 'Lead time, commission CTA, badge labels, and legal links on product pages.', pr: 'this builder' },
     { key: 'domains', title: 'Domains', mount: 'wv2DomainsBody',
-      blurb: 'Connect a custom domain you own to your storefront.', pr: 'this builder' }
+      blurb: 'Connect a custom domain you own to your storefront.', pr: 'this builder' },
+    { key: 'visibility', title: 'Visibility & pages', mount: 'wv2VisibilityBody',
+      blurb: 'Search-engine visibility and how many events show on your homepage.', pr: 'this builder' }
   ];
 
   // Module config state — cold-safe defaults so the header renders before load().
@@ -1911,6 +1913,7 @@
     mountLive();
     mountProductDisplay();
     mountDomains();
+    mountVisibility();
   }
 
   // ── Card 5 · Product page display (relocated from Settings, PR2) ────
@@ -2000,6 +2003,42 @@
     var authed = !!(window.firebase && firebase.auth && firebase.auth().currentUser);
     if (authed && typeof window.loadDomainSettings === 'function') {
       try { loadDomainSettings(); } catch (e) {}
+    }
+  }
+
+  // ── Card 7 · Visibility & pages (relocated from Settings › General, PR3) ──
+  // Search-engine visibility (publicConfig.searchable) + homepage events count.
+  // Reuses the shell's global handlers (saveSiteVisibility / loadSiteVisibility /
+  // saveEventsCount) on the SAME ids; the Settings › General sub-tabs are removed
+  // (so the ids exist only here). The "Active pages" list stays in General — it's
+  // entangled with Feature pages via loadActiveMastPages' shared gate. Loaders are
+  // gated on an authed user (boot-smoke / cold safety, like mountDomains).
+  function mountVisibility() {
+    var host = document.getElementById('wv2VisibilityBody'); if (!host) return;
+    if (!canEdit()) { host.innerHTML = '<div class="mu-sub">You do not have permission to edit site visibility.</div>'; return; }
+    host.innerHTML =
+      '<div class="wv2-sub"><div class="wv2-sub-h">Search-engine visibility</div>' +
+        '<div class="mu-sub" style="margin-bottom:8px;">Controls whether search engines can index your storefront. Keep it Private while setting up; switch to Public when you&rsquo;re ready to be found.</div>' +
+        '<div style="display:flex;gap:16px;align-items:center;">' +
+          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="siteVisibility" value="private" id="visibilityPrivate" onchange="saveSiteVisibility(false)" checked><span>Private <span class="mu-sub">(not indexed)</span></span></label>' +
+          '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="siteVisibility" value="public" id="visibilityPublic" onchange="saveSiteVisibility(true)"><span>Public <span class="mu-sub">(search engines can find you)</span></span></label>' +
+        '</div>' +
+        '<div id="visibilityStatus" style="margin-top:8px;font-size:0.85rem;"></div>' +
+      '</div>' +
+      '<div class="wv2-sub"><div class="wv2-sub-h">Events on homepage</div>' +
+        '<div class="mu-sub" style="margin-bottom:8px;">How many upcoming events appear in the Schedule section on your homepage (1&ndash;20, default 3).</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;">' +
+          '<input type="number" id="eventsCountInput" min="1" max="20" value="3" style="width:80px;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:0.9rem;">' +
+          '<button class="btn btn-primary" onclick="saveEventsCount()">Save</button>' +
+        '</div>' +
+        '<div id="eventsCountStatus" style="margin-top:8px;font-size:0.85rem;"></div>' +
+      '</div>';
+    var authed = !!(window.firebase && firebase.auth && firebase.auth().currentUser);
+    if (authed) {
+      try { if (typeof window.loadSiteVisibility === 'function') loadSiteVisibility(); } catch (e) {}
+      Promise.resolve(MastDB.get('public/config/homepageEventsCount')).then(function (v) {
+        var i = document.getElementById('eventsCountInput'); if (i && v) i.value = v;
+      }).catch(function () {});
     }
   }
 

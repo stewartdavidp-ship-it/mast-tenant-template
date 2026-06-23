@@ -9016,10 +9016,8 @@
         <div class="view-tabs" id="generalTabBar" style="margin-bottom:20px;">
           <button class="view-tab active" id="genTabBtn-businessSetup" data-tab="businessSetup" onclick="switchGeneralTab('businessSetup')"><span class="tab-status-dot" data-state="ok"></span>Business setup</button>
           <button class="view-tab" id="genTabBtn-githubPat" data-tab="githubPat" style="display:none;" onclick="switchGeneralTab('githubPat')"><span class="tab-status-dot" data-state="missing"></span>GitHub token</button>
-          <button class="view-tab" id="genTabBtn-siteVisibility" data-tab="siteVisibility" onclick="switchGeneralTab('siteVisibility')"><span class="tab-status-dot" data-state="ok"></span>Site visibility</button>
           <button class="view-tab" id="genTabBtn-activePages" data-tab="activePages" onclick="switchGeneralTab('activePages')"><span class="tab-status-dot" data-state="info"></span>Active pages</button>
           <button class="view-tab" id="genTabBtn-featurePages" data-tab="featurePages" style="display:none;" onclick="switchGeneralTab('featurePages')"><span class="tab-status-dot" data-state="partial"></span>Feature pages</button>
-          <button class="view-tab" id="genTabBtn-homepageEvents" data-tab="homepageEvents" onclick="switchGeneralTab('homepageEvents')"><span class="tab-status-dot" data-state="ok"></span>Homepage events</button>
           <button class="view-tab" id="genTabBtn-publicFeedback" data-tab="publicFeedback" onclick="switchGeneralTab('publicFeedback')"><span class="tab-status-dot" data-state="none"></span>Public feedback</button>
         </div>
 
@@ -9051,23 +9049,7 @@
         </div>
 
         <!-- ── Site visibility ── -->
-        <div id="genTab-siteVisibility" class="gen-tab-body" style="display:none;">
-          <div class="tab-section-title">Site visibility<span class="tab-section-status" data-state="ok" id="genStatus-siteVisibility">Private</span></div>
-          <p class="tab-section-purpose">Controls whether search engines (Google, Bing, etc.) can index your Mast-hosted site. Keep it <strong>Private</strong> while you&rsquo;re setting up content. Switch to <strong>Public</strong> when you&rsquo;re ready to be found in search results.</p>
-          <div class="form-group">
-            <div style="display:flex;gap:12px;align-items:center;">
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="radio" name="siteVisibility" value="private" id="visibilityPrivate" onchange="saveSiteVisibility(false)" checked>
-                <span>Private <span style="font-size:0.78rem;color:var(--warm-gray);">(not indexed)</span></span>
-              </label>
-              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                <input type="radio" name="siteVisibility" value="public" id="visibilityPublic" onchange="saveSiteVisibility(true)">
-                <span>Public <span style="font-size:0.78rem;color:var(--warm-gray);">(search engines can find you)</span></span>
-              </label>
-            </div>
-            <div id="visibilityStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-          </div>
-        </div>
+        <!-- Site visibility relocated to My Website › Visibility & pages (PR3) -->
 
         <!-- ── Active Mast pages ── -->
         <div id="genTab-activePages" class="gen-tab-body" style="display:none;">
@@ -9091,19 +9073,7 @@
           </div>
         </div>
 
-        <!-- ── Homepage events ── -->
-        <div id="genTab-homepageEvents" class="gen-tab-body" style="display:none;">
-          <div class="tab-section-title">Events shown on homepage<span class="tab-section-status" data-state="ok" id="genStatus-homepageEvents">3 events</span></div>
-          <p class="tab-section-purpose">Controls how many upcoming events appear in the schedule section on your public homepage. Set between 1 and 20. Default is 3.</p>
-          <div class="form-group">
-            <div style="display:flex;gap:8px;align-items:center;">
-              <input type="number" id="eventsCountInput" min="1" max="20" value="3"
-                style="width:80px;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:0.9rem;">
-              <button class="btn btn-primary" onclick="saveEventsCount()">Save</button>
-            </div>
-            <div id="eventsCountStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-          </div>
-        </div>
+        <!-- Homepage events count relocated to My Website › Visibility & pages (PR3) -->
 
         <!-- ── Public feedback ── -->
         <div id="genTab-publicFeedback" class="gen-tab-body" style="display:none;">
@@ -18908,7 +18878,7 @@ function applyRoute(route) {
 }
 
 function lazyLoadForRoute(route) {
-  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); applySettingsGating(); loadSiteVisibility(); loadActiveMastPages(); if (typeof applyGeneralTabGating === 'function') applyGeneralTabGating(); if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus(); if (typeof refreshWorkshopTabStatus === 'function') refreshWorkshopTabStatus(); }
+  if (route === 'settings') { updateGitHubTokenStatus(); loadOperators(); loadStorageInfo(); loadStudioLocations(); loadLocations(); loadPublicFeedbackSetting(); loadEmailConfig(); loadEmailDomainSection(); loadResendWebhookSection(); applySettingsGating(); loadActiveMastPages(); if (typeof applyGeneralTabGating === 'function') applyGeneralTabGating(); if (typeof refreshGeneralTabStatus === 'function') refreshGeneralTabStatus(); if (typeof refreshWorkshopTabStatus === 'function') refreshWorkshopTabStatus(); }
   if (route === 'analytics' && !analyticsLoaded) loadAnalytics();
   if (route === 'products') loadProducts();
   // orders lazy-load handled by orders module
@@ -19907,7 +19877,7 @@ var MODULE_MANIFEST = {
   // no longer load. The legacy host modules brand / homepage still load — they own
   // BrandBridge / HomepageBridge + writers the builder delegates to (hp*,
   // hpToggleTestimonialVisible). website.js (V1) is RETIRED (T6 PR3): its WebsiteBridge write layer moved to the lazy website-core.
-  'website-v2': { src: 'modules/website-v2.js', v: 'caacc1c9293a', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
+  'website-v2': { src: 'modules/website-v2.js', v: 'c3c5499dd574', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
   'commissions-v2': { src: 'modules/commissions-v2.js', v: '3d50623dc6d2', routes: ['commissions-v2', 'commissions'] }, // UI-redesign Process surface: commissions lifecycle. orders.js (V1) commission slice RETIRED (T6 PR2): its CommissionsBridge + write cores were absorbed here; the bare #commissions route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'products-v2': { src: 'modules/products-v2.js', v: 'ec87df621dce', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: 'db17beb55ab7', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)
