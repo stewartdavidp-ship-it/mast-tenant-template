@@ -2,7 +2,7 @@
 
 Status: **PLANNED** (2026-06-10). 5 of 12 Sales sub-items already have a V2 surface; this plan
 covers the remaining 7 + standard-compliance for the existing 5. Companion to
-`products-v2-build-plan.md` (the ratified engine/SO model) — this doc does not re-litigate
+`archive/products-v2-build-plan.md` (the ratified engine/SO model; archived — shipped) — this doc does not re-litigate
 those decisions, it applies them to Sales.
 
 ## Scorecard — the 12 Sales routes (sidebar `data-section="sales"`)
