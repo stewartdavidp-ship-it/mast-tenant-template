@@ -271,7 +271,7 @@
         classId: v('enV2Class'), sessionId: v('enV2Session'),
         studentId: v('enV2Student') || null,
         name: v('enV2Name'), email: v('enV2Email'),
-        pricePaidCents: priceRaw === '' ? 0 : Math.round(parseFloat(priceRaw) * 100),
+        pricePaidCents: priceRaw === '' ? 0 : MastFormat.parseCents(priceRaw),
         notes: v('enV2Notes')
       };
       if (!data.classId) { if (window.showToast) showToast('Class is required.', true); return false; }

@@ -526,7 +526,7 @@
           imageIds: extras.imageUrl ? [extras.imageUrl] : [],
           seriesInfo: extras.type === 'series' ? {
             totalSessions: parseInt(extras.seriesTotal, 10) || null,
-            seriesPriceCents: extras.seriesPrice ? Math.round(parseFloat(extras.seriesPrice) * 100) : null,
+            seriesPriceCents: extras.seriesPrice ? MastFormat.parseCents(extras.seriesPrice) : null,
             allowDropIn: extras.seriesDropIn !== 'false', allowLateEnroll: extras.seriesLateEnroll === 'true'
           } : null
         });

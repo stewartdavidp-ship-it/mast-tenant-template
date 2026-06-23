@@ -275,4 +275,39 @@ t('countNoun: "<n> noun" with correct form', () => {
   assert.strictEqual(F.countNoun(2, 'entry', 'entries'), '2 entries');
 });
 
+// ── parseMoney / parseCents — the inverse of money(); replace ad-hoc
+// `parseFloat(input.value)` and `Math.round(parseFloat(x)*100)`.
+t('parseMoney: strips $ / commas / whitespace', () => {
+  assert.strictEqual(F.parseMoney('$1,234.50'), 1234.5);
+  assert.strictEqual(F.parseMoney('  $ 5.00 '), 5);
+  assert.strictEqual(F.parseMoney('1234.5'), 1234.5);
+});
+t('parseMoney: negative, number passthrough, zero', () => {
+  assert.strictEqual(F.parseMoney('-5.00'), -5);
+  assert.strictEqual(F.parseMoney(1234.5), 1234.5);
+  assert.strictEqual(F.parseMoney(0), 0);
+  assert.strictEqual(F.parseMoney('0'), 0);
+});
+t('parseMoney: blank/garbage → null (NOT 0 — distinguishes blank from zero)', () => {
+  assert.strictEqual(F.parseMoney(''), null);
+  assert.strictEqual(F.parseMoney(null), null);
+  assert.strictEqual(F.parseMoney('abc'), null);
+  assert.strictEqual(F.parseMoney('-'), null);
+  assert.strictEqual(F.parseMoney('.'), null);
+});
+t('parseCents: float-safe dollars→cents (19.99 → 1999, not 1998)', () => {
+  assert.strictEqual(F.parseCents('19.99'), 1999); // 19.99*100 = 1998.9999999999998
+  assert.strictEqual(F.parseCents('$12.50'), 1250);
+  assert.strictEqual(F.parseCents('0.1'), 10);
+  assert.strictEqual(F.parseCents('12.345'), 1235); // rounds
+  assert.strictEqual(F.parseCents(0), 0);
+});
+t('parseCents: blank/garbage → null', () => {
+  assert.strictEqual(F.parseCents(''), null);
+  assert.strictEqual(F.parseCents('abc'), null);
+});
+// Round-trip with the format side: parseCents -> money(cents)
+t('parseCents → money({cents}) round-trips', () =>
+  assert.strictEqual(F.money(F.parseCents('$1,234.50'), { cents: true }), '$1,234.50'));
+
 console.log(`\n${pass} mast-format assertions passed.`);
