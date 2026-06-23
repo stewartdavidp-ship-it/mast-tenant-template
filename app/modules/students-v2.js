@@ -576,7 +576,7 @@
       var rec = V2.byId[id];
       var em = ((rec && rec.email) || '').toLowerCase();
       var refs = V2.enrollments.filter(function (e) { return e.studentId === id || (em && String(e.studentEmail || e.customerEmail || '').toLowerCase() === em); }).length;
-      var msg = 'Delete the student "' + ((rec && rec.displayName) || '') + '"?' + (refs ? ' They have ' + refs + ' enrollment' + (refs === 1 ? '' : 's') + ' — enrollment history keeps the name but loses the profile (waivers, clearances, documents).' : '') + ' This cannot be undone.';
+      var msg = 'Delete the student "' + ((rec && rec.displayName) || '') + '"?' + (refs ? ' They have ' + MastFormat.countNoun(refs, 'enrollment') + ' — enrollment history keeps the name but loses the profile (waivers, clearances, documents).' : '') + ' This cannot be undone.';
       mastConfirm(msg, { title: 'Delete Student', confirmLabel: 'Delete', danger: true }).then(function (ok) {
         if (!ok) return;
         Promise.resolve(window.StudentsBridge.remove(id)).then(function () {

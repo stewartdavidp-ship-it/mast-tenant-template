@@ -213,7 +213,7 @@
           var ovCount = Object.keys((live && live.moduleOverrides) || {}).length + Object.keys((live && live.permissionOverrides) || {}).length;
           if (window.showToast) {
             showToast((roleChanged ? 'Role changed to ' + roleDisplay(rec.role) + '. ' : '') +
-              (ovCount ? ovCount + ' personal override' + (ovCount === 1 ? '' : 's') + ' in effect.' : 'Access matches the role defaults.'));
+              (ovCount ? MastFormat.countNoun(ovCount, 'personal override') + ' in effect.' : 'Access matches the role defaults.'));
           }
           render();
           return true;

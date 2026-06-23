@@ -634,8 +634,8 @@
         var built = itemActions.filter(function (ia) { return ia.action === 'build'; }).length;
         var backordered = itemActions.filter(function (ia) { return ia.action === 'backorder'; }).length;
         var msg;
-        if (built) msg = 'Order confirmed — ' + built + ' item' + (built === 1 ? '' : 's') + ' sent to production';
-        else if (backordered) msg = 'Order confirmed — held for back-ordered stock (' + backordered + ' item' + (backordered === 1 ? '' : 's') + ')';
+        if (built) msg = 'Order confirmed — ' + MastFormat.countNoun(built, 'item') + ' sent to production';
+        else if (backordered) msg = 'Order confirmed — held for back-ordered stock (' + MastFormat.countNoun(backordered, 'item') + ')';
         else msg = 'Order confirmed and routed to packing';
         toast(msg);
         window.MastUI.slideOut.requestCloseForce();
@@ -1087,7 +1087,7 @@
       var eligible = keys.filter(function (k) { return !isEtsyOrder(V2.byId[k]); });
       var skipped = keys.length - eligible.length;
       if (!eligible.length) { toast('All selected orders are Etsy — they ship via Etsy and were skipped.', true); return; }
-      var msg = 'Mark ' + eligible.length + ' order' + (eligible.length === 1 ? '' : 's') + ' as shipped?' +
+      var msg = 'Mark ' + MastFormat.countNoun(eligible.length, 'order') + ' as shipped?' +
         (skipped ? ' (' + skipped + ' Etsy order' + (skipped === 1 ? '' : 's') + ' will be skipped.)' : '') +
         ' This deducts inventory and emails each customer their shipping notification.';
       confirmThen(msg, function () {
@@ -1112,7 +1112,7 @@
       if (!canEdit()) { toast('You don\'t have permission to edit orders.', true); return; }
       var keys = selectedVisibleKeys();
       if (!keys.length) return;
-      promptReason('Cancel ' + keys.length + ' order' + (keys.length === 1 ? '' : 's') + '? This releases committed inventory, cancels open production requests, and opens a CS ticket for each. Enter a cancellation reason:', function (reason) {
+      promptReason('Cancel ' + MastFormat.countNoun(keys.length, 'order') + '? This releases committed inventory, cancels open production requests, and opens a CS ticket for each. Enter a cancellation reason:', function (reason) {
         ensureBridge().then(function (bridge) {
           if (!bridge || typeof bridge.bulkCancel !== 'function') { toast('Orders engine still loading — try again', true); return; }
           var btn = document.getElementById('ordersV2BulkCancel');

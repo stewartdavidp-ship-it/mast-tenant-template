@@ -195,7 +195,7 @@
         ], acctOrders) : '<span class="mu-sub">No orders yet from this account.</span>';
         var rec = reconcileCount(aid);
         var reconcileChip = rec ? '<div style="margin-top:10px;"><span style="font-size:0.78rem;font-weight:600;padding:4px 12px;border-radius:10px;background:color-mix(in srgb,var(--amber) 15%,transparent);color:var(--amber);border:1px solid color-mix(in srgb,var(--amber) 40%,transparent);">' +
-          rec + ' unlinked order' + (rec === 1 ? '' : 's') + ' match this account\'s buyers — link the buyer in the Users tab to attribute them.</span></div>' : '';
+          MastFormat.countNoun(rec, 'unlinked order') + ' match this account\'s buyers — link the buyer in the Users tab to attribute them.</span></div>' : '';
 
         // AR aging detail — unpaid invoices bucketed by days overdue, each row
         // drilling to its V2 order. Read-only (no RBAC gate; mirrors sibling
@@ -205,7 +205,7 @@
             return '<div style="border:1px solid var(--border,rgba(127,127,127,.2));border-radius:8px;padding:10px;">' +
               '<div class="mu-sub" style="text-transform:uppercase;letter-spacing:0.04em;">' + esc(b.label) + '</div>' +
               '<div style="font-size:1.15rem;font-weight:700;margin-top:2px;">' + (N.money(b.total) || '$0.00') + '</div>' +
-              '<div class="mu-sub">' + b.count + ' order' + (b.count === 1 ? '' : 's') + '</div>' +
+              '<div class="mu-sub">' + MastFormat.countNoun(b.count, 'order') + '</div>' +
             '</div>';
           }).join('') + '</div>';
         var arRowsBody = ar.rows.length ? UI.relatedTable([
@@ -218,7 +218,7 @@
             } },
           { label: 'Total', align: 'right', render: function (r) { return N.money(r.total) || '—'; } }
         ], ar.rows) : '<span class="mu-sub">No unpaid wholesale orders. AR is clean.</span>';
-        var arSummary = ar.rows.length ? '<div class="mu-sub" style="margin-bottom:10px;">Outstanding: <b>' + (N.money(ar.grand) || '$0.00') + '</b> across ' + ar.rows.length + ' order' + (ar.rows.length === 1 ? '' : 's') + '</div>' : '';
+        var arSummary = ar.rows.length ? '<div class="mu-sub" style="margin-bottom:10px;">Outstanding: <b>' + (N.money(ar.grand) || '$0.00') + '</b> across ' + MastFormat.countNoun(ar.rows.length, 'order') + '</div>' : '';
 
         // Cadence — reorder-frequency analytics derived from this account's orders.
         var cad = cadenceOf(a);
@@ -254,7 +254,7 @@
         var usersActions = mayEdit
           ? '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' +
               '<button class="btn btn-secondary btn-small" onclick="WholesaleV2.authorizeUser(\'' + esc(aid) + '\')">+ Authorize buyer</button>' +
-              (V2.usersUnlinked.length ? '<span class="mu-sub">' + V2.usersUnlinked.length + ' buyer' + (V2.usersUnlinked.length === 1 ? '' : 's') + ' authorized but not linked to any account — enter their email to attach.</span>' : '') +
+              (V2.usersUnlinked.length ? '<span class="mu-sub">' + MastFormat.countNoun(V2.usersUnlinked.length, 'buyer') + ' authorized but not linked to any account — enter their email to attach.</span>' : '') +
             '</div>'
           : '<div class="mu-sub" style="margin-top:8px;">You don\'t have permission to manage authorized buyers.</div>';
         // Pending access requests (account-agnostic queue — buyers asking for

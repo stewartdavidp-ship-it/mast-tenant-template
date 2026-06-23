@@ -239,7 +239,7 @@ function renderSales() {
   if (bannerEl) {
     if (hasUrlFilter) {
       var bparts = [];
-      if (urlIds.length) bparts.push(urlIds.length + ' selected sale' + (urlIds.length === 1 ? '' : 's'));
+      if (urlIds.length) bparts.push(MastFormat.countNoun(urlIds.length, 'selected sale'));
       if (urlStatus) bparts.push('status: ' + urlStatus);
       if (urlPayment) bparts.push('payment: ' + urlPayment);
       if (urlDateFrom && urlDateTo) bparts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
@@ -284,7 +284,7 @@ function renderSales() {
       '</div>' : '');
   }
 
-  if (countEl) countEl.textContent = all.length + ' sale' + (all.length !== 1 ? 's' : '');
+  if (countEl) countEl.textContent = MastFormat.countNoun(all.length, 'sale');
 
   if (all.length === 0) {
     if (emptyEl) emptyEl.style.display = '';
@@ -533,7 +533,7 @@ async function renderDayCloseUnified() {
     });
     rows.sort(function(a, b) { return (new Date(b.ts).getTime() || 0) - (new Date(a.ts).getTime() || 0); });
 
-    if (countEl) countEl.textContent = rows.length + ' transaction' + (rows.length === 1 ? '' : 's');
+    if (countEl) countEl.textContent = MastFormat.countNoun(rows.length, 'transaction');
     if (rows.length === 0) {
       if (emptyEl) emptyEl.style.display = '';
       if (tableWrap) tableWrap.style.display = 'none';
@@ -924,7 +924,7 @@ function renderSalesEvents() {
   if (bannerEl) {
     if (hasUrlFilter) {
       var bparts = [];
-      if (urlIds.length) bparts.push(urlIds.length + ' selected event' + (urlIds.length === 1 ? '' : 's'));
+      if (urlIds.length) bparts.push(MastFormat.countNoun(urlIds.length, 'selected event'));
       if (urlStatus) bparts.push('status: ' + urlStatus);
       bannerEl.innerHTML = '<span>🎪 Showing ' + bparts.join(', ') + ' (' + arr.length + ')</span>' +
         '<button type="button" onclick="clearSalesEventsFilter()" style="margin-left:auto;background:transparent;border:1px solid rgba(245,158,11,0.5);color:#F59E0B;padding:2px 10px;border-radius:4px;cursor:pointer;font-size:0.78rem;">Clear filter</button>';
@@ -934,7 +934,7 @@ function renderSalesEvents() {
     }
   }
 
-  countEl.textContent = arr.length + ' event' + (arr.length !== 1 ? 's' : '');
+  countEl.textContent = MastFormat.countNoun(arr.length, 'event');
 
   if (arr.length === 0) {
     emptyEl.style.display = '';
@@ -1113,7 +1113,7 @@ function renderSalesEventDetail(eventId) {
     '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
       '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Revenue</div>' +
       '<div style="font-size:1.6rem;font-weight:700;">' + formatCents(eventRevenue) + '</div>' +
-      '<div style="font-size:0.78rem;color:var(--warm-gray);">' + eventSales.length + ' sale' + (eventSales.length !== 1 ? 's' : '') + '</div>' +
+      '<div style="font-size:0.78rem;color:var(--warm-gray);">' + MastFormat.countNoun(eventSales.length, 'sale') + '</div>' +
     '</div>' +
     '<div style="background:var(--cream);border-radius:8px;padding:12px 16px;flex:1;min-width:120px;">' +
       '<div style="font-size:0.78rem;color:var(--warm-gray);text-transform:uppercase;">Remaining</div>' +

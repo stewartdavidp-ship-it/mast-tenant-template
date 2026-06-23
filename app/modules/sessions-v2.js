@@ -457,7 +457,7 @@
     checkInAll: function (sessionId) {
       if (!SessionsV2._guardRun()) return;
       Promise.resolve(window.SessionsBridge.checkInAll(sessionId)).then(function (n) {
-        SessionsV2._afterRunAction(sessionId, n + ' student' + (n === 1 ? '' : 's') + ' checked in.');
+        SessionsV2._afterRunAction(sessionId, MastFormat.countNoun(n, 'student') + ' checked in.');
       }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
     },
     startClass: function (sessionId) {
@@ -475,7 +475,7 @@
     closeOutAll: function (sessionId) {
       if (!SessionsV2._guardRun()) return;
       Promise.resolve(window.SessionsBridge.closeOutAll(sessionId)).then(function (n) {
-        SessionsV2._afterRunAction(sessionId, n + ' student' + (n === 1 ? '' : 's') + ' closed out.');
+        SessionsV2._afterRunAction(sessionId, MastFormat.countNoun(n, 'student') + ' closed out.');
       }).catch(function (e) { if (window.showToast) showToast('Error: ' + (e && e.message || 'failed.'), true); });
     },
     closeSession: function (sessionId) {

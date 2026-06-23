@@ -294,7 +294,7 @@ function viewLibraryImage(imageId) {
         '<span style="color:var(--warm-gray);">Dimensions</span><span>' + (img.resolution || dims) + '</span>' +
         '<span style="color:var(--warm-gray);">Tags</span><span>' + esc(tags) + '</span>' +
         '<span style="color:var(--warm-gray);">Uploaded</span><span>' + (img.uploadedAt ? new Date(img.uploadedAt).toLocaleString() : (img.uploadDate || 'unknown')) + '</span>' +
-        '<span style="color:var(--warm-gray);">On Website</span><span>' + (u.onWebsite ? 'Yes (' + u.galleryCount + ' placement' + (u.galleryCount !== 1 ? 's' : '') + ')' : 'No') + '</span>' +
+        '<span style="color:var(--warm-gray);">On Website</span><span>' + (u.onWebsite ? 'Yes (' + MastFormat.countNoun(u.galleryCount, 'placement') + ')' : 'No') + '</span>' +
         '<span style="color:var(--warm-gray);">Products</span><span>' + (u.products.length > 0 ? esc(u.products.join(', ')) : 'None') + '</span>' +
       '</div>' +
       // W2.4 — editable tags
@@ -515,7 +515,7 @@ async function loadAndRenderImageCollections() {
         '<div style="height:120px;display:flex;align-items:center;justify-content:center;background:var(--charcoal);color:var(--warm-gray-light);font-size:1.6rem;">&#128194;</div>') +
       '<div class="img-lib-card-body">' +
         '<div style="font-weight:600;font-size:0.9rem;">' + esc(c.name || '(untitled)') + '</div>' +
-        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + count + ' image' + (count !== 1 ? 's' : '') + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + MastFormat.countNoun(count, 'image') + '</div>' +
       '</div></div>';
   });
   html += '</div>';
@@ -790,23 +790,23 @@ async function renderImageDetailBackrefs(imageId) {
 function _formatBackrefList(r) {
   var pieces = [];
   if (r.products.length) {
-    pieces.push('<div><strong>' + r.products.length + ' product' + (r.products.length !== 1 ? 's' : '') + ':</strong> ' +
+    pieces.push('<div><strong>' + MastFormat.countNoun(r.products.length, 'product') + ':</strong> ' +
       r.products.slice(0, 8).map(function(p) { return '<a href="#products?pid=' + esc(p.id) + '" onclick="closeModal()">' + esc(p.name) + '</a>'; }).join(', ') +
       (r.products.length > 8 ? ' …' : '') + '</div>');
   }
   if (r.blogPosts.length) {
-    pieces.push('<div><strong>' + r.blogPosts.length + ' blog post' + (r.blogPosts.length !== 1 ? 's' : '') + ':</strong> ' +
+    pieces.push('<div><strong>' + MastFormat.countNoun(r.blogPosts.length, 'blog post') + ':</strong> ' +
       r.blogPosts.map(function(p) { return '<a href="#blog?postId=' + esc(p.id) + '" onclick="closeModal()">' + esc(p.title) + '</a>'; }).join(', ') + '</div>');
   }
   if (r.socialPosts.length) {
-    pieces.push('<div><strong>' + r.socialPosts.length + ' social post' + (r.socialPosts.length !== 1 ? 's' : '') + '</strong></div>');
+    pieces.push('<div><strong>' + MastFormat.countNoun(r.socialPosts.length, 'social post') + '</strong></div>');
   }
   if (r.stories.length) {
     pieces.push('<div><strong>' + r.stories.length + ' stor' + (r.stories.length !== 1 ? 'ies' : 'y') + ':</strong> ' +
       r.stories.map(function(s) { return esc(s.title); }).join(', ') + '</div>');
   }
   if (r.homepageSections) {
-    pieces.push('<div><strong>' + r.homepageSections + ' homepage section' + (r.homepageSections !== 1 ? 's' : '') + '</strong></div>');
+    pieces.push('<div><strong>' + MastFormat.countNoun(r.homepageSections, 'homepage section') + '</strong></div>');
   }
   if (!pieces.length) return '<span style="color:var(--warm-gray);">Not used anywhere yet.</span>';
   return pieces.join('');

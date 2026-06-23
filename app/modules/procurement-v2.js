@@ -436,7 +436,7 @@
     var withVendor = sug.filter(function (s) { return s.vendorId; });
     var vendorCount = Object.keys(withVendor.reduce(function (a, s) { a[s.vendorId] = 1; return a; }, {})).length;
     var action = withVendor.length
-      ? '<button class="btn btn-primary" onclick="ProcurementV2.createDrafts()">Create ' + vendorCount + ' draft PO' + (vendorCount === 1 ? '' : 's') + ' (' + withVendor.length + ' item' + (withVendor.length === 1 ? '' : 's') + ')</button>'
+      ? '<button class="btn btn-primary" onclick="ProcurementV2.createDrafts()">Create ' + vendorCount + ' draft PO' + (vendorCount === 1 ? '' : 's') + ' (' + MastFormat.countNoun(withVendor.length, 'item') + ')</button>'
       : '';
     var hint = '<div class="mu-sub" style="margin:12px 0;">Items at or below their reorder point. Click one to draft a PO for it, or create grouped drafts for all — each opens in its process for review before sending.</div>';
     var listHtml = sug.length
@@ -694,7 +694,7 @@
       var byVendor = {};
       withVendor.forEach(function (s) { (byVendor[s.vendorId] = byVendor[s.vendorId] || []).push(reorderLine(s)); });
       var groups = Object.keys(byVendor).map(function (vid) { return { vendorId: vid, lines: byVendor[vid] }; });
-      var msg = 'Create ' + groups.length + ' draft PO' + (groups.length === 1 ? '' : 's') + ' from ' + withVendor.length + ' low item' + (withVendor.length === 1 ? '' : 's') + '? Each opens for review before sending.';
+      var msg = 'Create ' + groups.length + ' draft PO' + (groups.length === 1 ? '' : 's') + ' from ' + MastFormat.countNoun(withVendor.length, 'low item') + '? Each opens for review before sending.';
       if (typeof window.mastConfirm === 'function') Promise.resolve(window.mastConfirm(msg)).then(function (ok) { if (ok) createDraftGroups(groups); });
       else createDraftGroups(groups);
     },
@@ -1406,7 +1406,7 @@
     var html = '';
     if (hasUrlFilter) {
       var bParts = [];
-      if (urlIds.length) bParts.push(urlIds.length + ' selected vendor' + (urlIds.length === 1 ? '' : 's'));
+      if (urlIds.length) bParts.push(MastFormat.countNoun(urlIds.length, 'selected vendor'));
       if (urlActive === 'true') bParts.push('active only');
       else if (urlActive === 'false') bParts.push('inactive only');
       if (urlRole) bParts.push('role: ' + urlRole);
@@ -2491,7 +2491,7 @@
       await _commitReceiptWrite(po, built);
       receiveDraft = null;
       closeModal();
-      if (typeof showToast === 'function') showToast('Receipt recorded · ' + built.generatedLots.length + ' lot' + (built.generatedLots.length === 1 ? '' : 's') + ' created');
+      if (typeof showToast === 'function') showToast('Receipt recorded · ' + MastFormat.countNoun(built.generatedLots.length, 'lot') + ' created');
       render();
     } catch (err) {
       if (typeof showToast === 'function') showToast('Failed to record receipt: ' + (err && err.message), true);
@@ -2567,7 +2567,7 @@
 
     try {
       await MastDB.multiUpdate(updates);
-      if (typeof showToast === 'function') showToast('Landed costs allocated across ' + perLine.length + ' lot' + (perLine.length === 1 ? '' : 's'));
+      if (typeof showToast === 'function') showToast('Landed costs allocated across ' + MastFormat.countNoun(perLine.length, 'lot'));
       render();
     } catch (err) {
       if (typeof showToast === 'function') showToast('Failed to apply: ' + (err && err.message), true);

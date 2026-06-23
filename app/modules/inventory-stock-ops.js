@@ -276,11 +276,11 @@ async function applyRecount() {
     recountProducts = [];
     renderInventoryOverview();
 
-    var msg = 'Counted ' + toApply.length + ' product' + (toApply.length !== 1 ? 's' : '') + '. ';
+    var msg = 'Counted ' + MastFormat.countNoun(toApply.length, 'product') + '. ';
     if (varianceCount === 0) {
       msg += 'All counts matched!';
     } else {
-      msg += varianceCount + ' variance' + (varianceCount !== 1 ? 's' : '') + ' found, ' + totalVariance + ' unit' + (totalVariance !== 1 ? 's' : '') + ' adjusted.';
+      msg += MastFormat.countNoun(varianceCount, 'variance') + ' found, ' + MastFormat.countNoun(totalVariance, 'unit') + ' adjusted.';
     }
     showToast(msg);
   } catch (err) {

@@ -184,7 +184,7 @@ function refreshDisplayTabStatus() {
   var legalIds = ['sdCustomPrivacyUrl','sdCustomTermsUrl','sdCustomSecurityUrl','sdCustomAiUrl'];
   var legalCount = legalIds.reduce(function(n, id) { var el = document.getElementById(id); return n + ((el && el.value && el.value.trim()) ? 1 : 0); }, 0);
   setDot('legal', legalCount > 0 ? 'ok' : 'info');
-  setPill('legal', legalCount > 0 ? 'ok' : 'info', legalCount > 0 ? (legalCount + ' override' + (legalCount === 1 ? '' : 's')) : 'Mast defaults');
+  setPill('legal', legalCount > 0 ? 'ok' : 'info', legalCount > 0 ? (MastFormat.countNoun(legalCount, 'override')) : 'Mast defaults');
 }
 window.refreshDisplayTabStatus = refreshDisplayTabStatus;
 

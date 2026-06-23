@@ -168,7 +168,7 @@
     var ids = Object.keys(V2.selected);
     if (!ids.length || !tag) return;
     var verb = remove ? 'Remove tag "' + tag + '" from ' : 'Apply tag "' + tag + '" to ';
-    mastConfirm(verb + ids.length + ' customer' + (ids.length === 1 ? '' : 's') + '?', { title: remove ? 'Remove tag' : 'Bulk tag' }).then(function (ok) {
+    mastConfirm(verb + MastFormat.countNoun(ids.length, 'customer') + '?', { title: remove ? 'Remove tag' : 'Bulk tag' }).then(function (ok) {
       if (!ok) return;
       MastAdmin.loadModule('finance').then(function () {
         return window.FinanceBridge.portfolioBulkTag(ids, tag, { remove: remove });

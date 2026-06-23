@@ -450,7 +450,7 @@ async function loadPlaidBanksForSettings() {
       h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
       h += '<span id="plaidBankArrow_' + esc(itemId) + '" style="font-size:0.72rem;transition:transform 0.2s;">&#9654;</span>';
       h += '<span style="font-weight:600;font-size:0.9rem;">' + esc(item.institutionName || 'Unknown Bank') + '</span>';
-      h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '') + '</span>';
+      h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + MastFormat.countNoun(acctCount, 'account') + '</span>';
       h += '<span style="background:' + statusBg + ';color:#fff;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + esc(item.status || 'unknown') + '</span>';
       if (item.lastSyncAt) h += '<span style="font-size:0.78rem;color:var(--warm-gray-light);">Synced ' + new Date(item.lastSyncAt).toLocaleDateString() + '</span>';
       h += '</div>';

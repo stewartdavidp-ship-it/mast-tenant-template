@@ -259,7 +259,7 @@ function renderHistoricalOrders() {
     // Search filter
     var html = '<div style="max-width:900px;">' +
       '<h1 style="margin-top:0;margin-bottom:4px;">Past Orders</h1>' +
-      '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:16px;">' + orders.length + ' order' + (orders.length !== 1 ? 's' : '') + ' imported from your previous platform</p>' +
+      '<p style="color:var(--warm-gray);font-size:0.85rem;margin-bottom:16px;">' + MastFormat.countNoun(orders.length, 'order') + ' imported from your previous platform</p>' +
       '<div style="margin-bottom:16px;">' +
         '<input type="text" id="histOrderSearch" placeholder="Search by name or email..." style="width:100%;max-width:320px;padding:8px 12px;border:1px solid var(--surface-card-border,#e0e0e0);border-radius:6px;font-size:0.85rem;background:var(--bg);color:var(--text,#2a2a2a);">' +
       '</div>';

@@ -465,7 +465,7 @@ function renderProductionJobs() {
   if (bannerEl) {
     if (hasUrlFilter) {
       var bparts = [];
-      if (urlIds.length) bparts.push(urlIds.length + ' selected job' + (urlIds.length === 1 ? '' : 's'));
+      if (urlIds.length) bparts.push(MastFormat.countNoun(urlIds.length, 'selected job'));
       if (urlStatus) bparts.push('status: ' + String(urlStatus).replace(/-/g, ' '));
       if (urlPurpose) bparts.push('purpose: ' + urlPurpose);
       if (urlWorkType) bparts.push('workType: ' + urlWorkType);
@@ -1568,7 +1568,7 @@ function openCompleteBuild(jobId, buildId) {
 
   // Count photos for this build
   var mediaCount = currentBuildMedia ? Object.keys(currentBuildMedia).length : 0;
-  var mediaNote = mediaCount > 0 ? '<p style="font-size:0.85rem;color:var(--teal);margin-bottom:12px;">📷 This build has ' + mediaCount + ' photo' + (mediaCount !== 1 ? 's' : '') + '</p>' : '';
+  var mediaNote = mediaCount > 0 ? '<p style="font-size:0.85rem;color:var(--teal);margin-bottom:12px;">📷 This build has ' + MastFormat.countNoun(mediaCount, 'photo') + '</p>' : '';
 
   var html = '<div style="max-width:500px;padding:24px;">' +
     '<h3>Complete Build</h3>' +
@@ -2005,7 +2005,7 @@ function renderBuildMediaGallery(buildId, media) {
     el.innerHTML = '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;grid-column:1/-1;">No photos yet. Tap the camera button to capture build photos.</p>';
     return;
   }
-  el.innerHTML = '<div style="grid-column:1/-1;font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;">' + keys.length + ' photo' + (keys.length !== 1 ? 's' : '') + '</div>' +
+  el.innerHTML = '<div style="grid-column:1/-1;font-size:0.85rem;color:var(--warm-gray);margin-bottom:4px;">' + MastFormat.countNoun(keys.length, 'photo') + '</div>' +
     keys.map(function(k) {
       var m = media[k];
       return '<div class="media-thumb">' +
@@ -3114,7 +3114,7 @@ async function uploadStoryMediaFromInput(input, storyId) {
     }
   }
   if (uploadedCount > 0 && typeof showToast === 'function') {
-    showToast(uploadedCount + ' photo' + (uploadedCount === 1 ? '' : 's') + ' uploaded — save the draft to keep changes.');
+    showToast(MastFormat.countNoun(uploadedCount, 'photo') + ' uploaded — save the draft to keep changes.');
   } else if (uploadedCount === 0 && typeof showToast === 'function') {
     showToast('Upload failed for all files. Check the messages above the section.', true);
   }

@@ -703,7 +703,7 @@ function renderForecastSlowMovement() {
 
   var html = '<div style="margin-top:24px;border:1px solid var(--cream-dark,rgba(232,224,212,1));border-radius:8px;overflow:hidden;">';
   html += '<div style="padding:12px 16px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;background:var(--cream,rgba(245,240,232,1));" onclick="toggleForecastSlow()">' +
-    '<span style="font-weight:600;font-size:0.9rem;">' + slow.length + ' product' + (slow.length !== 1 ? 's' : '') + ' with no recent orders</span>' +
+    '<span style="font-weight:600;font-size:0.9rem;">' + MastFormat.countNoun(slow.length, 'product') + ' with no recent orders</span>' +
     '<span id="forecastSlowArrow" style="font-size:0.78rem;">' + (forecastSlowExpanded ? '&#x25BC;' : '&#x25B6;') + '</span>' +
   '</div>';
 

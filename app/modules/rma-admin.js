@@ -176,7 +176,7 @@
       filtered = all.filter(function(r) { return r.status === rmaFilter; });
     }
 
-    if (countEl) countEl.textContent = filtered.length + ' return' + (filtered.length !== 1 ? 's' : '');
+    if (countEl) countEl.textContent = MastFormat.countNoun(filtered.length, 'return');
 
     if (filtered.length === 0) {
       if (emptyEl) emptyEl.style.display = '';
@@ -195,7 +195,7 @@
         '<td style="font-weight:500;">' + esc((key || '').substring(0, 8)) + '</td>' +
         '<td>' + esc(r.orderNumber || (r.orderId || '').substring(0, 8)) + '</td>' +
         '<td>' + esc(r.customerEmail || '') + '</td>' +
-        '<td>' + itemCount + ' item' + (itemCount !== 1 ? 's' : '') + '</td>' +
+        '<td>' + MastFormat.countNoun(itemCount, 'item') + '</td>' +
         '<td>$' + ((r.refundAmountCents || 0) / 100).toFixed(2) + '</td>' +
         '<td>' + MastUI.statusBadge(status, 'rma') + '</td>' +
         '<td>' + formatOrderDate(r.requestedAt) + '</td>' +

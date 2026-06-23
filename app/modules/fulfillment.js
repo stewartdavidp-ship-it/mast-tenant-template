@@ -164,7 +164,7 @@
     }
 
     var html = setupBanner + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:12px;flex-wrap:wrap;">' +
-      '<div style="font-size:0.85rem;color:var(--warm-gray);">' + rows.length + ' order' + (rows.length === 1 ? '' : 's') + ' ready &middot; ' + selCount + ' selected</div>' +
+      '<div style="font-size:0.85rem;color:var(--warm-gray);">' + MastFormat.countNoun(rows.length, 'order') + ' ready &middot; ' + selCount + ' selected</div>' +
       '<button id="buyLabelsBtn" class="btn btn-primary" ' + (selCount === 0 ? 'disabled' : '') + ' style="font-size:0.85rem;padding:8px 16px;' + (selCount === 0 ? 'opacity:0.5;cursor:not-allowed;' : '') + '" onclick="buyLabelsSelected()">Buy Selected (' + selCount + ')</button>' +
     '</div>';
 
@@ -824,7 +824,7 @@
         '<div style="display:flex;justify-content:space-between;align-items:center;">' +
           '<div><strong>' + esc(b.name || 'Unnamed Bundle') + '</strong>' +
             ' ' + MastUI.badge(b.status, isOpen ? 'teal' : 'neutral') + '</div>' +
-          '<div style="font-size:0.85rem;color:var(--warm-gray);">' + total + ' package' + (total !== 1 ? 's' : '') + '</div>' +
+          '<div style="font-size:0.85rem;color:var(--warm-gray);">' + MastFormat.countNoun(total, 'package') + '</div>' +
         '</div>';
       if (b.carrier) {
         card += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">' + esc(b.carrier) + (b.dropOffLocation ? ' — ' + esc(b.dropOffLocation) : '') + '</div>';

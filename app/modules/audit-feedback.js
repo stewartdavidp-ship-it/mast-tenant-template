@@ -736,14 +736,14 @@
       html.push('  <div style="padding:12px 16px;border-bottom:1px solid var(--cream-dark);font-weight:600;color:var(--text-primary);">');
       html.push(    esc(ruleId) +
                     ' <span style="color:var(--warm-gray);font-weight:400;font-size:0.85rem;">(' +
-                    rows.length + ' suppression' + (rows.length === 1 ? '' : 's') + ')</span>');
+                    MastFormat.countNoun(rows.length, 'suppression') + ')</span>');
       html.push('  </div>');
 
       Object.keys(batches).forEach(function(bid) {
         var b = batches[bid];
         html.push('  <div style="padding:10px 16px;border-bottom:1px solid var(--cream-dark);background:rgba(0,0,0,0.02);">');
         html.push('    <div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em;">');
-        html.push(      'Batch ' + esc(bid.slice(-8)) + ' — ' + b.length + ' product' + (b.length === 1 ? '' : 's') + ', ' + esc(reasonLabel(b[0].reason)));
+        html.push(      'Batch ' + esc(bid.slice(-8)) + ' — ' + MastFormat.countNoun(b.length, 'product') + ', ' + esc(reasonLabel(b[0].reason)));
         html.push('    </div>');
         b.forEach(function(r) { html.push(renderRowHtml(r)); });
         html.push('  </div>');

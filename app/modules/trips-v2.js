@@ -1398,7 +1398,7 @@
     if (bannerEl) {
       if (hasUrlFilter) {
         var bparts = [];
-        if (urlIds.length) bparts.push(urlIds.length + ' selected trip' + (urlIds.length === 1 ? '' : 's'));
+        if (urlIds.length) bparts.push(MastFormat.countNoun(urlIds.length, 'selected trip'));
         if (urlStatus) bparts.push('status: ' + String(urlStatus).replace(/-/g, ' '));
         if (urlDateFrom && urlDateTo) bparts.push('from ' + urlDateFrom + ' to ' + urlDateTo);
         else if (urlDateFrom) bparts.push('from ' + urlDateFrom + ' onward');

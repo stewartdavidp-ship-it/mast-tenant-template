@@ -449,8 +449,8 @@
 
       markUnpublished();
       var migrationMsg = '';
-      if (migrationResult.hidden > 0) migrationMsg += ' ' + migrationResult.hidden + ' image' + (migrationResult.hidden !== 1 ? 's' : '') + ' hidden.';
-      if (migrationResult.restored > 0) migrationMsg += ' ' + migrationResult.restored + ' image' + (migrationResult.restored !== 1 ? 's' : '') + ' restored.';
+      if (migrationResult.hidden > 0) migrationMsg += ' ' + MastFormat.countNoun(migrationResult.hidden, 'image') + ' hidden.';
+      if (migrationResult.restored > 0) migrationMsg += ' ' + MastFormat.countNoun(migrationResult.restored, 'image') + ' restored.';
       showToast('Switched to ' + newManifest.name + '.' + migrationMsg);
 
       // Reload theme config and manifest so Style tab reflects new template

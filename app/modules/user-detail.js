@@ -199,7 +199,7 @@ function _renderUserPermissionsTab(container, uid, u) {
   container.innerHTML =
     '<div style="padding:8px 0 16px;">' +
       '<p style="font-size:0.85rem;color:var(--warm-gray);margin:0 0 12px;">Current role: <strong>' + esc(roleName) + '</strong>' +
-        (overrideCount > 0 ? ' &middot; ' + overrideCount + ' permission override' + (overrideCount === 1 ? '' : 's') : ' &middot; using role defaults') +
+        (overrideCount > 0 ? ' &middot; ' + MastFormat.countNoun(overrideCount, 'permission override') : ' &middot; using role defaults') +
       '</p>' +
       '<button class="btn btn-primary" onclick="openUserPermissionsPanel(\'' + esc(uid) + '\')">Edit Permissions</button>' +
     '</div>';
@@ -287,7 +287,7 @@ async function saveUserPermissionOverrides(uid) {
     var displayName = u.displayName || u.email || 'User';
     var diffCount = userOverrideCount(adminUsers[uid]);
     showToast(diffCount > 0
-      ? 'Permissions updated for ' + displayName + ' (' + diffCount + ' override' + (diffCount !== 1 ? 's' : '') + ').'
+      ? 'Permissions updated for ' + displayName + ' (' + MastFormat.countNoun(diffCount, 'override') + ').'
       : 'Permissions reset to role defaults for ' + displayName + '.');
     renderUsersList();
   } catch (err) {

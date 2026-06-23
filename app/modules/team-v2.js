@@ -210,7 +210,7 @@
     if (canEdit) cols.push({ label: '', align: 'right', render: function (r) {
       return '<button class="btn btn-small btn-secondary" onclick="TeamV2.compEdit(\'' + esc(e._key) + '\',\'' + esc(r.key) + '\')">Edit</button>'; } });
     var compTable = UI.relatedTable(cols, compRows);
-    var compBadge = gaps > 0 ? (gaps + ' gap' + (gaps !== 1 ? 's' : '')) : 'Complete';
+    var compBadge = gaps > 0 ? (MastFormat.countNoun(gaps, 'gap')) : 'Complete';
     return UI.cardTable('Compliance — ' + compBadge, compTable);
   }
   function complianceForm(UI, e, fieldKey) {
@@ -1238,7 +1238,7 @@
       if (banner) {
         if (active.length > 0) {
           banner.style.display = '';
-          banner.innerHTML = '&#9889; <strong>' + active.length + ' employee' + (active.length !== 1 ? 's' : '') + ' currently clocked in</strong>';
+          banner.innerHTML = '&#9889; <strong>' + MastFormat.countNoun(active.length, 'employee') + ' currently clocked in</strong>';
         } else {
           banner.style.display = 'none';
         }
@@ -1684,7 +1684,7 @@
 
     var h = '';
     if (missingCount > 0) {
-      h += '<div style="background:rgba(217,119,6,0.15);border:1px solid rgba(217,119,6,0.4);border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:#fbbf24;">⚠ <strong>' + missingCount + ' compliance gap' + (missingCount !== 1 ? 's' : '') + '</strong> across your team.</div>';
+      h += '<div style="background:rgba(217,119,6,0.15);border:1px solid rgba(217,119,6,0.4);border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:#fbbf24;">⚠ <strong>' + MastFormat.countNoun(missingCount, 'compliance gap') + '</strong> across your team.</div>';
     } else if (active.length > 0) {
       h += '<div style="background:rgba(22,163,74,0.15);border:1px solid rgba(22,163,74,0.4);border-radius:6px;padding:10px 16px;margin-bottom:16px;font-size:0.85rem;color:#86efac;">✓ All employees have complete compliance documents on file.</div>';
     }
@@ -2905,7 +2905,7 @@
     // URL-filter banner
     if (hasUrlFilter) {
       var bparts = [];
-      if (urlIds.length) bparts.push(urlIds.length + ' selected employee' + (urlIds.length === 1 ? '' : 's'));
+      if (urlIds.length) bparts.push(MastFormat.countNoun(urlIds.length, 'selected employee'));
       if (urlStatus) bparts.push('status: ' + urlStatus);
       if (urlEmpType) bparts.push('type: ' + urlEmpType);
       if (urlGapsOnly) bparts.push('compliance gaps only');
@@ -2921,7 +2921,7 @@
     h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:4px;">';
     h += active.length + ' active';
     if (partTime.length > 0) h += ' \u00b7 ' + partTime.length + ' part-time';
-    if (gapCount > 0) h += ' \u00b7 <span style="color:#d97706;">\u26a0 ' + gapCount + ' compliance gap' + (gapCount !== 1 ? 's' : '') + '</span>';
+    if (gapCount > 0) h += ' \u00b7 <span style="color:#d97706;">\u26a0 ' + MastFormat.countNoun(gapCount, 'compliance gap') + '</span>';
     h += '</div>';
     if (active.length > 0) {
       h += '<div style="font-size:0.85rem;color:var(--warm-gray);margin-top:2px;">Monthly labor cost: <strong>' + fmtDollars(Math.round(totalMonthlyCost)) + '</strong></div>';
@@ -3105,7 +3105,7 @@
       compHtml += '</div>';
     });
     compHtml += '<div id="teamComplianceForm" style="display:none;"></div>';
-    var compBadge = compGaps > 0 ? '<span style="color:#d97706;font-size:0.78rem;">\u26a0 ' + compGaps + ' gap' + (compGaps !== 1 ? 's' : '') + '</span>' : '<span style="color:#16a34a;font-size:0.78rem;">\u2713 Complete</span>';
+    var compBadge = compGaps > 0 ? '<span style="color:#d97706;font-size:0.78rem;">\u26a0 ' + MastFormat.countNoun(compGaps, 'gap') + '</span>' : '<span style="color:#16a34a;font-size:0.78rem;">\u2713 Complete</span>';
     h += collapsibleSection('secCompliance', 'Compliance Checklist', compHtml, { badge: compBadge });
 
     // --- Employee Documents (collapsible, closed by default) ---

@@ -548,7 +548,7 @@
       if (!window.StoriesBridge || !StoriesBridge.uploadMedia || !CUR) { if (window.showToast) showToast('Stories engine still loading — try again', true); return; }
       var prog = document.getElementById('storyV2UploadProgress'), did = 0;
       (function next(i) {
-        if (i >= files.length) { if (did && window.showToast) showToast(did + ' photo' + (did === 1 ? '' : 's') + ' uploaded — save the draft to keep changes.'); return; }
+        if (i >= files.length) { if (did && window.showToast) showToast(MastFormat.countNoun(did, 'photo') + ' uploaded — save the draft to keep changes.'); return; }
         var f = files[i];
         if (!/^image\//.test(f.type)) { return next(i + 1); }
         var node = null;

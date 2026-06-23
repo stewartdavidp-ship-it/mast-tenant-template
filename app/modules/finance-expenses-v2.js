@@ -401,7 +401,7 @@
       if (!canEdit()) { if (window.showToast) showToast('Finance write access required.', true); return; }
       var ids = selectedVisibleIds();
       if (!ids.length) return;
-      var msg = 'Approve ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : '') + '?';
+      var msg = 'Approve ' + MastFormat.countNoun(ids.length, 'expense') + '?';
       (typeof mastConfirm === 'function' ? mastConfirm(msg, { title: 'Approve expenses', confirmLabel: 'Approve' }) : Promise.resolve(true))
         .then(function (ok) {
           if (!ok) return;
@@ -410,7 +410,7 @@
           // Per-id qboPush gated on source ∈ {plaid,manual} (mirrors finance.js).
           bulkWrite(ids, { reviewed: true }, qboPush).then(function () {
             V2.sel = {};
-            if (window.showToast) showToast('Approved ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : ''));
+            if (window.showToast) showToast('Approved ' + MastFormat.countNoun(ids.length, 'expense'));
             afterWrite();
           }).catch(function (e) {
             console.error('[finance-expenses-v2] bulk approve', e);
@@ -423,7 +423,7 @@
       if (!canEdit()) { if (window.showToast) showToast('Finance write access required.', true); return; }
       var ids = selectedVisibleIds();
       if (!ids.length) return;
-      var msg = 'Mark ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : '') + ' as personal? They will be excluded from business reports.';
+      var msg = 'Mark ' + MastFormat.countNoun(ids.length, 'expense') + ' as personal? They will be excluded from business reports.';
       (typeof mastConfirm === 'function' ? mastConfirm(msg, { title: 'Mark as personal', confirmLabel: 'Mark personal' }) : Promise.resolve(true))
         .then(function (ok) {
           if (!ok) return;

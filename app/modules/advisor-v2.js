@@ -411,7 +411,7 @@
       if (status === 'connected') {
         var parts = [];
         if (c.shopDomain || c.shopId) parts.push(esc(c.shopDomain || c.shopId));
-        if (typeof c.webhookSubscriptionCount === 'number') parts.push(c.webhookSubscriptionCount + ' hook' + (c.webhookSubscriptionCount === 1 ? '' : 's'));
+        if (typeof c.webhookSubscriptionCount === 'number') parts.push(MastFormat.countNoun(c.webhookSubscriptionCount, 'hook'));
         if (c.lastSyncAt) parts.push('Synced ' + timeAgo(c.lastSyncAt));
         sub = parts.join(' • ');
       } else if (c.lastErrorMessage) {
@@ -847,9 +847,9 @@
     if (!isFinite(ms)) return '';
     var days = Math.round((ms - Date.now()) / 86400000);
     if (days === 0) return 'today';
-    if (days > 0) return 'in ' + days + ' day' + (days === 1 ? '' : 's');
+    if (days > 0) return 'in ' + MastFormat.countNoun(days, 'day');
     var n = -days;
-    return n + ' day' + (n === 1 ? '' : 's') + ' overdue';
+    return MastFormat.countNoun(n, 'day') + ' overdue';
   }
 
   function _formatExpiresDate(expiresAt) {
@@ -939,7 +939,7 @@
     var until = MastFormat.addDays(new Date(), days).toISOString();
     try {
       await MastDB.businessEntity.renewals.snooze(itemId, until);
-      if (window.showToast) showToast('Snoozed ' + days + ' day' + (days === 1 ? '' : 's'));
+      if (window.showToast) showToast('Snoozed ' + MastFormat.countNoun(days, 'day'));
     } catch (err) {
       if (window.showToast) showToast('Could not snooze: ' + (err.message || 'unknown'), true);
     }

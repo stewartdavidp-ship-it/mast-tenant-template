@@ -757,7 +757,7 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
     var chipFg = _includeTestData ? '#f59e0b' : '#9ca3af';
     var chipLabel = _includeTestData
       ? 'Including test data'
-      : 'Excluding test data (' + testTxnCount + ' txn' + (testTxnCount === 1 ? '' : 's') + ', ' + fmt$(testTotalCents) + ')';
+      : 'Excluding test data (' + MastFormat.countNoun(testTxnCount, 'txn') + ', ' + fmt$(testTotalCents) + ')';
     var btnLabel = _includeTestData ? 'Exclude' : 'Include';
     h += '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">' +
          '<span style="background:' + chipBg + ';color:' + chipFg + ';padding:4px 10px;border-radius:999px;font-size:0.78rem;font-weight:600;">' + chipLabel + '</span>' +
@@ -770,7 +770,7 @@ function renderRevenue(totalCents, byChannel, txns, start, end, testTotalCents, 
   if (prior && priorWin) {
     h += '<div style="margin-bottom:12px;font-size:0.72rem;color:var(--warm-gray,#888);">' +
       'Comparing to ' + toDateShort(priorWin.start) + ' &ndash; ' + toDateShort(priorWin.end) +
-      ' (' + fmt$(prior.totalCents) + ' &middot; ' + prior.txnCount + ' txn' + (prior.txnCount === 1 ? '' : 's') + ')' +
+      ' (' + fmt$(prior.totalCents) + ' &middot; ' + MastFormat.countNoun(prior.txnCount, 'txn') + ')' +
       '</div>';
   }
 
@@ -995,7 +995,7 @@ async function loadFinExpBanks() {
       h += '<div style="font-weight:600;font-size:0.9rem;">' + e(item.institutionName || 'Bank') + '</div>';
       h += '<span style="background:' + statusColor + ';color:#fff;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + e(status) + '</span>';
       h += '</div>';
-      h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:8px;">' + acctCount + ' account' + (acctCount !== 1 ? 's' : '');
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray,#888);margin-bottom:8px;">' + MastFormat.countNoun(acctCount, 'account');
       h += ' · Last successful sync: ' + e(_fmtSyncTs(item.lastSuccessfulSyncAt || item.lastSyncAt));
       h += '</div>';
       if (isError && item.lastSyncError) {
@@ -1153,7 +1153,7 @@ function renderFinExpenses(expenses, start, end) {
   var h = '';
   if (hasUrlExpFilter) {
     var bParts = [];
-    if (urlExpIds.length) bParts.push(urlExpIds.length + ' selected expense' + (urlExpIds.length === 1 ? '' : 's'));
+    if (urlExpIds.length) bParts.push(MastFormat.countNoun(urlExpIds.length, 'selected expense'));
     if (urlExpStatus) bParts.push('status: ' + urlExpStatus);
     if (urlExpCategory) bParts.push('category: ' + urlExpCategory);
     if (urlExpAccount) {
@@ -1362,7 +1362,7 @@ function finExpSelectedIds() {
 window.finExpBulkApprove = function() {
   var ids = finExpSelectedIds();
   if (ids.length === 0) return;
-  mastConfirm('Approve ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : '') + '?', { title: 'Approve expenses', confirmLabel: 'Approve' }).then(async function(ok) {
+  mastConfirm('Approve ' + MastFormat.countNoun(ids.length, 'expense') + '?', { title: 'Approve expenses', confirmLabel: 'Approve' }).then(async function(ok) {
     if (!ok) return;
     var btn = document.getElementById('finExpBulkApproveBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Approving…'; }
@@ -1374,7 +1374,7 @@ window.finExpBulkApprove = function() {
         updates['admin/expenses/' + id + '/updatedAt'] = now;
       });
       await MastDB.update('', updates);
-      showToast('Approved ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : ''));
+      showToast('Approved ' + MastFormat.countNoun(ids.length, 'expense'));
       // W1 final wire: each approved expense becomes eligible for QBO push.
       // Filter by pusher gate (source ∈ {plaid, manual}).
       ids.forEach(function(id) {
@@ -1395,7 +1395,7 @@ window.finExpBulkApprove = function() {
 window.finExpBulkPersonal = function() {
   var ids = finExpSelectedIds();
   if (ids.length === 0) return;
-  mastConfirm('Mark ' + ids.length + ' expense' + (ids.length !== 1 ? 's' : '') + ' as personal? They will be excluded from business reports.', { title: 'Mark as personal', confirmLabel: 'Mark Personal' }).then(async function(ok) {
+  mastConfirm('Mark ' + MastFormat.countNoun(ids.length, 'expense') + ' as personal? They will be excluded from business reports.', { title: 'Mark as personal', confirmLabel: 'Mark Personal' }).then(async function(ok) {
     if (!ok) return;
     var btn = document.getElementById('finExpBulkPersonalBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Marking…'; }
@@ -1999,7 +1999,7 @@ function renderPnl(curr, prev, start, end, prior) {
     var chipFg = _includeTestData ? '#f59e0b' : '#9ca3af';
     var chipLabel = _includeTestData
       ? 'Including test data'
-      : 'Excluding test data (' + testTxnCount + ' txn' + (testTxnCount === 1 ? '' : 's') + ', ' + fmt$(testRevenue) + ')';
+      : 'Excluding test data (' + MastFormat.countNoun(testTxnCount, 'txn') + ', ' + fmt$(testRevenue) + ')';
     var btnLabel = _includeTestData ? 'Exclude' : 'Include';
     h += '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">' +
          '<span style="background:' + chipBg + ';color:' + chipFg + ';padding:4px 10px;border-radius:999px;font-size:0.78rem;font-weight:600;">' + chipLabel + '</span>' +
@@ -2042,7 +2042,7 @@ function renderPnl(curr, prev, start, end, prior) {
 
   if (cogsMissing) {
     h += '<div style="background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.35);color:#f59e0b;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:0.85rem;">' +
-      '⚠ <strong>COGS not available.</strong> ' + curr.cogsLineMissingCount + ' line item' + (curr.cogsLineMissingCount === 1 ? '' : 's') + ' in this period have neither a snapshot <code>cogsCents</code> nor a product cost on file. Set product cost in the <strong>Maker</strong> module so P&amp;L can compute Gross Profit instead of treating COGS as $0 (which would falsely show 100% margin).' +
+      '⚠ <strong>COGS not available.</strong> ' + MastFormat.countNoun(curr.cogsLineMissingCount, 'line item') + ' in this period have neither a snapshot <code>cogsCents</code> nor a product cost on file. Set product cost in the <strong>Maker</strong> module so P&amp;L can compute Gross Profit instead of treating COGS as $0 (which would falsely show 100% margin).' +
       '</div>';
   }
 
@@ -3022,16 +3022,16 @@ function renderCashFlow(bankTotal, bankAccounts, staleItems, arTotal, arDueHoriz
   var hasBank = bankAccounts.length > 0;
   h += '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px;">';
   if (hasBank) {
-    h += statCard('Cash on Hand', '$' + MastFormat.moneyRaw(bankTotal), '#22c55e', bankAccounts.length + ' account' + (bankAccounts.length !== 1 ? 's' : ''));
+    h += statCard('Cash on Hand', '$' + MastFormat.moneyRaw(bankTotal), '#22c55e', MastFormat.countNoun(bankAccounts.length, 'account'));
   } else {
     h += statCard('Cash on Hand', '—', 'var(--warm-gray,#888)', 'Connect a bank to track');
   }
   // W1.2: card sub-label now shows the projected portion explicitly so the
   // header and the projection cell reconcile visibly on the same panel.
   h += statCard('AR Outstanding', fmt$(arTotal), '#3b82f6',
-    arCount + ' invoice' + (arCount !== 1 ? 's' : '') + ' · ' + fmt$(arDueHorizon) + ' in ≤' + horizonDays + 'd');
+    MastFormat.countNoun(arCount, 'invoice') + ' · ' + fmt$(arDueHorizon) + ' in ≤' + horizonDays + 'd');
   h += statCard('AP Due', fmt$(apTotal), '#f97316',
-    apCount + ' receipt' + (apCount !== 1 ? 's' : '') + ' · ' + fmt$(apDueHorizon) + ' in ≤' + horizonDays + 'd');
+    MastFormat.countNoun(apCount, 'receipt') + ' · ' + fmt$(apDueHorizon) + ' in ≤' + horizonDays + 'd');
   h += '</div>';
 
   // Bank accounts
@@ -3235,7 +3235,7 @@ async function renderArAuditLog() {
     h += '<a href="#finance-ar" style="color:var(--teal,#2a9d8f);font-size:0.85rem;text-decoration:none;">&larr; Back to AR aging</a>';
     h += '<div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0 16px 0;">';
     h += '<h2 style="margin:0;font-size:1.15rem;font-weight:700;">Reminder Audit Log</h2>';
-    h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + rows.length + ' record' + (rows.length === 1 ? '' : 's') + '</span>';
+    h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + MastFormat.countNoun(rows.length, 'record') + '</span>';
     h += '</div>';
 
     if (rows.length === 0) {
@@ -3401,7 +3401,7 @@ function renderArContent() {
     var chipFg = _includeTestData ? '#f59e0b' : '#9ca3af';
     var chipLabel = _includeTestData
       ? 'Including test data'
-      : 'Excluding test data (' + testRows + ' invoice' + (testRows === 1 ? '' : 's') + ', ' + fmt$(testAmtDue) + ')';
+      : 'Excluding test data (' + MastFormat.countNoun(testRows, 'invoice') + ', ' + fmt$(testAmtDue) + ')';
     var btnLabel = _includeTestData ? 'Exclude' : 'Include';
     h += '<div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;">' +
          '<span style="background:' + chipBg + ';color:' + chipFg + ';padding:4px 10px;border-radius:999px;font-size:0.78rem;font-weight:600;">' + chipLabel + '</span>' +
@@ -3411,7 +3411,7 @@ function renderArContent() {
 
   // Summary cards
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
-  h += statCard('Total AR', fmt$(total), '#3b82f6', rows.length + ' invoice' + (rows.length !== 1 ? 's' : ''));
+  h += statCard('Total AR', fmt$(total), '#3b82f6', MastFormat.countNoun(rows.length, 'invoice'));
   [['current','Current'],['1_to_30','30+'],['31_to_60','60+'],['61_to_90','90+']].forEach(function(kl) {
     var color = bucketColor(kl[0]);
     h += statCard(kl[1], fmt$(summary[kl[0]]), color, counts[kl[0]] + (counts[kl[0]] !== 1 ? ' invoices' : ' invoice'));
@@ -3765,7 +3765,7 @@ async function _arQueueReminderCore(orderId, row) {
     // behind-UTC timezones. Empty/unparseable falls back to "as soon as possible".
     var dueDateStr = MastFormat.dateLong(row.dueDate) || 'as soon as possible';
     var invoiceLabel = row.invoiceNumber ? ('Invoice #' + row.invoiceNumber) : ('Order ' + orderId.slice(-8));
-    var ageStr = row.daysOverdue > 0 ? (' (' + row.daysOverdue + ' day' + (row.daysOverdue === 1 ? '' : 's') + ' overdue)') : '';
+    var ageStr = row.daysOverdue > 0 ? (' (' + MastFormat.countNoun(row.daysOverdue, 'day') + ' overdue)') : '';
 
     var subject = 'Reminder: ' + invoiceLabel + ' — ' + amountDueStr + ' due';
     var textBody =
@@ -3970,7 +3970,7 @@ function renderApContent() {
   var h = '';
 
   h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
-  h += statCard('Total AP', fmt$(total), '#f97316', rows.length + ' receipt' + (rows.length !== 1 ? 's' : ''));
+  h += statCard('Total AP', fmt$(total), '#f97316', MastFormat.countNoun(rows.length, 'receipt'));
   [['current','Current'],['1_to_30','30+'],['31_to_60','60+'],['61_to_90','90+']].forEach(function(kl) {
     var color = bucketColor(kl[0]);
     h += statCard(kl[1], fmt$(summary[kl[0]]), color, counts[kl[0]] + (counts[kl[0]] !== 1 ? ' receipts' : ' receipt'));
@@ -4142,7 +4142,7 @@ function renderApGrouped(filtered) {
     h += '<div style="display:flex;align-items:center;gap:10px;">';
     h += '<span style="font-weight:700;">' + e(g.vendorName) + '</span>';
     h += agingBadge(g.worstBucket === 'current' ? 0 : g.worstBucket === '1_to_30' ? 15 : g.worstBucket === '31_to_60' ? 45 : g.worstBucket === '61_to_90' ? 75 : 100);
-    h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + g.rows.length + ' receipt' + (g.rows.length !== 1 ? 's' : '') + '</span>';
+    h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + MastFormat.countNoun(g.rows.length, 'receipt') + '</span>';
     h += '</div>';
     h += '<div style="display:flex;align-items:center;gap:16px;">';
     h += '<span><span style="color:var(--warm-gray,#888);font-size:0.78rem;">Due</span> <span style="font-size:0.78rem;">' + e(dueDateStr) + '</span></span>';
@@ -4549,7 +4549,7 @@ async function renderApVendorDetail(vendorId) {
 
     // Summary
     h += '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">';
-    h += statCard('Lifetime Billed', fmt$(totalBilled), 'var(--text,#fff)', receipts.length + ' bill' + (receipts.length === 1 ? '' : 's'));
+    h += statCard('Lifetime Billed', fmt$(totalBilled), 'var(--text,#fff)', MastFormat.countNoun(receipts.length, 'bill'));
     h += statCard('Paid', fmt$(totalPaid), '#22c55e');
     h += statCard('Outstanding', fmt$(totalDue), totalDue > 0 ? '#f97316' : '#22c55e');
     h += '</div>';
@@ -4747,7 +4747,7 @@ function _renderMissingStateTriage(missingStateOrders) {
     '</tr>';
   }).join('');
   return '<div style="border:1px solid var(--amber);background:rgba(196,133,60,0.10);border-radius:10px;padding:14px 16px;margin-bottom:20px;">' +
-    '<div style="font-weight:600;color:var(--amber);margin-bottom:4px;">⚠️ ' + list.length + ' order' + (list.length === 1 ? '' : 's') + ' missing a tax jurisdiction (' + fmt$(total) + ')</div>' +
+    '<div style="font-weight:600;color:var(--amber);margin-bottom:4px;">⚠️ ' + MastFormat.countNoun(list.length, 'order') + ' missing a tax jurisdiction (' + fmt$(total) + ')</div>' +
     '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:10px;">Excluded from the sales-tax and nexus figures above — set the state where each sale occurred to include it. POS sales now capture this automatically.</div>' +
     '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.78rem;">' +
       '<thead><tr style="text-align:left;color:var(--warm-gray);"><th style="padding:6px 8px;">Order</th><th style="padding:6px 8px;">Channel</th><th style="padding:6px 8px;">Date</th><th style="padding:6px 8px;text-align:right;">Total</th><th style="padding:6px 8px;">Jurisdiction</th></tr></thead>' +
@@ -6642,7 +6642,7 @@ async function portfolioBulkTag(tag) {
   if (checked.length === 0) return;
   var ids = checked.map(function(cb) { return cb.dataset.customerId; });
   var confirmed = await (typeof mastConfirm === 'function'
-    ? mastConfirm('Apply tag "' + tag + '" to ' + ids.length + ' customer' + (ids.length === 1 ? '' : 's') + '?', { title: 'Bulk tag' })
+    ? mastConfirm('Apply tag "' + tag + '" to ' + MastFormat.countNoun(ids.length, 'customer') + '?', { title: 'Bulk tag' })
     : Promise.resolve(window.confirm('Apply tag "' + tag + '" to ' + ids.length + ' customers?')));
   if (!confirmed) return;
   var res = await _portfolioBulkTagCore(ids, tag);
@@ -6803,7 +6803,7 @@ async function _loadFinanceOverview() {
     } else if (anyCogsMissing || cogsVal == null || isNaN(cogsVal) || cogsVal <= 0) {
       var missCount = pnlPeriod.cogsLineMissingCount || 0;
       var diag = missCount > 0
-        ? (missCount + ' line item' + (missCount === 1 ? '' : 's') + ' missing COGS — set product costs in Maker')
+        ? (MastFormat.countNoun(missCount, 'line item') + ' missing COGS — set product costs in Maker')
         : 'COGS not yet tracked — set material costs in Products';
       marginCard = { value: '—', diag: diag, color: 'var(--warm-gray,#888)' };
     } else {
@@ -6864,8 +6864,8 @@ async function _loadFinanceOverview() {
 
     var h = w3Banner + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">';
     h += card('Cash on Hand', cashVal, cashColor, cashSub, null);
-    h += card('AR Outstanding', fmt$(arOutstandingCents), '#3b82f6', arCount + ' open invoice' + (arCount === 1 ? '' : 's'), 'finance-ar');
-    h += card('AP Owed', fmt$(apOwedCents), '#f97316', apCount + ' open bill' + (apCount === 1 ? '' : 's'), 'finance-ap');
+    h += card('AR Outstanding', fmt$(arOutstandingCents), '#3b82f6', MastFormat.countNoun(arCount, 'open invoice'), 'finance-ar');
+    h += card('AP Owed', fmt$(apOwedCents), '#f97316', MastFormat.countNoun(apCount, 'open bill'), 'finance-ap');
     h += card(periodTag + ' Revenue', fmt$(periodRev), '#16a34a', revSub, 'finance-revenue');
     h += card('Margin', marginCard.value, marginCard.color, marginCard.diag, 'finance-pl');
     h += card('Runway', runwayCard.value, runwayCard.color, runwayCard.diag, 'finance-cash-flow');
@@ -7096,7 +7096,7 @@ async function renderPeriodClose() {
       if (!pc) {
         h += '<button class="btn btn-primary btn-small" onclick="event.stopPropagation();finPeriodCloseRun(\'' + _jsAttrSafe(monthStr) + '\')">Close ' + e(_pcMonthLabel(monthStr).split(' ')[0]) + '</button>';
       } else {
-        h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + dayCount + ' day' + (dayCount === 1 ? '' : 's') + '</span>';
+        h += '<span style="color:var(--warm-gray,#888);font-size:0.78rem;">' + MastFormat.countNoun(dayCount, 'day') + '</span>';
       }
       h += '</td></tr>';
     });

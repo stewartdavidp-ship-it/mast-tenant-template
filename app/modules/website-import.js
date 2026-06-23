@@ -876,7 +876,7 @@
     if (selectedProductIds.size > 0) {
       html += selectedProductIds.size + ' selected';
     } else {
-      html += allProducts.length + ' product' + (allProducts.length !== 1 ? 's' : '');
+      html += MastFormat.countNoun(allProducts.length, 'product');
     }
     html += '</label>';
     html += '</div>';
@@ -947,7 +947,7 @@
       return '<div style="font-size:0.85rem;color:var(--warm-gray);padding:16px 0;">No imported images found.</div>';
     }
 
-    var html = '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' + images.length + ' image' + (images.length !== 1 ? 's' : '') + ' from imported products</div>';
+    var html = '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:12px;">' + MastFormat.countNoun(images.length, 'image') + ' from imported products</div>';
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;">';
     images.forEach(function(img) {
       html += '<div style="position:relative;border-radius:8px;overflow:hidden;aspect-ratio:1;">';
@@ -1265,7 +1265,7 @@
       drafts.forEach(function(p) { updates['public/products/' + p.id + '/status'] = 'active'; });
       await MastDB.multiUpdate(updates);
       drafts.forEach(function(p) { writeAudit('update', 'products', p.id); });
-      showToast(drafts.length + ' product' + (drafts.length !== 1 ? 's' : '') + ' published!');
+      showToast(MastFormat.countNoun(drafts.length, 'product') + ' published!');
       await loadImportedProducts();
       renderImportPage();
     } catch (err) {
@@ -1308,7 +1308,7 @@
   window.wpDeleteSelectedProducts = function() {
     var count = selectedProductIds.size;
     if (count === 0) return;
-    showConfirmDialog('Delete ' + count + ' Product' + (count !== 1 ? 's' : ''), 'Delete ' + count + ' selected product' + (count !== 1 ? 's' : '') + '? This cannot be undone.', async function() {
+    showConfirmDialog('Delete ' + count + ' Product' + (count !== 1 ? 's' : ''), 'Delete ' + MastFormat.countNoun(count, 'selected product') + '? This cannot be undone.', async function() {
       try {
         var pids = Array.from(selectedProductIds);
         console.log('[wpDeleteSelectedProducts] Deleting', pids.length, 'products:', pids);
@@ -1318,7 +1318,7 @@
           writeAudit('delete', 'products', pids[i]);
         }
         console.log('[wpDeleteSelectedProducts] All deletes complete');
-        showToast(count + ' product' + (count !== 1 ? 's' : '') + ' deleted.');
+        showToast(MastFormat.countNoun(count, 'product') + ' deleted.');
         selectedProductIds.clear();
         // Force fresh read
         importedProducts = [];

@@ -320,7 +320,7 @@
 
     if (hasUrlFilter) {
       var bParts = [];
-      if (urlCodes.length) bParts.push(urlCodes.length + ' selected card' + (urlCodes.length === 1 ? '' : 's'));
+      if (urlCodes.length) bParts.push(MastFormat.countNoun(urlCodes.length, 'selected card'));
       if (urlStatus) bParts.push('status: ' + urlStatus);
       if (urlDateFrom) bParts.push('from ' + urlDateFrom);
       if (urlDateTo) bParts.push('to ' + urlDateTo);

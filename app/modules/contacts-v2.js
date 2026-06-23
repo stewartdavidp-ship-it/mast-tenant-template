@@ -176,7 +176,7 @@
           { label: 'Type', render: function (it) { return UI.badge(it.type || '—', INTERACTION_TONE[it.type] || 'neutral'); } },
           { label: 'Notes', render: function (it) {
               var n = it.notes ? esc(it.notes) : '—';
-              var docs = (it.documents && it.documents.length) ? ' <span class="mu-sub">(' + it.documents.length + ' doc' + (it.documents.length === 1 ? '' : 's') + ')</span>' : '';
+              var docs = (it.documents && it.documents.length) ? ' <span class="mu-sub">(' + MastFormat.countNoun(it.documents.length, 'doc') + ')</span>' : '';
               return n + docs;
             } }
         ];

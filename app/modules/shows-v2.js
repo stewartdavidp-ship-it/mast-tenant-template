@@ -2116,7 +2116,7 @@
       }).join('');
       var hint = showingAll
         ? '<div class="mu-sub" style="margin-bottom:8px;">No application photos marked — showing all gallery images.</div>'
-        : '<div class="mu-sub" style="margin-bottom:8px;color:var(--amber);">⭐ ' + appIds.length + ' application photo' + (appIds.length !== 1 ? 's' : '') + '</div>';
+        : '<div class="mu-sub" style="margin-bottom:8px;color:var(--amber);">⭐ ' + MastFormat.countNoun(appIds.length, 'application photo') + '</div>';
       var removeBtn = V2.ai.images[slotIdx]
         ? '<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="ShowsV2.aiAssignImage(' + slotIdx + ',null);ShowsV2.aiClosePicker();">Remove</button>' : '';
       var inner = hint + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px;">' + grid + '</div>' +
@@ -2301,7 +2301,7 @@
               missing.forEach(function (f) {
                 if (drafted[f.name] && V2.ai.mapping[f.name]) { V2.ai.mapping[f.name].value = String(drafted[f.name]); n++; }
               });
-              toast(n ? ('Drafted ' + n + ' field' + (n !== 1 ? 's' : '') + '.') : 'No draftable fields returned.');
+              toast(n ? ('Drafted ' + MastFormat.countNoun(n, 'field') + '.') : 'No draftable fields returned.');
             } else {
               toast('AI returned an unparseable draft — fill in manually.', true);
             }

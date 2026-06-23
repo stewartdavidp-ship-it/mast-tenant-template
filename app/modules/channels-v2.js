@@ -422,10 +422,10 @@
       e.innerHTML =
         '<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.9rem;">' +
         '<span>' + (unmatched
-          ? '<button type="button" class="mu-link" onclick="navigateTo(\'mapping\')">' + unmatched + ' listing' + (unmatched === 1 ? '' : 's') + ' to match →</button>'
+          ? '<button type="button" class="mu-link" onclick="navigateTo(\'mapping\')">' + MastFormat.countNoun(unmatched, 'listing') + ' to match →</button>'
           : '✓ All listings matched') + '</span>' +
         '<span>' + (findings
-          ? '<button type="button" class="mu-link" onclick="navigateTo(\'audit\')">' + findings + ' open finding' + (findings === 1 ? '' : 's') + ' →</button>'
+          ? '<button type="button" class="mu-link" onclick="navigateTo(\'audit\')">' + MastFormat.countNoun(findings, 'open finding') + ' →</button>'
           : '✓ No open findings') + '</span>' +
         '</div>';
     });

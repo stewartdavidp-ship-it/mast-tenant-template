@@ -192,7 +192,7 @@
         '<label style="display:inline-flex;align-items:center;gap:4px;">' +
           '<input type="checkbox" id="eiHideResolved"' + (hideResolved ? ' checked' : '') + ' onchange="engagementInboxSetHideResolved(this.checked)"> Hide resolved' +
         '</label>' +
-        '<span style="margin-left:auto;color:var(--warm-gray);">' + filtered.length + ' row' + (filtered.length !== 1 ? 's' : '') + '</span>' +
+        '<span style="margin-left:auto;color:var(--warm-gray);">' + MastFormat.countNoun(filtered.length, 'row') + '</span>' +
       '</div>' +
       // Bulk actions bar
       '<div id="eiBulkBar" style="display:none;background:var(--cream);padding:6px 10px;border-radius:4px;margin:4px 0;font-size:0.85rem;">' +

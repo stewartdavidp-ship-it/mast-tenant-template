@@ -143,7 +143,7 @@
       U.tiles([
         { k: (V2.range === 'today' ? 'Today' : V2.range === 'week' ? 'Last 7 days' : 'All time'), v: U.Num.money(sum), hero: true },
         { k: 'Sales shown', v: U.Num.count(rows.length) },
-        { k: 'Today', v: U.Num.money(todaySum) + ' · ' + today.length + ' sale' + (today.length === 1 ? '' : 's') }
+        { k: 'Today', v: U.Num.money(todaySum) + ' · ' + MastFormat.countNoun(today.length, 'sale') }
       ]) +
       '<div style="margin:14px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><div>' + pills + '</div>' + statusSel + '</div>' +
       window.MastEntity.renderList('orders-v2', {
