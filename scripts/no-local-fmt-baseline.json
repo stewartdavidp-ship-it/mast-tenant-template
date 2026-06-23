@@ -214,6 +214,10 @@
     "centsDiv": 4,
     "moneyToFixed": 4
   },
+  "app/modules/subscription-billing.js": {
+    "centsDiv": 1,
+    "localeDate": 5
+  },
   "app/modules/subscription-v2.js": {
     "centsDiv": 2,
     "localeDate": 11
