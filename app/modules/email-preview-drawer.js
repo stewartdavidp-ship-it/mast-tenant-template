@@ -94,7 +94,7 @@ function loadDrawerPreviewFromLog(trigger) {
     }
     var key = Object.keys(val)[0];
     var email = val[key];
-    var footerNote = 'From most recent send' + (email.createdAt ? ' (' + new Date(email.createdAt).toLocaleDateString() + ')' : '');
+    var footerNote = 'From most recent send' + (email.createdAt ? ' (' + MastFormat.date(email.createdAt) + ')' : '');
     renderDrawerPreview(email.htmlSnapshot || null, email.subject || null, footerNote);
   }).catch(function(err) {
     bodyEl.innerHTML = '<div style="text-align:center;padding:40px 20px;color:var(--warm-gray);font-size:0.85rem;">Failed to load preview: ' + esc(err.message) + '</div>';

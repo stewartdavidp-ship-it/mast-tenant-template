@@ -698,8 +698,8 @@
         var map = { connected: 'connected', expired: 'needs-reauth', revoked: 'needs-reauth', error: 'error', pending: 'pending' };
         var bits = [];
         if (rec.env) bits.push(rec.env);
-        if (rec.connectedAt) bits.push('connected ' + new Date(rec.connectedAt).toLocaleDateString());
-        if (rec.lastSyncAt) bits.push('last sync ' + new Date(rec.lastSyncAt).toLocaleDateString());
+        if (rec.connectedAt) bits.push('connected ' + MastFormat.date(rec.connectedAt));
+        if (rec.lastSyncAt) bits.push('last sync ' + MastFormat.date(rec.lastSyncAt));
         else if (rec.status === 'connected') bits.push('no manual sync yet');
         return {
           state: map[rec.status] || 'not-collected',
@@ -1028,7 +1028,7 @@
         var bits = [];
         if (rec.institutionName) bits.push(rec.institutionName);
         if (rec.itemCount && rec.itemCount > 1) bits.push('+' + (rec.itemCount - 1) + ' more');
-        if (rec.connectedAt) bits.push('connected ' + new Date(rec.connectedAt).toLocaleDateString());
+        if (rec.connectedAt) bits.push('connected ' + MastFormat.date(rec.connectedAt));
         return {
           state: map[rec.status] || 'not-collected',
           detail: bits.join(' • '),
@@ -1140,7 +1140,7 @@
       var env = doc.env || 'sandbox';
       var realmShort = String(doc.realmId).slice(0, 8) + '…';
       var bits = [env, 'realm ' + realmShort];
-      if (doc.connectedAt) bits.push('since ' + new Date(doc.connectedAt).toLocaleDateString());
+      if (doc.connectedAt) bits.push('since ' + MastFormat.date(doc.connectedAt));
       // Idle-expiry: lastUsedAt/refreshedAt drives the ~100-day force-expiry clock.
       var lastUsedAt = doc.lastUsedAt || doc.refreshedAt || doc.connectedAt;
       var lastMs = (typeof lastUsedAt === 'number') ? lastUsedAt : Date.parse(lastUsedAt);

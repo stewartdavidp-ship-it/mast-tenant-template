@@ -120,7 +120,7 @@
       (rows[0].openedAt ? ' · last ' + esc(_agoLabel(rows[0].openedAt)) : '') + '</div>';
     var body = '<table class="data-table" style="width:100%;font-size:0.85rem;"><thead><tr><th>When</th><th>Recipient</th><th>Email</th></tr></thead><tbody>';
     rows.forEach(function (o) {
-      var when = o.openedAt ? new Date(o.openedAt).toLocaleString() : '—';
+      var when = o.openedAt ? MastFormat.dateTime(o.openedAt) : '—';
       body += '<tr><td>' + esc(when) + ' <span class="mu-sub" style="font-size:0.72rem;">(' + esc(_agoLabel(o.openedAt)) + ')</span></td>' +
         '<td>' + esc(o._recipientName || '—') + '</td><td>' + esc(o._recipientEmail || '—') + '</td></tr>';
     });

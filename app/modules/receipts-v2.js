@@ -328,7 +328,7 @@
       rows = cands.map(function (c) {
         var s = c.sale;
         var match = c.amount === payCents;
-        var when = (s.timestamp || s.createdAt) ? new Date(s.timestamp || s.createdAt).toLocaleString() : '—';
+        var when = (s.timestamp || s.createdAt) ? MastFormat.dateTime(s.timestamp || s.createdAt) : '—';
         var delta = c.deltaMin === Infinity ? '' : (c.deltaMin < 1 ? '<1 min' : Math.round(c.deltaMin) + ' min') + ' apart';
         var items = (s.items || []).map(function (i) { return i.productName; }).filter(Boolean).join(', ');
         return '<div onclick="ReceiptsV2.commitMatch(\'' + esc(payment._key) + '\',\'' + esc(c.saleId) + '\')" ' +
@@ -350,7 +350,7 @@
       '<div style="padding:14px;border:1px solid var(--border);border-radius:10px;margin-bottom:16px;background:var(--surface,transparent);">' +
         '<div style="font-size:0.72rem;letter-spacing:0.04em;text-transform:uppercase;color:var(--warm-gray);">Square payment</div>' +
         '<div style="font-weight:700;font-size:1.15rem;">' + U.Num.money(payCents / 100) + '</div>' +
-        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + (payment.createdAt ? new Date(payment.createdAt).toLocaleString() : '—') + '</div>' +
+        '<div style="font-size:0.78rem;color:var(--warm-gray);">' + (payment.createdAt ? MastFormat.dateTime(payment.createdAt) : '—') + '</div>' +
       '</div>' +
       '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:8px;">Select a sale to match:</div>' +
       rows +

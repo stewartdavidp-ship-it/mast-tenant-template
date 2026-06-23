@@ -76,7 +76,7 @@
     if (hrs < 24) return hrs + 'h ago';
     var days = Math.floor(hrs / 24);
     if (days < 30) return days + 'd ago';
-    return new Date(iso).toLocaleDateString();
+    return MastFormat.date(iso);
   }
   function canEdit() { return typeof window.can !== 'function' || window.can('engagement-inbox', 'edit'); }
   function bridge() {

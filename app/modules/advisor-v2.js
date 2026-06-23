@@ -856,7 +856,7 @@
     if (!expiresAt) return '';
     var d = new Date(expiresAt);
     if (isNaN(d.getTime())) return '';
-    return d.toLocaleDateString();
+    return MastFormat.date(d);
   }
 
   function renderRenewalsSection() {

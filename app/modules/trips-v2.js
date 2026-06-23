@@ -1665,7 +1665,7 @@
         '@media print{body{margin:0;}}' +
       '</style></head><body>' +
       '<h2>Trip Mileage Tax Report — ' + year + '</h2>' +
-      '<p>Generated ' + new Date().toLocaleDateString() + '</p>' +
+      '<p>Generated ' + MastFormat.date() + '</p>' +
       container.innerHTML +
       '<script>window.onload=function(){window.print();}<\/script>' +
       '</body></html>'

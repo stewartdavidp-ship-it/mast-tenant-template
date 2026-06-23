@@ -533,7 +533,7 @@
     }).join('');
     _printAndCleanup('print-pick-list',
       '<h1 style="font-size:18px;margin:0 0 12px;">Pick List — ' + selectedKeys.length + ' orders</h1>' +
-      '<p style="font-size:11px;color:#666;margin:0 0 12px;">Generated ' + new Date().toLocaleString() + '</p>' +
+      '<p style="font-size:11px;color:#666;margin:0 0 12px;">Generated ' + MastFormat.dateTime() + '</p>' +
       '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
         '<thead><tr style="border-bottom:2px solid #000;"><th align="left">Qty</th><th align="left">Product</th><th align="left">Options</th><th align="left">Location</th></tr></thead>' +
         '<tbody>' + rowsHtml + '</tbody>' +

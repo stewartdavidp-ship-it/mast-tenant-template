@@ -851,7 +851,7 @@
           }
           if (r.featuredOnSite) {
             var featRel = r.featuredAt ? (relativeTime(r.featuredAt) || '') : '';
-            var featTitle = r.featuredAt ? new Date(r.featuredAt).toLocaleString() : 'Featured on site';
+            var featTitle = r.featuredAt ? MastFormat.dateTime(r.featuredAt) : 'Featured on site';
             html += '<span class="status-badge pill" title="' + _esc(featTitle) + '" style="background:rgba(212,162,69,0.16);color:var(--amber);font-size:0.78rem;display:inline-flex;align-items:center;gap:4px;">' +
               '✓ Featured' + (featRel ? ' <span style="color:var(--warm-gray);font-weight:400;">· ' + _esc(featRel) + '</span>' : '') +
             '</span>';

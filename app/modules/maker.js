@@ -6228,7 +6228,7 @@
       var statusEl = document.getElementById('spotPriceStatusText');
       if (statusEl) {
         if (current && current.fetchedAt) {
-          var when = new Date(current.fetchedAt).toLocaleString();
+          var when = MastFormat.dateTime(current.fetchedAt);
           statusEl.innerHTML = '🔗 Last spot fetch: <strong>' + when + '</strong> · '
             + 'Au $' + current.gold.toFixed(2) + '/oz · '
             + 'Ag $' + current.silver.toFixed(2) + '/oz · '

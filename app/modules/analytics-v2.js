@@ -89,7 +89,7 @@
         '<span style="flex:0 0 70px;">' + v.views + ' views</span>' +
         '<span style="flex:0 0 70px;">' + v.clicks + ' clicks</span>' +
         '<span style="flex:1;color:var(--warm-gray);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(pages) + '</span>' +
-        '<span style="flex:0 0 150px;text-align:right;color:var(--warm-gray);">' + (v.lastSeen ? new Date(v.lastSeen).toLocaleString() : '—') + '</span></div>';
+        '<span style="flex:0 0 150px;text-align:right;color:var(--warm-gray);">' + (v.lastSeen ? MastFormat.dateTime(v.lastSeen) : '—') + '</span></div>';
     }).join('');
     return U.card('Visitors (most recent first)', rows);
   }
@@ -97,7 +97,7 @@
     var rows = V2.hits.slice(0, 30).map(function (h) {
       var what = h.t === 'pv' ? ('Viewed ' + pageLabel(h.p)) : actionLabel(h.a);
       return '<div style="display:flex;gap:12px;padding:6px 0;border-bottom:1px solid var(--cream-dark);font-size:0.85rem;align-items:baseline;">' +
-        '<span style="flex:0 0 150px;color:var(--warm-gray);">' + (h.ts ? new Date(h.ts).toLocaleString() : '—') + '</span>' +
+        '<span style="flex:0 0 150px;color:var(--warm-gray);">' + (h.ts ? MastFormat.dateTime(h.ts) : '—') + '</span>' +
         '<span style="flex:1;">' + esc(what) + '</span>' +
         '<span style="flex:0 0 130px;text-align:right;font-family:monospace;font-size:0.78rem;color:var(--warm-gray);">' + esc(h.ip || '') + '</span></div>';
     }).join('');

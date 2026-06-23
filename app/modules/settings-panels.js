@@ -452,7 +452,7 @@ async function loadPlaidBanksForSettings() {
       h += '<span style="font-weight:600;font-size:0.9rem;">' + esc(item.institutionName || 'Unknown Bank') + '</span>';
       h += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + MastFormat.countNoun(acctCount, 'account') + '</span>';
       h += '<span style="background:' + statusBg + ';color:#fff;padding:2px 8px;border-radius:4px;font-size:0.72rem;font-weight:600;">' + esc(item.status || 'unknown') + '</span>';
-      if (item.lastSyncAt) h += '<span style="font-size:0.78rem;color:var(--warm-gray-light);">Synced ' + new Date(item.lastSyncAt).toLocaleDateString() + '</span>';
+      if (item.lastSyncAt) h += '<span style="font-size:0.78rem;color:var(--warm-gray-light);">Synced ' + MastFormat.date(item.lastSyncAt) + '</span>';
       h += '</div>';
 
       h += '<div style="display:flex;gap:6px;" onclick="event.stopPropagation()">';
@@ -473,7 +473,7 @@ async function loadPlaidBanksForSettings() {
         });
       }
       if (item.lastSyncAt) {
-        h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:6px;">Last synced ' + new Date(item.lastSyncAt).toLocaleString() + '</div>';
+        h += '<div style="font-size:0.78rem;color:var(--warm-gray-light);margin-top:6px;">Last synced ' + MastFormat.dateTime(item.lastSyncAt) + '</div>';
       }
       if (item.lastError) {
         h += '<div style="font-size:0.78rem;color:#dc2626;margin-top:4px;">' + esc(item.lastError) + '</div>';

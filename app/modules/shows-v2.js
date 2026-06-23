@@ -380,7 +380,7 @@
     } else {
       histBody = hist.map(function (e) {
         var ns = e.newStatus || '';
-        var when = e.timestamp ? new Date(e.timestamp).toLocaleDateString() : '';
+        var when = e.timestamp ? MastFormat.date(e.timestamp) : '';
         return '<div style="padding:6px 0;border-top:1px solid var(--cream-dark,rgba(127,127,127,.18));font-size:0.85rem;">' +
           UI.badge(STATUS_LABEL[ns] || ns, STATUS_TONE[ns] || 'neutral') +
           (e.oldStatus ? ' <span class="mu-sub">from ' + esc(STATUS_LABEL[e.oldStatus] || e.oldStatus) + '</span>' : '') +
@@ -1300,7 +1300,7 @@
         var show = V2.byId[app.showId] || {};
         return '<div onclick="ShowsV2.aiResume(\'' + esc(id) + '\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--cream-dark,rgba(127,127,127,.18));">' +
           '<div><div style="font-weight:600;">' + esc(showName(show) !== 'Unnamed Show' ? showName(show) : (app.showName || 'Unknown Show')) + '</div>' +
-          '<div class="mu-sub">Saved ' + esc(app.updatedAt ? new Date(app.updatedAt).toLocaleDateString() : '') + '</div></div>' +
+          '<div class="mu-sub">Saved ' + esc(app.updatedAt ? MastFormat.date(app.updatedAt) : '') + '</div></div>' +
           U.badge(app.status || 'draft', 'neutral') + '</div>';
       }).join('');
       out += U.card('Saved packages', saved);

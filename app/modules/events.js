@@ -1280,7 +1280,7 @@
         html += '<div><strong>' + esc(s.businessName || '') + '</strong> ' + evBadgeHtml(s.reviewDecision || s.status || 'pending');
         if (s.notified) html += ' <span style="font-size:0.72rem;color:var(--warm-gray);">notified</span>';
         html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">' + esc(s.ownerName || '') + (s.email ? ' · ' + esc(s.email) : '') + (s.phone ? ' · ' + esc(s.phone) : '') + '</div>';
-        html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(s.category || '') + ' · Submitted ' + (s.submittedAt ? new Date(s.submittedAt).toLocaleDateString() : '') + '</div>';
+        html += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-top:2px;">' + esc(s.category || '') + ' · Submitted ' + (s.submittedAt ? MastFormat.date(s.submittedAt) : '') + '</div>';
         html += '</div></div>';
 
         if (s.businessDescription) html += '<p style="font-size:0.85rem;margin:10px 0 0;">' + esc(s.businessDescription) + '</p>';
@@ -1592,7 +1592,7 @@
         html += '<div class="ev-card" style="margin-bottom:8px;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
         html += '<strong style="font-size:0.9rem;">' + esc(a.subject || '') + '</strong>';
-        html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + (a.sentAt ? new Date(a.sentAt).toLocaleString() : '') + '</span>';
+        html += '<span style="font-size:0.78rem;color:var(--warm-gray);">' + (a.sentAt ? MastFormat.dateTime(a.sentAt) : '') + '</span>';
         html += '</div>';
         html += '<p style="font-size:0.85rem;margin:8px 0 0;white-space:pre-wrap;">' + esc(a.body || '') + '</p>';
         if (a.recipientCount) html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin-top:4px;">Sent to ' + a.recipientCount + ' vendors</p>';

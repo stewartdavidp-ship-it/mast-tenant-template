@@ -3,37 +3,25 @@
     "localeDate": 1
   },
   "app/modules/accounting.js": {
-    "localeDate": 6
+    "localeDate": 2
   },
   "app/modules/add-to-sale-dialog.js": {
     "centsDiv": 1,
     "moneyToFixed": 1
   },
   "app/modules/advisor-v2.js": {
-    "centsDiv": 1,
-    "localeDate": 1
+    "centsDiv": 1
   },
   "app/modules/analytics-v2.js": {
     "centsDiv": 2,
-    "moneyToFixed": 2,
-    "localeDate": 2
-  },
-  "app/modules/audit-feedback.js": {
-    "localeDate": 1
-  },
-  "app/modules/audit.js": {
-    "localeDate": 1
-  },
-  "app/modules/auditlog-v2.js": {
-    "localeDate": 1
+    "moneyToFixed": 2
   },
   "app/modules/blog-v2.js": {
     "moneyToFixed": 3
   },
   "app/modules/book.js": {
-    "centsDiv": 11,
-    "moneyToFixed": 9,
-    "localeDate": 8
+    "centsDiv": 5,
+    "moneyToFixed": 3
   },
   "app/modules/cart.js": {
     "centsDiv": 5,
@@ -45,13 +33,10 @@
   },
   "app/modules/coin-wallet-modal.js": {
     "centsDiv": 1,
-    "localeDate": 4
+    "localeDate": 3
   },
   "app/modules/commissions-v2.js": {
     "centsDiv": 1
-  },
-  "app/modules/connections-providers.js": {
-    "localeDate": 4
   },
   "app/modules/consignment.js": {
     "centsDiv": 13,
@@ -72,8 +57,7 @@
   },
   "app/modules/customer-service.js": {
     "centsDiv": 2,
-    "moneyToFixed": 4,
-    "localeDate": 3
+    "moneyToFixed": 4
   },
   "app/modules/customers-v2.js": {
     "centsDiv": 4,
@@ -88,19 +72,9 @@
   "app/modules/email-log.js": {
     "localeDate": 5
   },
-  "app/modules/email-preview-drawer.js": {
-    "localeDate": 1
-  },
-  "app/modules/engagement-inbox-v2.js": {
-    "localeDate": 1
-  },
-  "app/modules/engagement-inbox.js": {
-    "localeDate": 1
-  },
   "app/modules/events.js": {
     "centsDiv": 2,
-    "moneyToFixed": 2,
-    "localeDate": 2
+    "moneyToFixed": 2
   },
   "app/modules/finance-close-v2.js": {
     "centsDiv": 3,
@@ -118,8 +92,8 @@
     "moneyToFixed": 1
   },
   "app/modules/finance.js": {
-    "centsDiv": 63,
-    "moneyToFixed": 77,
+    "centsDiv": 62,
+    "moneyToFixed": 64,
     "localeDate": 7
   },
   "app/modules/fulfillment-v2.js": {
@@ -127,8 +101,7 @@
   },
   "app/modules/fulfillment.js": {
     "centsDiv": 2,
-    "moneyToFixed": 3,
-    "localeDate": 1
+    "moneyToFixed": 3
   },
   "app/modules/galleries-v2.js": {
     "centsDiv": 8,
@@ -136,9 +109,6 @@
   },
   "app/modules/gift-cards-v2.js": {
     "centsDiv": 1
-  },
-  "app/modules/image-library.js": {
-    "localeDate": 2
   },
   "app/modules/instructors-v2.js": {
     "centsDiv": 1,
@@ -155,30 +125,25 @@
   "app/modules/link-recipe-dialog.js": {
     "moneyToFixed": 1
   },
-  "app/modules/lookbooks-v2.js": {
-    "localeDate": 1
+  "app/modules/maker-settings.js": {
+    "moneyToFixed": 1
   },
   "app/modules/maker.js": {
-    "centsDiv": 18,
-    "moneyToFixed": 39,
-    "localeDate": 4
-  },
-  "app/modules/maker-settings.js": {
-    "moneyToFixed": 1,
-    "localeDate": 1
+    "centsDiv": 13,
+    "moneyToFixed": 7
   },
   "app/modules/mapping.js": {
     "centsDiv": 1,
     "moneyToFixed": 1
   },
+  "app/modules/newsletter-v2.js": {
+    "centsDiv": 1,
+    "localeDate": 1
+  },
   "app/modules/orders-v2.js": {
     "centsDiv": 6,
     "moneyToFixed": 3,
     "localeDate": 4
-  },
-  "app/modules/rma-admin.js": {
-    "centsDiv": 14,
-    "moneyToFixed": 11
   },
   "app/modules/passes-v2.js": {
     "centsDiv": 1,
@@ -189,9 +154,8 @@
     "localeDate": 1
   },
   "app/modules/production.js": {
-    "centsDiv": 16,
-    "moneyToFixed": 14,
-    "localeDate": 4
+    "centsDiv": 2,
+    "localeDate": 1
   },
   "app/modules/products-engine.js": {
     "centsDiv": 6,
@@ -207,7 +171,11 @@
   },
   "app/modules/receipts-v2.js": {
     "centsDiv": 13,
-    "localeDate": 4
+    "localeDate": 2
+  },
+  "app/modules/rma-admin.js": {
+    "centsDiv": 14,
+    "moneyToFixed": 11
   },
   "app/modules/rma-v2.js": {
     "centsDiv": 2
@@ -217,11 +185,10 @@
   },
   "app/modules/sales.js": {
     "centsDiv": 3,
-    "moneyToFixed": 3,
-    "localeDate": 7
+    "moneyToFixed": 3
   },
   "app/modules/settings-panels.js": {
-    "localeDate": 5
+    "localeDate": 3
   },
   "app/modules/setup-wizard.js": {
     "centsDiv": 4,
@@ -230,7 +197,7 @@
   "app/modules/shows-v2.js": {
     "centsDiv": 2,
     "moneyToFixed": 2,
-    "localeDate": 6
+    "localeDate": 4
   },
   "app/modules/social-v2.js": {
     "moneyToFixed": 2
@@ -254,13 +221,10 @@
   "app/modules/trips-v2.js": {
     "centsDiv": 4,
     "moneyToFixed": 8,
-    "localeDate": 3
-  },
-  "app/modules/unified-drift-dialog.js": {
-    "localeDate": 1
+    "localeDate": 2
   },
   "app/modules/variant-detail-tabs.js": {
-    "moneyToFixed": 26
+    "moneyToFixed": 5
   },
   "app/modules/vendors-v2.js": {
     "centsDiv": 1,
@@ -270,12 +234,12 @@
     "centsDiv": 4,
     "moneyToFixed": 4
   },
-  "app/modules/website-v2.js": {
+  "app/modules/website-import.js": {
     "centsDiv": 1,
     "moneyToFixed": 1,
     "localeDate": 1
   },
-  "app/modules/website-import.js": {
+  "app/modules/website-v2.js": {
     "centsDiv": 1,
     "moneyToFixed": 1,
     "localeDate": 1
@@ -283,9 +247,5 @@
   "app/modules/wholesale-v2.js": {
     "centsDiv": 3,
     "moneyToFixed": 1
-  },
-  "app/modules/newsletter-v2.js": {
-    "centsDiv": 1,
-    "localeDate": 1
   }
 }

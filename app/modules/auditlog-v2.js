@@ -79,7 +79,7 @@
           { k: 'Area', v: esc(entityLabel(ev.entity)) },
           { k: 'Record id', v: ev.entityId ? '<span style="font-family:monospace;font-size:0.78rem;">' + esc(ev.entityId) + '</span>' : '—' },
           { k: 'Who', v: esc(r.actorName) + (actor.role ? ' <span style="color:var(--warm-gray);">(' + esc(actor.role) + ')</span>' : '') },
-          { k: 'When', v: r.whenMs ? new Date(r.whenMs).toLocaleString() : '—' },
+          { k: 'When', v: r.whenMs ? MastFormat.dateTime(r.whenMs) : '—' },
           { k: 'Where', v: ctx.gpsMode === 'fair' ? 'At a fair / event' : 'In the studio' }
         ]);
         var prov = UI.kv([

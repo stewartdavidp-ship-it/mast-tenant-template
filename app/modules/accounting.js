@@ -127,7 +127,7 @@
       if (connected) {
         var env = doc.env || 'sandbox';
         var realmShort = String(doc.realmId).slice(0, 8) + '…';
-        var connectedAt = doc.connectedAt ? new Date(doc.connectedAt).toLocaleString() : '—';
+        var connectedAt = doc.connectedAt ? MastFormat.dateTime(doc.connectedAt) : '—';
         var countdownChipHtml = _renderReconnectCountdownChip(doc);
         var webhookSectionHtml = _renderWebhookSection(meta);
         html =
@@ -200,7 +200,7 @@
     if (pending.length === 0) return '';
     var rows = pending.map(function(c, idx) {
       var name = c.accountName || c.accountId || '(unnamed bank account)';
-      var when = c.detectedAt ? new Date(c.detectedAt).toLocaleString() : '';
+      var when = c.detectedAt ? MastFormat.dateTime(c.detectedAt) : '';
       var safeIdx = window._jsAttr ? window._jsAttr(c.accountId || String(idx)) : esc(c.accountId || String(idx));
       return '<li style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-top:1px solid rgba(0,0,0,0.06);">' +
         '<div style="flex:1;min-width:0;">' +
@@ -291,7 +291,7 @@
         pillBg = 'rgba(239,68,68,0.18)'; pillFg = '#ef4444';
         pillLabel = '⚠ Stale (' + ageDays + 'd)';
       }
-      ageLine = 'Last webhook event: ' + new Date(lastMs).toLocaleString() + '.';
+      ageLine = 'Last webhook event: ' + MastFormat.dateTime(lastMs) + '.';
     }
     return '<div style="background:var(--bg-secondary,#1a1a1a);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:12px 14px;margin-bottom:16px;">' +
       '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">' +
@@ -790,7 +790,7 @@
 
     var lastSaved = '';
     if (mappingDoc && mappingDoc.confirmedAt) {
-      var when = new Date(mappingDoc.confirmedAt).toLocaleString();
+      var when = MastFormat.dateTime(mappingDoc.confirmedAt);
       var who = mappingDoc.confirmedBy || '';
       lastSaved = '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:12px;">Last saved: ' + esc(when) + (who ? ' by ' + esc(who) : '') + '</div>';
     }
