@@ -2899,6 +2899,12 @@
 
     var html = '<div class="section-header"><h2>Page Builder</h2></div>';
 
+    // Storefront capabilities (nav-level destination pages) — the single place
+    // to turn storefront pages/features on or off. Writes the SAME store the
+    // storefront nav reads (public/config/nav/sections). Distinct from the
+    // homepage section cards below, which toggle on-page content blocks.
+    html += renderCapabilitiesPanel();
+
     // Top: Section Cards
     html += renderSectionCards();
 
@@ -2944,6 +2950,50 @@
       html += '</div>';
     });
 
+    html += '</div>';
+    return html;
+  }
+
+  // --- Storefront capabilities panel (nav-level destination pages) ---
+  // Each entry toggles public/config/nav/sections/{id}/enabled via the shared
+  // hpToggleSection writer (which also mirrors webPresence + markUnpublished).
+  // `def` mirrors the corrected DEFAULT_SECTIONS fallback in storefront-nav.js,
+  // so the panel shows the same on/off state the storefront resolves when a
+  // tenant's nav/sections is sparse. about/contact/newsletter are NOT listed
+  // here — they are homepage content sections owned by the section cards above.
+  var STOREFRONT_CAPABILITIES = [
+    { id: 'shop',       label: 'Shop',        def: true,  hint: 'Your product catalog. Needs active products to sell.' },
+    { id: 'blog',       label: 'Blog',        def: true,  hint: 'Long-form posts. Shows entries once you publish posts.' },
+    { id: 'schedule',   label: 'Schedule',    def: false, hint: 'Upcoming events & shows, pulled from your events.' },
+    { id: 'classes',    label: 'Classes',     def: false, hint: 'Bookable classes. Needs the booking module.' },
+    { id: 'wholesale',  label: 'Wholesale',   def: false, hint: 'B2B catalog. Needs wholesale pricing on products.' },
+    { id: 'commission', label: 'Commissions', def: false, hint: 'Let visitors request custom commission work.' },
+    { id: 'giftcards',  label: 'Gift Cards',  def: false, hint: 'Sell gift cards. Needs gift cards enabled in Wallet.' }
+  ];
+
+  function capabilityEnabled(id, def) {
+    var s = navSections && navSections[id];
+    if (s && typeof s.enabled !== 'undefined') return s.enabled !== false;
+    return def;
+  }
+
+  function renderCapabilitiesPanel() {
+    var html = '<div class="wv2-capabilities" style="margin-bottom:16px;padding:14px 16px;background:var(--surface-card);border:1px solid var(--warm-gray);border-radius:8px;">';
+    html += '<h3 style="margin:0;font-size:1.0rem;color:var(--text-primary);">Storefront Pages &amp; Features</h3>';
+    html += '<p style="margin:4px 0 12px;font-size:0.78rem;color:var(--warm-gray);">Turn storefront capabilities on or off. Each adds or removes its page and nav link on your live site.</p>';
+    STOREFRONT_CAPABILITIES.forEach(function(cap) {
+      var on = capabilityEnabled(cap.id, cap.def);
+      html += '<div class="wv2-cap-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid color-mix(in srgb, var(--warm-gray) 30%, transparent);">';
+      html += '<div style="min-width:0;">';
+      html += '<div style="font-size:0.85rem;color:var(--text-primary);">' + esc(cap.label) + '</div>';
+      html += '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(cap.hint) + '</div>';
+      html += '</div>';
+      html += '<label class="toggle-switch" onclick="event.stopPropagation();" style="flex:0 0 auto;">';
+      html += '<input type="checkbox"' + (on ? ' checked' : '') + ' onchange="hpToggleSection(\'' + cap.id + '\', this.checked)">';
+      html += '<span class="toggle-slider"></span>';
+      html += '</label>';
+      html += '</div>';
+    });
     html += '</div>';
     return html;
   }
