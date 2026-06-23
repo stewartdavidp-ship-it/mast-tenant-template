@@ -194,7 +194,7 @@
         var q = data.question.trim();
         live.question = q; live.name = q;
         live.answer = data.answer; live.contentHtml = data.answer;
-        live.slug = data.slug || q.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        live.slug = data.slug || MastUtil.slugify(q);
         live.storefrontEnabled = data.storefrontEnabled;
         if (window.showToast) showToast('FAQ updated'); reloadSoon(); return true;
       }).catch(function (e) { console.error('[cs-faqs-v2] update', e); if (window.showToast) showToast('Failed to update FAQ', true); return false; });

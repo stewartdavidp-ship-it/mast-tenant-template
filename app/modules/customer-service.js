@@ -2308,7 +2308,7 @@
     var content = (document.getElementById('csPContent') || {}).value || '';
     var sf = !!((document.getElementById('csPStorefront') || {}).checked);
     if (!name) { showToast('Question is required', true); return; }
-    var slugVal = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var slugVal = slug || MastUtil.slugify(name);
     // D2: persist canonical question/answer fields alongside name/contentHtml
     // for backward compat. New rows tagged kind='faq' so they stay on the CS
     // surface; Sales → Policies route filters to kind='policy'.
@@ -2732,7 +2732,7 @@
     var name = (data.question || '').trim();
     var slug = (data.slug || '').trim();
     var content = data.answer || '';
-    var slugVal = slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var slugVal = slug || MastUtil.slugify(name);
     return {
       name: name, slug: slugVal, contentHtml: content,
       question: name, answer: content,
@@ -2771,7 +2771,7 @@
     }
   };
   window.csTogglePolicyStorefront = togglePolicyStorefront;
-  window.csAutofillPolicySlug = function (name, doIt) { if (!doIt) return; var el = document.getElementById('csPSlug'); if (el) el.value = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); };
+  window.csAutofillPolicySlug = function (name, doIt) { if (!doIt) return; var el = document.getElementById('csPSlug'); if (el) el.value = MastUtil.slugify(name); };
 
   // Bridge for the cs-reviews-v2 redesign twin (flag-gated #cs-reviews-v2). It
   // delegates review MODERATION (approve / reject / feature / unfeature) here so

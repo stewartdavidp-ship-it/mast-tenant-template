@@ -1338,7 +1338,7 @@
     if (window.WebsiteBridge && typeof window.WebsiteBridge.slugForCategory === 'function') {
       return window.WebsiteBridge.slugForCategory(label, list, excludeIdx);
     }
-    var base = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var base = MastUtil.slugify(label || '');
     if (!base) return '';
     var slug = base, n = 2;
     while ((list || []).some(function (c, i) { return i !== excludeIdx && c && c.id === slug; })) { slug = base + '-' + n; n++; }
@@ -2544,7 +2544,7 @@
   // Decor") or the plural `categories` array (which holds slug ids, e.g.
   // "home-decor"). Both forms are normalized through the same slugify the category
   // ids use, so a label and its slug collapse to one key that matches the cat.id.
-  function catSlugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  function catSlugify(s) { return MastUtil.slugify(s || ''); }
   function productCatSlugs(p) {
     if (!p) return [];
     var out = {};

@@ -5062,7 +5062,7 @@
 
     try {
       var pid = 'p' + Date.now().toString(36);
-      var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      var slug = MastUtil.slugify(name);
       var now = new Date().toISOString();
       // Checkpoint D — initialize defineSpec scaffolding for VAR/Resell.
       var defineSpec = {};
@@ -7585,7 +7585,7 @@
       var acqType = (opts.acquisitionType === 'var' || opts.acquisitionType === 'resell') ? opts.acquisitionType : 'build';
       var category = String(opts.category || 'other').trim().toLowerCase() || 'other';
       var pid = 'p' + Date.now().toString(36);
-      var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      var slug = MastUtil.slugify(name);
       var now = new Date().toISOString();
       var defineSpec = {};
       if (acqType === 'var') defineSpec.var = { components: [], valueAddSteps: [] };
@@ -7619,7 +7619,7 @@
       var src = findProduct(sourcePid) || (await MastDB.get('public/products/' + sourcePid));
       if (!src) return { ok: false, error: 'Source product not found' };
       var pid = 'p' + Date.now().toString(36);
-      var slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      var slug = MastUtil.slugify(name);
       var now = new Date().toISOString();
       function clone(v) { return (v == null) ? v : JSON.parse(JSON.stringify(v)); }
       // Variants → new ids; preserve combo/price/sku/name/imageIndex only.
