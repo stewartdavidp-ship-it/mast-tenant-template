@@ -311,40 +311,42 @@
       dividers[d].style.display = 'none';
     }
 
-    // Determine whether the flow sections are ALREADY in the target relative order
-    // in the DOM. If so, skip the appendChild moves below: re-appending a node that
-    // is already correctly placed still detaches/re-attaches it, which RESTARTS any
-    // CSS animations on it and its descendants. That is what made the hero logo
-    // (heroFadeIn) "double-paint" ~0.5s after load — this runs after the async
-    // sectionOrder fetch and re-appended sections that were already in order.
-    // Templates are authored in manifest order, so the common case is now a no-op.
+    // Reorder flow sections into `flow` order, but MOVE ONLY the sections that are
+    // actually out of place. Re-appending a node that is already correctly
+    // positioned still detaches/re-attaches it, which RESTARTS CSS animations on it
+    // and its descendants — that is what made the hero logo (heroFadeIn)
+    // "double-paint" ~0.5s after load (this runs after the async sectionOrder fetch
+    // and previously re-appended every section). Anchoring on the first flow section
+    // and only moving out-of-order ones means the hero — always first, already first
+    // in the DOM — is never re-appended, so its fade-in runs exactly once.
     var flowEls = [];
     for (var fi = 0; fi < flow.length; fi++) { if (slotMap[flow[fi]]) flowEls.push(slotMap[flow[fi]]); }
-    var domOrder = [];
-    for (var ci = 0; ci < container.children.length; ci++) {
-      if (flowEls.indexOf(container.children[ci]) !== -1) domOrder.push(container.children[ci]);
-    }
-    var alreadyOrdered = domOrder.length === flowEls.length &&
-      domOrder.every(function (el, idx) { return el === flowEls[idx]; });
 
-    // Reorder: append flow sections in order (moves them in DOM) — only when needed
+    var ref = null; // last flow section known to be correctly positioned
     for (var j = 0; j < flow.length; j++) {
       var slotEl = slotMap[flow[j]];
-      if (slotEl) {
-        // Mark as flow-active so JS data loaders know this section is wanted
-        slotEl.removeAttribute('data-flow-hidden');
-        slotEl.setAttribute('data-flow-active', 'true');
-        // Show immediately if not waiting on JS data loading
-        if (slotEl.style.display === 'none' && !slotEl.hasAttribute('data-default-hidden')) {
-          slotEl.style.display = '';
-        }
-        if (!alreadyOrdered) container.appendChild(slotEl);
+      if (!slotEl) continue;
+      // Mark as flow-active so JS data loaders know this section is wanted
+      slotEl.removeAttribute('data-flow-hidden');
+      slotEl.setAttribute('data-flow-active', 'true');
+      // Show immediately if not waiting on JS data loading
+      if (slotEl.style.display === 'none' && !slotEl.hasAttribute('data-default-hidden')) {
+        slotEl.style.display = '';
       }
+      if (ref) {
+        // The next flow section after `ref` in the DOM (skipping non-flow nodes).
+        var nextFlow = ref.nextElementSibling;
+        while (nextFlow && flowEls.indexOf(nextFlow) === -1) nextFlow = nextFlow.nextElementSibling;
+        // Only move when slotEl isn't already the next flow section after ref.
+        if (nextFlow !== slotEl) container.insertBefore(slotEl, ref.nextElementSibling);
+      }
+      ref = slotEl;
     }
 
-    // Re-append any remaining content (footer, scripts) that should stay at the end
+    // Keep the footer at the end — but only move it if it isn't already last
+    // (a needless move would re-trigger any footer animations).
     var footer = container.querySelector('footer, .site-footer');
-    if (footer && !alreadyOrdered) container.appendChild(footer);
+    if (footer && container.lastElementChild !== footer) container.appendChild(footer);
   }
 
   /**
