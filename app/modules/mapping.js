@@ -1676,17 +1676,7 @@
     var csv = rows.map(function(r) {
       return r.map(cell).join(',');
     }).join('\n');
-    var blob = new Blob([csv], { type: 'text/csv' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'product-listing-mappings-' + new Date().toISOString().slice(0, 10) + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function() {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
+    MastExport.downloadBlob('product-listing-mappings-' + new Date().toISOString().slice(0, 10) + '.csv', csv, 'text/csv');
   }
 
   // ============================================================

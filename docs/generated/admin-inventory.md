@@ -6,7 +6,7 @@ Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
 - **Core shell:** `app/index.html` — **41,517** lines
-- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,827** lines combined
+- **Feature modules:** **148** files in `app/modules/` (**91** routed), **142,805** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -52,7 +52,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/cs-support-v2.js` | 368 | cs-inbox-v2, cs-tickets-v2 |
 | `modules/cs-surveys-v2.js` | 718 | cs-surveys-v2 |
 | `modules/customer-portfolio-v2.js` | 188 | customer-portfolio-v2 |
-| `modules/customer-service.js` | 3,624 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
+| `modules/customer-service.js` | 3,616 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-core.js` | 613 | — |
 | `modules/customers-v2.js` | 1,070 | customers-v2, customers |
 | `modules/demo-mode.js` | 279 | — |
@@ -97,7 +97,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/maker-settings.js` | 353 | — |
 | `modules/maker.js` | 7,887 | materials, products |
 | `modules/mapping-v2.js` | 382 | mapping-v2 |
-| `modules/mapping.js` | 1,812 | mapping |
+| `modules/mapping.js` | 1,802 | mapping |
 | `modules/marketing-calendar-v2.js` | 250 | marketing-calendar-v2, marketing-calendar |
 | `modules/match-confirm-modal.js` | 139 | — |
 | `modules/materials-v2.js` | 597 | materials-v2 |
@@ -138,7 +138,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/subscription-v2.js` | 344 | subscription-v2, plan-billing-coins-v2 |
 | `modules/team-v2.js` | 4,132 | team-v2, team |
 | `modules/terms-v2.js` | 300 | terms-v2 |
-| `modules/trips-v2.js` | 2,539 | trips-v2, trips |
+| `modules/trips-v2.js` | 2,535 | trips-v2, trips |
 | `modules/unified-drift-dialog.js` | 152 | — |
 | `modules/user-detail.js` | 650 | — |
 | `modules/users-admin.js` | 634 | — |

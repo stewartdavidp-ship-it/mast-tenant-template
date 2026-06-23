@@ -2184,15 +2184,7 @@
   function csDownloadVocDigest() {
     var md = window.__csVocDigestMarkdown;
     if (!md) return;
-    var blob = new Blob([md], { type: 'text/markdown' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'voc-digest-' + new Date().toISOString().slice(0, 10) + '.md';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    MastExport.downloadBlob('voc-digest-' + new Date().toISOString().slice(0, 10) + '.md', md, 'text/markdown');
   }
 
   function csOpenTicket(ticketId) {
