@@ -35,6 +35,10 @@
     "centsDiv": 1,
     "localeDate": 3
   },
+  "app/modules/coins-tab.js": {
+    "centsDiv": 1,
+    "localeDate": 7
+  },
   "app/modules/commissions-v2.js": {
     "centsDiv": 1
   },
