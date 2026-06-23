@@ -407,6 +407,8 @@
   };
 
   window._gcOpenConfig = function() {
+    // Gift-card config relocated to My Website › Wallet & loyalty (PR4).
+    if (typeof navigateTo === 'function') { navigateTo('website-v2'); if (window.showToast) showToast('Configure gift cards in My Website → Wallet & loyalty'); return; }
     var config = giftCardConfig || {};
     var denoms = (config.giftCardDenominations || []).map(function(c) { return (c / 100).toFixed(2); }).join(', ');
 
@@ -1118,6 +1120,8 @@
   // ---- Loyalty Config Modal ----
 
   window._loyaltyOpenConfig = function() {
+    // Loyalty config relocated to My Website › Wallet & loyalty (PR4).
+    if (typeof navigateTo === 'function') { navigateTo('website-v2'); if (window.showToast) showToast('Configure loyalty in My Website → Wallet & loyalty'); return; }
     var config = loyaltyConfig || {};
     var exclusions = (config.loyaltyExclusions || []).join(', ');
 

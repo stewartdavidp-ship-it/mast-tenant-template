@@ -466,15 +466,10 @@
     // view). Re-reads via LoyaltyBridge so the form opens on the freshest config.
     settings: function () {
       if (!canL('edit')) { if (window.showToast) showToast('Loyalty write access required.', true); return; }
-      if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('cart'); } catch (e) {} }
-      Promise.resolve((window.LoyaltyBridge && LoyaltyBridge.getProgramConfig) ? LoyaltyBridge.getProgramConfig() : MastDB.get('admin/walletConfig'))
-        .then(function (c) {
-          V2.config = Object.assign({ _cfgName: 'Program settings' }, V2.config || {}, c || {});
-          MastEntity.openRecord('loyalty-config-v2', V2.config, 'edit');
-        }).catch(function () {
-          V2.config = V2.config || { _cfgName: 'Program settings' };
-          MastEntity.openRecord('loyalty-config-v2', V2.config, 'edit');
-        });
+      // Loyalty program config relocated to My Website › Wallet & loyalty (PR4).
+      // This page stays for operational management (members, points, history).
+      if (typeof navigateTo === 'function') navigateTo('website-v2');
+      if (window.showToast) showToast('Configure loyalty in My Website → Wallet & loyalty');
     },
     // Per-customer point adjustment is NOT a roster write — it lives on the
     // customer Wallet (the adjustCustomerWallet CF). Open that native modal for
