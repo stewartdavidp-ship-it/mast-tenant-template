@@ -2138,7 +2138,7 @@
 
     // Generate session ID for grouping legs
     if (!retroModalData.eventSessionId) {
-      retroModalData.eventSessionId = 'session-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+      retroModalData.eventSessionId = MastUtil.genId('session-');
     }
 
     // Create trip record — see comment on the active-trip path above; the

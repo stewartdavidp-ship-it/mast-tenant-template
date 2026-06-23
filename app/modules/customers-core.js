@@ -516,7 +516,7 @@
     saveSegment: async function (name, filters) {
       name = (name || '').trim();
       if (!name) throw new Error('Segment name required');
-      var id = 'seg_' + Date.now().toString(36);
+      var id = MastUtil.genId('seg_');
       var now = new Date().toISOString();
       var record = {
         id: id, name: name, filters: filters || {},

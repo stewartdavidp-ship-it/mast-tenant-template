@@ -1673,7 +1673,7 @@
       var counterRef = MastDB.blog.meta.postCounter();
       var result = await counterRef.transaction(function (current) { return (current || 0) + 1; });
       var postNumber = result.snapshot.val();
-      var id = 'post_' + Date.now();
+      var id = MastUtil.genId('post_');
       var status = (data.status === 'complete') ? 'complete' : 'draft';
       var post = {
         id: id,
@@ -1876,7 +1876,7 @@
     addIdea: async function (text) {
       var t = String(text == null ? '' : text).trim();
       if (!t) throw new Error('Idea text is required');
-      var id = 'idea_' + Date.now();
+      var id = MastUtil.genId('idea_');
       var idea = { id: id, text: t, createdAt: new Date().toISOString() };
       await MastDB.blog.ideas.ref(id).set(idea);
       if (typeof blogIdeas !== 'undefined' && Array.isArray(blogIdeas)) blogIdeas.unshift(idea);

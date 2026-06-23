@@ -204,7 +204,7 @@
       if (!canEdit()) { if (window.showToast) showToast('You do not have permission to edit commission terms.', true); return; }
       var max = 0;
       V2.rows.forEach(function (r) { if ((r.version || 0) > max) max = r.version || 0; });
-      var id = 'ctv_' + Date.now().toString(36);
+      var id = MastUtil.genId('ctv_');
       var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
       var now = new Date().toISOString();
       var draft = { version: max + 1, status: 'draft', content: '', content_html: null,

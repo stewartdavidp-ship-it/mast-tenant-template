@@ -933,7 +933,7 @@
       if (docIdx != null && docs[docIdx]) {
         docs[docIdx] = Object.assign({}, docs[docIdx], record, { updatedAt: now });
       } else {
-        docs.push(Object.assign({ documentId: 'doc_' + Date.now(), createdAt: now }, record, { updatedAt: now }));
+        docs.push(Object.assign({ documentId: MastUtil.genId('doc_'), createdAt: now }, record, { updatedAt: now }));
       }
       await MastDB.set('students/' + studentId + '/documents', docs);
       await MastDB.set('students/' + studentId + '/updatedAt', now);
