@@ -777,7 +777,7 @@
     // photo-count badge (parity with the legacy section card's image badge).
     var b = window.HomepageBridge;
     var nImg = (b && b.images && b.images.isCapable && b.images.isCapable(sec.id) && b.images.count) ? b.images.count(sec.id) : 0;
-    var badge = nImg > 0 ? '<span class="wv2-sec-count">' + MastFormat.countNoun(nImg, 'photo') + '</span>' : '';
+    var badge = nImg > 0 ? '<span class="wv2-sec-count">' + nImg + ' photo' + (nImg === 1 ? '' : 's') + '</span>' : '';
     return '<div class="wv2-sec-row"' + (ed ? ' role="button" tabindex="0" onclick="' + open + '" onkeydown="if(event.key===\'Enter\'){' + open + '}"' : '') + '>' +
         '<div class="wv2-sec-id"><span class="wv2-sec-name">' + esc(sec.label || sec.id) + '</span> ' + pill + badge + '</div>' +
         '<div class="wv2-sec-actions">' + reorder + toggle + (ed ? '<span class="wv2-sec-go">Edit ›</span>' : '') + '</div>' +
@@ -926,7 +926,7 @@
   function photosManagerHtml(secId, items, cats, focus, ed) {
     var b = window.HomepageBridge;
     var tplHidden = (b && b.images && b.images.hiddenCount) ? b.images.hiddenCount(secId) : 0;
-    var tplNote = tplHidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + MastFormat.countNoun(tplHidden, 'photo') + ' hidden by a template switch.</div>' : '';
+    var tplNote = tplHidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + tplHidden + ' photo' + (tplHidden === 1 ? '' : 's') + ' hidden by a template switch.</div>' : '';
     var showHidden = !!WV2_PHOTOS.showHidden;
     var hiddenItems = items.filter(function (e) { return e[1].visible === false; });
     var displayItems = showHidden ? items : items.filter(function (e) { return e[1].visible !== false; });
@@ -949,7 +949,7 @@
           (isVid ? '<span class="wv2-phototile-vid">▶</span>' : '') + '</button>';
       }).join('') + '</div>';
     var hiddenToggle = (ed && hiddenItems.length) ? '<div style="margin-top:10px;"><button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.photoToggleHidden()">' +
-      (showHidden ? 'Hide hidden photos' : ('Show ' + MastFormat.countNoun(hiddenItems.length, 'hidden photo'))) + '</button></div>' : '';
+      (showHidden ? 'Hide hidden photos' : ('Show ' + hiddenItems.length + ' hidden photo' + (hiddenItems.length === 1 ? '' : 's'))) + '</button></div>' : '';
     var photosCard = U.card('Photos (' + items.length + ')', addBar + grid + hiddenToggle + tplNote);
     return photosCard + (focus ? photoSelectedCardHtml(secId, items, cats, focus, ed) : '');
   }
@@ -1338,7 +1338,7 @@
     if (window.WebsiteBridge && typeof window.WebsiteBridge.slugForCategory === 'function') {
       return window.WebsiteBridge.slugForCategory(label, list, excludeIdx);
     }
-    var base = MastUtil.slugify(label || '');
+    var base = String(label || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
     if (!base) return '';
     var slug = base, n = 2;
     while ((list || []).some(function (c, i) { return i !== excludeIdx && c && c.id === slug; })) { slug = base + '-' + n; n++; }
@@ -1355,7 +1355,7 @@
     var cid = esc(cat.id);
     var count = (V2.productCatCounts && V2.productCatCounts[String(cat.id).toLowerCase()]) || 0;
     var countPill = count > 0
-      ? '<span class="wv2-cat-count" title="' + MastFormat.countNoun(count, 'product') + ' in this category">' + count + '</span>'
+      ? '<span class="wv2-cat-count" title="' + count + ' product' + (count === 1 ? '' : 's') + ' in this category">' + count + '</span>'
       : '';
     var upDis = idx === 0 ? ' disabled' : '';
     var dnDis = idx === total - 1 ? ' disabled' : '';
@@ -1461,7 +1461,7 @@
     var sug = V2.suggestions;
     if (!Array.isArray(sug) || !sug.length || !canEdit()) return '';
     var chips = sug.slice(0, 8).map(function (s) {
-      return '<button type="button" class="wv2-sug-chip" onclick="WebsiteV2.addSuggestedCat(\'' + esc(s.slug) + '\')" title="' + MastFormat.countNoun(s.count, 'product') + ' use this category">' +
+      return '<button type="button" class="wv2-sug-chip" onclick="WebsiteV2.addSuggestedCat(\'' + esc(s.slug) + '\')" title="' + s.count + ' product' + (s.count === 1 ? '' : 's') + ' use this category">' +
         '+ ' + esc(titleSlug(s.slug)) + ' <span class="wv2-sug-n">' + s.count + '</span></button>';
     }).join('');
     return '<div class="wv2-suggest">' +
@@ -1495,6 +1495,49 @@
     '</div>';
   }
 
+  // Storefront pages & features — the single place to turn nav-level storefront
+  // capabilities on/off. Each toggle writes public/config/nav/sections/{id}/enabled
+  // (the SAME store storefront-nav.js reads) via the global hpToggleSection writer.
+  // `def` mirrors the corrected DEFAULT_SECTIONS fallback in storefront-nav.js, so a
+  // capability with no explicit nav/sections entry shows the state the storefront
+  // resolves. about/contact/newsletter are NOT here — those are homepage content
+  // sections edited in Card 2 (Your words & pictures).
+  var STOREFRONT_CAPABILITIES = [
+    { id: 'shop',       label: 'Shop',        def: true,  hint: 'Your product catalog. Needs active products to sell.' },
+    { id: 'blog',       label: 'Blog',        def: true,  hint: 'Long-form posts. Shows entries once you publish posts.' },
+    { id: 'schedule',   label: 'Schedule',    def: false, hint: 'Upcoming events & shows, pulled from your events.' },
+    { id: 'classes',    label: 'Classes',     def: false, hint: 'Bookable classes. Needs the booking module.' },
+    { id: 'wholesale',  label: 'Wholesale',   def: false, hint: 'B2B catalog. Needs wholesale pricing on products.' },
+    { id: 'commission', label: 'Commissions', def: false, hint: 'Let visitors request custom commission work.' },
+    { id: 'giftcards',  label: 'Gift Cards',  def: false, hint: 'Sell gift cards. Needs gift cards enabled in Wallet.' }
+  ];
+
+  function capabilityEnabled(id, def) {
+    var s = V2.nav && V2.nav[id];
+    if (s && typeof s.enabled !== 'undefined') return s.enabled !== false;
+    return def;
+  }
+
+  function capabilitiesBlockHtml() {
+    var rows = STOREFRONT_CAPABILITIES.map(function (cap) {
+      var on = capabilityEnabled(cap.id, cap.def);
+      return '<div class="wv2-cap-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);">' +
+          '<div style="min-width:0;">' +
+            '<div style="font-size:0.85rem;color:var(--text-primary);">' + esc(cap.label) + '</div>' +
+            '<div class="mu-sub" style="font-size:0.72rem;">' + esc(cap.hint) + '</div>' +
+          '</div>' +
+          '<label class="toggle-switch" onclick="event.stopPropagation();" style="flex:0 0 auto;">' +
+            '<input type="checkbox"' + (on ? ' checked' : '') + ' onchange="WebsiteV2.toggleCapability(\'' + cap.id + '\', this.checked)">' +
+            '<span class="toggle-slider"></span>' +
+          '</label>' +
+        '</div>';
+    }).join('');
+    return '<div class="wv2-sub"><div class="wv2-sub-h">Storefront pages &amp; features</div>' +
+        '<div class="mu-sub" style="margin-bottom:8px;">Turn storefront capabilities on or off. Each adds or removes its page and nav link on your live site.</div>' +
+        rows +
+      '</div>';
+  }
+
   function shopHtml() {
     if (!canEdit()) {
       return '<div class="mu-sub">You do not have permission to edit your shop categories.</div>';
@@ -1503,7 +1546,8 @@
     var listHtml = cats.length
       ? '<div class="wv2-catlist">' + cats.map(function (c, i) { return shopCatRow(c, i, cats.length); }).join('') + '</div>'
       : '<div class="mu-sub" style="padding:6px 0;">No categories yet. Add your first product category below — it becomes a filter pill on your shop.</div>';
-    return '<div class="wv2-sub"><div class="wv2-sub-h">Shop categories</div>' +
+    return capabilitiesBlockHtml() +
+      '<div class="wv2-sub"><div class="wv2-sub-h">Shop categories</div>' +
         '<div class="mu-sub" style="margin-bottom:8px;">Categories become the filter pills customers tap on your shop page. Drag order is display order.</div>' +
         listHtml + shopAddHtml() +
       '</div>' +
@@ -1848,6 +1892,23 @@
   // ── public API ─────────────────────────────────────────────────────
   window.WebsiteV2 = {
     refresh: function () { render(); },
+
+    // Card 3 · Storefront pages & features toggle → public/config/nav/sections/{id}/enabled
+    // via the shared hpToggleSection writer (handles the webPresence mirror +
+    // markUnpublished). Updates V2.nav optimistically then re-mounts the shop card.
+    toggleCapability: async function (id, enabled) {
+      if (!canEdit()) { if (window.showToast) showToast('No permission to edit your site.', true); return; }
+      if (!window.hpToggleSection) { if (window.showToast) showToast('Site editor still loading — try again', true); return; }
+      try {
+        await window.hpToggleSection(id, enabled);
+        if (!V2.nav) V2.nav = {};
+        if (!V2.nav[id]) V2.nav[id] = {};
+        V2.nav[id].enabled = enabled;
+      } catch (e) {
+        if (window.showToast) showToast('Could not update: ' + (e && e.message || e), true);
+      }
+      mountShop();
+    },
 
     // Card 1 · Color scheme tile → HomepageBridge.setColorScheme (clears custom
     // overrides server-side, mirrors wpSelectScheme). Instant-apply.
@@ -2417,9 +2478,14 @@
     copyLink: function () {
       var url = liveUrl();
       if (!url) { if (window.showToast) showToast('Live URL unavailable', true); return; }
-      window.MastUI.copy(url, { okMsg: 'Live link copied', errMsg: false }).then(function (ok) {
-        if (!ok && typeof window.mastCopyFallback === 'function') mastCopyFallback('Copy this link', url);
-      });
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(
+          function () { if (window.showToast) showToast('Live link copied'); },
+          function () { if (typeof window.mastCopyFallback === 'function') mastCopyFallback('Copy this link', url); }
+        );
+      } else if (typeof window.mastCopyFallback === 'function') {
+        mastCopyFallback('Copy this link', url);
+      }
     }
   };
 
@@ -2539,7 +2605,7 @@
   // Decor") or the plural `categories` array (which holds slug ids, e.g.
   // "home-decor"). Both forms are normalized through the same slugify the category
   // ids use, so a label and its slug collapse to one key that matches the cat.id.
-  function catSlugify(s) { return MastUtil.slugify(s || ''); }
+  function catSlugify(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
   function productCatSlugs(p) {
     if (!p) return [];
     var out = {};
@@ -2894,12 +2960,6 @@
 
     var html = '<div class="section-header"><h2>Page Builder</h2></div>';
 
-    // Storefront capabilities (nav-level destination pages) — the single place
-    // to turn storefront pages/features on or off. Writes the SAME store the
-    // storefront nav reads (public/config/nav/sections). Distinct from the
-    // homepage section cards below, which toggle on-page content blocks.
-    html += renderCapabilitiesPanel();
-
     // Top: Section Cards
     html += renderSectionCards();
 
@@ -2945,50 +3005,6 @@
       html += '</div>';
     });
 
-    html += '</div>';
-    return html;
-  }
-
-  // --- Storefront capabilities panel (nav-level destination pages) ---
-  // Each entry toggles public/config/nav/sections/{id}/enabled via the shared
-  // hpToggleSection writer (which also mirrors webPresence + markUnpublished).
-  // `def` mirrors the corrected DEFAULT_SECTIONS fallback in storefront-nav.js,
-  // so the panel shows the same on/off state the storefront resolves when a
-  // tenant's nav/sections is sparse. about/contact/newsletter are NOT listed
-  // here — they are homepage content sections owned by the section cards above.
-  var STOREFRONT_CAPABILITIES = [
-    { id: 'shop',       label: 'Shop',        def: true,  hint: 'Your product catalog. Needs active products to sell.' },
-    { id: 'blog',       label: 'Blog',        def: true,  hint: 'Long-form posts. Shows entries once you publish posts.' },
-    { id: 'schedule',   label: 'Schedule',    def: false, hint: 'Upcoming events & shows, pulled from your events.' },
-    { id: 'classes',    label: 'Classes',     def: false, hint: 'Bookable classes. Needs the booking module.' },
-    { id: 'wholesale',  label: 'Wholesale',   def: false, hint: 'B2B catalog. Needs wholesale pricing on products.' },
-    { id: 'commission', label: 'Commissions', def: false, hint: 'Let visitors request custom commission work.' },
-    { id: 'giftcards',  label: 'Gift Cards',  def: false, hint: 'Sell gift cards. Needs gift cards enabled in Wallet.' }
-  ];
-
-  function capabilityEnabled(id, def) {
-    var s = navSections && navSections[id];
-    if (s && typeof s.enabled !== 'undefined') return s.enabled !== false;
-    return def;
-  }
-
-  function renderCapabilitiesPanel() {
-    var html = '<div class="wv2-capabilities" style="margin-bottom:16px;padding:14px 16px;background:var(--surface-card);border:1px solid var(--warm-gray);border-radius:8px;">';
-    html += '<h3 style="margin:0;font-size:1.0rem;color:var(--text-primary);">Storefront Pages &amp; Features</h3>';
-    html += '<p style="margin:4px 0 12px;font-size:0.78rem;color:var(--warm-gray);">Turn storefront capabilities on or off. Each adds or removes its page and nav link on your live site.</p>';
-    STOREFRONT_CAPABILITIES.forEach(function(cap) {
-      var on = capabilityEnabled(cap.id, cap.def);
-      html += '<div class="wv2-cap-row" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid color-mix(in srgb, var(--warm-gray) 30%, transparent);">';
-      html += '<div style="min-width:0;">';
-      html += '<div style="font-size:0.85rem;color:var(--text-primary);">' + esc(cap.label) + '</div>';
-      html += '<div style="font-size:0.72rem;color:var(--warm-gray);">' + esc(cap.hint) + '</div>';
-      html += '</div>';
-      html += '<label class="toggle-switch" onclick="event.stopPropagation();" style="flex:0 0 auto;">';
-      html += '<input type="checkbox"' + (on ? ' checked' : '') + ' onchange="hpToggleSection(\'' + cap.id + '\', this.checked)">';
-      html += '<span class="toggle-slider"></span>';
-      html += '</label>';
-      html += '</div>';
-    });
     html += '</div>';
     return html;
   }
@@ -3251,7 +3267,7 @@
     }).length;
     if (hiddenCount > 0) {
       html += '<div style="margin-top:8px;padding:8px 12px;background:color-mix(in srgb, var(--amber, var(--amber)) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber, var(--amber)) 25%, transparent);border-radius:6px;font-size:0.78rem;color:var(--warm-gray);">';
-      html += MastFormat.countNoun(hiddenCount, 'image') + ' hidden by template switch';
+      html += hiddenCount + ' image' + (hiddenCount !== 1 ? 's' : '') + ' hidden by template switch';
       html += '</div>';
     }
 
