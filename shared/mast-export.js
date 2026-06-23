@@ -121,30 +121,45 @@
     return builtinUnparse(r.columns, r.data);
   }
 
-  // download(filename, rows, opts) — build the CSV, then trigger a browser
-  // download (Blob + object URL + a temporary <a>). In node (no document) this is
-  // a graceful no-op that just returns the CSV string, so callers/tests can run
-  // headless. Returns the CSV string in both cases.
-  function download(filename, rows, opts) {
-    var csv = toCsv(rows, opts);
-    if (typeof document === 'undefined') return csv;
-    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); // BOM for Excel
+  // downloadBlob(filename, content[, mimeType]) — trigger a browser download of
+  // ARBITRARY content: a string, an existing Blob, or any BlobPart (e.g. a
+  // typed array / canvas blob). The generic form of the CSV download() — the one
+  // place that owns the Blob + object-URL + temporary-<a> + revoke dance that ~20
+  // call sites hand-roll. In node (no document) it's a graceful no-op returning
+  // false. Returns true if a download was triggered.
+  function downloadBlob(filename, content, mimeType) {
+    if (typeof document === 'undefined') return false;
+    var blob = (typeof Blob !== 'undefined' && content instanceof Blob)
+      ? content
+      : new Blob([content == null ? '' : content], { type: mimeType || 'application/octet-stream' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url;
-    a.download = filename || 'export.csv';
+    a.download = filename || 'download';
     document.body.appendChild(a);
     a.click();
     setTimeout(function () {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     }, 0);
+    return true;
+  }
+
+  // download(filename, rows, opts) — build the CSV, then trigger a browser
+  // download via downloadBlob. In node (no document) this is a graceful no-op
+  // that just returns the CSV string, so callers/tests can run headless. Returns
+  // the CSV string in both cases.
+  function download(filename, rows, opts) {
+    var csv = toCsv(rows, opts);
+    if (typeof document === 'undefined') return csv;
+    downloadBlob(filename || 'export.csv', '﻿' + csv, 'text/csv;charset=utf-8'); // BOM for Excel
     return csv;
   }
 
   var api = {
     toCsv: toCsv,
-    download: download
+    download: download,
+    downloadBlob: downloadBlob
   };
 
   if (typeof window !== 'undefined') {

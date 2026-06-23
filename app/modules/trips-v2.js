@@ -1634,11 +1634,7 @@
       ].map(cell).join(',') + '\n';
     });
 
-    var blob = new Blob([csv], { type: 'text/csv' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'trip-mileage-report-' + year + '.csv';
-    a.click();
+    MastExport.downloadBlob('trip-mileage-report-' + year + '.csv', csv, 'text/csv');
     showToast('CSV exported');
   }
 

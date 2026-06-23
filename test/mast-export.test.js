@@ -114,4 +114,40 @@ t('download() in node → no throw, returns the CSV string', () => {
     'a\r\n1');
 });
 
+// ── downloadBlob — generic content download. The node no-op MUST be asserted
+// BEFORE the browser stubs are installed (it keys off `typeof document`).
+t('downloadBlob() in node (no document) → false, never throws', () =>
+  assert.strictEqual(MastExport.downloadBlob('x.txt', 'hello'), false));
+
+// Install persistent browser stubs (left in place — the deferred cleanup
+// setTimeout(0) inside downloadBlob fires after the test returns and re-reads
+// document/URL, so deleting them mid-test would crash the late callback).
+let _blobParts, _blobType, _urlIn;
+global.document = {
+  createElement() { return { click() { this._clicked = true; } }; },
+  body: { appendChild() {}, removeChild() {} }
+};
+global.URL = { createObjectURL(b) { _urlIn = b; return 'blob:stub'; }, revokeObjectURL() {} };
+global.Blob = function (parts, opts) { _blobParts = parts; _blobType = opts && opts.type; };
+
+t('downloadBlob() browser path: builds Blob, sets filename, clicks anchor', () => {
+  let captured;
+  global.document.createElement = function () {
+    return { set download(v) { captured = v; }, get download() { return captured; }, click() {}, href: '' };
+  };
+  const r = MastExport.downloadBlob('report.json', '{"ok":true}', 'application/json');
+  assert.strictEqual(r, true);
+  assert.strictEqual(captured, 'report.json');
+  assert.deepStrictEqual(_blobParts, ['{"ok":true}']);
+  assert.strictEqual(_blobType, 'application/json');
+});
+
+t('downloadBlob() passes an existing Blob through unchanged (not re-wrapped)', () => {
+  global.document.createElement = function () { return { click() {}, href: '', download: '' }; };
+  const existing = Object.create(global.Blob.prototype); // instanceof Blob === true
+  _urlIn = null;
+  assert.strictEqual(MastExport.downloadBlob('a.png', existing), true);
+  assert.strictEqual(_urlIn, existing);
+});
+
 console.log(`\n${pass} CSV export assertions passed.`);

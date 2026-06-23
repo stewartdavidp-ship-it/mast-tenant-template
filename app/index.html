@@ -231,7 +231,7 @@
        present, falls back to a built-in serializer. Eager so adopters can call it
        synchronously. Not yet adopted (next PR).
        ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
-  <script src="../shared/mast-export.js?v=876e1d5d38f3"></script>
+  <script src="../shared/mast-export.js?v=30e78296da76"></script>
   <!-- Canonical HTML sanitizer core (Track 7). window.MastSanitize.sanitizeHtml —
        a dependency-free, pure home for the allow-list sanitizer that otherwise
        lives only inside the MastUI engine (MastUI.sanitizeHtml). SUPERSET of that
@@ -19997,7 +19997,7 @@ var MODULE_MANIFEST = {
   'duplicates-v2': { src: 'modules/duplicates-v2.js', v: 'a8e6475587d6', routes: ['duplicates-v2'] }, // UI-redesign Resolve micro-surface (flag-gated)
   'calendar-v2': { src: 'modules/calendar-v2.js', v: '51ba114722f7', routes: ['calendar-v2'] }, // UI-redesign Calendar index control (flag-gated)
   'promotions-v2': { src: 'modules/promotions-v2.js', v: '1c378ee3ca12', routes: ['promotions-v2', 'promotions'] }, // promotions; owns the legacy 'promotions' route too (V1 promotions.js retired, T6)
-  'trips-v2': { src: 'modules/trips-v2.js', v: '66cd80c1a608', routes: ['trips-v2', 'trips'] }, // Trips hub (read history + delegated start/end/retroactive flows + tax report + app-wide active-trip banner). trips.js (V1) RETIRED (T6): the entire trips engine is absorbed here, so the bare #trips route resolves here directly (no MAST_V2_ROUTE_MAP remap).
+  'trips-v2': { src: 'modules/trips-v2.js', v: '6fc133cbdf1c', routes: ['trips-v2', 'trips'] }, // Trips hub (read history + delegated start/end/retroactive flows + tax report + app-wide active-trip banner). trips.js (V1) RETIRED (T6): the entire trips engine is absorbed here, so the bare #trips route resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'finance-expenses-v2': { src: 'modules/finance-expenses-v2.js', v: '39d8e2578c7c', routes: ['finance-expenses-v2'] }, // UI-redesign conversion: expenses (flag-gated, side-by-side)
   'team-v2': { src: 'modules/team-v2.js', v: 'a4f31d88c53e', routes: ['team-v2', 'team'] }, // Team roster/employee + HR sub-surfaces (time clock / PTO / labor burden / docs / onboarding). team.js (V1) RETIRED (T6): its TeamBridge + TeamPanels + full handler closure were absorbed into team-v2.js, and the bare #team route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'procurement-v2': { src: 'modules/procurement-v2.js', v: '61dbb10909dd', routes: ['procurement-v2', 'procurement'] }, // Procurement hub (POs + Needs-reorder lens + receiving + vendors via vendors-v2). procurement.js (V1) RETIRED (T6): its ProcurementBridge + VendorsBridge + receive→stock→QBO engine absorbed here, so the bare #procurement route resolves here directly (no remap).
@@ -20069,7 +20069,7 @@ var MODULE_MANIFEST = {
   book: { src: 'modules/book.js', v: '60b25f447ce5', routes: ['book', 'book-detail', 'enrollments', 'instructors', 'instructor-detail', 'resources', 'resource-detail', 'passes', 'pass-detail', 'calendar', 'book-reports'] },
   cart: { src: 'modules/cart.js', v: 'ac83779d846e', routes: ['wallet', 'gift-cards', 'loyalty', 'membership'] },
   studio: { src: 'modules/studio.js', v: 'af62dd99a2a1', routes: ['studio'] },
-  'customer-service': { src: 'modules/customer-service.js', v: '3f58dce115a8', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
+  'customer-service': { src: 'modules/customer-service.js', v: '8da51b2ec63e', routes: ['cs-inbox', 'cs-tickets', 'cs-surveys', 'cs-reviews', 'cs-faqs', 'cs-members'] },
   // W2 marketing-suite modules
   engagementInbox: { src: 'modules/engagement-inbox.js', v: 'c5cf75b5824f', routes: ['engagement-inbox'] },
   composer: { src: 'modules/composer.js', v: 'fac71133333b', routes: ['composer'] },
@@ -20087,7 +20087,7 @@ var MODULE_MANIFEST = {
   // first channel connect (auto-fired by post-boot trigger via
   // window.MastMappingFlow.checkAndMaybeShow). 'mapping' route is the
   // Settings re-entry surface for later edits + new-listing deltas.
-  mapping: { src: 'modules/mapping.js', v: 'ca27ef2bfe34', routes: ['mapping'] },
+  mapping: { src: 'modules/mapping.js', v: 'fea9f79aaad3', routes: ['mapping'] },
   // Workflow engine — reusable gated-workflow primitive. No routes; loaded
   // on-demand by consuming surfaces (commissions, pick/ship, RMA, etc.)
   // before they render. See docs/workflow-engine-design.md.
