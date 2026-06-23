@@ -329,14 +329,14 @@
     if (total === 0) {
       galleryLines = '<li>You have no gallery images yet — nothing to move.</li>';
     } else {
-      galleryLines += '<li><strong>' + keep + '</strong> ' + MastFormat.plural(keep, 'gallery image') + ' fit the new layout and stay visible.</li>';
+      galleryLines += '<li><strong>' + keep + '</strong> gallery image' + (keep === 1 ? '' : 's') + ' fit the new layout and stay visible.</li>';
       if (hide > 0) {
-        galleryLines += '<li><strong>' + hide + '</strong> ' + MastFormat.plural(hide, 'image') + ' won’t fit the new layout, so ' +
+        galleryLines += '<li><strong>' + hide + '</strong> image' + (hide === 1 ? '' : 's') + ' won’t fit the new layout, so ' +
           (hide === 1 ? 'it' : 'they') + '’ll be <strong>hidden</strong> — not deleted, and you can switch back to bring ' +
           (hide === 1 ? 'it' : 'them') + ' right back.</li>';
       }
       if (restore > 0) {
-        galleryLines += '<li><strong>' + restore + '</strong> ' + MastFormat.plural(restore, 'previously hidden image') +
+        galleryLines += '<li><strong>' + restore + '</strong> previously hidden image' + (restore === 1 ? '' : 's') +
           ' will reappear in this Look.</li>';
       }
     }
@@ -777,7 +777,7 @@
     // photo-count badge (parity with the legacy section card's image badge).
     var b = window.HomepageBridge;
     var nImg = (b && b.images && b.images.isCapable && b.images.isCapable(sec.id) && b.images.count) ? b.images.count(sec.id) : 0;
-    var badge = nImg > 0 ? '<span class="wv2-sec-count">' + MastFormat.countNoun(nImg, 'photo') + '</span>' : '';
+    var badge = nImg > 0 ? '<span class="wv2-sec-count">' + nImg + ' photo' + (nImg === 1 ? '' : 's') + '</span>' : '';
     return '<div class="wv2-sec-row"' + (ed ? ' role="button" tabindex="0" onclick="' + open + '" onkeydown="if(event.key===\'Enter\'){' + open + '}"' : '') + '>' +
         '<div class="wv2-sec-id"><span class="wv2-sec-name">' + esc(sec.label || sec.id) + '</span> ' + pill + badge + '</div>' +
         '<div class="wv2-sec-actions">' + reorder + toggle + (ed ? '<span class="wv2-sec-go">Edit ›</span>' : '') + '</div>' +
@@ -926,7 +926,7 @@
   function photosManagerHtml(secId, items, cats, focus, ed) {
     var b = window.HomepageBridge;
     var tplHidden = (b && b.images && b.images.hiddenCount) ? b.images.hiddenCount(secId) : 0;
-    var tplNote = tplHidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + MastFormat.countNoun(tplHidden, 'photo') + ' hidden by a template switch.</div>' : '';
+    var tplNote = tplHidden > 0 ? '<div class="mu-sub" style="margin-top:8px;">' + tplHidden + ' photo' + (tplHidden === 1 ? '' : 's') + ' hidden by a template switch.</div>' : '';
     var showHidden = !!WV2_PHOTOS.showHidden;
     var hiddenItems = items.filter(function (e) { return e[1].visible === false; });
     var displayItems = showHidden ? items : items.filter(function (e) { return e[1].visible !== false; });
@@ -946,10 +946,12 @@
         var k = e[0], d = e[1];
         var isVid = d.videoUrl || /\.(mp4|mov|webm)/i.test(d.url || '');
         return '<button type="button" class="wv2-phototile' + (k === focus ? ' on' : '') + (d.visible === false ? ' off' : '') + '" onclick="WebsiteV2.photoSelect(\'' + esc(k) + '\')" style="background-image:url(' + esc(d.url || '') + ');" title="' + esc(d.alt || d.caption || '') + '">' +
-          (isVid ? '<span class="wv2-phototile-vid">▶</span>' : '') + '</button>';
+          (isVid ? '<span class="wv2-phototile-vid">▶</span>' : '') +
+          (ed ? '<span class="wv2-phototile-x" role="button" tabindex="-1" title="Remove photo" aria-label="Remove photo" onclick="event.stopPropagation();WebsiteV2.imgdRemove(\'' + esc(k) + '\')">✕</span>' : '') +
+          '</button>';
       }).join('') + '</div>';
     var hiddenToggle = (ed && hiddenItems.length) ? '<div style="margin-top:10px;"><button type="button" class="btn btn-secondary btn-small" onclick="WebsiteV2.photoToggleHidden()">' +
-      (showHidden ? 'Hide hidden photos' : ('Show ' + MastFormat.countNoun(hiddenItems.length, 'hidden photo'))) + '</button></div>' : '';
+      (showHidden ? 'Hide hidden photos' : ('Show ' + hiddenItems.length + ' hidden photo' + (hiddenItems.length === 1 ? '' : 's'))) + '</button></div>' : '';
     var photosCard = U.card('Photos (' + items.length + ')', addBar + grid + hiddenToggle + tplNote);
     return photosCard + (focus ? photoSelectedCardHtml(secId, items, cats, focus, ed) : '');
   }
@@ -1355,7 +1357,7 @@
     var cid = esc(cat.id);
     var count = (V2.productCatCounts && V2.productCatCounts[String(cat.id).toLowerCase()]) || 0;
     var countPill = count > 0
-      ? '<span class="wv2-cat-count" title="' + MastFormat.countNoun(count, 'product') + ' in this category">' + count + '</span>'
+      ? '<span class="wv2-cat-count" title="' + count + ' product' + (count === 1 ? '' : 's') + ' in this category">' + count + '</span>'
       : '';
     var upDis = idx === 0 ? ' disabled' : '';
     var dnDis = idx === total - 1 ? ' disabled' : '';
@@ -1461,7 +1463,7 @@
     var sug = V2.suggestions;
     if (!Array.isArray(sug) || !sug.length || !canEdit()) return '';
     var chips = sug.slice(0, 8).map(function (s) {
-      return '<button type="button" class="wv2-sug-chip" onclick="WebsiteV2.addSuggestedCat(\'' + esc(s.slug) + '\')" title="' + MastFormat.countNoun(s.count, 'product') + ' use this category">' +
+      return '<button type="button" class="wv2-sug-chip" onclick="WebsiteV2.addSuggestedCat(\'' + esc(s.slug) + '\')" title="' + s.count + ' product' + (s.count === 1 ? '' : 's') + ' use this category">' +
         '+ ' + esc(titleSlug(s.slug)) + ' <span class="wv2-sug-n">' + s.count + '</span></button>';
     }).join('');
     return '<div class="wv2-suggest">' +
@@ -1796,6 +1798,8 @@
       '.wv2-phototile.on{border-color:var(--teal);}' +
       '.wv2-phototile.off{opacity:0.4;}' +
       '.wv2-phototile-vid{position:absolute;bottom:2px;right:3px;font-size:0.72rem;line-height:1;padding:1px 3px;border-radius:4px;background:color-mix(in srgb,var(--surface-card) 78%,transparent);color:var(--text-primary);}' +
+      '.wv2-phototile-x{position:absolute;top:2px;right:2px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;line-height:1;border-radius:50%;background:color-mix(in srgb,var(--surface-card) 88%,transparent);color:var(--text-primary);border:1px solid color-mix(in srgb,var(--text-primary) 20%,transparent);cursor:pointer;}' +
+      '.wv2-phototile-x:hover{background:var(--danger);color:var(--cream);border-color:var(--danger);}' +
       '.wv2-photo-prev{flex-shrink:0;width:108px;height:108px;border-radius:8px;border:1px solid var(--border);background-size:cover;background-position:center;}' +
       '.wv2-photo-prev-vid{display:flex;align-items:center;justify-content:center;color:var(--warm-gray);font-size:1.6rem;background:color-mix(in srgb,var(--text-primary) 6%,transparent);}' +
       '.wv2-photo-edit-top{display:flex;gap:14px;}' +
@@ -2310,8 +2314,13 @@
         WV2_PHOTOS.focus = null; // focus falls back to first after delete
         Promise.resolve(b.images.removeConfirmed(imageId)).then(function () { fillPhotosManager(WV2_PHOTOS.sec); });
       };
-      if (typeof window.mastConfirm === 'function') window.mastConfirm('Remove this photo from the section?', go);
-      else go();
+      // mastConfirm is PROMISE-style: mastConfirm(message, options) → Promise<bool>.
+      // (The old callback form `mastConfirm(msg, go)` passed `go` as `options` and
+      // never ran — Remove silently did nothing.)
+      if (typeof window.mastConfirm === 'function') {
+        Promise.resolve(window.mastConfirm('Remove this photo from the section?', { title: 'Remove photo', confirmLabel: 'Remove', cancelLabel: 'Keep', danger: true }))
+          .then(function (ok) { if (ok) go(); });
+      } else { go(); }
     },
     // Featured-testimonial visibility → window.hpToggleTestimonialVisible (the
     // SAME single-source writer the legacy page builder uses; arg-taking, no DOM)
@@ -2478,9 +2487,14 @@
     copyLink: function () {
       var url = liveUrl();
       if (!url) { if (window.showToast) showToast('Live URL unavailable', true); return; }
-      window.MastUI.copy(url, { okMsg: 'Live link copied', errMsg: false }).then(function (ok) {
-        if (!ok && typeof window.mastCopyFallback === 'function') mastCopyFallback('Copy this link', url);
-      });
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(
+          function () { if (window.showToast) showToast('Live link copied'); },
+          function () { if (typeof window.mastCopyFallback === 'function') mastCopyFallback('Copy this link', url); }
+        );
+      } else if (typeof window.mastCopyFallback === 'function') {
+        mastCopyFallback('Copy this link', url);
+      }
     }
   };
 
@@ -3262,7 +3276,7 @@
     }).length;
     if (hiddenCount > 0) {
       html += '<div style="margin-top:8px;padding:8px 12px;background:color-mix(in srgb, var(--amber, var(--amber)) 10%, transparent);border:1px solid color-mix(in srgb, var(--amber, var(--amber)) 25%, transparent);border-radius:6px;font-size:0.78rem;color:var(--warm-gray);">';
-      html += MastFormat.countNoun(hiddenCount, 'image') + ' hidden by template switch';
+      html += hiddenCount + ' image' + (hiddenCount !== 1 ? 's' : '') + ' hidden by template switch';
       html += '</div>';
     }
 
