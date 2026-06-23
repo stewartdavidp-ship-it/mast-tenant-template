@@ -316,7 +316,7 @@
     if (id) {
       await MastDB.lpe.equipment.update(id, payload);
     } else {
-      id = 'equip_' + Date.now();
+      id = MastUtil.genId('equip_');
       payload.createdAt = new Date().toISOString();
       await MastDB.lpe.equipment.set(id, payload);
     }
@@ -464,7 +464,7 @@
       return founderId;
     }
     payload.createdAt = new Date().toISOString();
-    var newId = 'founder_' + Date.now();
+    var newId = MastUtil.genId('founder_');
     await MastDB.set('admin/lpe/founders/' + newId, payload);
     return newId;
   }
@@ -599,7 +599,7 @@
         fields.createdAt = new Date().toISOString();
         fields.payType = 'hourly'; // default for new employees created from studio
         fields.status = 'active';
-        var newId = 'emp_' + Date.now();
+        var newId = MastUtil.genId('emp_');
         await MastDB.set('admin/employees/' + newId, fields);
         showToast('Team member added');
       }
@@ -712,7 +712,7 @@
       return itemId;
     }
     payload.createdAt = new Date().toISOString();
-    var newId = 'oh_' + Date.now();
+    var newId = MastUtil.genId('oh_');
     await MastDB.set('admin/lpe/overheadItems/' + newId, payload);
     return newId;
   }

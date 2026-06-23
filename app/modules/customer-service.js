@@ -3139,7 +3139,7 @@
         nextNum = txRes.value.nextNumber - 1;
       }
       var ticketNumber = prefix + '-' + String(nextNum).padStart(4, '0');
-      var ticketId = 'ticket_' + Date.now().toString(36);
+      var ticketId = MastUtil.genId('ticket_');
       var now = new Date().toISOString();
       var ticketData = {
         id: ticketId,
@@ -3156,7 +3156,7 @@
       };
       await MastDB.set('cs_tickets/' + ticketId, ticketData);
       if (data.firstMessage) {
-        var msgId = 'msg_' + Date.now().toString(36);
+        var msgId = MastUtil.genId('msg_');
         await MastDB.set('cs_tickets/' + ticketId + '/messages/' + msgId, {
           id: msgId,
           body: data.firstMessage,
@@ -3176,7 +3176,7 @@
     // authorName, authorEmail } (author defaults to the signed-in operator).
     reply: async function (ticketId, body, opts) {
       opts = opts || {};
-      var msgId = 'msg_' + Date.now().toString(36);
+      var msgId = MastUtil.genId('msg_');
       var now = new Date().toISOString();
       var msgData = {
         id: msgId,

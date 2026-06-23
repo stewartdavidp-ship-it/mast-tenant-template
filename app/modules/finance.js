@@ -2818,7 +2818,7 @@ async function _closeV3Call(name, payload) {
 async function _dayCloseSaveCore(payload, isReclose) {
   // Best-effort UUID (crypto.randomUUID is widely supported in supported browsers).
   var requestId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
-    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    : (MastUtil.genId('rid-'));
   var p = Object.assign({}, payload, { requestId: requestId });
   var json = await _closeV3Call('writeDayClose', p);
   if (!json || json.ok !== true) {
@@ -4384,7 +4384,7 @@ window.finApSaveVendor = async function(vendorId) {
 async function _apSaveVendorCore(vendorId, payload) {
   payload.updatedAt = payload.updatedAt || new Date().toISOString();
   if (!vendorId) {
-    var id = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    var id = MastUtil.genId('v_');
     payload.id = id; payload.createdAt = payload.updatedAt;
     await MastDB.set('admin/vendors/' + id, payload);
     return id;
@@ -4478,7 +4478,7 @@ window.finApSaveBill = async function(billId) {
 async function _apSaveBillCore(billId, payload) {
   payload.updatedAt = payload.updatedAt || new Date().toISOString();
   if (!billId) {
-    var id = 'b_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+    var id = MastUtil.genId('b_');
     payload.id = id; payload.createdAt = payload.updatedAt;
     await MastDB.set('admin/purchaseReceipts/' + id, payload);
     _firTriggerQboPush('apBill', id);
@@ -7111,7 +7111,7 @@ async function renderPeriodClose() {
 // ── Close v3 state-free cores (shared with the V2 close hub via FinanceBridge) ──
 function _closeV3RequestId() {
   return (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID()
-    : ('rid-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+    : (MastUtil.genId('rid-'));
 }
 // Throws on failure; the unclosedDays precondition surfaces as
 // err.message === 'unclosedDays' with err.details.dates = [...].

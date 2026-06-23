@@ -702,7 +702,7 @@
     var hasEmail = !!(c.customerContact && c.customerContact.indexOf('@') !== -1);
     var sendEmail = !!opts.sendEmail && hasEmail;
 
-    var milestoneId = 'mst_' + Date.now().toString(36);
+    var milestoneId = MastUtil.genId('mst_');
     var photoUrl = null;
     if (file) {
       if (typeof onPhase === 'function') onPhase('Uploading photo…');

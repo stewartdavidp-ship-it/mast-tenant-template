@@ -234,7 +234,7 @@
     if (!file) throw new Error('No file provided');
 
     var isVideo = (file.type || '').indexOf('video/') === 0;
-    var clipId = 'clip_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    var clipId = MastUtil.genId('clip_');
 
     var thumbnailBase64 = isVideo
       ? await smExtractVideoThumbnail(file)
@@ -392,7 +392,7 @@
     var uid = smGetUid();
     if (!uid) throw new Error('Not signed in');
     data = data || {};
-    var clipId = 'preshoot_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    var clipId = MastUtil.genId('preshoot_');
     var clipData = {
       clipId: clipId,
       fileName: 'Pre-shoot: ' + (data.subject || data.productName || data.description || 'Untitled'),
@@ -473,7 +473,7 @@
     createPost: async function(postData) {
       var uid = smGetUid();
       if (!uid) throw new Error('Not signed in');
-      var postId = 'post_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+      var postId = MastUtil.genId('post_');
       var data = {
         postId: postId,
         clipId: postData.clipId || null,
@@ -1702,7 +1702,7 @@
     // socialOpenFromContent post shape (status:'draft'). → Promise<postId>.
     var uid = smGetUid();
     if (!uid) return Promise.reject(new Error('Not signed in'));
-    var postId = 'post_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 6);
+    var postId = MastUtil.genId('post_');
     var postData = {
       postId: postId,
       clipId: null,

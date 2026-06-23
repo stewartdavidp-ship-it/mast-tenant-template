@@ -1302,7 +1302,7 @@
       }
       var tenantId = MastDB.tenantId();
       var fns = firebase.functions();
-      var rmaId = 'rma_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      var rmaId = MastUtil.genId('rma_');
       // The intent record mirrors saveNewRma exactly (no money). refundMethod uses
       // the legacy store_credit/original_payment vocabulary the RMA record speaks;
       // the CF maps it. refundAmountCents is the AUTHORIZED ceiling the CF caps to.

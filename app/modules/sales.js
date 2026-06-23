@@ -2990,7 +2990,7 @@ async function exitPackingMode() {
 
       var amountCents = Math.round(amountDollars * 100);
       var now = new Date().toISOString();
-      var saleId = 'manual_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      var saleId = MastUtil.genId('manual_');
       var receivedAtIso = saleDate ? saleDate + 'T12:00:00.000Z' : now;
 
       // 1. Write sale record

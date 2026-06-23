@@ -659,7 +659,7 @@
       }
     }
 
-    var interactionId = 'int_' + Date.now().toString(36);
+    var interactionId = MastUtil.genId('int_');
     var interactionData = {
       id: interactionId,
       date: date,
@@ -769,7 +769,7 @@
     // it to — inquiry leads may have no linked contact yet).
     var now = new Date().toISOString();
     if (contactId) {
-      var interactionId = 'int_' + Date.now().toString(36);
+      var interactionId = MastUtil.genId('int_');
       await MastDB.contacts.setInteraction(contactId, interactionId, {
         id: interactionId,
         date: now.slice(0, 10),
@@ -956,7 +956,7 @@
 
   window.ContactsBridge = {
       create: async function (data) {
-        var id = 'contact_' + Date.now().toString(36);
+        var id = MastUtil.genId('contact_');
         var now = new Date().toISOString();
         var contactData = {
           id: id,

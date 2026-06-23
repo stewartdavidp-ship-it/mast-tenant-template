@@ -5573,7 +5573,7 @@
     if (clone.lineItems) {
       var freshLis = {};
       Object.keys(clone.lineItems).forEach(function(oldId) {
-        var newId = 'li_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        var newId = MastUtil.genId('li_');
         var li = clone.lineItems[oldId];
         li.lineItemId = newId;
         freshLis[newId] = li;
@@ -5584,12 +5584,12 @@
       var freshVariants = {};
       Object.keys(clone.variants).forEach(function(vid) {
         var v = clone.variants[vid];
-        var newVid = 'v_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+        var newVid = MastUtil.genId('v_');
         v.variantId = newVid;
         if (v.lineItems) {
           var fLis = {};
           Object.keys(v.lineItems).forEach(function(oldId) {
-            var newId = 'li_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+            var newId = MastUtil.genId('li_');
             var li = v.lineItems[oldId];
             li.lineItemId = newId;
             fLis[newId] = li;
@@ -6139,7 +6139,7 @@
       return;
     }
 
-    var liId = 'li_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+    var liId = MastUtil.genId('li_');
     var lineItems = materializeLineItems(builderState, currentVariantId || 'default');
     var target = { lineItems: lineItems };
 

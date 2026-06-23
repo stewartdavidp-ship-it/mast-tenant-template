@@ -3806,7 +3806,7 @@
   async function writeEmployee(id, fields, isNew) {
     if (isNew) {
       fields.createdAt = new Date().toISOString();
-      var newId = id || ('emp_' + Date.now());
+      var newId = id || (MastUtil.genId('emp_'));
       await MastDB.set('admin/employees/' + newId, fields);
       return newId;
     }

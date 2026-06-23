@@ -3994,8 +3994,8 @@
       nextNum = txRes.value.nextNumber - 1;
     }
     var ticketNumber = prefix + '-' + String(nextNum).padStart(4, '0');
-    var ticketId = 'ticket_' + Date.now().toString(36);
-    var msgId = 'msg_' + Date.now().toString(36);
+    var ticketId = MastUtil.genId('ticket_');
+    var msgId = MastUtil.genId('msg_');
     var now = new Date().toISOString();
 
     await MastDB.set('cs_tickets/' + ticketId, {
@@ -5221,7 +5221,7 @@
     try {
       var snap = await MastDB.query('students').orderByChild('email').equalTo(email).limitToFirst(1).once('value');
       if (snap.exists()) return; // Already exists
-      var studentId = 'stu_' + Date.now();
+      var studentId = MastUtil.genId('stu_');
       await MastDB.set('students/' + studentId, {
         displayName: name || '',
         email: email,

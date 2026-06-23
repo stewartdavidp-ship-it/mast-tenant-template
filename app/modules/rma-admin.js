@@ -309,7 +309,7 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
 
     try {
-      var rmaId = 'rma_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+      var rmaId = MastUtil.genId('rma_');
       var srcOrder = orderId ? orders[orderId] : null;
       var orderNumber = srcOrder ? getOrderDisplayNumber(srcOrder) : '';
       var nowIso = new Date().toISOString();
@@ -645,7 +645,7 @@
         if (rmaTicketId && ticketMsg) {
           try {
             var tNow = new Date().toISOString();
-            var tMsgId = 'msg_' + Date.now().toString(36);
+            var tMsgId = MastUtil.genId('msg_');
             await MastDB.set('cs_tickets/' + rmaTicketId + '/messages/' + tMsgId, {
               id: tMsgId,
               body: ticketMsg,
@@ -729,7 +729,7 @@
         if (rmaTicketId) {
           try {
             var tNow = new Date().toISOString();
-            var tMsgId = 'msg_' + Date.now().toString(36);
+            var tMsgId = MastUtil.genId('msg_');
             await MastDB.set('cs_tickets/' + rmaTicketId + '/messages/' + tMsgId, {
               id: tMsgId,
               body: 'Your return is complete. Your refund has been processed.',

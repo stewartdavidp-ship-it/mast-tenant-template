@@ -82,7 +82,7 @@ async function addVariantToProduct(pid, comboSig) {
   });
 
   var newVariant = {
-    id: 'v_' + Date.now().toString(36),
+    id: MastUtil.genId('v_'),
     combo: combo,
     priceCents: product.priceCents != null ? product.priceCents : 0
   };
