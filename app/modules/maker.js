@@ -3226,7 +3226,7 @@
         // costShape recompute is non-revisionable bookkeeping — write live
         await persistCostShape(defineProductId, costShape);
         try { await recomputeAndPersistReadiness(defineProductId); } catch (e) {}
-        MastAdmin.showToast('Staged ' + Object.keys(pending).length + ' change' + (Object.keys(pending).length === 1 ? '' : 's') + ' (Apply to go live)');
+        MastAdmin.showToast('Staged ' + Object.keys(pending).length + ' ' + MastFormat.plural(Object.keys(pending).length, 'change') + ' (Apply to go live)');
         renderDefineView();
         return;
       }

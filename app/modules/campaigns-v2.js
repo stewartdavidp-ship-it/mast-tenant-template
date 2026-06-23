@@ -281,7 +281,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Campaigns',
-        count: N.count(V2.rows.length) + ' campaign' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'campaign'),
         subtitle: 'Group blog, newsletter, social and story posts under one utm_campaign for attribution.',
         actionsHtml:
           '<button class="btn btn-primary" onclick="CampaignsV2.create()">+ New campaign</button>' +

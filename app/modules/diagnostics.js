@@ -138,7 +138,7 @@
     var errs = ring.length - ring.filter(function (c) { return c.ctx && c.ctx.kind === 'slow-read'; }).length;
     return '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0;">' +
       U.badge(N.count(errs) + ' captured this session', errs ? 'danger' : 'success') +
-      U.badge(N.count(slow) + ' slow read' + (slow === 1 ? '' : 's') + ' this session', slow ? 'warning' : 'neutral') +
+      U.badge(N.count(slow) + ' ' + MastFormat.plural(slow, 'slow read') + ' this session', slow ? 'warning' : 'neutral') +
       '</div>';
   }
 
@@ -192,7 +192,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Diagnostics',
-        count: N.count(V2.rows.length) + ' recent report' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'recent report'),
         actionsHtml: '<button class="btn btn-secondary" onclick="DiagnosticsV2.selfTest()">Run self-test</button> <button class="btn btn-secondary" onclick="DiagnosticsV2.refresh()">↻ Refresh</button>'
       }) +
       sessionPulse() +

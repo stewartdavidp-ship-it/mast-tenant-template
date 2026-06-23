@@ -374,7 +374,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Schedule',
-        count: N.count(V2.rows.length) + ' session' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'session'),
         actionsHtml:
           (can('calendar', 'edit') ? '<button class="btn btn-primary" onclick="SessionsV2.create()">+ New session</button> ' : '') +
           '<button class="btn btn-secondary" onclick="SessionsV2.exportCsv()">↓ Export</button>'

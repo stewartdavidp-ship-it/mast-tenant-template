@@ -276,7 +276,7 @@
     }).join('');
 
     tab.innerHTML =
-      U.pageHeader({ title: 'Channel Audit', count: N.count(c.open) + ' open finding' + (c.open === 1 ? '' : 's'),
+      U.pageHeader({ title: 'Channel Audit', count: N.count(c.open) + ' ' + MastFormat.plural(c.open, 'open finding'),
         actionsHtml: '<button class="btn btn-secondary" onclick="AuditV2.exportCsv()">↓ Export</button>' }) +
       '<div style="margin:14px 0;">' + pills + '</div>' +
       (V2.bucket === 'muted' ? mutedPane() :

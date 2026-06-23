@@ -358,7 +358,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Membership',
-        count: N.count(V2.rows.length) + ' member' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'member'),
         // Grant is a write — gate the affordance on edit (cs-members-v2 twin precedent).
         actionsHtml: (canM('edit') ? '<button class="btn btn-primary" onclick="MembershipV2.grant()">+ Grant</button>' : '') +
           '<button class="btn btn-secondary" onclick="MembershipV2.exportCsv()">&darr; Export</button>'

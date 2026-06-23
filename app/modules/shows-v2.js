@@ -1137,7 +1137,7 @@
     var cards = V2.finderResults.map(function (r, idx) {
       return finderResultCard(r, idx);
     }).join('');
-    return U.card(N.count(n) + ' show' + (n !== 1 ? 's' : '') + ' found', cards);
+    return U.card(N.count(n) + ' ' + MastFormat.plural(n, 'show') + ' found', cards);
   }
 
   // A single ranked result card (name / location / dates / fees / fit-why + links +

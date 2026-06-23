@@ -365,7 +365,7 @@
     var addLabel = V2.lens === 'founders' ? '+ New founder' : V2.lens === 'overhead' ? '+ New cost' : '+ New equipment';
     var expensesNote = (V2.lens === 'overhead' && V2.expenseOverheadCount > 0)
       ? '<div class="mu-sub" style="margin:10px 0;">+ ' + N.money(V2.expenseOverheadCents, { cents: true }) + '/mo from ' +
-        N.count(V2.expenseOverheadCount) + ' expense' + (V2.expenseOverheadCount === 1 ? '' : 's') + ' tagged as studio overhead in ' +
+        N.count(V2.expenseOverheadCount) + ' ' + MastFormat.plural(V2.expenseOverheadCount, 'expense') + ' tagged as studio overhead in ' +
         '<button type="button" class="mu-link" onclick="navigateTo(\'finance-expenses\')">Expenses</button>.</div>'
       : '';
 

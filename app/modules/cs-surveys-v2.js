@@ -473,7 +473,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Surveys',
-        count: N.count(realResponses.length) + ' response' + (realResponses.length === 1 ? '' : 's') + ' · ' + N.count(completed) + ' completed',
+        count: N.count(realResponses.length) + ' ' + MastFormat.plural(realResponses.length, 'response') + ' · ' + N.count(completed) + ' completed',
         actionsHtml: actions
       }) +
       '<div style="margin:14px 0;">' + lensPills + '</div>' +

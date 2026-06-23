@@ -615,7 +615,7 @@
       tab.innerHTML =
         U.pageHeader({
           title: 'Newsletter',
-          count: N.count(V2.issues.length) + ' issue' + (V2.issues.length === 1 ? '' : 's'),
+          count: N.count(V2.issues.length) + ' ' + MastFormat.plural(V2.issues.length, 'issue'),
           subtitle: 'Create a draft here, then compose & send it in the classic grid builder.',
           actionsHtml: '<button class="btn btn-primary" onclick="NewsletterV2.newIssue()">+ New issue</button>' +
             '<button class="btn btn-secondary" onclick="NewsletterV2.exportIssuesCsv()">↓ Export</button>'

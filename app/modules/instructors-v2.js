@@ -333,7 +333,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Instructors',
-        count: N.count(V2.rows.length) + ' instructor' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'instructor'),
         actionsHtml: '<button class="btn btn-primary" onclick="InstructorsV2.create()">+ New instructor</button>' +
           '<button class="btn btn-secondary" onclick="InstructorsV2.exportCsv()">↓ Export</button>'
       }) +

@@ -71,7 +71,7 @@
           { k: 'Unit cost', v: N.money(m.unitCost || 0) || '$0.00', hero: true },
           { k: 'On hand', v: (m.onHandQty != null ? (m.onHandQty + (m.unitOfMeasure ? ' ' + esc(m.unitOfMeasure) : '')) : '—') },
           { k: 'Reorder at', v: (m.reorderThreshold != null && m.reorderThreshold !== 0) ? esc(String(m.reorderThreshold)) : '—' },
-          { k: 'Used in', v: N.count(uses.length) + ' recipe' + (uses.length === 1 ? '' : 's') }
+          { k: 'Used in', v: N.count(uses.length) + ' ' + MastFormat.plural(uses.length, 'recipe') }
         ]);
         var tabsBar = UI.paneTabsBar([{ key: 'ov', label: 'Overview' }, { key: 'cost', label: 'Cost history' }, { key: 'recipes', label: 'Recipes' }], 'ov');
 

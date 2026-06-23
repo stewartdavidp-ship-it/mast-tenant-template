@@ -354,7 +354,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Coupons',
-        count: N.count(V2.rows.length) + ' coupon' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'coupon'),
         actionsHtml: '<button class="btn btn-primary" onclick="CouponsV2.create()">+ New coupon</button>' +
           '<button class="btn btn-secondary" onclick="CouponsV2.exportCsv()">↓ Export</button>'
       }) +

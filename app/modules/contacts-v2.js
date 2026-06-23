@@ -353,7 +353,7 @@
     tab.innerHTML =
       U.pageHeader({
         title: 'Contacts',
-        count: N.count(V2.rows.length) + ' contact' + (V2.rows.length === 1 ? '' : 's'),
+        count: N.count(V2.rows.length) + ' ' + MastFormat.plural(V2.rows.length, 'contact'),
         actionsHtml: '<button class="btn btn-primary" onclick="ContactsV2.create()">+ New contact</button>' +
           '<button class="btn btn-secondary" onclick="ContactsV2.google()">Google Contacts</button>' +
           '<button class="btn btn-secondary" onclick="ContactsV2.exportCsv()">↓ Export</button>'
