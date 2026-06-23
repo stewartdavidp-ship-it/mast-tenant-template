@@ -597,7 +597,7 @@
       var result = await fn({ tenantId: tenantId() });
       var data = (result && result.data) || {};
       var count = data.detected || 0;
-      toastOk('Checked — ' + count + ' collision' + (count === 1 ? '' : 's') + ' detected');
+      toastOk('Checked — ' + MastFormat.countNoun(count, 'collision') + ' detected');
       renderConnectView();
     } catch (err) {
       toastErr('Collision check failed: ' + (err && err.message));

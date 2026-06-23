@@ -117,7 +117,7 @@ async function renderAddToMast() {
     html += '<div style="display:flex;gap:8px;flex-shrink:0;align-self:flex-start;flex-wrap:wrap;">';
     if (overrideCount > 0) {
       html += '<button class="btn btn-secondary" onclick="resetModeOverridesClick()" ' +
-              'aria-label="Reset sidebar to default — undoes ' + overrideCount + ' override' + (overrideCount === 1 ? '' : 's') + '" ' +
+              'aria-label="Reset sidebar to default — undoes ' + MastFormat.countNoun(overrideCount, 'override') + '" ' +
               'title="Restore your sidebar to what your business setup prescribes.">Reset to default</button>';
     }
     if (visibleCount > 0) {
@@ -372,7 +372,7 @@ async function addAllToMastClick() {
     var result = await addRoutesToMast(softHidden, 'add_all_to_mast_page');
     if (result && result.success) {
       if (typeof showToast === 'function') {
-        showToast(result.addedCount + ' module' + (result.addedCount === 1 ? '' : 's') + ' added to your Mast.');
+        showToast(MastFormat.countNoun(result.addedCount, 'module') + ' added to your Mast.');
       }
       renderAddToMast();
     } else {
@@ -399,8 +399,8 @@ async function resetModeOverridesClick() {
     return;
   }
   var parts = [];
-  if (addedCount > 0)  parts.push(addedCount + ' added module' + (addedCount === 1 ? '' : 's'));
-  if (hiddenCount > 0) parts.push(hiddenCount + ' hidden module' + (hiddenCount === 1 ? '' : 's'));
+  if (addedCount > 0)  parts.push(MastFormat.countNoun(addedCount, 'added module'));
+  if (hiddenCount > 0) parts.push(MastFormat.countNoun(hiddenCount, 'hidden module'));
   var prompt = 'Reset to default? This undoes ' + parts.join(' and ') +
                ', putting your sidebar back to what your business setup prescribes. ' +
                'You can re-add or re-hide modules at any time.';
@@ -412,7 +412,7 @@ async function resetModeOverridesClick() {
       if (typeof showToast === 'function') {
         showToast(result.alreadyDefault
           ? 'Your sidebar was already at the default.'
-          : 'Sidebar reset to default (' + result.clearedCount + ' override' + (result.clearedCount === 1 ? '' : 's') + ' cleared).');
+          : 'Sidebar reset to default (' + MastFormat.countNoun(result.clearedCount, 'override') + ' cleared).');
       }
       renderAddToMast();
     } else {
@@ -447,7 +447,7 @@ async function addAllInSectionClick(sectionKey) {
     if (result && result.success) {
       var sectionLabel = MODE_SECTION_LABELS[sectionKey] || sectionKey;
       if (typeof showToast === 'function') {
-        showToast(result.addedCount + ' ' + sectionLabel + ' module' + (result.addedCount === 1 ? '' : 's') + ' added.');
+        showToast(result.addedCount + ' ' + sectionLabel + ' ' + MastFormat.plural(result.addedCount, 'module') + ' added.');
       }
       renderAddToMast();
     } else {
@@ -481,7 +481,7 @@ async function removeAllFromMastClick() {
     if (result && result.success) {
       if (typeof showToast === 'function') {
         var advisory = _dependencyHideAdvisory(visible);
-        showToast(result.removedCount + ' module' + (result.removedCount === 1 ? '' : 's') + ' hidden from your Mast.' + (advisory ? '  ' + advisory : ''));
+        showToast(MastFormat.countNoun(result.removedCount, 'module') + ' hidden from your Mast.' + (advisory ? '  ' + advisory : ''));
       }
       renderAddToMast();
     } else {
@@ -516,7 +516,7 @@ async function removeAllInSectionClick(sectionKey) {
       var sectionLabel = MODE_SECTION_LABELS[sectionKey] || sectionKey;
       if (typeof showToast === 'function') {
         var advisory = _dependencyHideAdvisory(inSection);
-        showToast(result.removedCount + ' ' + sectionLabel + ' module' + (result.removedCount === 1 ? '' : 's') + ' hidden.' + (advisory ? '  ' + advisory : ''));
+        showToast(result.removedCount + ' ' + sectionLabel + ' ' + MastFormat.plural(result.removedCount, 'module') + ' hidden.' + (advisory ? '  ' + advisory : ''));
       }
       renderAddToMast();
     } else {
