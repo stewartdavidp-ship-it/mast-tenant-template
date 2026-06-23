@@ -8900,8 +8900,8 @@
             </button>
             <div class="settings-nav-items">
               <button class="settings-nav-item active" data-nav-key="general" onclick="switchSettingsSubView('general')">General</button>
-              <button class="settings-nav-item" data-nav-key="storefront" onclick="switchSettingsSubView('storefront')">Product Page Display</button>
-              <button class="settings-nav-item" data-nav-key="domains" onclick="switchSettingsSubView('domains')">Domains</button>
+              <button class="settings-nav-item" data-nav-key="storefront" onclick="navigateTo('website-v2')">Product Page Display &rarr;</button>
+              <button class="settings-nav-item" data-nav-key="domains" onclick="navigateTo('website-v2')">Domains &rarr;</button>
             </div>
           </div>
 
@@ -10710,109 +10710,8 @@
       </div>
       <!-- Storefront Display Settings -->
       <div id="settingsSubStorefront" style="display:none;max-width:720px;padding-top:16px;">
-        <p class="tab-section-purpose" style="margin-bottom:16px;">Controls how individual product pages render &mdash; lead time, badges, commission CTA, legal links. For site-wide content (homepage, About, Brand, image library), see the <a href="javascript:void(0)" onclick="navigateTo('website')" style="color:var(--teal);text-decoration:underline;">Site</a> section.</p>
-        <!-- Display settings tab strip (view-tabs pattern). Each surface that affects what
-             customers see on your storefront becomes its own tab. -->
-        <div class="view-tabs" id="displayTabBar" style="margin-bottom:20px;">
-          <button class="view-tab active" id="displayTabBtn-leadTime" data-tab="leadTime" onclick="switchDisplayTab('leadTime')"><span class="tab-status-dot" data-state="none"></span>Lead time</button>
-          <button class="view-tab" id="displayTabBtn-commissionCta" data-tab="commissionCta" onclick="switchDisplayTab('commissionCta')"><span class="tab-status-dot" data-state="none"></span>Commission CTA</button>
-          <button class="view-tab" id="displayTabBtn-badges" data-tab="badges" onclick="switchDisplayTab('badges')"><span class="tab-status-dot" data-state="info"></span>Badge labels</button>
-          <button class="view-tab" id="displayTabBtn-legal" data-tab="legal" onclick="switchDisplayTab('legal')"><span class="tab-status-dot" data-state="info"></span>Legal links</button>
-        </div>
-
-        <!-- ── Lead time ── -->
-        <div id="displayTab-leadTime" class="display-tab-body">
-          <div class="tab-section-title">Lead time on products<span class="tab-section-status" data-state="none" id="displayStatus-leadTime">Off</span></div>
-          <p class="tab-section-purpose">When on, product pages and the cart show an estimated fulfillment time based on the inventory mode for each item (in-stock, made-to-order, etc.). When off, no time estimate is shown. Useful if your fulfillment windows vary widely and you&rsquo;d rather set expectations on individual product pages.</p>
-          <div class="form-group">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-              <span style="font-weight:600;font-size:0.9rem;">Show lead time on products</span>
-              <label class="toggle-switch" style="margin:0;">
-                <input type="checkbox" id="sdShowLeadTime">
-                <span class="toggle-slider"></span>
-              </label>
-            </label>
-          </div>
-          <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save</button>
-          <div id="sdSaveStatus_leadTime" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
-
-        <!-- ── Commission CTA ── -->
-        <div id="displayTab-commissionCta" class="display-tab-body" style="display:none;">
-          <div class="tab-section-title">Commission CTA on retired products<span class="tab-section-status" data-state="none" id="displayStatus-commissionCta">Off</span></div>
-          <p class="tab-section-purpose">When on, discontinued or sold-out products display a call-to-action inviting visitors to commission a custom version. Use this to capture interest in pieces that are no longer available off-the-shelf. Customize the button text and where it links to below.</p>
-          <div class="form-group">
-            <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-              <span style="font-weight:600;font-size:0.9rem;">Show commission CTA</span>
-              <label class="toggle-switch" style="margin:0;">
-                <input type="checkbox" id="sdShowCommissionCTA">
-                <span class="toggle-slider"></span>
-              </label>
-            </label>
-          </div>
-          <div class="form-group">
-            <label style="font-size:0.85rem;">CTA text</label>
-            <input type="text" id="sdCommissionCTAText" placeholder="Love this piece? Commission a custom version" style="font-size:0.85rem;">
-          </div>
-          <div class="form-group">
-            <label style="font-size:0.85rem;">CTA link</label>
-            <input type="text" id="sdCommissionCTALink" placeholder="/contact" style="font-size:0.85rem;">
-          </div>
-          <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save</button>
-          <div id="sdSaveStatus_commissionCta" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
-
-        <!-- ── Badge labels ── -->
-        <div id="displayTab-badges" class="display-tab-body" style="display:none;">
-          <div class="tab-section-title">Product badge labels<span class="tab-section-status" data-state="info" id="displayStatus-badges">Defaults</span></div>
-          <p class="tab-section-purpose">Override the text shown on product badges for inventory states. Leave a field blank to use the default label shown in the placeholder. Use <code>{n}</code> as a placeholder for the stock count (e.g. &ldquo;Only {n} Left&rdquo;).</p>
-          <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div>
-              <label style="font-size:0.78rem;">Discontinued + In stock</label>
-              <input type="text" id="sdBadgeDiscontinuedInStock" placeholder="Final Stock" style="font-size:0.85rem;">
-            </div>
-            <div>
-              <label style="font-size:0.78rem;">Discontinued + Sold</label>
-              <input type="text" id="sdBadgeDiscontinuedSold" placeholder="Retired" style="font-size:0.85rem;">
-            </div>
-            <div>
-              <label style="font-size:0.78rem;">Made to order</label>
-              <input type="text" id="sdBadgeMadeToOrder" placeholder="Made to Order" style="font-size:0.85rem;">
-            </div>
-            <div>
-              <label style="font-size:0.78rem;">Low stock</label>
-              <input type="text" id="sdBadgeLowStock" placeholder="Only {n} Left" style="font-size:0.85rem;">
-            </div>
-          </div>
-          <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save</button>
-          <div id="sdSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
-
-        <!-- ── Legal policy links ── -->
-        <div id="displayTab-legal" class="display-tab-body" style="display:none;">
-          <div class="tab-section-title">Legal policy links<span class="tab-section-status" data-state="info" id="displayStatus-legal">Mast defaults</span></div>
-          <p class="tab-section-purpose">Override the default policy links shown in your storefront footer with your own URLs. Leave any field blank to keep the Mast default policy at <code>runmast.com</code>. Each URL must be a full <code>https://</code> link to a page you control.</p>
-          <div class="form-group">
-            <label style="font-size:0.85rem;">Privacy policy URL</label>
-            <input type="text" id="sdCustomPrivacyUrl" placeholder="https://your-site.com/privacy" style="font-size:0.85rem;">
-          </div>
-          <div class="form-group">
-            <label style="font-size:0.85rem;">Terms of service URL</label>
-            <input type="text" id="sdCustomTermsUrl" placeholder="https://your-site.com/terms" style="font-size:0.85rem;">
-          </div>
-          <div class="form-group">
-            <label style="font-size:0.85rem;">Security statement URL</label>
-            <input type="text" id="sdCustomSecurityUrl" placeholder="https://your-site.com/security" style="font-size:0.85rem;">
-          </div>
-          <div class="form-group">
-            <label style="font-size:0.85rem;">AI transparency URL</label>
-            <input type="text" id="sdCustomAiUrl" placeholder="https://your-site.com/ai" style="font-size:0.85rem;">
-          </div>
-          <button class="btn btn-primary" onclick="savePrivacyUrlSettings()">Save legal URLs</button>
-          <div id="privacyUrlSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
-        </div>
+        <p class="tab-section-purpose">Product page display settings moved to <a href="javascript:void(0)" onclick="navigateTo('website-v2')" style="color:var(--teal);text-decoration:underline;">My Website &rarr; Product page display</a>.</p>
       </div>
-
       <!-- Dashboard Card Settings -->
       <div id="settingsSubDashboard" style="display:none;max-width:720px;">
         <div class="form-group">
@@ -10834,14 +10733,7 @@
       </div>
       <!-- Domain Settings -->
       <div id="settingsSubDomains" style="display:none;max-width:720px;">
-        <div class="tab-section-title">Domains<span class="tab-section-status" data-state="info" id="domainsStatus">Loading&hellip;</span></div>
-        <p class="tab-section-purpose">Connect a custom domain you own (e.g. <code>mycoolshop.com</code>) to your storefront. Your primary <code>.runmast.com</code> subdomain and the Firebase default are managed automatically. After you add a domain we&rsquo;ll show the DNS records to add &mdash; with direct links to your registrar &mdash; then verify DNS + SSL.</p>
-
-        <!-- Custom storefront domain — a MastIntake domain-control intake. The engine
-             renders add → DNS records (+ registrar links) → Verify → status, wrapping
-             the existing /manageDomain CF (connections-providers.js → custom-domain).
-             Replaces the bespoke domains list + add form + #dnsInstructions panel. -->
-        <div id="customDomainHost"></div>
+        <p class="tab-section-purpose">Domain settings moved to <a href="javascript:void(0)" onclick="navigateTo('website-v2')" style="color:var(--teal);text-decoration:underline;">My Website &rarr; Domains</a>.</p>
       </div>
       <!-- AI Integrations Settings -->
       <div id="settingsSubAi" style="display:none;max-width:720px;">
@@ -20015,7 +19907,7 @@ var MODULE_MANIFEST = {
   // no longer load. The legacy host modules brand / homepage still load — they own
   // BrandBridge / HomepageBridge + writers the builder delegates to (hp*,
   // hpToggleTestimonialVisible). website.js (V1) is RETIRED (T6 PR3): its WebsiteBridge write layer moved to the lazy website-core.
-  'website-v2': { src: 'modules/website-v2.js', v: 'c1f0533f4ecf', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
+  'website-v2': { src: 'modules/website-v2.js', v: '68f332d32ac0', routes: ['website-v2', 'website', 'homepage', 'brand'] }, // "Your website" consolidated builder (sticky header + 4-card scroll; absorbs page builder + homepage-v2 + brand-v2). website.js + homepage.js + brand.js — the LAST bespoke V1 modules — ALL RETIRED (T6): write layer → website-core (PR1), AI import wizard → website-import (PR2); HomepageBridge/BrandBridge + hp*/brand* writers absorbed VERBATIM into website-v2.js as eager sibling IIFEs. The bare #website/#homepage/#brand routes resolve here directly, un-gated, for ALL users (Legacy-UI included — without these route keys applyRoute silently no-ops; MAST_V2_ROUTE_MAP[homepage|brand]='website-v2' still resolves V2 deep-links).
   'commissions-v2': { src: 'modules/commissions-v2.js', v: '3d50623dc6d2', routes: ['commissions-v2', 'commissions'] }, // UI-redesign Process surface: commissions lifecycle. orders.js (V1) commission slice RETIRED (T6 PR2): its CommissionsBridge + write cores were absorbed here; the bare #commissions route now resolves here directly (no MAST_V2_ROUTE_MAP remap).
   'products-v2': { src: 'modules/products-v2.js', v: 'ec87df621dce', routes: ['products-v2'] }, // UI-redesign Process surface: products (list+variants+lifecycle, flag-gated, side-by-side; route-map flip deferred to P5)
   'gift-cards-v2': { src: 'modules/gift-cards-v2.js', v: 'db17beb55ab7', routes: ['gift-cards-v2'] }, // UI-redesign conversion: issued gift cards read detail (flag-gated)

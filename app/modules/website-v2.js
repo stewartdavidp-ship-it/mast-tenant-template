@@ -59,7 +59,12 @@
     { key: 'shop', title: 'Your shop', mount: 'wv2ShopBody',
       blurb: 'How your products and storefront appear to customers.', pr: 'this builder' },
     { key: 'live', title: 'See it live & share', mount: 'wv2LiveBody',
-      blurb: 'Preview your site, publish changes, and share the link.', pr: 'this builder' }
+      blurb: 'Preview your site, publish changes, and share the link.', pr: 'this builder' },
+    // Relocated from Settings (PR2): storefront-facing config now lives here.
+    { key: 'display', title: 'Product page display', mount: 'wv2DisplayBody',
+      blurb: 'Lead time, commission CTA, badge labels, and legal links on product pages.', pr: 'this builder' },
+    { key: 'domains', title: 'Domains', mount: 'wv2DomainsBody',
+      blurb: 'Connect a custom domain you own to your storefront.', pr: 'this builder' }
   ];
 
   // Module config state — cold-safe defaults so the header renders before load().
@@ -1891,6 +1896,98 @@
     mountWords();
     mountShop();
     mountLive();
+    mountProductDisplay();
+    mountDomains();
+  }
+
+  // ── Card 5 · Product page display (relocated from Settings, PR2) ────
+  // Renders the same markup/ids the shell's global shop-display handlers expect
+  // and delegates to them (loadShopDisplaySettings / saveShopDisplaySettings /
+  // savePrivacyUrlSettings / switchDisplayTab / refreshDisplayTabStatus — all
+  // top-level window globals). The Settings "Product Page Display" view is now a
+  // redirect stub to here, so these ids exist in exactly one place.
+  function mountProductDisplay() {
+    var host = document.getElementById('wv2DisplayBody'); if (!host) return;
+    if (!canEdit()) { host.innerHTML = '<div class="mu-sub">You do not have permission to edit storefront display settings.</div>'; return; }
+    host.innerHTML = `
+      <div class="view-tabs" id="displayTabBar" style="margin-bottom:20px;">
+        <button class="view-tab active" id="displayTabBtn-leadTime" data-tab="leadTime" onclick="switchDisplayTab('leadTime')"><span class="tab-status-dot" data-state="none"></span>Lead time</button>
+        <button class="view-tab" id="displayTabBtn-commissionCta" data-tab="commissionCta" onclick="switchDisplayTab('commissionCta')"><span class="tab-status-dot" data-state="none"></span>Commission CTA</button>
+        <button class="view-tab" id="displayTabBtn-badges" data-tab="badges" onclick="switchDisplayTab('badges')"><span class="tab-status-dot" data-state="info"></span>Badge labels</button>
+        <button class="view-tab" id="displayTabBtn-legal" data-tab="legal" onclick="switchDisplayTab('legal')"><span class="tab-status-dot" data-state="info"></span>Legal links</button>
+      </div>
+      <div id="displayTab-leadTime" class="display-tab-body">
+        <div class="tab-section-title">Lead time on products<span class="tab-section-status" data-state="none" id="displayStatus-leadTime">Off</span></div>
+        <p class="tab-section-purpose">When on, product pages and the cart show an estimated fulfillment time based on the inventory mode for each item (in-stock, made-to-order, etc.). When off, no time estimate is shown.</p>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <span style="font-weight:600;font-size:0.9rem;">Show lead time on products</span>
+            <label class="toggle-switch" style="margin:0;"><input type="checkbox" id="sdShowLeadTime"><span class="toggle-slider"></span></label>
+          </label>
+        </div>
+        <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save</button>
+        <div id="sdSaveStatus_leadTime" style="margin-top:8px;font-size:0.85rem;"></div>
+      </div>
+      <div id="displayTab-commissionCta" class="display-tab-body" style="display:none;">
+        <div class="tab-section-title">Commission CTA on retired products<span class="tab-section-status" data-state="none" id="displayStatus-commissionCta">Off</span></div>
+        <p class="tab-section-purpose">When on, discontinued or sold-out products display a call-to-action inviting visitors to commission a custom version. Customize the button text and link below.</p>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <span style="font-weight:600;font-size:0.9rem;">Show commission CTA</span>
+            <label class="toggle-switch" style="margin:0;"><input type="checkbox" id="sdShowCommissionCTA"><span class="toggle-slider"></span></label>
+          </label>
+        </div>
+        <div class="form-group"><label style="font-size:0.85rem;">CTA text</label><input type="text" id="sdCommissionCTAText" placeholder="Love this piece? Commission a custom version" style="font-size:0.85rem;"></div>
+        <div class="form-group"><label style="font-size:0.85rem;">CTA link</label><input type="text" id="sdCommissionCTALink" placeholder="/contact" style="font-size:0.85rem;"></div>
+        <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save</button>
+        <div id="sdSaveStatus_commissionCta" style="margin-top:8px;font-size:0.85rem;"></div>
+      </div>
+      <div id="displayTab-badges" class="display-tab-body" style="display:none;">
+        <div class="tab-section-title">Product badge labels<span class="tab-section-status" data-state="info" id="displayStatus-badges">Defaults</span></div>
+        <p class="tab-section-purpose">Override the text shown on product badges for inventory states. Leave a field blank to use the default. Use <code>{n}</code> as a placeholder for the stock count.</p>
+        <div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div><label style="font-size:0.78rem;">Discontinued + In stock</label><input type="text" id="sdBadgeDiscontinuedInStock" placeholder="Final Stock" style="font-size:0.85rem;"></div>
+          <div><label style="font-size:0.78rem;">Discontinued + Sold</label><input type="text" id="sdBadgeDiscontinuedSold" placeholder="Retired" style="font-size:0.85rem;"></div>
+          <div><label style="font-size:0.78rem;">Made to order</label><input type="text" id="sdBadgeMadeToOrder" placeholder="Made to Order" style="font-size:0.85rem;"></div>
+          <div><label style="font-size:0.78rem;">Low stock</label><input type="text" id="sdBadgeLowStock" placeholder="Only {n} Left" style="font-size:0.85rem;"></div>
+        </div>
+        <button class="btn btn-primary" onclick="saveShopDisplaySettings()">Save</button>
+        <div id="sdSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+      </div>
+      <div id="displayTab-legal" class="display-tab-body" style="display:none;">
+        <div class="tab-section-title">Legal policy links<span class="tab-section-status" data-state="info" id="displayStatus-legal">Mast defaults</span></div>
+        <p class="tab-section-purpose">Override the default policy links in your storefront footer with your own URLs. Leave any field blank to keep the Mast default. Each must be a full <code>https://</code> link.</p>
+        <div class="form-group"><label style="font-size:0.85rem;">Privacy policy URL</label><input type="text" id="sdCustomPrivacyUrl" placeholder="https://your-site.com/privacy" style="font-size:0.85rem;"></div>
+        <div class="form-group"><label style="font-size:0.85rem;">Terms of service URL</label><input type="text" id="sdCustomTermsUrl" placeholder="https://your-site.com/terms" style="font-size:0.85rem;"></div>
+        <div class="form-group"><label style="font-size:0.85rem;">Security statement URL</label><input type="text" id="sdCustomSecurityUrl" placeholder="https://your-site.com/security" style="font-size:0.85rem;"></div>
+        <div class="form-group"><label style="font-size:0.85rem;">AI transparency URL</label><input type="text" id="sdCustomAiUrl" placeholder="https://your-site.com/ai" style="font-size:0.85rem;"></div>
+        <button class="btn btn-primary" onclick="savePrivacyUrlSettings()">Save legal URLs</button>
+        <div id="privacyUrlSaveStatus" style="margin-top:8px;font-size:0.85rem;"></div>
+      </div>`;
+    try {
+      if (typeof window.loadShopDisplaySettings === 'function') Promise.resolve(loadShopDisplaySettings()).catch(function () {});
+      if (typeof window.loadPrivacyUrlSettings === 'function') Promise.resolve(loadPrivacyUrlSettings()).catch(function () {});
+      if (typeof window.refreshDisplayTabStatus === 'function') refreshDisplayTabStatus();
+    } catch (e) {}
+  }
+
+  // ── Card 6 · Domains (relocated from Settings, PR2) ─────────────────
+  // The domain control is a MastIntake intake rendered into #customDomainHost by
+  // the shell's loadDomainSettings(). Settings "Domains" is now a redirect stub.
+  function mountDomains() {
+    var host = document.getElementById('wv2DomainsBody'); if (!host) return;
+    if (!canEdit()) { host.innerHTML = '<div class="mu-sub">You do not have permission to manage domains.</div>'; return; }
+    host.innerHTML =
+      '<div class="tab-section-title">Domains<span class="tab-section-status" data-state="info" id="domainsStatus">Loading&hellip;</span></div>' +
+      '<p class="tab-section-purpose">Connect a custom domain you own (e.g. <code>mycoolshop.com</code>) to your storefront. Your <code>.runmast.com</code> subdomain is managed automatically. After you add a domain we&rsquo;ll show the DNS records to add, then verify DNS + SSL.</p>' +
+      '<div id="customDomainHost"></div>';
+    // loadDomainSettings → MastIntake calls currentUser.getIdToken(); guard on an
+    // authed user so the route render can't throw in unauthenticated/cold contexts
+    // (e.g. the headless boot smoke). The real admin is always signed in here.
+    var authed = !!(window.firebase && firebase.auth && firebase.auth().currentUser);
+    if (authed && typeof window.loadDomainSettings === 'function') {
+      try { loadDomainSettings(); } catch (e) {}
+    }
   }
 
   // ── public API ─────────────────────────────────────────────────────
