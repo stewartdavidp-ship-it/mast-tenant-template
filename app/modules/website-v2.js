@@ -3034,6 +3034,12 @@
   // section so operators see review-driven entries from public/testimonials/
   // alongside any image-based legacy entries.
   var testimonialsData = {};
+  // Brand logo config (config/brand/logo) + legacy nav logo url — read so the
+  // Hero "Brand Logo Image" variant picker can offer ONLY variants that have an
+  // uploaded image. Loaded here (this IIFE) because the brand-panel IIFE that
+  // owns logoConfig is a sibling we can't reach across.
+  var brandLogoConfig = null;
+  var brandLegacyLogoUrl = null;
 
   // --- Sync gallery data into the core shell's object without replacing the reference ---
   function syncToGlobal(data) {
@@ -3068,7 +3074,7 @@
       { id: 'headlineSize', label: 'Headline Size', type: 'select', options: [{ v: 'small', l: 'Small' }, { v: 'medium', l: 'Medium (Default)' }, { v: 'large', l: 'Large' }, { v: 'xl', l: 'Extra Large' }] },
       { id: 'textAlign', label: 'Text Position', type: 'select', options: [{ v: 'left', l: 'Left' }, { v: 'center', l: 'Center (Default)' }, { v: 'right', l: 'Right' }] },
       { id: 'showBrandLogo', label: 'Show Brand Logo', type: 'toggle' },
-      { id: 'brandLogoVariant', label: 'Brand Logo Image', type: 'select', options: [{ v: 'primary', l: 'Primary' }, { v: 'light', l: 'Light' }, { v: 'dark', l: 'Dark' }, { v: 'transparent', l: 'Transparent' }] }
+      { id: 'brandLogoVariant', label: 'Brand Logo Image', type: 'select', optionsKey: 'brandLogoVariants', options: [{ v: 'primary', l: 'Primary' }, { v: 'light', l: 'Light' }, { v: 'dark', l: 'Dark' }, { v: 'transparent', l: 'Transparent' }] }
     ]},
     { key: 'gallery', name: 'Products / Gallery', fields: [
       { id: 'heading', label: 'Heading', type: 'text' },
@@ -3147,6 +3153,15 @@
     try {
       testimonialsData = (await MastDB.get('public/testimonials')) || {};
     } catch (_e) { testimonialsData = {}; }
+
+    // Load brand logo config so the Hero variant picker lists only uploaded
+    // variants (primary always available when a primary/legacy logo exists).
+    try {
+      brandLogoConfig = (await MastDB.get('config/brand/logo')) || null;
+    } catch (_e) { brandLogoConfig = null; }
+    try {
+      brandLegacyLogoUrl = (await MastDB.get('public/config/nav/logoUrl')) || null;
+    } catch (_e) { brandLegacyLogoUrl = null; }
 
     // Load template manifest — try shared data first, then load independently
     templateManifest = MastAdmin.getData('templateManifest');
@@ -3424,6 +3439,25 @@
     return html;
   }
 
+  // Hero "Brand Logo Image" picker: offer ONLY variants that actually have an
+  // uploaded image (per config/brand/logo). 'primary' stays available whenever
+  // a primary or legacy nav logo exists; if nothing is uploaded yet we still
+  // emit a lone 'primary' so the select is never empty and the stored default
+  // remains selectable.
+  function getBrandLogoVariantOptions() {
+    var labels = { primary: 'Primary', light: 'Light', dark: 'Dark', transparent: 'Transparent' };
+    var cfg = brandLogoConfig || {};
+    var variants = cfg.variants || {};
+    var opts = [];
+    var hasPrimary = !!(cfg.primary && cfg.primary.url) || !!brandLegacyLogoUrl;
+    if (hasPrimary) opts.push({ v: 'primary', l: labels.primary });
+    ['light', 'dark', 'transparent'].forEach(function (k) {
+      if (variants[k] && variants[k].url) opts.push({ v: k, l: labels[k] });
+    });
+    if (opts.length === 0) opts.push({ v: 'primary', l: labels.primary });
+    return opts;
+  }
+
   function renderFieldInput(sectionKey, field, data) {
     var val = data[field.id] !== undefined ? data[field.id] : '';
     var inputId = 'hp-' + sectionKey + '-' + field.id;
@@ -3438,7 +3472,10 @@
       html += '<input type="number" id="' + inputId + '" value="' + esc(String(val)) + '" oninput="hpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', parseInt(this.value) || 0)">';
     } else if (field.type === 'select') {
       html += '<select id="' + inputId + '" onchange="hpUpdateField(\'' + sectionKey + '\', \'' + field.id + '\', this.value)">';
-      (field.options || []).forEach(function(opt) {
+      var selectOptions = field.optionsKey === 'brandLogoVariants'
+        ? getBrandLogoVariantOptions()
+        : (field.options || []);
+      selectOptions.forEach(function(opt) {
         html += '<option value="' + opt.v + '"' + (String(val) === opt.v ? ' selected' : '') + '>' + esc(opt.l) + '</option>';
       });
       html += '</select>';
