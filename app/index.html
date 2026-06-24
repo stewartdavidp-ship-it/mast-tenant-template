@@ -12265,7 +12265,7 @@ MastDB.walletConfig = {
   PATH: 'admin/walletConfig',
   get: function() { return MastDB.get('admin/walletConfig'); },
   set: function(data) { return MastDB.set('admin/walletConfig', data); },
-  update: function(data) { return MastDB.update('admin/walletConfig', data); }
+  update: function(data) { return Promise.all(Object.keys(data).map(function(k) { return MastDB.set('admin/walletConfig/' + k, data[k]); })); } // singleton doc (admin_walletConfig/_data): field-scoped create-or-merge set, same fix as termsConfig — MastDB.update() rejects when the doc doesn't exist yet (e.g. a tenant that never saved wallet/loyalty settings)
 };
 
 // admin_termsConfig is a SINGLETON_COLLECTIONS doc (shared/mastdb.js) → the
