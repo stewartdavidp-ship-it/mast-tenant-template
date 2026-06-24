@@ -370,6 +370,16 @@ var MastDB = (function() {
     } catch (_e) { /* timing must never disturb the read */ }
   }
 
+  // True when a Firestore write failed because the target doc doesn't exist —
+  // i.e. update() on a never-created doc. Matches both the v9 error code and the
+  // legacy message. Used by update() to upsert (create-or-merge) a first-time
+  // config save instead of throwing "Failed to save".
+  function _isMissingDocErr(err) {
+    if (!err) return false;
+    if (err.code === 'not-found' || err.code === 5) return true;
+    return /No document to update/i.test(String(err.message || ''));
+  }
+
   // --- Firestore retry helper (handles cold-start connection failures) ---
   function _fsGet(ref, opts, attempt) {
     attempt = attempt || 0;
@@ -532,6 +542,14 @@ var MastDB = (function() {
       update: function(path, partial) {
         var parsed = _translateTenantPath(path);
         var resolved = _translateFs(partial);
+        // A config/settings doc may not exist until its FIRST save (e.g. loyalty,
+        // gift cards, subscription, show-light on a tenant that never touched
+        // them — or a freshly cloned demo). Firestore update() rejects a missing
+        // doc ('not-found' / "No document to update"), which surfaced as
+        // "Failed to save" across the admin. Upsert (create-or-merge) ONLY in
+        // that case; strict update() semantics are preserved for every doc that
+        // already exists and for any other error. Central fix → no per-wrapper
+        // whack-a-mole (the termsConfig/walletConfig wrappers stay correct too).
         if (parsed.fieldPath) {
           var prefixed = {};
           for (var k in resolved) {
@@ -539,9 +557,18 @@ var MastDB = (function() {
               prefixed[parsed.fieldPath + '.' + k] = resolved[k];
             }
           }
-          return _docRef(parsed).update(prefixed);
+          return _docRef(parsed).update(prefixed).catch(function(err) {
+            if (!_isMissingDocErr(err)) throw err;
+            // Create the doc, then apply the field-scoped update.
+            return _docRef(parsed).set({}, { merge: true }).then(function() {
+              return _docRef(parsed).update(prefixed);
+            });
+          });
         }
-        return _docRef(parsed).update(resolved);
+        return _docRef(parsed).update(resolved).catch(function(err) {
+          if (!_isMissingDocErr(err)) throw err;
+          return _docRef(parsed).set(resolved, { merge: true });
+        });
       },
       push: function(path, value) {
         var parsed = _translateTenantPath(path);
