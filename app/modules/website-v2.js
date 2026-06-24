@@ -530,17 +530,6 @@
     { key: 'dark', label: 'Dark', desc: 'For light backgrounds', bg: 'light' },
     { key: 'transparent', label: 'Transparent', desc: 'No background', bg: 'check' }
   ];
-  // Options for the Hero "Brand Logo Image" picker — ONLY variants that actually
-  // have an image uploaded, so an empty slot can't be chosen. Read at render time.
-  function brandLogoVariantOptions() {
-    var logo = V2.logo || {};
-    var variants = logo.variants || {};
-    return LOGO_TILES.filter(function (t) {
-      return t.key === 'primary'
-        ? !!((logo.primary && logo.primary.url) || V2.legacyLogoUrl)
-        : !!(variants[t.key] && variants[t.key].url);
-    }).map(function (t) { return { v: t.key, l: t.label }; });
-  }
   function logoVoiceSection() {
     var b = V2.brand || {};
     var logo = V2.logo || {};
@@ -3079,7 +3068,7 @@
       { id: 'headlineSize', label: 'Headline Size', type: 'select', options: [{ v: 'small', l: 'Small' }, { v: 'medium', l: 'Medium (Default)' }, { v: 'large', l: 'Large' }, { v: 'xl', l: 'Extra Large' }] },
       { id: 'textAlign', label: 'Text Position', type: 'select', options: [{ v: 'left', l: 'Left' }, { v: 'center', l: 'Center (Default)' }, { v: 'right', l: 'Right' }] },
       { id: 'showBrandLogo', label: 'Show Brand Logo', type: 'toggle' },
-      { id: 'brandLogoVariant', label: 'Brand Logo Image', type: 'select', options: brandLogoVariantOptions }
+      { id: 'brandLogoVariant', label: 'Brand Logo Image', type: 'select', options: [{ v: 'primary', l: 'Primary' }, { v: 'light', l: 'Light' }, { v: 'dark', l: 'Dark' }, { v: 'transparent', l: 'Transparent' }] }
     ]},
     { key: 'gallery', name: 'Products / Gallery', fields: [
       { id: 'heading', label: 'Heading', type: 'text' },
