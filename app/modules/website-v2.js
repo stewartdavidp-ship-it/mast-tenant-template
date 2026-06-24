@@ -530,6 +530,17 @@
     { key: 'dark', label: 'Dark', desc: 'For light backgrounds', bg: 'light' },
     { key: 'transparent', label: 'Transparent', desc: 'No background', bg: 'check' }
   ];
+  // Options for the Hero "Brand Logo Image" picker — ONLY variants that actually
+  // have an image uploaded, so an empty slot can't be chosen. Read at render time.
+  function brandLogoVariantOptions() {
+    var logo = V2.logo || {};
+    var variants = logo.variants || {};
+    return LOGO_TILES.filter(function (t) {
+      return t.key === 'primary'
+        ? !!((logo.primary && logo.primary.url) || V2.legacyLogoUrl)
+        : !!(variants[t.key] && variants[t.key].url);
+    }).map(function (t) { return { v: t.key, l: t.label }; });
+  }
   function logoVoiceSection() {
     var b = V2.brand || {};
     var logo = V2.logo || {};
@@ -869,7 +880,7 @@
     var ctl;
     if (f.type === 'textarea') ctl = '<textarea class="form-input" rows="4" style="width:100%;resize:vertical;" oninput="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'textarea\',this.value)">' + esc(String(val)) + '</textarea>';
     else if (f.type === 'number') ctl = '<input class="form-input" type="number" style="width:100%;" value="' + esc(String(val)) + '" oninput="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'number\',this.value)">';
-    else if (f.type === 'select') ctl = '<select class="form-input" style="width:100%;" onchange="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'select\',this.value)">' + (f.options || []).map(function (o) { var ov = o.v != null ? o.v : o.value, ol = o.l != null ? o.l : o.label; return '<option value="' + esc(ov) + '"' + (String(val) === String(ov) ? ' selected' : '') + '>' + esc(ol) + '</option>'; }).join('') + '</select>';
+    else if (f.type === 'select') ctl = '<select class="form-input" style="width:100%;" onchange="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'select\',this.value)">' + ((typeof f.options === 'function' ? f.options() : f.options) || []).map(function (o) { var ov = o.v != null ? o.v : o.value, ol = o.l != null ? o.l : o.label; return '<option value="' + esc(ov) + '"' + (String(val) === String(ov) ? ' selected' : '') + '>' + esc(ol) + '</option>'; }).join('') + '</select>';
     else if (f.type === 'toggle') ctl = '<label class="toggle-switch"><input type="checkbox"' + (val ? ' checked' : '') + ' onchange="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'toggle\',this.checked)"><span class="toggle-slider"></span></label>';
     else ctl = '<input class="form-input" type="text" style="width:100%;" value="' + esc(String(val)) + '" oninput="WebsiteV2.contentInput(\'' + sid + '\',\'' + fid + '\',\'text\',this.value)">';
     return '<div class="form-group"><label class="form-label">' + esc(f.label) + '</label>' + ctl + '</div>';
@@ -3066,7 +3077,9 @@
       { id: 'ctaText', label: 'Button Text', type: 'text' },
       { id: 'ctaUrl', label: 'Button URL', type: 'text' },
       { id: 'headlineSize', label: 'Headline Size', type: 'select', options: [{ v: 'small', l: 'Small' }, { v: 'medium', l: 'Medium (Default)' }, { v: 'large', l: 'Large' }, { v: 'xl', l: 'Extra Large' }] },
-      { id: 'textAlign', label: 'Text Position', type: 'select', options: [{ v: 'left', l: 'Left' }, { v: 'center', l: 'Center (Default)' }, { v: 'right', l: 'Right' }] }
+      { id: 'textAlign', label: 'Text Position', type: 'select', options: [{ v: 'left', l: 'Left' }, { v: 'center', l: 'Center (Default)' }, { v: 'right', l: 'Right' }] },
+      { id: 'showBrandLogo', label: 'Show Brand Logo', type: 'toggle' },
+      { id: 'brandLogoVariant', label: 'Brand Logo Image', type: 'select', options: brandLogoVariantOptions }
     ]},
     { key: 'gallery', name: 'Products / Gallery', fields: [
       { id: 'heading', label: 'Heading', type: 'text' },

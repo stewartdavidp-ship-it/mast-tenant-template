@@ -493,29 +493,50 @@
     var heroLogoEl = document.getElementById('heroLogo');
     if (!heroLogoEl) return; // Not on homepage
 
-    // Try brand logo system for hero placement first, then fall back to canonical primary.
-    // Phase 4: legacy public/config/nav.logoUrl fallback removed.
-    var heroUrl = (brandLogo && brandLogo.hero && brandLogo.hero.url) || null;
-    var heroMaxHeight = (brandLogo && brandLogo.hero && brandLogo.hero.maxHeight) || null;
-    var primaryUrl = (brandLogo && brandLogo.primary && brandLogo.primary.url) || null;
+    function hide() {
+      heroLogoEl.style.display = 'none';
+      ['heroLogoSplit', 'heroLogoMinimal'].forEach(function(id) {
+        var el = document.getElementById(id); if (el) el.style.display = 'none';
+      });
+    }
+    function show(rawLogo, maxH) {
+      if (!rawLogo) { hide(); return; }
+      var basePath = getBasePath();
+      var logoUrl = (rawLogo.indexOf('https://') === 0 || rawLogo.indexOf('/') === 0 || rawLogo.indexOf('../') === 0)
+        ? rawLogo : (basePath + 'favicon.svg');
+      var brandName = (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'My Shop';
+      var heightStyle = maxH ? ' style="max-height:' + maxH + 'px"' : '';
+      var logoHtml = '<img src="' + esc(logoUrl) + '" alt="' + esc(brandName) + '"' + heightStyle + '>';
+      heroLogoEl.innerHTML = logoHtml;
+      heroLogoEl.style.display = '';
+      ['heroLogoSplit', 'heroLogoMinimal'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (el) { el.innerHTML = logoHtml; el.style.display = ''; }
+      });
+    }
+    function variantUrl(key) {
+      if (!brandLogo) return null;
+      if (key === 'primary') return brandLogo.primary && brandLogo.primary.url;
+      return brandLogo.variants && brandLogo.variants[key] && brandLogo.variants[key].url;
+    }
 
-    var rawLogo = heroUrl || primaryUrl || '';
-    if (!rawLogo) return; // No logo configured
-
-    var basePath = getBasePath();
-    var logoUrl = (rawLogo.indexOf('https://') === 0 || rawLogo.indexOf('/') === 0 || rawLogo.indexOf('../') === 0)
-      ? rawLogo : (basePath + 'favicon.svg');
-    var brandName = (window.TENANT_BRAND && window.TENANT_BRAND.name) || 'My Shop';
-
-    var heightStyle = heroMaxHeight ? ' style="max-height:' + heroMaxHeight + 'px"' : '';
-    var logoHtml = '<img src="' + esc(logoUrl) + '" alt="' + esc(brandName) + '"' + heightStyle + '>';
-    heroLogoEl.innerHTML = logoHtml;
-    heroLogoEl.style.display = '';
-
-    // Also populate variant-specific hero logos (split-image, minimal-text)
-    ['heroLogoSplit', 'heroLogoMinimal'].forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) { el.innerHTML = logoHtml; el.style.display = ''; }
+    // The Hero "Show Brand Logo" toggle + variant choice (website builder →
+    // Hero → Content) drive the hero brand logo, INDEPENDENT of the background
+    // photo/video. Unset → legacy behavior so existing tenants don't change.
+    // webPresence/config/sections is the same publicly-readable source
+    // storefront-content.js reads.
+    Promise.resolve(MastDB.get('webPresence/config/sections/hero')).catch(function() { return null; }).then(function(hero) {
+      hero = hero || {};
+      if (hero.showBrandLogo === false) { hide(); return; }
+      if (hero.showBrandLogo === true) {
+        show(variantUrl(hero.brandLogoVariant || 'primary') || variantUrl('primary') || '', null);
+        return;
+      }
+      // Unset (existing tenants): legacy hero placement, else canonical primary.
+      var heroUrl = (brandLogo && brandLogo.hero && brandLogo.hero.url) || null;
+      var heroMaxHeight = (brandLogo && brandLogo.hero && brandLogo.hero.maxHeight) || null;
+      var primaryUrl = (brandLogo && brandLogo.primary && brandLogo.primary.url) || null;
+      show(heroUrl || primaryUrl || '', heroMaxHeight);
     });
   }
 
