@@ -153,6 +153,12 @@ window.TENANT_READY = new Promise(function(resolve, reject) {
       etsyUrl: publicConfig.etsyUrl || ''
     };
 
+    // Frictionless public-demo entry: expose the demo flag so the admin shell
+    // (app/index.html) can auto-login a visitor via the demoAutoLogin CF instead
+    // of showing the login wall. Only ever true for flags.demo tenants (the
+    // platform stamps publicConfig.demoMode); a real tenant never sees this.
+    window.MAST_DEMO_MODE = !!publicConfig.demoMode;
+
     // Per-tenant Google Maps API key for checkout address autocomplete (client-side,
     // referrer-restricted). SECURITY (I-01, 2026-06-01 audit): no hardcoded platform-key
     // fallback — that literal shipped in the PUBLIC repo + every storefront bundle, a

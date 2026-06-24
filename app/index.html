@@ -16808,6 +16808,43 @@ function completeBootstrapTokenSignInIfPresent() {
   return true;
 }
 
+// Frictionless public-demo auto-login. When this tenant is a flags.demo demo
+// (publicConfig.demoMode → window.MAST_DEMO_MODE), skip the login wall: sign the
+// visitor in via the demoAutoLogin CF, which mints a shared demo-admin custom
+// token ONLY for a flags.demo tenant (server-side isDemo gate, fail-closed — a
+// real tenant gets 403). FAIL-OPEN here too: any error falls back to the normal
+// login screen, so a real tenant is never affected and a demo outage just shows
+// the usual login. Called from the onAuthStateChanged(!user) branch (once,
+// guarded) — by then TENANT_READY/publicConfig has resolved, so MAST_DEMO_MODE
+// and TENANT_ID are populated. Mirrors completeBootstrapTokenSignInIfPresent.
+function startDemoAutoLoginIfApplicable() {
+  if (typeof auth === 'undefined' || !auth) return false;
+  if (!window.MAST_DEMO_MODE || !window.TENANT_ID) return false;
+  if (window.__demoAutoLoginTried) return false; // one shot per page load
+  window.__demoAutoLoginTried = true;
+  window.__demoAutoLoginPending = true;
+  window.__lastAuthMethod = 'demo-auto-login';
+  var base = (typeof TENANT_FIREBASE_CONFIG !== 'undefined' && TENANT_FIREBASE_CONFIG && TENANT_FIREBASE_CONFIG.cloudFunctionsBase)
+    || 'https://us-central1-mast-platform-prod.cloudfunctions.net';
+  fetch(base + '/demoAutoLogin?tenantId=' + encodeURIComponent(window.TENANT_ID), { method: 'POST' })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (!d || !d.token) throw new Error('demoAutoLogin returned no token');
+      return auth.signInWithCustomToken(d.token);
+    })
+    .then(function() {
+      // Success: onAuthStateChanged funnel takes over (RBAC, app load) unchanged.
+      window.__demoAutoLoginPending = false;
+    })
+    .catch(function(err) {
+      console.warn('Demo auto-login failed; showing login:', err && err.message);
+      window.__demoAutoLoginPending = false;
+      var a = document.getElementById('authScreen'); if (a) a.style.display = '';
+      var l = document.getElementById('loadingScreen'); if (l) l.style.display = 'none';
+    });
+  return true;
+}
+
 // ── Same-origin password reset / first-time setup (companion to
 // completeEmailLinkSignInIfPresent). If the URL carries
 // ?mode=resetPassword&oobCode=…, verify the code and show a "Set your password"
@@ -17207,6 +17244,16 @@ auth.onAuthStateChanged(async function(user) {
     // before signInWithCustomToken resolves. The success/failure paths clear
     // __bootstrapTokenPending and onAuthStateChanged fires again.
     if (window.__bootstrapTokenPending) {
+      authScreen.style.display = 'none';
+      loadingScreen.style.display = '';
+      deniedScreen.style.display = 'none';
+      return;
+    }
+    // Frictionless demo: a flags.demo tenant skips the login wall. Kick off the
+    // demoAutoLogin custom-token sign-in (once) and show the loading screen while
+    // it's in flight. No-op (returns false) for every non-demo tenant, so the
+    // normal login flow below is unchanged for real tenants.
+    if (window.__demoAutoLoginPending || startDemoAutoLoginIfApplicable()) {
       authScreen.style.display = 'none';
       loadingScreen.style.display = '';
       deniedScreen.style.display = 'none';
