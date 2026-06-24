@@ -12526,7 +12526,7 @@ MastDB.lpe = {
   laborProfile: {
     PATH: 'admin/lpe/laborProfile',
     get: function() { return MastDB.get('admin/lpe/laborProfile'); },
-    update: function(data) { return MastDB.update('admin/lpe/laborProfile', data); }
+    update: function(data) { return Promise.all(Object.keys(data).map(function(k) { return MastDB.set('admin/lpe/laborProfile/' + k, data[k]); })); }
   }
 };
 
@@ -12890,7 +12890,7 @@ MastDB.subscription = {
   PATH: 'admin/subscription',
   get: function() { return MastDB.get('admin/subscription'); },
   set: function(data) { return MastDB.set('admin/subscription', data); },
-  update: function(data) { return MastDB.update('admin/subscription', data); }
+  update: function(data) { return Promise.all(Object.keys(data).map(function(k) { return MastDB.set('admin/subscription/' + k, data[k]); })); }
 };
 
 MastDB.tokenWallet = {
@@ -12911,20 +12911,20 @@ MastDB.showLight = {
     PATH: 'showLight/profile',
     get: function() { return MastDB.get('showLight/profile'); },
     set: function(data) { return MastDB.set('showLight/profile', data); },
-    update: function(data) { return MastDB.update('showLight/profile', data); }
+    update: function(data) { return Promise.all(Object.keys(data).map(function(k) { return MastDB.set('showLight/profile/' + k, data[k]); })); }
   },
   shows: {
     PATH: 'showLight/shows',
     get: function() { return MastDB.get('showLight/shows'); },
     set: function(data) { return MastDB.set('showLight/shows', data); },
-    update: function(data) { return MastDB.update('showLight/shows', data); },
+    update: function(data) { return Promise.all(Object.keys(data).map(function(k) { return MastDB.set('showLight/shows/' + k, data[k]); })); },
     newKey: function() { return MastDB.newKey('showLight/shows'); }
   },
   applications: {
     PATH: 'showLight/applications',
     get: function() { return MastDB.get('showLight/applications'); },
     set: function(data) { return MastDB.set('showLight/applications', data); },
-    update: function(data) { return MastDB.update('showLight/applications', data); },
+    update: function(data) { return Promise.all(Object.keys(data).map(function(k) { return MastDB.set('showLight/applications/' + k, data[k]); })); },
     newKey: function() { return MastDB.newKey('showLight/applications'); }
   }
 };
