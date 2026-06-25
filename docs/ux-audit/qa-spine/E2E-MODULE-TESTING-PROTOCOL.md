@@ -96,6 +96,22 @@ engines (most already have deterministic unit tests — confirm + fill gaps).
 
 ## Module ledger (control maintains)
 
-| Module | Workflow | Status | Verdict | Fix PRs | Date |
+| Module | Workflow | Status | Verdict | Fix PRs / chips | Date |
 |--------|----------|--------|---------|---------|------|
-| _(populated as the program runs)_ | | | | | |
+| maker (products/materials/recipes) | W1 | done | COMPLETE-WITH-GAPS | chips task_24c1f5b8 (CLOSE — not repro), task_a0b4bad3 | 2026-06-25 |
+| orders / cart / fulfillment | W2 | done | COMPLETE-WITH-GAPS | chip task_c4c14e7c | 2026-06-25 |
+| sales (POS) | W3 | done | COMPLETE (no bugs) | — | 2026-06-25 |
+| shared/*.js engines | — | done | healthy | PR #902 | 2026-06-25 |
+| procurement / reorder / lots | W4 | done | COMPLETE-WITH-GAPS | — (owed receiving E2E now PASSES) | 2026-06-25 |
+| maker reprice / price-locks | W5 | done | COMPLETE-WITH-GAPS | (task_24c1f5b8 → CLOSE) | 2026-06-25 |
+| finance / accounting | W6 | done | COMPLETE-WITH-GAPS | chip task_921f2a44 (oracle parity) | 2026-06-25 |
+| refund / return path | W7 | done | COMPLETE-WITH-GAPS | **PR #904** (HIGH), chip task_4255b64d (HIGH) | 2026-06-25 |
+| team (payroll/labor) | W8 | done | COMPLETE-WITH-GAPS | — | 2026-06-25 |
+| customers / wholesale / CS / contacts | W9 | done | COMPLETE-WITH-GAPS | — (F9 gap documented) | 2026-06-25 |
+| classes / booking | W10 | done | COMPLETE-WITH-GAPS | **PR #906** (HIGH); booking-rev-off-books finding | 2026-06-25 |
+| admin/config cluster (21 modules) | sweep A | done | COMPLETE | — | 2026-06-25 |
+| operations cluster (trips/studio/expenses/...) | sweep B | done | COMPLETE-WITH-GAPS | chips task_ae2caa40, task_e9b98bc0 | 2026-06-25 |
+| website / marketing / storefront | sweep C | done | COMPLETE-WITH-GAPS | **PR #907** | 2026-06-25 |
+
+### Program outcome (2026-06-25)
+Full module surface covered across MCP / UI / E2E. **In-repo bugs found + fixed (merged):** #904 refund-revenue netting (HIGH), #906 book.js blank edit-form (HIGH), #907 applyRoute null-guard; plus #902 engine test coverage. **Cross-repo bugs chipped (mast-mcp-server / mast-architecture):** task_a0b4bad3, task_c4c14e7c, task_4255b64d (HIGH), task_921f2a44, task_ae2caa40, task_e9b98bc0; task_24c1f5b8 → recommend CLOSE (not reproducible). **Architectural findings:** (1) class/booking revenue (`pricePaidCents`) is off the finance engine AND agent-invisible (F11+); (2) customer LTV/wholesale-tier/segments agent-invisible via MCP (F9); (3) several MCP read actions gated behind the mutation handshake. **sgtest15 residue needing an operator QA-reset:** +80 units Green Rod & +$107 AP from immutable received POs (W4); 2 future-dated time entries + 1 PTO policy (W8); archived test class + cancelled enrollments (W10); assorted archived test materials. No writes ever touched golden-auric.
