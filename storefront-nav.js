@@ -136,6 +136,16 @@
     var nav = document.getElementById('mainNav');
     if (nav && nav.parentNode) nav.parentNode.insertBefore(banner, nav);
     else if (document.body) document.body.insertBefore(banner, document.body.firstChild);
+    // The nav is position:fixed (top:0), so without this it would OVERLAP the
+    // banner and the menu items would sit on top of it. Pin the banner above the
+    // nav (CSS) and offset the fixed nav + page content down by the banner's
+    // measured height (it wraps to 2 lines on narrow screens, so don't hardcode).
+    document.body.classList.add('has-demo-banner');
+    var syncBannerHeight = function () {
+      document.documentElement.style.setProperty('--demo-banner-h', banner.offsetHeight + 'px');
+    };
+    syncBannerHeight();
+    window.addEventListener('resize', syncBannerHeight);
     // Live countdown — update the single span, never re-paint (keeps the button).
     setInterval(function () {
       var el = banner.querySelector('.demo-banner-countdown');
