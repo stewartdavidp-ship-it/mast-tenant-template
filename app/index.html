@@ -11980,7 +11980,7 @@ async function loadTenantConfig(tenantId) {
   try {
     TENANT_CONFIG = (await MastDB.platform.get('mast-platform/tenants/' + tenantId + '/config')) || {};
   } catch (err) {
-    console.warn('Tenant config load failed, using defaults:', err.message);
+    if (!/permission|insufficient/i.test(String(err && err.message))) console.warn('Tenant config load failed, using defaults:', err.message); // platform-registry read is platformAdmin-only — expected to fail for tenant admins; publicConfig below covers it
     TENANT_CONFIG = {};
   }
   // Read tenant registry fields — try publicConfig first (world-readable), fall back to full registry
@@ -28239,7 +28239,7 @@ async function loadConfigChecklist() {
       if (platChecklist) tenantConfigChecklist = platChecklist;
     }
   } catch (err) {
-    console.warn('Failed to load configChecklist:', err.message);
+    if (!/permission|insufficient/i.test(String(err && err.message))) console.warn('Failed to load configChecklist:', err.message); // platform-registry fallback is platformAdmin-only — expected to fail for tenant admins
     tenantConfigChecklist = {};
   }
   return tenantConfigChecklist;
