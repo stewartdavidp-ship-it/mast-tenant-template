@@ -115,6 +115,19 @@ function compile(fnText, name, deps) {
 
 // ── The REAL pure helpers + the F14 UI withhold gate ──────────────────────────
 const _orderRevenueCents = extractBlock(FINANCE_SRC, '_orderRevenueCents');
+// W7 refund-reversal: the revenue/P&L aggregators now route every order through
+// _orderNetRevenueCents (reverses cancelled/returned/refunded, nets partials by
+// refundedCents). Extract it WHOLE with its free deps injected so the real body
+// runs against our fakes — keeping this canary byte-faithful to shipped finance.
+const REVENUE_REVERSING_STATUSES = (function () {
+  const m = FINANCE_SRC.match(/var REVENUE_REVERSING_STATUSES = (\{[\s\S]*?\n\});/);
+  assert.ok(m, 'REVENUE_REVERSING_STATUSES not found in finance.js');
+  // eslint-disable-next-line no-eval
+  return eval('(' + m[1] + ')');
+})();
+const _orderNetRevenueCents = compile(
+  extractFnText(FINANCE_SRC, '_orderNetRevenueCents'), '_orderNetRevenueCents',
+  { _orderRevenueCents, REVENUE_REVERSING_STATUSES });
 const _salesCents = extractInline(FINANCE_SRC, '_salesCents');
 const _salesRowCounts = extractInline(FINANCE_SRC, '_salesRowCounts');
 const isTestSource = extractBlock(FINANCE_SRC, 'isTestSource');
@@ -185,10 +198,10 @@ const ID = (d) => d; // isoStart/isoEnd stub — identity; the mock's range bran
 // ── The REAL entangled async aggregators, injected with our fakes ─────────────
 const _loadRevenueAggregate = compile(
   extractFnText(FINANCE_SRC, '_loadRevenueAggregate'), '_loadRevenueAggregate',
-  { MastDB, isoStart: ID, isoEnd: ID, _orderRevenueCents, _includeTestData: false, _chan, isTestOrder, _salesRowCounts, _salesCents });
+  { MastDB, isoStart: ID, isoEnd: ID, _orderRevenueCents, _orderNetRevenueCents, _includeTestData: false, _chan, isTestOrder, _salesRowCounts, _salesCents });
 const computePnlLocal = compile(
   extractFnText(FINANCE_SRC, 'computePnlLocal'), 'computePnlLocal',
-  { MastDB, isoStart: ID, isoEnd: ID, _orderRevenueCents, _chan, isTestOrder, _includeTestData: false, _salesRowCounts, _salesCents });
+  { MastDB, isoStart: ID, isoEnd: ID, _orderRevenueCents, _orderNetRevenueCents, _chan, isTestOrder, _includeTestData: false, _salesRowCounts, _salesCents });
 const _arAgingSnapshotCore = compile(
   extractFnText(FINANCE_SRC, '_arAgingSnapshotCore'), '_arAgingSnapshotCore',
   { MastDB, _orderRevenueCents, isTestOrder, _includeTestData: false });

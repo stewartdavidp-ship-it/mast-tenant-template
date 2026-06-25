@@ -88,6 +88,39 @@ function _orderRevenueCents(o) {
   return 0;
 }
 
+// ── Revenue recognition: terminal statuses that REVERSE revenue ───────────────
+// Revenue must reverse for an order that is cancelled or returned/refunded —
+// otherwise the admin finance view (and P&L) keeps counting the original
+// positive sale forever (W7 return/refund QA bug: a fully-refunded order kept
+// contributing its full +$120 to finance_get_revenue). `cancelled` was already
+// excluded; the refund/return terminal states were not. These statuses mirror
+// the order state machine's revenue-reversing terminal states.
+var REVENUE_REVERSING_STATUSES = {
+  cancelled: true,
+  refunded: true,
+  return_received: true,
+  returned: true
+};
+
+// Net revenue for one order, in integer cents, AFTER refund reversal.
+//   - cancelled / fully-refunded / returned → 0 (revenue fully reverses).
+//   - a PARTIAL refund (order still 'placed'/'fulfilled' but carrying a
+//     `refundedCents` amount written back by the RMA `transitionRma` CF) nets
+//     down by the refunded amount rather than zeroing the whole sale.
+// Use this anywhere revenue is *recognized* (revenue summary, P&L, channel
+// rollups). Do NOT use it where the raw order value is wanted regardless of
+// refund state (e.g. a customer-activity list that should still show the order).
+function _orderNetRevenueCents(o) {
+  if (!o) return 0;
+  if (REVENUE_REVERSING_STATUSES[o.status]) return 0;
+  var cents = _orderRevenueCents(o);
+  // Partial refund on an otherwise-live order: subtract the refunded amount.
+  if (typeof o.refundedCents === 'number' && o.refundedCents > 0) {
+    cents -= o.refundedCents;
+  }
+  return cents > 0 ? cents : 0;
+}
+
 function _finResolvePeriod(p) {
   if (!p) p = window._finPeriod || { mode: 'mtd' };
   var s, e2;
@@ -586,8 +619,9 @@ async function _loadRevenueAggregate(start, end) {
   var byChannel = {};
   var txnCount = 0;
   orders.forEach(function(o) {
-    if (o.status === 'cancelled') return;
-    var cents = _orderRevenueCents(o);
+    // Revenue recognition: cancelled/returned/fully-refunded reverse to 0;
+    // partial refunds net down by refundedCents (see _orderNetRevenueCents).
+    var cents = _orderNetRevenueCents(o);
     if (cents <= 0) return;
     if (isTestOrder(o) && !_includeTestData) return;
     var ch = _chan(o.source || 'direct');
@@ -649,8 +683,8 @@ async function loadRevenue() {
       return 'Direct';
     }
     orders.forEach(function(o) {
-      if (o.status === 'cancelled') return;
-      var cents = _orderRevenueCents(o);
+      // Revenue recognition: reverse cancelled/returned/refunded; net partials.
+      var cents = _orderNetRevenueCents(o);
       if (cents <= 0) return;
       var ch = _chan(o.source || 'direct');
       var isTest = isTestOrder(o);
@@ -1830,8 +1864,8 @@ async function computePnlLocal(startDate, endDate) {
   var testRevenue = 0;
   var testTxnCount = 0;
   orders.forEach(function(o) {
-    if (o.status === 'cancelled') return;
-    var c = _orderRevenueCents(o); if (c <= 0) return;
+    // Revenue recognition: reverse cancelled/returned/refunded; net partials.
+    var c = _orderNetRevenueCents(o); if (c <= 0) return;
     var ch = _chan(o.source || 'direct');
     if (isTestOrder(o) && !_includeTestData) {
       testRevenue += c;
@@ -1872,10 +1906,11 @@ async function computePnlLocal(startDate, endDate) {
   });
 
   // Per-order line-item COGS attribution. Only count orders that contributed
-  // to `revenue` above (cancelled / test-excluded already filtered).
+  // to `revenue` above (cancelled / returned / refunded / test-excluded already
+  // filtered — a fully-reversed sale's COGS reverses with it; a partial refund
+  // keeps the goods so its COGS stays).
   orders.forEach(function(o) {
-    if (o.status === 'cancelled') return;
-    var c = _orderRevenueCents(o); if (c <= 0) return;
+    var c = _orderNetRevenueCents(o); if (c <= 0) return;
     if (isTestOrder(o) && !_includeTestData) return;
     var items = o.items || o.lineItems || [];
     if (!items.length) return;
@@ -5573,8 +5608,8 @@ async function computeMonthlyBreakdown(startDate, endDate) {
   function gm(iso) { return iso ? iso.slice(0,7) : null; }
   function em(ym) { if (!monthData[ym]) monthData[ym] = { revenue:0, cogs:0, opex:0 }; }
   Object.values(ordersRaw||{}).forEach(function(o) {
-    if (o.status==='cancelled') return;
-    var c = Math.round((o.total||0)*100); if (c<=0) return;
+    // Revenue recognition: reverse cancelled/returned/refunded; net partials.
+    var c = _orderNetRevenueCents(o); if (c<=0) return;
     var ym = gm(o.placedAt); if (!ym) return; em(ym);
     monthData[ym].revenue += c;
   });
@@ -6126,13 +6161,14 @@ function portfolioComputeTrend(ordersRaw, customersRaw, ticketsRaw, rmaRaw, c2s,
   Object.keys(ordersRaw || {}).forEach(function(oid) {
     var o = ordersRaw[oid];
     if (!o || !o.createdAt) return;
-    if (o.status === 'cancelled' || o.status === 'refunded') return;
     var mk = String(o.createdAt).slice(0, 7);
     var idx = labelIdx[mk];
     if (idx === undefined) return;
     var cid = o.customerId || o.linkedCustomerId || null;
     if (!cid) return;
-    var amt = _orderRevenueCents(o);
+    // Revenue recognition: reverse cancelled/returned/refunded; net partials.
+    var amt = _orderNetRevenueCents(o);
+    if (amt <= 0) return;
     revByCust[idx][cid] = (revByCust[idx][cid] || 0) + amt;
     activeSet[idx][cid] = true;
   });
@@ -8444,8 +8480,9 @@ async function _loadRevenueRows(start, end) {
   ]);
   var rows = [], totalCents = 0, byChannel = {}, testCount = 0, testCents = 0;
   Object.entries(ordersRaw || {}).forEach(function(kv) {
-    var o = kv[1]; if (!o || o.status === 'cancelled') return;
-    var cents = _orderRevenueCents(o); if (cents <= 0) return;
+    var o = kv[1]; if (!o) return;
+    // Revenue recognition: reverse cancelled/returned/refunded; net partials.
+    var cents = _orderNetRevenueCents(o); if (cents <= 0) return;
     if (isTestOrder(o) && !_includeTestData) { testCount++; testCents += cents; return; }
     var ch = _chan(o.source || 'direct');
     rows.push({ id: kv[0], kind: 'order', date: o.placedAt || o.createdAt || '', label: o.orderNumber || kv[0], party: o.customerName || o.customerEmail || '', channel: ch, cents: cents });

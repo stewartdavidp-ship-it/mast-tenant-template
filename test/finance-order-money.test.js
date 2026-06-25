@@ -34,6 +34,83 @@ function loadOrderRevenueCents() {
 
 const _orderRevenueCents = loadOrderRevenueCents();
 
+// W7 return/refund regression: revenue must REVERSE for cancelled / returned /
+// fully-refunded orders, and NET DOWN by refundedCents for a partial refund.
+// Before the fix, only `cancelled` was excluded, so a fully-refunded order kept
+// contributing its full positive total to finance_get_revenue / P&L forever.
+// We extract the REAL helper + constant from the shipped finance.js so this test
+// fails if either regresses.
+function loadOrderNetRevenueCents() {
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'app', 'modules', 'finance.js'),
+    'utf8'
+  );
+  const fnSrc = src.match(/function _orderRevenueCents\(o\) \{[\s\S]*?\n\}/);
+  assert.ok(fnSrc, '_orderRevenueCents not found in finance.js');
+  const constSrc = src.match(/var REVENUE_REVERSING_STATUSES = \{[\s\S]*?\n\};/);
+  assert.ok(constSrc, 'REVENUE_REVERSING_STATUSES not found in finance.js');
+  const netSrc = src.match(/function _orderNetRevenueCents\(o\) \{[\s\S]*?\n\}/);
+  assert.ok(netSrc, '_orderNetRevenueCents not found in finance.js');
+  // eslint-disable-next-line no-eval
+  return eval(
+    '(function(){' +
+    fnSrc[0] + '\n' +
+    constSrc[0] + '\n' +
+    netSrc[0] + '\n' +
+    'return _orderNetRevenueCents;})()'
+  );
+}
+
+const _orderNetRevenueCents = loadOrderNetRevenueCents();
+
+test('live order recognizes full revenue (no refund)', () => {
+  assert.strictEqual(_orderNetRevenueCents({ totalCents: 12000, status: 'fulfilled' }), 12000);
+});
+
+test('cancelled order reverses revenue to 0', () => {
+  assert.strictEqual(_orderNetRevenueCents({ totalCents: 12000, status: 'cancelled' }), 0);
+});
+
+test('fully-refunded order reverses revenue to 0 (the W7 bug)', () => {
+  // Confirmed live on sgtest15: status=refunded had been counting +$120.
+  assert.strictEqual(_orderNetRevenueCents({ totalCents: 12000, status: 'refunded' }), 0);
+});
+
+test('returned / return_received orders reverse revenue to 0', () => {
+  assert.strictEqual(_orderNetRevenueCents({ totalCents: 12000, status: 'returned' }), 0);
+  assert.strictEqual(_orderNetRevenueCents({ totalCents: 12000, status: 'return_received' }), 0);
+});
+
+test('partial refund nets down by refundedCents, not zeroed', () => {
+  // $120 order, $30 refunded, order still live → recognizes $90.
+  assert.strictEqual(
+    _orderNetRevenueCents({ totalCents: 12000, refundedCents: 3000, status: 'fulfilled' }),
+    9000
+  );
+});
+
+test('partial refund >= total nets to 0 (never negative)', () => {
+  assert.strictEqual(
+    _orderNetRevenueCents({ totalCents: 12000, refundedCents: 15000, status: 'fulfilled' }),
+    0
+  );
+});
+
+test('refundedCents on an already-reversed status still yields 0', () => {
+  assert.strictEqual(
+    _orderNetRevenueCents({ totalCents: 12000, refundedCents: 3000, status: 'refunded' }),
+    0
+  );
+});
+
+test('net helper inherits dollars/cents normalization for partials', () => {
+  // legacy dollars total ($119.53) minus a $19.53 refund → $100.00.
+  assert.strictEqual(
+    _orderNetRevenueCents({ total: 119.53, refundedCents: 1953, status: 'fulfilled' }),
+    10000
+  );
+});
+
 test('SGTE-0187 case: total AND totalCents both hold cents → not 100x', () => {
   // The order that drove the inflation. Both fields = 102000 cents = $1,020.00.
   const order = { total: 102000, totalCents: 102000 };
