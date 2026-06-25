@@ -127,8 +127,8 @@
     banner.innerHTML =
       '<span class="demo-banner-text">🧪 Demo store — resets in ' +
       '<strong class="demo-banner-countdown">' + esc(countdown()) + '</strong></span>' +
-      '<button class="demo-banner-cta" type="button" aria-label="Make this demo your real store">' +
-      'Make this my real store</button>';
+      '<button class="demo-banner-cta" type="button" aria-label="Start your own store">' +
+      'Start my own store</button>';
     var btn = banner.querySelector('.demo-banner-cta');
     if (btn) btn.addEventListener('click', function () {
       if (typeof window.demoUpgradeFlow === 'function') window.demoUpgradeFlow('storefront_banner');
