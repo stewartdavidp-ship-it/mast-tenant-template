@@ -18418,7 +18418,7 @@ function applyRoute(route) {
     renderPlaceholder(config.placeholder);
     document.getElementById('placeholderTab').style.display = '';
   } else if (config.tab) {
-    document.getElementById(config.tab).style.display = '';
+    var rt = document.getElementById(config.tab); if (rt) rt.style.display = '';
   }
 
   // Run setup (sub-view switching, etc.)
@@ -19386,7 +19386,7 @@ var MastAdmin = (function() {
 var MAST_BUILD_V = '20260319.3';
 
 // Module build version — bump this when deploying module changes to bust browser cache.
-var MAST_MODULES_V = '20260621-041500-pos0ride';
+var MAST_MODULES_V = '20260625-120000-rtguard';
 
 // Module manifest — maps moduleId to script path and owned routes.
 // Routes listed here will be lazy-loaded when first navigated to.
