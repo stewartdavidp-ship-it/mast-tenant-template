@@ -623,14 +623,6 @@ footer {
    it reads as a sandbox, distinct from the promo banner. Carries a live reset
    countdown and a CTA into the convert flow (W4). */
 .demo-banner {
-  /* Pinned to the very top, ABOVE the fixed nav (z-index:100), so it never
-     overlaps the menu. The nav + page content are offset down by its height
-     via --demo-banner-h (set in storefront-nav.js injectDemoBanner). */
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 101;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -645,10 +637,6 @@ footer {
   text-transform: uppercase;
   color: #F5C97A;
 }
-/* When the demo banner is present, push the fixed nav (and page content that
-   starts under it) below the banner so they no longer collide. */
-body.has-demo-banner nav { top: var(--demo-banner-h, 38px); }
-body.has-demo-banner { padding-top: var(--demo-banner-h, 38px); }
 .demo-banner-text { font-weight: 500; }
 .demo-banner-countdown { color: #FBBF24; font-variant-numeric: tabular-nums; }
 .demo-banner-cta {
