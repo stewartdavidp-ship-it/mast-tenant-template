@@ -99,8 +99,9 @@
     track('demo_cta_clicked');                       // every click, any outcome
     if (_inFlight) return;
 
-    var confirmMsg = 'We’ll spin up a fresh Mast store that’s yours to keep — your ' +
-      'demo edits can come with you. This sandbox stays as-is until it expires.';
+    var confirmMsg = 'We’ll spin up a fresh, empty Mast store that’s yours to keep — a ' +
+      'clean slate for your own products and photos. The demo’s sample content stays ' +
+      'here. This sandbox remains as-is until it expires.';
     var asked = (typeof window.mastConfirm === 'function')
       ? window.mastConfirm(confirmMsg, { title: 'Start my own store', confirmText: 'Create my store' })
       : Promise.resolve(true);   // no native-dialog fallback; proceed if helper missing
