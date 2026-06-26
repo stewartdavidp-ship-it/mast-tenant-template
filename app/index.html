@@ -29551,6 +29551,42 @@ function getInventoryTotals(inv) {
   };
 }
 
+// Canonical per-variant availability for a product, counting each real variant
+// once (preferring its v_-id stock key, falling back to the legacy combo-label
+// key, ignoring orphaned duplicate keys). Mirrors the backend
+// lib/variant-stock.js so the dashboard agrees with mast_products. Returns []
+// for simple (no-variant) products.
+function getCanonicalVariantAvailability(product, inv) {
+  var stock = (inv && inv.stock && typeof inv.stock === 'object') ? inv.stock : {};
+  var variantDefs = (product && Array.isArray(product.variants))
+    ? product.variants.filter(function(v) { return v && v.id; })
+    : [];
+  if (!variantDefs.length) return [];
+  var options = (product && Array.isArray(product.options)) ? product.options : [];
+  function avail(e) {
+    e = e || {};
+    return Math.max(0, (e.onHand || 0) - (e.committed || 0) - (e.held || 0) - (e.damaged || 0));
+  }
+  function legacyKey(v) {
+    if (!v.combo) return null;
+    var labels = options.map(function(o) { return o && (o.label || o.name); }).filter(Boolean);
+    if (!labels.length) return null;
+    var comboKeys = Object.keys(v.combo);
+    var vals = labels.map(function(l) {
+      if (v.combo[l] !== undefined) return v.combo[l];
+      var ci = comboKeys.find(function(k) { return k.toLowerCase() === String(l).toLowerCase(); });
+      return ci ? v.combo[ci] : '';
+    }).filter(function(x) { return x !== '' && x != null; });
+    if (vals.length !== labels.length) return null;
+    return vals.join('|');
+  }
+  return variantDefs.map(function(v) {
+    var key = (stock[v.id] && typeof stock[v.id] === 'object') ? v.id : legacyKey(v);
+    var entry = (key && stock[key] && typeof stock[key] === 'object') ? stock[key] : null;
+    return { id: v.id, available: avail(entry) };
+  });
+}
+
 function getProductVariantCombos(product) {
   if (!product || !product.options || !product.options.length) return { labels: [], combos: [] };
   var labels = [];
@@ -39698,14 +39734,25 @@ function renderDashCardLowInventory() {
 
       var totals = getInventoryTotals(inv);
       var threshold = inv.lowStockThreshold || 2;
-      if (totals.available <= threshold) {
+      // Variant-aware status: whole-product "out of stock" requires ALL variants
+      // at 0. When only some variants are unavailable the product is still
+      // sellable — flag it distinctly instead of mislabelling it out of stock.
+      var variantAvail = getCanonicalVariantAvailability(p, inv);
+      var hasVariants = variantAvail.length > 0;
+      var allOut = hasVariants && variantAvail.every(function(v) { return v.available <= 0; });
+      var someOut = hasVariants && variantAvail.some(function(v) { return v.available <= 0; });
+      var isOut = hasVariants ? allOut : (totals.available === 0);
+      // Surface low-stock products AND products with a stocked-out variant (even
+      // when the aggregate is above threshold — worth the maker's attention).
+      if (totals.available <= threshold || (someOut && !allOut)) {
         lowItems.push({
           pid: p.pid,
           name: p.name || p.pid,
           image: firstProductImage(p),
           available: totals.available,
           threshold: threshold,
-          isOut: totals.available === 0
+          isOut: isOut,
+          someVariantsOut: someOut && !allOut
         });
       }
     });
@@ -39726,7 +39773,9 @@ function renderDashCardLowInventory() {
 
       displayItems.forEach(function(item) {
         var stockClass = item.isOut ? 'out' : 'low';
-        var stockLabel = item.isOut ? 'Out of stock' : item.available + ' left';
+        var stockLabel = item.isOut
+          ? 'Out of stock'
+          : (item.someVariantsOut ? 'Some variants unavailable' : item.available + ' left');
         var thumbHtml = item.image
           ? '<img class="dash-inv-thumb" src="' + esc(item.image) + '" alt="">'
           : '<div class="dash-inv-thumb"></div>';
