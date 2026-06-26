@@ -2645,6 +2645,66 @@
     if (typeof window.renderProducts === 'function') window.renderProducts();
   }
 
+  // Shared "needs reprice" candidacy test, reconciled with get_drift so the
+  // Bulk-reprice surfaces can't give a false all-clear. ACTIVE products only.
+  // Flags a recipe-linked product when ANY of:
+  //   • cost-baseline drift ≥ threshold (recipe cost moved since last publish), OR
+  //   • live price drift ≥ threshold (product retail/wholesale price vs recipe
+  //     tier price — the same comparison get_drift reports), OR
+  //   • below unit cost — product priced under the recipe's totalCost (negative
+  //     margin), regardless of channel config or drift direction.
+  // `product` is the linked public product, or null/undefined when not loaded.
+  // Returns { applicable, flagged, reasons[], costDriftPct, priceDriftPct, belowCost }.
+  // applicable===false means the recipe was NOT evaluated (no linked product, or
+  // the product is not active) — callers must not count it toward an all-clear.
+  function repriceCandidacy(recipe, product, thresholdPct) {
+    var v = { applicable: false, flagged: false, reasons: [], costDriftPct: 0, priceDriftPct: 0, belowCost: false };
+    if (!recipe || recipe.status === 'archived' || !recipe.productId) return v;
+    if (!product || (product.status || 'active') !== 'active') return v; // active products only
+    v.applicable = true;
+    var threshold = typeof thresholdPct === 'number' ? thresholdPct : 15;
+
+    // (1) cost-baseline drift (recipe cost vs last published baseline)
+    var costDrift = typeof recipe.currentDriftPct === 'number' ? recipe.currentDriftPct : 0;
+    v.costDriftPct = costDrift;
+    if (recipe.driftBaseline && Math.abs(costDrift) >= threshold) v.reasons.push('cost-drift');
+
+    // (2) live price drift — product price vs recipe tier price (retail + wholesale)
+    var recipeRetailCents = Math.round((recipe.retailPrice || 0) * 100);
+    var productRetailCents = product.priceCents || 0;
+    if (recipeRetailCents > 0 && productRetailCents > 0) {
+      v.priceDriftPct = ((productRetailCents - recipeRetailCents) / recipeRetailCents) * 100; // raw %, display rounds
+      if (Math.abs(v.priceDriftPct) >= threshold) v.reasons.push('price-drift');
+    }
+    var recipeWholesaleCents = Math.round((recipe.wholesalePrice || 0) * 100);
+    var productWholesaleCents = product.wholesalePriceCents || 0;
+    if (recipeWholesaleCents > 0 && productWholesaleCents > 0) {
+      var wDrift = ((productWholesaleCents - recipeWholesaleCents) / recipeWholesaleCents) * 100; // raw %
+      if (Math.abs(wDrift) >= threshold) v.reasons.push('price-drift-wholesale');
+    }
+
+    // (3) below unit cost (negative margin) — any channel config, any direction
+    var costCents = Math.round((recipe.totalCost || 0) * 100);
+    if (productRetailCents > 0 && costCents > 0 && productRetailCents < costCents) {
+      v.belowCost = true;
+      v.reasons.push('below-cost');
+    }
+
+    v.flagged = v.reasons.length > 0;
+    return v;
+  }
+
+  // Short human label for why a recipe was flagged (for reprice preview tables).
+  function repriceWhyLabel(v) {
+    if (!v || !v.reasons || !v.reasons.length) return '';
+    var parts = [];
+    if (v.belowCost) parts.push('Below cost');
+    if (v.reasons.indexOf('price-drift') >= 0) parts.push('Price ' + (v.priceDriftPct > 0 ? '+' : '') + (Number(v.priceDriftPct) || 0).toFixed(1) + '%');
+    else if (v.reasons.indexOf('price-drift-wholesale') >= 0) parts.push('Wholesale price drift');
+    if (v.reasons.indexOf('cost-drift') >= 0) parts.push('Cost ' + (v.costDriftPct > 0 ? '+' : '') + (Number(v.costDriftPct) || 0).toFixed(1) + '%');
+    return parts.join(' · ');
+  }
+
   // Utility counts surfaced as badges in the unified Products header
   // (dirty-recipe / drift / below-margin-floor). renderProducts pulls these
   // via window.makerComputeUtilityCounts() so the maker-side signals stay
@@ -2655,7 +2715,16 @@
       var r = recipesData[rid];
       if (!r || r.status === 'archived') return;
       if (r.costsDirty) dirty++;
-      if (typeof r.currentDriftPct === 'number' && Math.abs(r.currentDriftPct) >= repricingThresholdPct && r.driftBaseline) drift++;
+      // Drift badge now reflects the full reprice test (cost-baseline drift, live
+      // price drift, or below-cost) — not just cost-baseline drift — so it matches
+      // what Bulk reprice surfaces. Active products only; needs the product cache
+      // warm (it is, on the Products list view) — falls back to cost-drift when cold.
+      var prod = (typeof findProduct === 'function') ? findProduct(r.productId) : null;
+      if (prod) {
+        if (repriceCandidacy(r, prod, repricingThresholdPct).flagged) drift++;
+      } else if (typeof r.currentDriftPct === 'number' && Math.abs(r.currentDriftPct) >= repricingThresholdPct && r.driftBaseline) {
+        drift++;
+      }
       if (r.minMarginPercent != null) {
         var aTier = r.activePriceTier || 'direct';
         var aPrice = (r.isVariantEnabled && r.variants) ? getFirstVariantTierPrice(aTier, r) : (r[aTier + 'Price'] || 0);
@@ -3479,16 +3548,52 @@
     }
     var checklist = computeReadinessChecklist(p, null);
     await persistReadinessChecklist(pid, checklist);
-    var hardGates = ['defined','costed','listingReady'];
-    var failedHard = hardGates.filter(function(k) { return !checklist[k]; });
+
+    // Hard/soft gate evaluation — delegate to the SAME MastFlow evaluator that
+    // drives the workflow header's Draft checklist + "X to set up" counter, so a
+    // manual "mark done" override (record.__workflow.overrides) counts as
+    // satisfied here exactly as it does in the UI. This previously re-derived the
+    // gates straight from computeReadinessChecklist and ignored overrides, so an
+    // explicitly-overridden gate passed the checklist UI yet still failed
+    // promotion — the override feature was a dead end for the required gates
+    // (feedback: see products.workflow.js + workflow-engine.js override path).
+    // Using the evaluator also yields the friendly requirement labels the user
+    // already sees in the checklist instead of leaking the internal gate keys.
+    var failedHard = [], failedSoft = [];
+    var usedFlow = false;
+    if (window.MastFlow && typeof MastFlow.evaluate === 'function' &&
+        typeof MastFlow.getDefinition === 'function' && MastFlow.getDefinition('products')) {
+      try {
+        var ev = await MastFlow.evaluate('products', p);
+        (ev.missing || []).forEach(function(m) {
+          (m.req.hard ? failedHard : failedSoft).push(m.req.label);
+        });
+        usedFlow = true;
+      } catch (e) {
+        console.warn('[checkpoint-E] MastFlow evaluate failed; using raw checklist', e && e.message);
+      }
+    }
+    if (!usedFlow) {
+      // Fallback (MastFlow not loaded): raw checklist, but still honor any
+      // persisted manual overrides so the two paths can't disagree.
+      var ov = (p.__workflow && p.__workflow.overrides && p.__workflow.overrides.draft) || {};
+      var labelFor = {};
+      try { readinessCore().READINESS_GATES.forEach(function(g) { labelFor[g.key] = g.label; }); }
+      catch (e) {}
+      ['defined','costed','listingReady'].forEach(function(k) {
+        if (!checklist[k] && !ov[k]) failedHard.push(labelFor[k] || k);
+      });
+      ['channeled','capacityPlanned'].forEach(function(k) {
+        if (!checklist[k] && !ov[k]) failedSoft.push(labelFor[k] || k);
+      });
+    }
     if (failedHard.length) {
       MastAdmin.showToast('Cannot promote — missing: ' + failedHard.join(', '), true);
       return;
     }
-    var softGates = ['channeled','capacityPlanned'].filter(function(k) { return !checklist[k]; });
     var msg = 'Promote to Ready? This means the product is ready for launch review. You can still edit anything.';
-    if (softGates.length) {
-      msg += '\n\n(Recommended but not required: ' + softGates.join(', ') + ' — proceed anyway?)';
+    if (failedSoft.length) {
+      msg += '\n\n(Recommended but not required: ' + failedSoft.join(', ') + ' — proceed anyway?)';
     }
     var ok = await window.mastConfirm(msg, { title: 'Promote to Ready', confirmLabel: 'Promote' });
     if (!ok) return;
@@ -5861,15 +5966,25 @@
   // Phase 2E: bulk reprice modal — preview-then-confirm
   function openRepriceAllModal() {
     var candidates = [];
+    var evaluated = 0;
     Object.keys(recipesData).forEach(function(rid) {
       var r = recipesData[rid];
-      if (!r || r.status === 'archived') return;
-      var d = typeof r.currentDriftPct === 'number' ? r.currentDriftPct : 0;
-      if (Math.abs(d) >= repricingThresholdPct && r.driftBaseline) {
-        candidates.push(Object.assign({ recipeId: rid }, r));
+      if (!r || r.status === 'archived' || !r.productId) return;
+      var prod = (typeof findProduct === 'function') ? findProduct(r.productId) : null;
+      var v = repriceCandidacy(r, prod, repricingThresholdPct);
+      if (!v.applicable) return; // no product / not active — not evaluated
+      evaluated++;
+      if (v.flagged) {
+        candidates.push(Object.assign({ recipeId: rid }, r, {
+          _why: repriceWhyLabel(v), _belowCost: v.belowCost,
+          _priceDriftPct: v.priceDriftPct
+        }));
       }
     });
-    candidates.sort(function(a, b) { return Math.abs(b.currentDriftPct) - Math.abs(a.currentDriftPct); });
+    candidates.sort(function(a, b) {
+      if (!!a._belowCost !== !!b._belowCost) return a._belowCost ? -1 : 1;
+      return Math.abs(b.currentDriftPct || 0) - Math.abs(a.currentDriftPct || 0);
+    });
 
     var html = '';
     html += '<div id="repriceOverlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;" onclick="if(event.target.id===\'repriceOverlay\')makerCloseRepriceAll()">';
@@ -5878,20 +5993,23 @@
     html += '<h3 style="font-family:\'Cormorant Garamond\',serif;font-size:1.6rem;font-weight:500;margin:0;">↻ Reprice ' + MastFormat.countNoun(candidates.length, 'recipe') + '</h3>';
     html += '<button style="background:none;border:none;font-size:1.15rem;cursor:pointer;color:var(--warm-gray);" onclick="makerCloseRepriceAll()">✕</button>';
     html += '</div>';
-    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">Drift threshold: ' + repricingThresholdPct + '%. Each reprice runs calculate_price + propagates the active tier price to the linked product + resets the drift baseline.</p>';
+    html += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">Threshold: ' + repricingThresholdPct + '% drift. Flags active recipe-linked products that have drifted past the threshold (cost or price) or are priced below cost. Each reprice runs calculate_price + propagates the active tier price to the linked product + resets the drift baseline.</p>';
     if (candidates.length === 0) {
-      html += '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:12px;">No recipes need repricing.</p>';
+      html += '<p style="font-size:0.85rem;color:var(--warm-gray);text-align:center;padding:12px;">' +
+        (evaluated > 0
+          ? 'Checked ' + MastFormat.countNoun(evaluated, 'active recipe-linked product') + ' — none need repricing.'
+          : 'No active recipe-linked products to check.') + '</p>';
     } else {
       var esc = MastAdmin.esc;
       html += '<div class="data-table"><table style="width:100%;font-size:0.85rem;"><thead><tr>';
-      html += '<th>Recipe</th><th>Tier</th><th style="text-align:right;">Drift</th><th style="text-align:right;">Baseline</th><th style="text-align:right;">Now</th>';
-      html += '</tr></thead><tbody>';
+      html += '<th>Recipe</th><th>Tier</th><th>Why</th><th style="text-align:right;">Cost</th></tr>';
+      html += '</thead><tbody>';
       candidates.forEach(function(r) {
+        var whyColor = r._belowCost ? 'var(--danger)' : '#b45309';
         html += '<tr>';
         html += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.name || '') + '</td>';
         html += '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.activePriceTier || 'direct') + '</td>';
-        html += '<td style="text-align:right;font-family:monospace;color:#b45309;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (r.currentDriftPct > 0 ? '+' : '') + r.currentDriftPct.toFixed(1) + '%</td>';
-        html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw((r.driftBaseline || 0)) + '</td>';
+        html += '<td style="font-family:monospace;color:' + whyColor + ';padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r._why || '') + '</td>';
         html += '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">$' + MastFormat.moneyRaw((r.totalCost || 0)) + '</td>';
         html += '</tr>';
       });
@@ -5914,12 +6032,15 @@
   }
 
   async function executeRepriceAll() {
+    // Re-derive the SAME candidate set the preview showed (cost drift, live price
+    // drift, OR below-cost — active products only), so execute covers everything
+    // surfaced, not just cost-baseline drift.
     var candidates = [];
     Object.keys(recipesData).forEach(function(rid) {
       var r = recipesData[rid];
-      if (!r || r.status === 'archived') return;
-      var d = typeof r.currentDriftPct === 'number' ? r.currentDriftPct : 0;
-      if (Math.abs(d) >= repricingThresholdPct && r.driftBaseline) candidates.push(rid);
+      if (!r || r.status === 'archived' || !r.productId) return;
+      var prod = (typeof findProduct === 'function') ? findProduct(r.productId) : null;
+      if (repriceCandidacy(r, prod, repricingThresholdPct).flagged) candidates.push(rid);
     });
     closeRepriceAllModal();
     var ok = 0, fail = 0;
@@ -7705,22 +7826,41 @@
   async function bridgeRepriceCandidates() {
     try {
       await ensurePowerToolCtx();
+      // Detecting price-drift & below-cost (not just cost-baseline drift) needs the
+      // linked products' live prices/status — warm the product cache if it's cold.
+      var products = window.productsData;
+      if (!products || !products.length) {
+        try { var all = await MastDB.products.list(); products = Array.isArray(all) ? all : Object.values(all || {}); window.productsData = products; }
+        catch (e) { products = products || []; }
+      }
+      var byPid = {};
+      (products || []).forEach(function (p) { if (p && p.pid) byPid[p.pid] = p; });
+
       var out = [];
+      var evaluated = 0;
       Object.keys(recipesData).forEach(function (rid) {
         var r = recipesData[rid];
-        if (!r || r.status === 'archived') return;
-        if (!r.productId) return; // only recipe-linked products are repriced
-        var d = typeof r.currentDriftPct === 'number' ? r.currentDriftPct : 0;
-        if (Math.abs(d) >= repricingThresholdPct && r.driftBaseline) {
+        if (!r || r.status === 'archived' || !r.productId) return; // only recipe-linked products
+        var v = repriceCandidacy(r, byPid[r.productId], repricingThresholdPct);
+        if (!v.applicable) return; // no product / not active — not evaluated, not an all-clear
+        evaluated++;
+        if (v.flagged) {
           out.push({
             recipeId: rid, productId: r.productId, name: r.name || 'Recipe',
             activePriceTier: r.activePriceTier || 'direct',
-            currentDriftPct: d, driftBaseline: r.driftBaseline || 0, totalCost: r.totalCost || 0
+            currentDriftPct: v.costDriftPct, priceDriftPct: v.priceDriftPct,
+            belowCost: v.belowCost, reasons: v.reasons, why: repriceWhyLabel(v),
+            driftBaseline: r.driftBaseline || 0, totalCost: r.totalCost || 0
           });
         }
       });
-      out.sort(function (a, b) { return Math.abs(b.currentDriftPct) - Math.abs(a.currentDriftPct); });
-      return { ok: true, candidates: out, thresholdPct: repricingThresholdPct };
+      out.sort(function (a, b) {
+        if (!!a.belowCost !== !!b.belowCost) return a.belowCost ? -1 : 1;
+        var am = Math.max(Math.abs(a.currentDriftPct || 0), Math.abs(a.priceDriftPct || 0));
+        var bm = Math.max(Math.abs(b.currentDriftPct || 0), Math.abs(b.priceDriftPct || 0));
+        return bm - am;
+      });
+      return { ok: true, candidates: out, thresholdPct: repricingThresholdPct, evaluated: evaluated };
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
   }
 
