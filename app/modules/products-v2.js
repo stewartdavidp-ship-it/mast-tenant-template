@@ -469,6 +469,32 @@
       if (rc) { _recipeCache[recipeId] = rc; rerenderRecipePane(pid); }
     }, function () { delete _recipeCache['__loading_' + recipeId]; });
   }
+  // F3 — surface OTHER non-archived recipes that target the same (productId,
+  // variantKey) unit as the linked recipe, so it is unmistakable which recipe drives
+  // the price and which are stray duplicates to clean up. Cached + async loaded.
+  var _dupCache = {};
+  function loadDupsThenRerender(pid, linkedId, unit) {
+    var key = pid + '::' + unit;
+    if (_dupCache[key] !== undefined || _dupCache['__loading_' + key]) return;
+    if (!(window.MakerProductBridge && window.MakerProductBridge.sameUnitRecipes)) { _dupCache[key] = []; return; }
+    _dupCache['__loading_' + key] = true;
+    Promise.resolve(window.MakerProductBridge.sameUnitRecipes(pid, unit, linkedId)).then(function (dups) {
+      delete _dupCache['__loading_' + key];
+      _dupCache[key] = dups || [];
+      rerenderRecipePane(pid);
+    }, function () { delete _dupCache['__loading_' + key]; _dupCache[key] = []; });
+  }
+  function dupRecipesCard(dups) {
+    if (!dups || !dups.length) return '';
+    var rows = dups.map(function (d) {
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--cream-dark);">' +
+        '<span style="font-size:0.85rem;">' + esc(d.name) + ' <span style="color:var(--warm-gray);">· ' + esc(d.status) + ' · ' + (N.money(d.totalCost) || '$0') + '</span></span>' +
+        '<button class="btn btn-secondary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(d.recipeId) + '\')">Open</button>' +
+        '</div>';
+    }).join('');
+    return U.card('⚠ Other recipes on this unit',
+      '<div style="font-size:0.85rem;color:var(--warm-gray);margin-bottom:8px;">Only the linked recipe above drives this product’s price. These extra draft recipes target the same unit — open and archive the ones you don’t need.</div>' + rows);
+  }
   function recipePane(p) {
     var pid = p._key || p.pid;
     if (p.recipeId) {
@@ -476,10 +502,12 @@
       // is meaningless to the user. Fetched async + cached; shows a loader first.
       var rc = _recipeCache[p.recipeId];
       var head;
+      var unit = (rc && rc.variantKey) || 'default';
       if (rc) {
         var mats = rc.lineItems ? Object.keys(rc.lineItems).length : 0;
         head = U.kv([
           { k: 'Recipe', v: esc(rc.name || 'Recipe') },
+          { k: 'Drives price', v: 'Yes — this recipe sets the price' },
           { k: 'Unit cost', v: N.money(rc.totalCost) || '—' },
           { k: 'Status', v: rc.status ? esc(rc.status) : '—' },
           { k: 'Materials', v: String(mats) },
@@ -495,7 +523,11 @@
         '<button class="btn btn-primary btn-small" onclick="MastEntity.drill(\'recipe-v2\',\'' + esc(p.recipeId) + '\')">Open recipe →</button>' +
         (canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeUnlink(\'' + esc(pid) + '\')">Unlink</button>' : '') +
         '</div>';
-      return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” edits the full recipe here — materials, labor, pricing tiers, and per-variant cost (Back returns). Metal what-if pricing, bulk reprice, and CSV import are on the product list toolbar.</div>';
+      // Same-unit duplicate surfacing (loaded once the linked recipe's unit is known).
+      var dupKey = pid + '::' + unit;
+      if (_dupCache[dupKey] === undefined) loadDupsThenRerender(pid, p.recipeId, unit);
+      var dupCard = dupRecipesCard(_dupCache[dupKey]);
+      return U.card('Recipe', body) + '<div class="pv2-pnote">“Open recipe” edits the full recipe here — materials, labor, pricing tiers, and per-variant cost (Back returns). Metal what-if pricing, bulk reprice, and CSV import are on the product list toolbar.</div>' + dupCard;
     }
     return U.card('Recipe', '<div style="color:var(--warm-gray);font-size:0.9rem;margin-bottom:10px;">No recipe linked. A recipe tracks the materials, labor, and cost behind this product.</div>' +
       (canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeCreate(\'' + esc(pid) + '\')">+ Create a recipe</button>' : '<span style="color:var(--warm-gray);font-size:0.85rem;">No recipe.</span>'));
@@ -3363,6 +3395,8 @@
         Promise.resolve(window.MakerProductBridge.createRecipeForProduct(pid, rec.name || 'Recipe')).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (rec) rec.recipeId = res.recipeId;
+          // F3 — duplicate same-unit recipe is allowed (makers iterate) but flagged.
+          if (res.warning) { delete _dupCache[pid + '::default']; MastAdmin.showToast(res.warning, true); }
           rerenderRecipePane(pid);
           MastEntity.drill('recipe-v2', res.recipeId); // open the v2 recipe editor to fill it in
         }, function (e) { console.error('[products-v2] recipeCreate', e); MastAdmin.showToast('Failed', true); });
