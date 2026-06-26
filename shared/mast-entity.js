@@ -609,6 +609,26 @@
     }).catch(function (e) { console.error('[MastEntity] renderHeader', e); });
   }
 
+  // Re-derive the open record's summary header — the sticky tiles cover AND the
+  // guided process header (readiness checklist + step rail) — from live state,
+  // WITHOUT reopening the whole SO (a full reopen bounces every pane back to its
+  // default tab + loses scroll). A detail pane that writes a field the header
+  // derives from — a job's line items ("Items" tile / "At least one line item"),
+  // a product's price ("Price" tile / "Costed") — calls this after the write so
+  // the summary recomputes at the same time as the pane, instead of holding a
+  // stale snapshot until the next reopen. Pass the fresh/live record so the
+  // checklist predicates re-evaluate against it; pass tilesHtml (the schema's
+  // own UU.tiles(...) output) to refresh the cover counters in lockstep.
+  function refreshFlowHeader(record, tilesHtml) {
+    if (tilesHtml != null) {
+      var cover = document.querySelector('#muCover .mu-cover-body');
+      if (cover) cover.innerHTML = tilesHtml;
+    }
+    if (!_flow) return;
+    if (record) _flow.record = record;
+    _flowRender();
+  }
+
   function _flowTransition(targetPhaseKey, branchChoice) {
     if (!_flow || !window.MastFlow) return;
     var s = _flow.schema, rec = _flow.record, fk = _flow.flowKey;
@@ -774,7 +794,7 @@
     canonicalGet: canonicalGet, validate: validate,
     renderList: renderList, openRecord: openRecord, exportRows: exportRows,
     drill: drill, drillLink: drillLink, back: back, getCurrent: getCurrent,
-    filterActivity: filterActivity
+    filterActivity: filterActivity, refreshFlowHeader: refreshFlowHeader
   };
   if (typeof window !== 'undefined') window.MastEntity = api;
   if (typeof module !== 'undefined' && module.exports) {

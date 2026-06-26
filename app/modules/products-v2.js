@@ -392,6 +392,28 @@
       MastEntity.openRecord('products-v2', rec, 'read');
     });
   }
+  // The header summary tiles — DERIVED from the product record, so the same
+  // builder backs both the initial render and the post-write refresh (no cached
+  // copy to drift). Price/Variants/On hand recompute straight from the record.
+  function productTiles(UU, p) {
+    var prTile = priceRange(p) || '—';
+    return UU.tiles([
+      { k: 'Status', v: statusLabel(p.status), hero: true },
+      // "Price range" only when it's actually a range; uniform variants → "Price".
+      { k: (prTile.indexOf('–') >= 0 ? 'Price range' : 'Price'), v: prTile },
+      { k: 'Variants', v: variantCount(p) || 'Default only' },
+      { k: 'On hand', v: ((p.stockInfo && p.stockInfo.totalOnHand) != null ? String(p.stockInfo.totalOnHand) : '—') }
+    ]);
+  }
+  // Recompute the header summary (Price/On hand/Variants tiles) AND the Draft
+  // readiness checklist from the SAME live record a pane save just mutated
+  // (V2.byId[pid] === the open _flow.record) — in place, so the header updates
+  // with the pane instead of holding the open-time snapshot until a reopen.
+  function refreshProductSummary(pid) {
+    var rec = V2.byId[pid];
+    if (!rec || !window.MastEntity || !MastEntity.refreshFlowHeader) return;
+    MastEntity.refreshFlowHeader(rec, productTiles(U, rec));
+  }
   function pricingPane(p) {
     var pid = p._key || p.pid;
     if (V2.editPricing === pid) return pricingEditForm(p);
@@ -1232,14 +1254,7 @@
         // Fresh open/reopen always starts read-only — a prior session's abandoned
         // edit flag must not reopen a pane in edit mode (cancel-on-leave on close).
         V2.editInfo = V2.editFulfill = V2.editPricing = V2.editInv = V2.editAttrs = null;
-        var prTile = priceRange(p) || '—';
-        var tiles = UU.tiles([
-          { k: 'Status', v: statusLabel(p.status), hero: true },
-          // "Price range" only when it's actually a range; uniform variants → "Price".
-          { k: (prTile.indexOf('–') >= 0 ? 'Price range' : 'Price'), v: prTile },
-          { k: 'Variants', v: variantCount(p) || 'Default only' },
-          { k: 'On hand', v: ((p.stockInfo && p.stockInfo.totalOnHand) != null ? String(p.stockInfo.totalOnHand) : '—') }
-        ]);
+        var tiles = productTiles(UU, p);
         var tabs = [
           { key: 'pricing', label: 'Pricing' }, { key: 'sales', label: 'Sales' }, { key: 'recipe', label: 'Recipe' },
           { key: 'inventory', label: 'Inventory' }, { key: 'forecast', label: 'Forecast' },
@@ -2989,7 +3004,7 @@
         Promise.resolve(window.MakerProductBridge.setChannelBinding(pid, channelId, !bound)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[pid]; if (rec) { rec.channelBindings = res.channelBindings; rec.channelIds = res.channelIds; }
-          rerenderChannelsPane(pid);
+          rerenderChannelsPane(pid); refreshProductSummary(pid);
           MastAdmin.showToast(!bound ? 'Now selling on this channel' : 'Removed from channel');
         }, function (e) { console.error('[products-v2] toggleChannel', e); MastAdmin.showToast('Failed', true); });
       });
@@ -3266,7 +3281,7 @@
         Promise.resolve(window.MakerProductBridge.setStockCounts(pid, '_default', counts)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[pid]; if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
-          V2.editInv = null; rerenderInventoryPane(pid); markListDirty();
+          V2.editInv = null; rerenderInventoryPane(pid); refreshProductSummary(pid); markListDirty();
           MastAdmin.showToast('Stock updated');
         }, function (e) { console.error('[products-v2] saveInventory', e); MastAdmin.showToast('Failed', true); });
       });
@@ -3281,7 +3296,7 @@
         Promise.resolve(window.MakerProductBridge.setStockCounts(pid, vid, counts)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[pid]; if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
-          V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid);
+          V2.editVarInv = null; rerenderVariantInventoryPane(pid, vid); refreshProductSummary(pid);
           MastAdmin.showToast('Variant stock updated');
         }, function (e) { console.error('[products-v2] saveVariantInventory', e); MastAdmin.showToast('Failed', true); });
       });
@@ -3334,7 +3349,7 @@
         Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (!res.staged) Object.assign(rec, changed);
-          V2.editPricing = null; rerenderPricingPane(pid); markListDirty();
+          V2.editPricing = null; rerenderPricingPane(pid); refreshProductSummary(pid); markListDirty();
           MastAdmin.showToast(res.staged ? 'Staged ' + MastFormat.countNoun(res.changed, 'change') + ' (Apply to go live)' : 'Saved');
         }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
       });
@@ -3492,7 +3507,7 @@
           Promise.resolve(window.MakerProductBridge.unlinkRecipe(pid)).then(function (res) {
             if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
             var rec = V2.byId[pid]; if (rec) rec.recipeId = null;
-            rerenderRecipePane(pid); MastAdmin.showToast('Recipe unlinked');
+            rerenderRecipePane(pid); refreshProductSummary(pid); MastAdmin.showToast('Recipe unlinked');
           }, function (e) { console.error('[products-v2] recipeUnlink', e); MastAdmin.showToast('Failed', true); });
         });
       }
@@ -3550,7 +3565,7 @@
         Promise.resolve(window.MakerProductBridge.setInventoryConfig(pid, { stockType: stockType, productionLeadTimeDays: lead })).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
-          function finish(extra) { V2.editFulfill = null; rerenderFulfillmentPane(pid); MastAdmin.showToast('Fulfillment updated' + (extra || '')); }
+          function finish(extra) { V2.editFulfill = null; rerenderFulfillmentPane(pid); refreshProductSummary(pid); MastAdmin.showToast('Fulfillment updated' + (extra || '')); }
           // 2) catalog fields (availability / dimensions / weight / second) — one
           //    revision-aware setFields call (stages on Active, live otherwise).
           if (Object.keys(changed).length) {
@@ -3653,7 +3668,7 @@
           // Mirror the live cache so the read pane shows the edit immediately.
           if (!res.staged) Object.assign(rec, changed);
           V2.editInfo = null;
-          rerenderInfoPane(pid); if (!res.staged) markListDirty();
+          rerenderInfoPane(pid); refreshProductSummary(pid); if (!res.staged) markListDirty();
           // A live name edit also changes the SO title bar ("Product: <name>").
           // The header strip is image-only, so refresh the title element directly
           // (swap the old name in place — robust to the "Product: " label prefix).
@@ -3678,7 +3693,7 @@
         Promise.resolve(window.MakerProductBridge.addImage(pid, file)).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Upload failed: ' + ((res && res.error) || 'unknown'), true); return; }
           var rec = V2.byId[pid]; if (rec) { rec.images = res.images; rec.imageIds = res.imageIds; }
-          rerenderImagePane(pid); rerenderHeaderStrip(pid); markListDirty();
+          rerenderImagePane(pid); rerenderHeaderStrip(pid); refreshProductSummary(pid); markListDirty();
           MastAdmin.showToast('Image uploaded');
         }, function (e) { console.error('[products-v2] uploadImage', e); MastAdmin.showToast('Upload failed', true); });
       });
