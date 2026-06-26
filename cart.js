@@ -804,9 +804,106 @@
     }).catch(function() { /* silent — account upsert is best-effort */ });
   }
 
-  // Update nav sign-in / sign-out links across all pages
+  // ── Account menu (storefront nav) ────────────────────────────────────────
+  // A signed-in name is NOT a logout button — clicking it opens an account menu
+  // with Sign out as an explicit item, so a single misclick can't destroy the
+  // session. Reuses the storefront's inline-styled overlay pattern (cf.
+  // showSignInModal) with theme CSS vars — no new component or look.
+  var __accountMenuEl = null;
+
+  function __accountMenuIsTrigger(node) {
+    var oc = node && node.getAttribute && node.getAttribute('onclick');
+    return !!(oc && oc.indexOf('siteAccountMenu') !== -1);
+  }
+  function __accountMenuOutside(e) {
+    if (!__accountMenuEl) return;
+    if (__accountMenuEl.contains(e.target) || __accountMenuIsTrigger(e.target)) return;
+    closeAccountMenu();
+  }
+  function __accountMenuKeydown(e) {
+    if (e.key === 'Escape' || e.keyCode === 27) closeAccountMenu();
+  }
+
+  function closeAccountMenu() {
+    if (__accountMenuEl && __accountMenuEl.parentNode) __accountMenuEl.parentNode.removeChild(__accountMenuEl);
+    __accountMenuEl = null;
+    var triggers = document.querySelectorAll('[onclick*="siteAccountMenu"]');
+    for (var i = 0; i < triggers.length; i++) triggers[i].setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', __accountMenuOutside, true);
+    document.removeEventListener('keydown', __accountMenuKeydown, true);
+    window.removeEventListener('scroll', closeAccountMenu, true);
+    window.removeEventListener('resize', closeAccountMenu, true);
+  }
+
+  function __accountMenuItem(text, danger) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.setAttribute('role', 'menuitem');
+    b.textContent = text;
+    b.style.cssText = 'display:block;width:100%;text-align:left;background:none;border:none;' +
+      'padding:0.6rem 0.75rem;font-size:0.9rem;border-radius:7px;cursor:pointer;font-family:inherit;' +
+      'color:' + (danger ? '#c0392b' : 'inherit') + ';';
+    b.addEventListener('mouseenter', function () { b.style.background = 'rgba(0,0,0,0.06)'; });
+    b.addEventListener('mouseleave', function () { b.style.background = 'none'; });
+    return b;
+  }
+
+  function showAccountMenu(anchorEl) {
+    // Toggle: a second click on the name closes the open menu.
+    if (__accountMenuEl) { closeAccountMenu(); return; }
+    if (!anchorEl || !anchorEl.getBoundingClientRect) return;
+
+    var label = currentUser ? (currentUser.displayName || currentUser.email || 'Account') : 'Account';
+    var rect = anchorEl.getBoundingClientRect();
+
+    var menu = document.createElement('div');
+    menu.id = 'mast-account-menu';
+    menu.setAttribute('role', 'menu');
+    menu.setAttribute('aria-label', 'Account menu');
+    menu.style.cssText = 'position:fixed;z-index:10000;min-width:200px;max-width:260px;' +
+      'background:var(--bg,#fff);color:var(--text,#222);border:1px solid var(--border,#ddd);' +
+      'border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.25);padding:0.35rem;font-family:inherit;';
+    menu.style.top = Math.round(rect.bottom + 8) + 'px';
+    menu.style.left = Math.max(8, Math.round(Math.min(rect.left, window.innerWidth - 220))) + 'px';
+
+    var hdr = document.createElement('div');
+    hdr.style.cssText = 'padding:0.5rem 0.75rem 0.35rem;font-size:0.78rem;opacity:0.6;' +
+      'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    hdr.textContent = label;
+    menu.appendChild(hdr);
+
+    var ordersItem = __accountMenuItem('Orders', false);
+    ordersItem.addEventListener('click', function () { closeAccountMenu(); window.location.href = '/orders.html'; });
+    menu.appendChild(ordersItem);
+
+    var divider = document.createElement('div');
+    divider.style.cssText = 'height:1px;background:var(--border,#e5e5e5);margin:0.35rem 0.25rem;';
+    menu.appendChild(divider);
+
+    var signOutItem = __accountMenuItem('Sign out', true);
+    signOutItem.addEventListener('click', function () { closeAccountMenu(); signOut(); });
+    menu.appendChild(signOutItem);
+
+    document.body.appendChild(menu);
+    anchorEl.setAttribute('aria-expanded', 'true');
+    __accountMenuEl = menu;
+
+    // Defer outside-click binding so the click that opened the menu doesn't
+    // immediately close it. Capture phase + scroll/resize close to keep the
+    // fixed-position menu glued to the (potentially sticky) nav.
+    setTimeout(function () {
+      if (!__accountMenuEl) return;
+      document.addEventListener('click', __accountMenuOutside, true);
+      document.addEventListener('keydown', __accountMenuKeydown, true);
+      window.addEventListener('scroll', closeAccountMenu, true);
+      window.addEventListener('resize', closeAccountMenu, true);
+    }, 0);
+  }
+
+  // Update nav sign-in / account links across all pages
   function updateNavAuth(user) {
-    // Find all clickable elements that invoke siteSignIn
+    // Signed in: turn the "Sign In" link into the account name, which now OPENS
+    // the account menu (Sign out lives inside it) instead of signing out on click.
     var els = document.querySelectorAll('[onclick*="siteSignIn"]');
     for (var i = 0; i < els.length; i++) {
       var el = els[i];
@@ -815,16 +912,22 @@
         var first = name.split(' ')[0];
         el.textContent = first;
         el.classList.add('nav-user');
-        el.setAttribute('onclick', "event.preventDefault(); siteSignOut();" + (el.getAttribute('onclick').indexOf('closeMobileMenu') !== -1 ? ' closeMobileMenu();' : ''));
+        el.setAttribute('aria-haspopup', 'menu');
+        el.setAttribute('aria-expanded', 'false');
+        el.setAttribute('onclick', "event.preventDefault(); siteAccountMenu(this);");
       }
     }
-    // When signed out, find sign-out links and revert to sign-in
+    // Signed out: revert the account-name trigger back to a plain Sign In link.
     if (!user || user.isAnonymous) {
-      var outEls = document.querySelectorAll('[onclick*="siteSignOut"]');
+      closeAccountMenu();
+      var outEls = document.querySelectorAll('[onclick*="siteAccountMenu"]');
       for (var j = 0; j < outEls.length; j++) {
         var oel = outEls[j];
         oel.textContent = 'Sign In';
-        var isMobile = oel.getAttribute('onclick').indexOf('closeMobileMenu') !== -1;
+        oel.classList.remove('nav-user');
+        oel.removeAttribute('aria-haspopup');
+        oel.removeAttribute('aria-expanded');
+        var isMobile = !!oel.closest('#mobileMenu');
         oel.setAttribute('onclick', "event.preventDefault(); siteSignIn();" + (isMobile ? ' closeMobileMenu();' : ''));
       }
     }
@@ -1610,5 +1713,6 @@
   // Centralised here so every page shares the same Firebase Auth instance.
   window.siteSignIn = signIn;
   window.siteSignOut = signOut;
+  window.siteAccountMenu = showAccountMenu;
 
 })();
