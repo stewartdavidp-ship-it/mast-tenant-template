@@ -157,7 +157,13 @@
         // above (Advance), intercepted by detail.onFlowAdvance. Cancel is an
         // out-of-band terminal action (not a forward phase), kept here; Print is
         // a convenience reprint of the PO document. Both delegate to the Bridge.
-        var actionBtns = '<button class="btn btn-secondary btn-small" onclick="ProcurementV2.printPo(\'' + esc(po.poId) + '\')">Print PO</button> ';
+        var actionBtns = '';
+        // Draft→Ordered without emailing the vendor (F32): the stepper's "Send &
+        // mark ordered" always emails when a vendor email is on file; this is the
+        // out-of-band path for phone/manual/already-placed orders. Same backend
+        // advance (ProcurementBridge.send) with no document → no email queued.
+        if (po.status === 'draft' && canEdit()) actionBtns += '<button class="btn btn-secondary btn-small" onclick="ProcurementV2.markOrderedNoEmail(\'' + esc(po.poId) + '\')">Mark as ordered (no email)</button> ';
+        actionBtns += '<button class="btn btn-secondary btn-small" onclick="ProcurementV2.printPo(\'' + esc(po.poId) + '\')">Print PO</button> ';
         if (canCancelPo(po)) actionBtns += '<button class="btn btn-secondary btn-small" style="color:var(--danger);" onclick="ProcurementV2.cancel(\'' + esc(po.poId) + '\')">Cancel PO</button>';
         var manage = '<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">' + actionBtns + '</div>';
 
@@ -773,6 +779,32 @@
       return false;
     },
 
+    // ── Mark ordered without emailing (F32) ────────────────────────────
+    // Advances a Draft PO to Ordered for phone/manual/already-placed orders.
+    // Reuses ProcurementBridge.send WITHOUT a document (opts.html) — send only
+    // queues the vendor email when both a vendor email AND html are present, so
+    // omitting html stamps sentAt + status='submitted' (→ Ordered) with no email.
+    markOrderedNoEmail: function (id) {
+      var po = V2.byId[id];
+      if (!po || po.status !== 'draft' || !canEdit()) return;
+      if (!window.ProcurementBridge || typeof ProcurementBridge.send !== 'function') {
+        if (window.MastAdmin && typeof MastAdmin.loadModule === 'function') { try { MastAdmin.loadModule('procurement-v2'); } catch (e) {} }
+        if (window.showToast) showToast('Procurement engine still loading — try again', true);
+        return;
+      }
+      var doIt = function () {
+        ProcurementBridge.send(id, {}).then(function () {
+          if (window.showToast) showToast('PO marked ordered');
+          return reloadThenOpen(id);
+        }).catch(function (e) {
+          if (window.showToast) showToast('Failed to mark ordered: ' + (e && e.message || e), true);
+        });
+      };
+      var msg = 'Mark ' + (po.poNumber || 'this PO') + ' as ordered without emailing the vendor? Use this for phone/manual or already-placed orders.';
+      if (typeof window.mastConfirm === 'function') Promise.resolve(window.mastConfirm(msg)).then(function (ok) { if (ok) doIt(); });
+      else doIt();
+    },
+
     // ── Cancel (delegates to ProcurementBridge.cancel → legacy cancelPo) ───
     cancel: function (id) {
       var po = V2.byId[id];
@@ -871,10 +903,28 @@
     });
   }
 
+  // F35: a PO's status can change server-side (email-queue processor, MCP
+  // receive/cancel, a second session) with no client trigger to refetch — so the
+  // list/detail showed a stale status until a manual hard reload. Navigating to
+  // the route already re-runs load(); this covers the other case: the operator
+  // tabbed away and came back. Refetch (reusing load() → server reads + render)
+  // only when the tab regains visibility AND Procurement is the surface on screen.
+  var _focusRefetchWired = false;
+  function wireFocusRefetch() {
+    if (_focusRefetchWired) return;
+    _focusRefetchWired = true;
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState !== 'visible' || !V2.loaded) return;
+      var tab = document.getElementById('procurementV2Tab');
+      if (!tab || tab.style.display === 'none') return;
+      load();
+    });
+  }
+
   function procurementRouteSetup() {
     // ProcurementBridge / VendorsBridge are defined in the absorbed engine IIFE
     // below (T6) — present synchronously once this file executes, no async load.
-    ensureTab(); render(); load();
+    ensureTab(); render(); load(); wireFocusRefetch();
   }
   MastAdmin.registerModule('procurement-v2', {
     routes: {
