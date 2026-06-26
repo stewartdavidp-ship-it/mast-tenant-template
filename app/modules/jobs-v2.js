@@ -32,6 +32,17 @@
     });
   }
   function fmtDate(d) { return d ? U.Num.date(d) : ''; }
+  // Past-deadline flag (F25): true when a still-open job's deadline is before
+  // today. Terminal jobs (completed/cancelled) are never "overdue". Date-only
+  // comparison mirrors the daysUntil pattern used elsewhere (cs-members-v2).
+  function jobOverdue(j) {
+    if (!j || !j.deadline) return false;
+    var s = String(j.status || '').toLowerCase();
+    if (s === 'completed' || s === 'cancelled') return false;
+    var t = new Date(j.deadline); if (isNaN(t.getTime())) return false;
+    var now = new Date(); now.setHours(0, 0, 0, 0); t.setHours(0, 0, 0, 0);
+    return t.getTime() < now.getTime();
+  }
 
   // ── Serializable job-status transition table (jobs-v2-plan.md §3a) ───
   // Source-of-truth artifact: function-free DATA ONLY, mirroring the MCP
@@ -1032,8 +1043,25 @@
       window.MastEntity.renderList('jobs-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'JobsV2.sort', onRowClickFnName: 'JobsV2.open',
+        columns: deadlineFlaggedColumns(),
         empty: { title: 'No jobs match these filters', message: 'Try a different status or purpose.' }
       });
+  }
+  // F25: reuse the default schema columns, but wrap the Deadline cell so a
+  // past-deadline open job gets the app's existing danger badge appended. On-time
+  // (and terminal) rows render exactly as before — no look-and-feel change.
+  function deadlineFlaggedColumns() {
+    var cols = window.MastEntity.listColumns('jobs-v2');
+    cols.forEach(function (c) {
+      if (c.key !== 'deadline') return;
+      var base = c.render;
+      c.render = function (j) {
+        var html = base(j);
+        if (jobOverdue(j)) html += ' ' + U.badge('Overdue', 'danger');
+        return html;
+      };
+    });
+    return cols;
   }
 
   // ── Public handlers (referenced by engine-rendered HTML) ────────────
