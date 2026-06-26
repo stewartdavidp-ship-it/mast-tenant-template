@@ -2574,6 +2574,7 @@
         if (!st) return;
         if (!res || !res.ok) { st.candidates = []; render(); return; }
         st.candidates = res.candidates || []; st.thresholdPct = res.thresholdPct;
+        st.evaluated = (typeof res.evaluated === 'number') ? res.evaluated : null;
         render();
       }, function (e) { console.error('[products-v2] reprice candidates', e); if (st) { st.candidates = []; render(); } });
     }
@@ -2611,16 +2612,16 @@
       var h = '<div style="overflow-x:auto;margin-bottom:14px;"><table style="width:100%;border-collapse:collapse;font-size:0.85rem;"><thead><tr>' +
         '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Recipe</th>' +
         '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Tier</th>' +
-        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Drift</th>' +
-        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Baseline</th>' +
-        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Now</th>' +
+        '<th style="text-align:left;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Why</th>' +
+        '<th style="text-align:right;padding:6px 8px;border-bottom:2px solid var(--cream-dark);font-size:0.72rem;text-transform:uppercase;">Cost</th>' +
         '</tr></thead><tbody>';
       c.forEach(function (r) {
+        var why = r.why || ((r.currentDriftPct > 0 ? '+' : '') + (Number(r.currentDriftPct) || 0).toFixed(1) + '%');
+        var whyColor = r.belowCost ? 'var(--danger)' : 'var(--warning)';
         h += '<tr>' +
           '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.name || '') + '</td>' +
           '<td style="padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(r.activePriceTier || 'direct') + '</td>' +
-          '<td style="text-align:right;font-family:monospace;color:var(--warning);padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (r.currentDriftPct > 0 ? '+' : '') + (Number(r.currentDriftPct) || 0).toFixed(1) + '%</td>' +
-          '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (N.money(r.driftBaseline) || '$0.00') + '</td>' +
+          '<td style="font-family:monospace;color:' + whyColor + ';padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + esc(why) + '</td>' +
           '<td style="text-align:right;font-family:monospace;padding:6px 8px;border-bottom:1px solid var(--cream-dark);">' + (N.money(r.totalCost) || '$0.00') + '</td>' +
           '</tr>';
       });
@@ -2655,10 +2656,15 @@
         body = '<div class="mu-sub" style="text-align:center;padding:12px;">Checking recipes…</div>';
         foot = '<button class="btn btn-secondary" onclick="ProductsV2.repriceClose()">Cancel</button>';
       } else if (!st.candidates.length) {
-        body = '<div class="mu-sub" style="text-align:center;padding:12px;">No recipe-linked products need repricing — all are within the ' + (st.thresholdPct != null ? st.thresholdPct + '% ' : '') + 'drift threshold.</div>';
+        var thr = (st.thresholdPct != null ? st.thresholdPct + '%' : 'the configured');
+        body = '<div class="mu-sub" style="text-align:center;padding:12px;">' +
+          (st.evaluated
+            ? 'Checked ' + st.evaluated + ' active recipe-linked product' + (st.evaluated === 1 ? '' : 's') + ' — none need repricing (all within the ' + thr + ' drift threshold and priced at or above cost).'
+            : 'No active recipe-linked products to check.') +
+          '</div>';
         foot = '<button class="btn btn-secondary" onclick="ProductsV2.repriceClose()">Close</button>';
       } else {
-        body = '<div class="mu-sub" style="margin-bottom:12px;">' + MastFormat.countNoun(st.candidates.length, 'recipe-linked product') + ' drifted past the ' + (st.thresholdPct != null ? st.thresholdPct + '% ' : '') + 'threshold. Each recipe is recosted, then its prices are written to the linked product through the standard recipe-apply path (variant tier prices + Etsy sync).</div>' + tableHtml();
+        body = '<div class="mu-sub" style="margin-bottom:12px;">' + MastFormat.countNoun(st.candidates.length, 'active recipe-linked product') + ' need repricing — drifted past the ' + (st.thresholdPct != null ? st.thresholdPct + '% ' : '') + 'threshold (cost or price) or priced below cost. Each recipe is recosted, then its prices are written to the linked product through the standard recipe-apply path (variant tier prices + Etsy sync).</div>' + tableHtml();
         foot = '<button class="btn btn-secondary" onclick="ProductsV2.repriceClose()">Cancel</button>' +
           '<button class="btn btn-primary" onclick="ProductsV2.repriceRun()">Reprice all ' + st.candidates.length + '</button>';
       }
