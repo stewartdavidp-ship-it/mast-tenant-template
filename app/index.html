@@ -206,6 +206,13 @@
        ?v= kept in lockstep with MAST_MODULES_V by scripts/bump-modules-version.sh.
        See docs/ux-audit/product-publish-gate-plan.md §7. -->
   <script src="../shared/product-readiness.core.js?v=9dcf533c48b5"></script>
+  <!-- Canonical low/out-of-stock classifier (MastStockStatus.classify). ONE
+       definition shared by the Products-page filter pills, the Inventory
+       overview table, the Dashboard "Low Inventory" card and the storefront
+       availability badge (shop.html / product.html) so no surface re-derives
+       the rule and drifts. Eager so it exists before the lazy products module.
+       ?v= kept in lockstep with MAST_MODULES_V via scripts/gen-cache-bust.mjs. -->
+  <script src="../shared/stock-status.core.js?v=34ea61d64603"></script>
   <!-- Canonical revenue channel normalization (MastChannels.normalize/label/color).
        Byte-identical to mast-mcp-server/src/shared/channel-normalization.core.js so the
        finance revenue UI and the MCP finance_get_revenue / finance_get_pnl aggregators
@@ -19563,7 +19570,7 @@ var MODULE_MANIFEST = {
   // renderers) — no route; lazy-loaded via the eager renderProducts /
   // renderInventoryOverview / switchProductTab / renderProductDetail shims
   // (decomposition Track 1, coupled-cluster tier, recipe B).
-  productsEngine: { src: 'modules/products-engine.js', v: '36fb1bf2a151', routes: [] },
+  productsEngine: { src: 'modules/products-engine.js', v: '5b7f0023af7d', routes: [] },
   // Coupon dialogs (add/edit / share / delete) — no route; lazy-loaded via the
   // eager openCouponModal / openCouponShareModal / confirmDeleteCoupon shims (Track 1).
   couponModals: { src: 'modules/coupon-modals.js', v: '79e8904d3a56', routes: [] },
@@ -39692,20 +39699,26 @@ function renderDashCardLowInventory() {
       if (!p || !p.pid) return;
       var inv = inventory[p.pid];
       if (!inv) return;
-      // Skip build-to-order and sculpture products
-      if (inv.stockType === 'made-to-order' || inv.stockType === 'build-to-order') return;
-      if (p.categories && p.categories.indexOf('Sculptures') !== -1) return;
-
-      var totals = getInventoryTotals(inv);
-      var threshold = inv.lowStockThreshold || 2;
-      if (totals.available <= threshold) {
+      // Canonical low/out classification (shared/stock-status.core.js) — the
+      // same rule the Products page pills and the storefront badge use. Only
+      // stock-tracked shortages surface here: build/made-to-order and depleted
+      // stock-to-build (made on demand) are never "low" or "out", so they no
+      // longer need an ad-hoc stockType/category skip. A product counts as
+      // "out" only when its AGGREGATE available is 0 (one sold-out variant
+      // alongside in-stock siblings is not a whole-product stock-out).
+      var ss = window.MastStockStatus.classify({
+        stockType: inv.stockType,
+        available: getInventoryTotals(inv).available,
+        lowStockThreshold: inv.lowStockThreshold
+      });
+      if (ss.status === 'out' || ss.status === 'low') {
         lowItems.push({
           pid: p.pid,
           name: p.name || p.pid,
           image: firstProductImage(p),
-          available: totals.available,
-          threshold: threshold,
-          isOut: totals.available === 0
+          available: ss.available,
+          threshold: ss.threshold,
+          isOut: ss.status === 'out'
         });
       }
     });
