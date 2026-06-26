@@ -1,6 +1,9 @@
 {
   "hosting": {
     "public": ".",
+    "redirects": [
+      { "source": "/admin", "destination": "/app", "type": 301 }
+    ],
     "headers": [
       {
         "source": "**/*.@(html|js|css)",
