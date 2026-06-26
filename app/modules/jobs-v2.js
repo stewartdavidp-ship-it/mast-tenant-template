@@ -349,6 +349,28 @@
     });
   }
 
+  // The header summary tiles — DERIVED from the job record, so the same builder
+  // backs both the initial render and the post-write refresh (no cached copy to
+  // drift). Items/Progress recompute straight from j.lineItems.
+  function jobTiles(UU, j) {
+    var prog = progressOf(j);
+    return UU.tiles([
+      { k: 'Purpose', v: esc(purposeLabel(j.purpose)) },
+      { k: 'Priority', v: j.priority ? statusLabel(j.priority) : '—' },
+      { k: 'Progress', v: prog.target ? (prog.done + '/' + prog.target + ' · ' + prog.pct + '%') : '—' },
+      { k: 'Items', v: String(lineItemsArr(j).length) }
+    ]);
+  }
+
+  // Recompute the header summary (Items/Progress tiles) AND the Definition
+  // readiness checklist from the SAME live record an items write just produced —
+  // in place, so they update together with the Line Items pane (vs the old
+  // snapshot that stayed 0 / red ❌ until a reopen).
+  function refreshJobSummary(j) {
+    if (!j || !window.MastEntity || !MastEntity.refreshFlowHeader) return;
+    MastEntity.refreshFlowHeader(j, jobTiles(window.MastUI, j));
+  }
+
   // ── Schema: the whole Jobs surface, declaratively ───────────────────
   MastEntity.define('jobs-v2', {
     label: 'Job', labelPlural: 'Jobs', size: 'xl',
@@ -399,13 +421,7 @@
         return true;
       },
       render: function (UU, j) {
-        var prog = progressOf(j);
-        var tiles = UU.tiles([
-          { k: 'Purpose', v: esc(purposeLabel(j.purpose)) },
-          { k: 'Priority', v: j.priority ? statusLabel(j.priority) : '—' },
-          { k: 'Progress', v: prog.target ? (prog.done + '/' + prog.target + ' · ' + prog.pct + '%') : '—' },
-          { k: 'Items', v: String(lineItemsArr(j).length) }
-        ]);
+        var tiles = jobTiles(UU, j);
         var tabs = [
           { key: 'overview', label: 'Overview' }, { key: 'items', label: 'Line Items' },
           { key: 'builds', label: 'Builds' }, { key: 'costs', label: 'Costs' },
@@ -633,6 +649,9 @@
       var body = document.getElementById('mastSlideOutBody');
       var pane = body && body.querySelector('.mu-pane[data-pane="items"]');
       if (pane) pane.innerHTML = itemsPane(window.MastUI, fresh);
+      // Derive the header tiles + Definition checklist from the same fresh record
+      // so "Items" and "At least one line item" update with the pane, not on reopen.
+      refreshJobSummary(fresh);
     });
   }
 
