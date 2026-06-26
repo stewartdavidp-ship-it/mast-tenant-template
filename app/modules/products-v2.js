@@ -3682,7 +3682,10 @@
         Promise.resolve(window.MakerProductBridge.setInventoryConfig(pid, { stockType: stockType, productionLeadTimeDays: lead })).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
-          function finish(extra) { V2.editFulfill = null; rerenderFulfillmentPane(pid); refreshProductSummary(pid); MastAdmin.showToast('Fulfillment updated' + (extra || '')); }
+          // Also refresh the Inventory pane: it shows the same Stock mode (read
+          // from the shared stockInfo), so a fulfillment save must re-render it or
+          // the two tabs visibly disagree until the drawer is reopened.
+          function finish(extra) { V2.editFulfill = null; rerenderFulfillmentPane(pid); rerenderInventoryPane(pid); refreshProductSummary(pid); MastAdmin.showToast('Fulfillment updated' + (extra || '')); }
           // 2) catalog fields (availability / dimensions / weight / second) — one
           //    revision-aware setFields call (stages on Active, live otherwise).
           if (Object.keys(changed).length) {
