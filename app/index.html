@@ -19409,7 +19409,7 @@ var MODULE_MANIFEST = {
   // loaded on demand by settings areas via MastAdmin.loadModule('connections-providers').
   'connections-providers': { src: 'modules/connections-providers.js', v: '9a7fbfe27c01', routes: [] },
   'shows-v2': { src: 'modules/shows-v2.js', v: '4d1305a5311c', routes: ['shows-v2', 'show-find-v2', 'show-apply-v2', 'show-prep-v2', 'show-execute-v2', 'show-history-v2', 'show', 'show-find', 'show-apply', 'show-prep', 'show-execute', 'show-history'] }, // Shows lifecycle hub (Find/Apply/Prep/Execute/History lenses) — full functional twin. shows.js (V1) RETIRED (T6): its ShowsBridge + DOM-free write cores were absorbed into shows-v2.js, and the bare #show* routes now resolve here directly (no MAST_V2_ROUTE_MAP remap).
-  production: { src: 'modules/production.js', v: '746f04797b23', routes: ['jobs', 'production', 'stories', 'forecast'] },
+  production: { src: 'modules/production.js', v: '1e2c3e1ddd38', routes: ['jobs', 'production', 'stories', 'forecast'] },
   // procurement.js (V1) manifest row REMOVED (T6): its ProcurementBridge + VendorsBridge + receive→stock→QBO engine absorbed into procurement-v2.js, which owns the bare #procurement route below.
   // contacts.js (V1) manifest row REMOVED (T6): its ContactsBridge + cores absorbed into contacts-v2.js, which owns the bare #contacts route below.
   // customers.js (V1) manifest row REMOVED (T6 PR5): the 3.5K-line V1 Customers UI is deleted; the bare #customers route is now owned by the customers-v2 row below.
