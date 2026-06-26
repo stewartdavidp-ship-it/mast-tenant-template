@@ -3479,16 +3479,52 @@
     }
     var checklist = computeReadinessChecklist(p, null);
     await persistReadinessChecklist(pid, checklist);
-    var hardGates = ['defined','costed','listingReady'];
-    var failedHard = hardGates.filter(function(k) { return !checklist[k]; });
+
+    // Hard/soft gate evaluation — delegate to the SAME MastFlow evaluator that
+    // drives the workflow header's Draft checklist + "X to set up" counter, so a
+    // manual "mark done" override (record.__workflow.overrides) counts as
+    // satisfied here exactly as it does in the UI. This previously re-derived the
+    // gates straight from computeReadinessChecklist and ignored overrides, so an
+    // explicitly-overridden gate passed the checklist UI yet still failed
+    // promotion — the override feature was a dead end for the required gates
+    // (feedback: see products.workflow.js + workflow-engine.js override path).
+    // Using the evaluator also yields the friendly requirement labels the user
+    // already sees in the checklist instead of leaking the internal gate keys.
+    var failedHard = [], failedSoft = [];
+    var usedFlow = false;
+    if (window.MastFlow && typeof MastFlow.evaluate === 'function' &&
+        typeof MastFlow.getDefinition === 'function' && MastFlow.getDefinition('products')) {
+      try {
+        var ev = await MastFlow.evaluate('products', p);
+        (ev.missing || []).forEach(function(m) {
+          (m.req.hard ? failedHard : failedSoft).push(m.req.label);
+        });
+        usedFlow = true;
+      } catch (e) {
+        console.warn('[checkpoint-E] MastFlow evaluate failed; using raw checklist', e && e.message);
+      }
+    }
+    if (!usedFlow) {
+      // Fallback (MastFlow not loaded): raw checklist, but still honor any
+      // persisted manual overrides so the two paths can't disagree.
+      var ov = (p.__workflow && p.__workflow.overrides && p.__workflow.overrides.draft) || {};
+      var labelFor = {};
+      try { readinessCore().READINESS_GATES.forEach(function(g) { labelFor[g.key] = g.label; }); }
+      catch (e) {}
+      ['defined','costed','listingReady'].forEach(function(k) {
+        if (!checklist[k] && !ov[k]) failedHard.push(labelFor[k] || k);
+      });
+      ['channeled','capacityPlanned'].forEach(function(k) {
+        if (!checklist[k] && !ov[k]) failedSoft.push(labelFor[k] || k);
+      });
+    }
     if (failedHard.length) {
       MastAdmin.showToast('Cannot promote — missing: ' + failedHard.join(', '), true);
       return;
     }
-    var softGates = ['channeled','capacityPlanned'].filter(function(k) { return !checklist[k]; });
     var msg = 'Promote to Ready? This means the product is ready for launch review. You can still edit anything.';
-    if (softGates.length) {
-      msg += '\n\n(Recommended but not required: ' + softGates.join(', ') + ' — proceed anyway?)';
+    if (failedSoft.length) {
+      msg += '\n\n(Recommended but not required: ' + failedSoft.join(', ') + ' — proceed anyway?)';
     }
     var ok = await window.mastConfirm(msg, { title: 'Promote to Ready', confirmLabel: 'Promote' });
     if (!ok) return;
