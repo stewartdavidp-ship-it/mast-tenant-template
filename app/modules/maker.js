@@ -7528,7 +7528,7 @@
       if (window.inventory && typeof window.inventory === 'object') window.inventory[pid] = inv;
       await bridgeEnsureProduct(pid);
       if (typeof window.syncStockInfoToPublic === 'function') {
-        try { await window.syncStockInfoToPublic(pid); } catch (e) { console.warn('[bridge] stockInfo sync', e); }
+        try { await window.syncStockInfoToPublic(pid, inv); } catch (e) { console.warn('[bridge] stockInfo sync', e); }
       }
       var fresh = await MastDB.get('public/products/' + pid + '/stockInfo');
       var p = findProduct(pid); if (p && fresh) p.stockInfo = fresh;
@@ -7565,7 +7565,7 @@
       if (window.inventory && typeof window.inventory === 'object') window.inventory[pid] = inv;
       await bridgeEnsureProduct(pid);
       if (typeof window.syncStockInfoToPublic === 'function') {
-        try { await window.syncStockInfoToPublic(pid); } catch (e) { console.warn('[bridge] stockInfo sync', e); }
+        try { await window.syncStockInfoToPublic(pid, inv); } catch (e) { console.warn('[bridge] stockInfo sync', e); }
       }
       var fresh2 = await MastDB.get('public/products/' + pid + '/stockInfo');
       var p2 = findProduct(pid); if (p2 && fresh2) p2.stockInfo = fresh2;
@@ -7589,7 +7589,7 @@
       if (window.inventory && typeof window.inventory === 'object') window.inventory[pid] = inv;
       await bridgeEnsureProduct(pid);
       if (typeof window.syncStockInfoToPublic === 'function') {
-        try { await window.syncStockInfoToPublic(pid); } catch (e) { console.warn('[bridge] inv-config sync', e); }
+        try { await window.syncStockInfoToPublic(pid, inv); } catch (e) { console.warn('[bridge] inv-config sync', e); }
       }
       var fresh = await MastDB.get('public/products/' + pid + '/stockInfo');
       var p = findProduct(pid); if (p && fresh) p.stockInfo = fresh;
@@ -7630,7 +7630,7 @@
       if (window.inventory && typeof window.inventory === 'object') window.inventory[pid] = inv;
       await bridgeEnsureProduct(pid);
       if (typeof window.syncStockInfoToPublic === 'function') {
-        try { await window.syncStockInfoToPublic(pid); } catch (e) { console.warn('[bridge] variant inv-config sync', e); }
+        try { await window.syncStockInfoToPublic(pid, inv); } catch (e) { console.warn('[bridge] variant inv-config sync', e); }
       }
       var fresh = await MastDB.get('public/products/' + pid + '/stockInfo');
       var p = findProduct(pid); if (p && fresh) p.stockInfo = fresh;

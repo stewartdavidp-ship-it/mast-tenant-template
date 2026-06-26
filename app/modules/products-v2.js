@@ -419,12 +419,57 @@
     if (V2.editPricing === pid) return pricingEditForm(p);
     var guarded = String(p.status || '').toLowerCase() === 'active';
     var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editPricing(\'' + esc(pid) + '\')">' + (guarded ? 'Revise' : 'Edit') + '</button>' : '';
+    // Recipe is the cost source — fetch it (cached) so the Pricing tab can show
+    // the unit cost, margin, and below-cost state instead of being blind to it.
+    var rc = p.recipeId ? _recipeCache[p.recipeId] : null;
+    if (p.recipeId && !rc) loadRecipeThenRerender(p.recipeId, pid);
     var rows = [{ k: 'Retail price', v: N.money(price(p)) || '—' }];
     if (typeof p.wholesalePriceCents === 'number' && p.wholesalePriceCents > 0) rows.push({ k: 'Wholesale', v: N.money(p.wholesalePriceCents / 100) });
-    rows.push({ k: 'Cost basis', v: p.recipeId ? 'From recipe (see Recipe tab)' : 'Manually priced' });
+    if (rc) {
+      rows.push({ k: 'Cost basis', v: 'From recipe — ' + (N.money(rc.totalCost) || '—') + ' unit cost' });
+      var mr = pricingMarginRow(p, rc); if (mr) rows.push(mr);
+    } else {
+      rows.push({ k: 'Cost basis', v: p.recipeId ? 'From recipe (see Recipe tab)' : 'Manually priced' });
+    }
     var nOv = realVariants(p).filter(function (v) { return variantOverridden(p, v); }).length;
     rows.push({ k: 'Variant overrides', v: nOv ? (MastFormat.countNoun(nOv, 'variant')) : 'none' });
-    return U.card('Pricing · Default (base)', U.kv(rows), { headerRight: editBtn }) + '<div class="pv2-pnote">Base price propagates to every non-overridden variant. Set a variant’s own price on its Pricing tab.</div>';
+    var recipeBlock = rc ? pricingRecipeSummary(p, rc, { showApply: true }) : '';
+    return U.card('Pricing · Default (base)', U.kv(rows), { headerRight: editBtn }) + recipeBlock + '<div class="pv2-pnote">Base price propagates to every non-overridden variant. Set a variant’s own price on its Pricing tab.</div>';
+  }
+  // Margin of the product's live retail price against the recipe unit cost.
+  // Below cost (negative margin) is flagged in the module's danger style (the
+  // same ⚠ / var(--danger) the reprice + what-if surfaces use). Returns a kv
+  // row, or null when there's no cost or price to compare.
+  function pricingMarginRow(p, rc) {
+    var cost = Number(rc.totalCost) || 0;
+    var retail = price(p);
+    if (!(cost > 0) || typeof retail !== 'number' || !(retail > 0)) return null;
+    var marginPct = ((retail - cost) / retail) * 100;
+    if (retail < cost) {
+      return { k: 'Margin', v: '<span style="color:var(--danger);font-weight:600;">⚠ ' + marginPct.toFixed(1) + '% — below cost</span>' };
+    }
+    return { k: 'Margin', v: marginPct.toFixed(1) + '%' };
+  }
+  // Recipe cost + tier prices for the Pricing tab — REUSES the Recipe tab's
+  // Cost-breakdown card (recipeCostCard) and the shared tier-price rows
+  // (recipeTierPriceRows, same format as the recipe "Pricing & tiers" card) so
+  // the operator sees what the product costs and what the recipe would charge,
+  // without retyping. opts.showApply adds the one-click apply action.
+  function pricingRecipeSummary(p, rc, opts) {
+    opts = opts || {};
+    var pid = p._key || p.pid;
+    var tier = (['wholesale', 'direct', 'retail'].indexOf(rc.activePriceTier) >= 0) ? rc.activePriceTier : 'direct';
+    var tierLabel = (RECIPE_TIERS.filter(function (t) { return t.k === tier; })[0] || { l: 'Direct' }).l;
+    var tierPrice = Number(rc[tier + 'Price']) || 0;
+    var apply = (opts.showApply && canEditProduct() && tierPrice > 0)
+      ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.applyRecipePrice(\'' + esc(pid) + '\')">Apply recipe pricing (' + esc(tierLabel.toLowerCase()) + ' · ' + (N.money(tierPrice) || '—') + ')</button>'
+      : '';
+    var note = opts.showApply
+      ? '<div class="pv2-pnote">Tier prices come from the recipe’s markups (Recipe tab). “Apply recipe pricing” sets this product’s price to the active tier — change which tier is active on the Recipe tab.</div>'
+      : '<div class="pv2-pnote">Tier prices come from the recipe’s markups — edit them on the Recipe tab.</div>';
+    return recipeCostCard(rc) +
+      U.card('Recipe tier prices', U.kv(recipeTierPriceRows(rc, tier)) + (apply ? '<div style="margin-top:10px;">' + apply + '</div>' : '')) +
+      note;
   }
   // Inline edit of the customer-facing price (direct priceCents — the model most
   // products use; markupConfig is vestigial). Delegates to the revision-aware
@@ -434,24 +479,48 @@
     var guarded = String(p.status || '').toLowerCase() === 'active';
     var retail = (typeof p.priceCents === 'number') ? (p.priceCents / 100) : (typeof p.price === 'number' ? p.price : '');
     var wholesale = (typeof p.wholesalePriceCents === 'number' && p.wholesalePriceCents > 0) ? (p.wholesalePriceCents / 100) : '';
-    function money(label, id, val, hint) {
+    var rc = p.recipeId ? _recipeCache[p.recipeId] : null;
+    if (p.recipeId && !rc) loadRecipeThenRerender(p.recipeId, pid);
+    function money(label, id, val, hint, extra) {
       return '<label style="display:block;margin-bottom:12px;font-size:0.85rem;color:var(--warm-gray);">' + esc(label) +
         '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;"><span style="font-size:0.9rem;">$</span>' +
         '<input id="' + id + '" type="number" step="0.01" min="0" value="' + esc(val === '' ? '' : String(val)) +
-        '" style="flex:1;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></div>' +
+        '"' + (extra || '') + ' style="flex:1;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;"></div>' +
         (hint ? '<span style="font-size:0.72rem;color:var(--warm-gray);">' + esc(hint) + '</span>' : '') + '</label>';
     }
     var note = guarded ? '<div class="pv2-pnote">This product is Published — your edits stage as a pending revision and go live when you Apply.</div>' : '';
-    var costNote = p.recipeId ? '<div class="pv2-pnote">Cost basis comes from the linked recipe (Recipe tab); this sets the customer-facing price directly.</div>' : '';
+    // When recipe-linked, warn live as the operator types below the unit cost
+    // (negative margin) — reuses the module's below-cost danger style. Pre-fill
+    // the warning if the current price is already below cost.
+    var retailExtra = rc ? ' oninput="ProductsV2.checkBelowCost(\'' + esc(pid) + '\')"' : '';
+    var costNote = rc
+      ? '<div class="pv2-pnote">Cost basis comes from the linked recipe: <strong>' + (N.money(rc.totalCost) || '—') + ' unit cost</strong>. This sets the customer-facing price directly.</div>'
+      : (p.recipeId ? '<div class="pv2-pnote">Cost basis comes from the linked recipe (Recipe tab); this sets the customer-facing price directly.</div>' : '');
     var body = note +
-      money('Retail price', 'pv2PriceRetail', retail) +
+      money('Retail price', 'pv2PriceRetail', retail, null, retailExtra) +
+      (rc ? '<div id="pv2BelowCost" style="font-size:0.85rem;margin:-6px 0 12px;">' + belowCostWarningHtml(retail, rc) + '</div>' : '') +
       money('Wholesale price (optional)', 'pv2PriceWholesale', wholesale, 'Leave blank if you don’t sell this wholesale.') +
       costNote +
       '<div style="display:flex;gap:8px;margin-top:4px;">' +
       '<button class="btn btn-primary btn-small" onclick="ProductsV2.savePricing(\'' + esc(pid) + '\')">' + (guarded ? 'Stage changes' : 'Save') + '</button>' +
       '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelPricing(\'' + esc(pid) + '\')">Cancel</button>' +
       '</div>';
-    return U.card('Edit pricing · Default (base)', body);
+    // Read-only recipe cost + tier prices so the operator isn't pricing from
+    // memory (apply lives in the read view, not mid-edit).
+    var recipeBlock = rc ? pricingRecipeSummary(p, rc, { showApply: false }) : '';
+    return U.card('Edit pricing · Default (base)', body) + recipeBlock;
+  }
+  // Below-cost (negative-margin) warning markup for a given retail price
+  // (dollars) vs the recipe unit cost. Empty string when at/above cost or
+  // when there's nothing to compare. Shared by the initial render and the
+  // live oninput check so both read identically.
+  function belowCostWarningHtml(retailDollars, rc) {
+    var cost = rc ? (Number(rc.totalCost) || 0) : 0;
+    var val = (retailDollars === '' || retailDollars == null) ? NaN : Number(retailDollars);
+    if (!(cost > 0) || !isFinite(val) || !(val > 0) || val >= cost) return '';
+    var marginPct = ((val - cost) / val) * 100;
+    return '<span style="color:var(--danger);font-weight:600;">⚠ Below cost — ' + (N.money(val) || '$' + val) +
+      ' is under the recipe unit cost of ' + (N.money(cost) || '—') + ' (' + marginPct.toFixed(1) + '% margin).</span>';
   }
   function rerenderPricingPane(pid) {
     var rec = V2.byId[pid]; if (!rec) return;
@@ -466,7 +535,9 @@
     _recipeCache['__loading_' + recipeId] = true;
     Promise.resolve(MastDB.recipes.get(recipeId)).then(function (rc) {
       delete _recipeCache['__loading_' + recipeId];
-      if (rc) { _recipeCache[recipeId] = rc; rerenderRecipePane(pid); }
+      // Pricing tab also costs from the recipe — re-render both panes (each
+      // no-ops if its pane isn't on screen) so the recipe cost/tiers surface.
+      if (rc) { _recipeCache[recipeId] = rc; rerenderRecipePane(pid); rerenderPricingPane(pid); }
     }, function () { delete _recipeCache['__loading_' + recipeId]; });
   }
   // F3 — surface OTHER non-archived recipes that target the same (productId,
@@ -617,7 +688,7 @@
       ? [{ k: 'Incoming (on order)', v: String(incoming) + (si.incomingEta ? ' · ETA ' + N.date(si.incomingEta) : '') }]
       : [];
     return U.card(title, U.kv([
-      { k: 'Stock type', v: si.stockType || '—' },
+      { k: 'Stock mode', v: si.stockType || '—' },
       { k: (hasVar ? 'On hand (all variants)' : 'On hand'), v: (si.totalOnHand != null ? String(si.totalOnHand) : '—') }
     ].concat(incomingRow).concat([
       { k: 'Low-stock at', v: (si.lowStockThreshold != null ? String(si.lowStockThreshold) : '—') },
@@ -647,7 +718,7 @@
     var si = p.stockInfo || {};
     var src = { onHand: si.totalOnHand, committed: si.totalCommitted, held: si.totalHeld, damaged: si.totalDamaged, incoming: si.totalIncoming };
     var body = '<div style="display:flex;flex-wrap:wrap;">' + stockCountInputs('pv2Inv_', src) + '</div>' +
-      '<div class="pv2-pnote">All counts for the stocked unit. <strong>Available</strong> is derived (on hand − committed − held). Stock type &amp; low-stock threshold are set on the Fulfillment tab.</div>' +
+      '<div class="pv2-pnote">All counts for the stocked unit. <strong>Available</strong> is derived (on hand − committed − held). Stock mode &amp; low-stock threshold are set on the Fulfillment tab.</div>' +
       '<div style="display:flex;gap:8px;margin-top:8px;">' +
       '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveInventory(\'' + esc(pid) + '\')">Save</button>' +
       '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelInventory(\'' + esc(pid) + '\')">Cancel</button>' +
@@ -1865,20 +1936,29 @@
     if (!cur || ['wholesale', 'direct', 'retail'].indexOf(cur) < 0) opts = '<option value="" selected>—</option>' + opts;
     return '<select onchange="ProductsV2.recipeSetTier(this.value)" style="padding:3px 8px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.85rem;background:var(--cream);color:inherit;">' + opts + '</select>';
   }
-  function recipePricingCard(rc) {
-    if (V2._recipeEditPricing) return recipePricingForm(rc);
-    var canEd = recipeCanEdit(rc);
-    var editBtn = canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditPricing()">Edit</button>' : '';
+  // Read-only tier rows (markup× price · margin) — the single source for both
+  // the recipe "Pricing & tiers" card and the product Pricing tab's recipe
+  // summary, so both render the identical format. markActiveTier (a tier key)
+  // appends a "· active" marker; omit it where an active-tier selector already
+  // shows which tier is live.
+  function recipeTierPriceRows(rc, markActiveTier) {
     var total = Number(rc.totalCost) || 0;
-    var rows = [{ k: 'Active tier', v: canEd ? recipeActiveTierSelect(rc) : '<span class="from">' + esc(rc.activePriceTier || '—') + '</span>' }];
-    RECIPE_TIERS.forEach(function (t) {
+    return RECIPE_TIERS.map(function (t) {
       var markup = Number(rc[t.k + 'Markup']) || 0;
       var price = Number(rc[t.k + 'Price']) || 0;
       var margin = recipeTierMargin(price, total);
       var v = (markup ? markup.toFixed(2) + '× ' : '') + (N.money(price) || '—') +
-        (margin != null ? ' <span class="from">· ' + margin + '% margin</span>' : '');
-      rows.push({ k: t.l, v: v });
+        (margin != null ? ' <span class="from">· ' + margin + '% margin</span>' : '') +
+        (markActiveTier && t.k === markActiveTier ? ' <span class="from">· active</span>' : '');
+      return { k: t.l, v: v };
     });
+  }
+  function recipePricingCard(rc) {
+    if (V2._recipeEditPricing) return recipePricingForm(rc);
+    var canEd = recipeCanEdit(rc);
+    var editBtn = canEd ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.recipeEditPricing()">Edit</button>' : '';
+    var rows = [{ k: 'Active tier', v: canEd ? recipeActiveTierSelect(rc) : '<span class="from">' + esc(rc.activePriceTier || '—') + '</span>' }];
+    recipeTierPriceRows(rc).forEach(function (r) { rows.push(r); });
     rows.push({ k: 'Min margin floor', v: (rc.minMarginPercent != null && rc.minMarginPercent !== '') ? (rc.minMarginPercent + '%') : '—' });
     return U.card('Pricing & tiers', U.kv(rows), { headerRight: editBtn });
   }
@@ -3386,6 +3466,43 @@
         }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
       });
     },
+    // Live below-cost check while editing the retail price — toggles the inline
+    // warning (negative margin vs the recipe unit cost). Display only; Save is
+    // never blocked (operators may deliberately price below cost).
+    checkBelowCost: function (pid) {
+      var warnEl = document.getElementById('pv2BelowCost'); if (!warnEl) return;
+      var rec = V2.byId[pid] || {};
+      var rc = rec.recipeId ? _recipeCache[rec.recipeId] : null;
+      var inp = document.getElementById('pv2PriceRetail');
+      warnEl.innerHTML = rc ? belowCostWarningHtml(inp ? inp.value : '', rc) : '';
+    },
+    // Apply recipe pricing — writes the recipe's ACTIVE-tier price to the
+    // product's customer-facing price, REUSING the existing product-price write
+    // (MakerProductBridge.setFields — the same revision-aware path Save uses, so
+    // it stages on Active products and syncs Etsy). No new pricing mechanism and
+    // no recost/publish: the source of truth for the value is the recipe tier.
+    applyRecipePrice: function (pid) {
+      if (!_guardEditP()) return;
+      var rec = V2.byId[pid] || {};
+      var recipeId = rec.recipeId;
+      if (!recipeId) { MastAdmin.showToast('No recipe linked to price from', true); return; }
+      var rc = _recipeCache[recipeId];
+      if (!rc) { MastAdmin.showToast('Recipe not loaded yet — try again in a moment', true); loadRecipeThenRerender(recipeId, pid); return; }
+      var tier = (['wholesale', 'direct', 'retail'].indexOf(rc.activePriceTier) >= 0) ? rc.activePriceTier : 'direct';
+      var tierPrice = Number(rc[tier + 'Price']) || 0;
+      if (!(tierPrice > 0)) { MastAdmin.showToast('Recipe has no ' + tier + ' price set — set markups on the Recipe tab', true); return; }
+      var newCents = Math.round(tierPrice * 100);
+      var curCents = (typeof rec.priceCents === 'number') ? rec.priceCents : (typeof rec.price === 'number' ? Math.round(rec.price * 100) : null);
+      if (newCents === curCents) { MastAdmin.showToast('Already at the recipe ' + tier + ' price'); return; }
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setFields(pid, { priceCents: newCents })).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Apply failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          if (!res.staged) Object.assign(rec, { priceCents: newCents });
+          rerenderPricingPane(pid); markListDirty();
+          MastAdmin.showToast(res.staged ? 'Staged recipe ' + tier + ' price (Apply to go live)' : 'Applied recipe ' + tier + ' price');
+        }, function (e) { console.error('[products-v2] applyRecipePrice', e); MastAdmin.showToast('Apply failed', true); });
+      });
+    },
     // ── Recipe tab (link/create; editing is the v2 recipe SO — R5) ─────
     recipeCreate: function (pid) {
       if (!_guardEditP()) return;
@@ -3599,7 +3716,10 @@
         Promise.resolve(window.MakerProductBridge.setInventoryConfig(pid, { stockType: stockType, productionLeadTimeDays: lead })).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (rec && res.stockInfo) rec.stockInfo = res.stockInfo;
-          function finish(extra) { V2.editFulfill = null; rerenderFulfillmentPane(pid); refreshProductSummary(pid); MastAdmin.showToast('Fulfillment updated' + (extra || '')); }
+          // Also refresh the Inventory pane: it shows the same Stock mode (read
+          // from the shared stockInfo), so a fulfillment save must re-render it or
+          // the two tabs visibly disagree until the drawer is reopened.
+          function finish(extra) { V2.editFulfill = null; rerenderFulfillmentPane(pid); rerenderInventoryPane(pid); refreshProductSummary(pid); MastAdmin.showToast('Fulfillment updated' + (extra || '')); }
           // 2) catalog fields (availability / dimensions / weight / second) — one
           //    revision-aware setFields call (stages on Active, live otherwise).
           if (Object.keys(changed).length) {
