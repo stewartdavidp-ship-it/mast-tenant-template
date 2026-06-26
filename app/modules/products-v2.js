@@ -585,7 +585,7 @@
       ? [{ k: 'Incoming (on order)', v: String(incoming) + (si.incomingEta ? ' · ETA ' + N.date(si.incomingEta) : '') }]
       : [];
     return U.card(title, U.kv([
-      { k: 'Stock type', v: si.stockType || '—' },
+      { k: 'Stock mode', v: si.stockType || '—' },
       { k: (hasVar ? 'On hand (all variants)' : 'On hand'), v: (si.totalOnHand != null ? String(si.totalOnHand) : '—') }
     ].concat(incomingRow).concat([
       { k: 'Low-stock at', v: (si.lowStockThreshold != null ? String(si.lowStockThreshold) : '—') },
@@ -615,7 +615,7 @@
     var si = p.stockInfo || {};
     var src = { onHand: si.totalOnHand, committed: si.totalCommitted, held: si.totalHeld, damaged: si.totalDamaged, incoming: si.totalIncoming };
     var body = '<div style="display:flex;flex-wrap:wrap;">' + stockCountInputs('pv2Inv_', src) + '</div>' +
-      '<div class="pv2-pnote">All counts for the stocked unit. <strong>Available</strong> is derived (on hand − committed − held). Stock type &amp; low-stock threshold are set on the Fulfillment tab.</div>' +
+      '<div class="pv2-pnote">All counts for the stocked unit. <strong>Available</strong> is derived (on hand − committed − held). Stock mode &amp; low-stock threshold are set on the Fulfillment tab.</div>' +
       '<div style="display:flex;gap:8px;margin-top:8px;">' +
       '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveInventory(\'' + esc(pid) + '\')">Save</button>' +
       '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelInventory(\'' + esc(pid) + '\')">Cancel</button>' +
