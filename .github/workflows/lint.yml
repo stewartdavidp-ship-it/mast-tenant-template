@@ -178,6 +178,7 @@ jobs:
           node test/brand-sync-business-name.test.js &&
           node test/consignment-commission-rate.test.js &&
           node test/mastdb-fieldpath.test.js &&
+          node test/mastdb-transaction-fieldpath.test.js &&
           node test/mastdb-push-fieldpath.test.js &&
           node test/mastdb-core.test.js &&
           node test/mastdb-missing-index.test.js &&

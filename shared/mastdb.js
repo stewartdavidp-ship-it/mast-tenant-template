@@ -472,6 +472,33 @@ var MastDB = (function() {
     return data;
   }
 
+  // --- Read the value at a parsed path's fieldPath (if any), else the whole
+  //     (unwrapped) doc. Mirrors get()/subscribe() so transaction() operates on
+  //     the SAME value the rest of the API does — not the raw container doc. ---
+  function _readAtPath(docData, parsed) {
+    var data = _unwrapV(docData);
+    if (!parsed.fieldPath) return data;
+    var segs = parsed.fieldPath.split('.');
+    var val = data;
+    for (var i = 0; i < segs.length && val != null; i++) val = val[segs[i]];
+    return val !== undefined ? val : null;
+  }
+
+  // --- Corruption guard: a value that stringifies to "[object Object]" is the
+  //     signature of `someObject + scalar` arithmetic — e.g. a counter that read
+  //     a whole document instead of its nested field. Persisting it (as a scalar
+  //     leaf or, worse, a {_v:"[object Object]N"} full-doc replace) silently
+  //     destroys data. Throw at the write boundary so the bad call surfaces. ---
+  function _assertScalarSafe(value, path) {
+    if (typeof value === 'string' && value.indexOf('[object Object]') !== -1) {
+      throw new TypeError(
+        'MastDB: refusing to persist a corrupt scalar at "' + path + '" — value "' +
+        value + '" looks like object+number coercion (a counter likely read a ' +
+        'document instead of its nested field).'
+      );
+    }
+  }
+
   // --- Firestore tenant store ---
   function _makeFirestoreStore() {
     return {
@@ -693,13 +720,24 @@ var MastDB = (function() {
         var ref = _docRef(parsed);
         return _fs.runTransaction(function(tx) {
           return tx.get(ref).then(function(doc) {
-            var current = doc.exists ? doc.data() : null;
+            // Operate on the value at the (possibly nested) fieldPath — NOT the
+            // raw document. Reading the whole doc for a nested path like
+            // admin/inventory/<pid>/stock/_default/incoming made callers compute
+            // `(wholeDoc || 0) + qty` → "[object Object]<qty>", then the scalar
+            // branch below full-replaced the doc with {_v:"[object Object]<qty>"},
+            // wiping stock/stockType (sgtest15 build-completion corruption).
+            var current = _readAtPath(doc.exists ? doc.data() : null, parsed);
             var next = fn(current);
             if (next === undefined) return { committed: false, value: current };
             var resolved = _translateFs(next);
-            if (resolved !== null && typeof resolved === 'object' && !Array.isArray(resolved)) {
+            if (parsed.fieldPath) {
+              // Scope the write to exactly the nested field; preserve siblings.
+              _assertScalarSafe(resolved, path);
+              tx.set(ref, _buildNestedSet(parsed.fieldPath, resolved), { mergeFields: [parsed.fieldPath] });
+            } else if (resolved !== null && typeof resolved === 'object' && !Array.isArray(resolved)) {
               tx.set(ref, resolved);
             } else {
+              _assertScalarSafe(resolved, path);
               tx.set(ref, { _v: resolved });
             }
             return { committed: true, value: next };
@@ -903,13 +941,19 @@ var MastDB = (function() {
         var ref = _platformDocRef(parsed);
         return _fs.runTransaction(function(tx) {
           return tx.get(ref).then(function(doc) {
-            var current = doc.exists ? _unwrapV(doc.data()) : null;
+            // Honor a nested fieldPath (see tenant-store transaction note) — read
+            // and write the targeted field, never the whole container doc.
+            var current = _readAtPath(doc.exists ? doc.data() : null, parsed);
             var next = fn(current);
             if (next === undefined) return { committed: false, value: current };
             var resolved = _translateFs(next);
-            if (resolved !== null && typeof resolved === 'object' && !Array.isArray(resolved)) {
+            if (parsed.fieldPath) {
+              _assertScalarSafe(resolved, path);
+              tx.set(ref, _buildNestedSet(parsed.fieldPath, resolved), { mergeFields: [parsed.fieldPath] });
+            } else if (resolved !== null && typeof resolved === 'object' && !Array.isArray(resolved)) {
               tx.set(ref, resolved);
             } else {
+              _assertScalarSafe(resolved, path);
               tx.set(ref, { _v: resolved });
             }
             return { committed: true, value: next };
