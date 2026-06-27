@@ -226,6 +226,27 @@
         // ── Items ──────────────────────────────────────────────────────
         var m = function (x) { return UI.Num.money(x) || '—'; };
         var items = (d.lineItems ? d.lineItems(r) : []) || [];
+        // Receipt mode (mirrors the storefront /orders receipt). Stored line price is NET
+        // (membership discount baked in). When per-line membershipDiscountCents reconciles
+        // exactly to the order-level discount, promote the lines + subtotal to GROSS and show a
+        // Member Discount row so "Subtotal − discount = Total" foots. Otherwise leave NET (which
+        // already foots: net lines sum to the net subtotal). Line items always sum to subtotal.
+        // Detection works in integer cents (no formatting); dollar conversions go through
+        // UI.Num.moneyVal so the receipt stays on the centralized money core.
+        var rawItems = r.items || [];
+        var memberDiscCents = (r.membershipDiscount && r.membershipDiscount.discountCents) || 0;
+        var attributedCents = 0;
+        rawItems.forEach(function (it) { attributedCents += (it.membershipDiscountCents || 0); });
+        var grossMode = memberDiscCents > 0 && attributedCents === memberDiscCents;
+        var memberDiscUSD = grossMode ? UI.Num.moneyVal(r.membershipDiscount, 'discountCents') : 0;
+        if (grossMode) {
+          for (var gi = 0; gi < items.length; gi++) {
+            var dUSD = (rawItems[gi] && rawItems[gi].membershipDiscountCents) ? UI.Num.moneyVal(rawItems[gi], 'membershipDiscountCents') : 0;
+            var q = items[gi].qty || 1;
+            items[gi].price = (items[gi].price || 0) + dUSD / q;
+            items[gi].total = (items[gi].total || 0) + dUSD;
+          }
+        }
         // Built with the relatedTable primitive (not a hand-rolled mu-rel table)
         // so the chrome comes from MastUI, matching the stock transaction template.
         var itemsTable = UI.relatedTable([
@@ -235,7 +256,9 @@
           { label: 'Total', align: 'right', render: function (it) { return m(it.total); } }
         ], items);
         var t = (d.totals ? d.totals(r) : {}) || {};
-        var totalsHtml = '<div class="mu-totrow"><span>Subtotal</span><span>' + m(t.subtotal) + '</span></div>' +
+        var subtotalDisplay = grossMode ? (t.subtotal || 0) + memberDiscUSD : t.subtotal;
+        var totalsHtml = '<div class="mu-totrow"><span>Subtotal</span><span>' + m(subtotalDisplay) + '</span></div>' +
+          (grossMode ? '<div class="mu-totrow"><span>' + esc((r.membershipDiscount && r.membershipDiscount.programName) || 'Member Discount') + '</span><span>-' + m(memberDiscUSD) + '</span></div>' : '') +
           '<div class="mu-totrow"><span>Shipping</span><span>' + m(t.shipping) + '</span></div>' +
           '<div class="mu-totrow"><span>Tax</span><span>' + m(t.tax) + '</span></div>' +
           '<div class="mu-totrow grand"><span>Total</span><span>' + m(t.total) + '</span></div>';
