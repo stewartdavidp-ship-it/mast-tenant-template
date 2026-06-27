@@ -485,6 +485,9 @@
       retailPrice: 0,
       retailGrossProfit: 0,
       activePriceTier: data.activePriceTier || 'direct',
+      // F3 — a recipe drives the priced unit (productId, variantKey). Defaults to the
+      // 'default' unit and reuses the product variant-key space for per-variant recipes.
+      variantKey: data.variantKey || 'default',
       // Channel-First Phase 1c (D33, D41) — per-tier override; null means "use suggested".
       // suggestedPrice mirrors the computed wholesale/direct/retail{Price} fields and is
       // populated by calculateRecipe(). Effective price = overridePrice[tier] ?? suggestedPrice[tier].
@@ -6002,7 +6005,7 @@
     } else {
       var esc = MastAdmin.esc;
       html += '<div class="data-table"><table style="width:100%;font-size:0.85rem;"><thead><tr>';
-      html += '<th>Recipe</th><th>Tier</th><th>Why</th><th style="text-align:right;">Cost</th></tr>';
+      html += '<th>Recipe</th><th>Active tier (drives price)</th><th>Why</th><th style="text-align:right;">Cost</th></tr>';
       html += '</thead><tbody>';
       candidates.forEach(function(r) {
         var whyColor = r._belowCost ? 'var(--danger)' : '#b45309';
@@ -7656,16 +7659,46 @@
   // simple recipeId write (applyRecipeToProduct is a different, price-applying op
   // — not used here). createRecipe is maker's own writer (sets recipe.productId);
   // we additionally set product.recipeId, matching the legacy create-recipe flow.
-  async function bridgeCreateRecipeForProduct(pid, name) {
+  async function bridgeCreateRecipeForProduct(pid, name, variantKey) {
     try {
-      var rec = await createRecipe({ productId: pid, name: name || 'Recipe', status: 'draft' });
+      var unit = variantKey || 'default';
+      // F3 — warn (do NOT block) when another non-archived recipe already drives
+      // this (productId, variantKey) unit, so the maker knows a duplicate exists.
+      var existing = await bridgeSameUnitRecipes(pid, unit, null);
+      var rec = await createRecipe({ productId: pid, name: name || 'Recipe', status: 'draft', variantKey: unit });
       var rid = rec && rec.recipeId;
       if (!rid) return { ok: false, error: 'Recipe creation failed' };
       await MastDB.set('public/products/' + pid + '/recipeId', rid);
       var p = findProduct(pid); if (p) p.recipeId = rid;
       MastAdmin.writeAudit('create', 'recipe', rid);
-      return { ok: true, recipeId: rid };
+      var out = { ok: true, recipeId: rid };
+      if (existing.length) out.warning = 'Another recipe already targets this unit — only the linked recipe drives the price. Clean up the extras when ready.';
+      return out;
     } catch (e) { return { ok: false, error: (e && e.message) || 'Failed' }; }
+  }
+
+  // F3 — non-archived recipes (other than excludeId) targeting the same
+  // (productId, variantKey) unit. Pure filter over a recipe map.
+  function sameUnitFromMap(map, pid, variantKey, excludeId) {
+    var unit = variantKey || 'default';
+    var out = [];
+    Object.keys(map || {}).forEach(function (rid) {
+      var r = map[rid];
+      if (!r || rid === excludeId || r.status === 'archived') return;
+      if (r.productId !== pid) return;
+      if ((r.variantKey || 'default') !== unit) return;
+      out.push({ recipeId: rid, name: r.name || 'Recipe', status: r.status || 'draft', totalCost: r.totalCost || 0 });
+    });
+    return out;
+  }
+
+  // Source-of-truth lookup: prefer the live recipesData cache, else list from the DB
+  // (products-v2 may invoke this without the maker module's listener active).
+  async function bridgeSameUnitRecipes(pid, variantKey, excludeId) {
+    var map = (recipesLoaded && Object.keys(recipesData).length)
+      ? recipesData
+      : ((await MastDB.recipes.list(200)) || {});
+    return sameUnitFromMap(map, pid, variantKey, excludeId);
   }
   async function bridgeLinkRecipe(pid, recipeId) {
     try {
@@ -7983,7 +8016,9 @@
     // Per-variant fulfillment overrides (mode / lead / fulfill days; null = inherit).
     setVariantInventoryConfig: function (pid, variantId, patch) { return bridgeSetVariantInventoryConfig(pid, variantId, patch); },
     // Recipe link (building itself stays in the legacy builder).
-    createRecipeForProduct: function (pid, name) { return bridgeCreateRecipeForProduct(pid, name); },
+    createRecipeForProduct: function (pid, name, variantKey) { return bridgeCreateRecipeForProduct(pid, name, variantKey); },
+    // F3 — other non-archived recipes targeting the same (productId, variantKey) unit.
+    sameUnitRecipes: function (pid, variantKey, excludeId) { return bridgeSameUnitRecipes(pid, variantKey, excludeId); },
     linkRecipe: function (pid, recipeId) { return bridgeLinkRecipe(pid, recipeId); },
     unlinkRecipe: function (pid) { return bridgeUnlinkRecipe(pid); },
     // Authored product attributes (tags / materials / custom) — live write.
