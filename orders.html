@@ -1280,6 +1280,16 @@ window.TENANT_READY.then(function() {
   // ── Order Detail Rendering ──
   function renderOrderDetail(order) {
     var items = order.items || [];
+    // Receipt representation mode. Stored line `priceCents` is NET (membership discount baked in).
+    // When per-line membershipDiscountCents reconciles exactly to the order-level discount we show
+    // GROSS lines under a GROSS subtotal (Subtotal − discount = Total foots); otherwise (legacy
+    // orders) we show NET lines under a NET subtotal with savings as a note. Either way the
+    // displayed line items always sum to the displayed subtotal.
+    var orderDiscCents = (order.membershipDiscount && order.membershipDiscount.discountCents) || 0;
+    var attributedCents = 0;
+    for (var ci = 0; ci < items.length; ci++) attributedCents += (items[ci].membershipDiscountCents || 0);
+    var grossMode = orderDiscCents > 0 && attributedCents === orderDiscCents;
+
     var html = '<div class="order-detail-section"><div class="order-detail-label">Items</div>';
 
     for (var i = 0; i < items.length; i++) {
@@ -1294,25 +1304,24 @@ window.TENANT_READY.then(function() {
         }
         if (opts.length) options = opts.join(' · ');
       }
+      var lineNetCents = (item.priceCents || 0) * (item.qty || 1);
+      var lineCents = grossMode ? lineNetCents + (item.membershipDiscountCents || 0) : lineNetCents;
       html += '<div class="order-item-row">' +
         '<div class="order-item-name">' + esc(name) +
           (options ? '<div class="order-item-options">' + esc(options) + '</div>' : '') +
         '</div>' +
         '<div class="order-item-qty">&times;' + (item.qty || 1) + '</div>' +
-        '<div class="order-item-price">' + formatPrice(((item.priceCents || 0) * (item.qty || 1)) / 100) + '</div>' +
+        '<div class="order-item-price">' + formatPrice(lineCents / 100) + '</div>' +
       '</div>';
     }
     html += '</div>';
 
     // Totals
     html += '<div class="order-detail-section"><div class="order-totals">';
-    var displaySubtotal = order.subtotal || 0;
-    if (order.membershipDiscount && order.membershipDiscount.discountCents) {
-      displaySubtotal = displaySubtotal + (order.membershipDiscount.discountCents / 100);
-    }
+    var displaySubtotal = grossMode ? ((order.subtotal || 0) + orderDiscCents / 100) : (order.subtotal || 0);
     if (displaySubtotal > 0) html += '<div class="order-total-row"><span>Subtotal</span><span>' + formatPrice(displaySubtotal) + '</span></div>';
-    if (order.membershipDiscount && order.membershipDiscount.discountCents) {
-      html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>' + esc(order.membershipDiscount.programName || 'Member Discount') + '</span><span>-' + formatPrice(order.membershipDiscount.discountCents / 100) + '</span></div>';
+    if (grossMode) {
+      html += '<div class="order-total-row" style="color:var(--accent,#C6A96C)"><span>' + esc(order.membershipDiscount.programName || 'Member Discount') + '</span><span>-' + formatPrice(orderDiscCents / 100) + '</span></div>';
     }
     var shipLabel = (order.shippingMethod && order.shippingMethod.label) || 'Shipping';
     if (order.shippingCost != null) html += '<div class="order-total-row"><span>' + esc(shipLabel) + '</span><span>' + (order.shippingCost === 0 ? 'Free' : formatPrice(order.shippingCost)) + '</span></div>';
@@ -1341,6 +1350,11 @@ window.TENANT_READY.then(function() {
     }
     var displayTotal = orderTotalDollars(order);
     if (displayTotal != null) html += '<div class="order-total-row grand-total"><span>Total</span><span>' + formatPrice(displayTotal) + '</span></div>';
+    // Legacy orders (no per-line discount data): savings are already baked into the net line
+    // prices above, so show them as an informational note rather than a second deduction.
+    if (!grossMode && orderDiscCents > 0) {
+      html += '<div class="order-total-row" style="color:var(--accent,#C6A96C);font-size:0.85em;"><span>' + esc(order.membershipDiscount.programName || 'Member savings') + ' (included)</span><span>-' + formatPrice(orderDiscCents / 100) + '</span></div>';
+    }
     html += '</div></div>';
 
     // Shipping address
