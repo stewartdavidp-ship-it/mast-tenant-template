@@ -39699,13 +39699,7 @@ function renderDashCardLowInventory() {
       if (!p || !p.pid) return;
       var inv = inventory[p.pid];
       if (!inv) return;
-      // Canonical low/out classification (shared/stock-status.core.js) — the
-      // same rule the Products page pills and the storefront badge use. Only
-      // stock-tracked shortages surface here: build/made-to-order and depleted
-      // stock-to-build (made on demand) are never "low" or "out", so they no
-      // longer need an ad-hoc stockType/category skip. A product counts as
-      // "out" only when its AGGREGATE available is 0 (one sold-out variant
-      // alongside in-stock siblings is not a whole-product stock-out).
+      // Canonical low/out classification (shared/stock-status.core.js) — same rule as the Products pills/storefront; build/made-to-order and depleted stock-to-build never count, and "out" needs aggregate available 0 (every variant 0).
       var ss = window.MastStockStatus.classify({
         stockType: inv.stockType,
         available: getInventoryTotals(inv).available,
