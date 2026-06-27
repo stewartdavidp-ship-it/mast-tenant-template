@@ -3341,18 +3341,26 @@
         var sku = se ? se.value.trim() : '';
         patch = { priceCents: priceCents, wholesalePriceCents: wholesaleCents, sku: sku === '' ? null : sku };
       }
-      withProductBridge(function () {
-        Promise.resolve(window.MakerProductBridge.setVariantFields(pid, vid, patch)).then(function (res) {
-          if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
-          var rec = V2.byId[pid]; if (rec) rec.variants = res.variants;
-          V2.editVarPricing = null;
-          // Re-open the variant SO — lands on v-pricing (its default tab) and
-          // refreshes the Price hero tile + pane together.
-          var vr = buildVariantRecord(pid + '::' + vid);
-          if (vr) MastEntity.openRecord('product-variant-v2', vr, 'read', true);
-          MastAdmin.showToast(useDefault ? 'Using Default price' : 'Variant pricing saved');
-        }, function (e) { console.error('[products-v2] saveVariantPricing', e); MastAdmin.showToast('Failed', true); });
-      });
+      function doSave() {
+        withProductBridge(function () {
+          Promise.resolve(window.MakerProductBridge.setVariantFields(pid, vid, patch)).then(function (res) {
+            if (!res || !res.ok) { MastAdmin.showToast('Failed: ' + ((res && res.error) || 'unknown'), true); return; }
+            var rec = V2.byId[pid]; if (rec) rec.variants = res.variants;
+            V2.editVarPricing = null;
+            // Re-open the variant SO — lands on v-pricing (its default tab) and
+            // refreshes the Price hero tile + pane together.
+            var vr = buildVariantRecord(pid + '::' + vid);
+            if (vr) MastEntity.openRecord('product-variant-v2', vr, 'read', true);
+            MastAdmin.showToast(useDefault ? 'Using Default price' : 'Variant pricing saved');
+          }, function (e) { console.error('[products-v2] saveVariantPricing', e); MastAdmin.showToast('Failed', true); });
+        });
+      }
+      // $0 variant price is allowed but never silent — confirm first (F8).
+      if (!useDefault && patch.priceCents === 0 && typeof window.mastConfirm === 'function') {
+        Promise.resolve(window.mastConfirm('This variant will be free — confirm', { title: 'Free variant?', confirmLabel: 'Save as free' })).then(function (ok) { if (ok) doSave(); });
+      } else {
+        doSave();
+      }
     },
     // ── Variant Info (custom name; first-class variant identity) ──────
     editVariantInfo: function (pid, vid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editVarInfo = pid + '::' + vid; rerenderVariantInfoPane(pid, vid); },
@@ -3457,14 +3465,23 @@
       var newWh = (wholesale === '') ? null : Math.round(wholesale * 100);
       if (newWh !== curWh) changed.wholesalePriceCents = newWh;
       if (!Object.keys(changed).length) { V2.editPricing = null; rerenderPricingPane(pid); MastAdmin.showToast('No changes'); return; }
-      withProductBridge(function () {
-        Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
-          if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
-          if (!res.staged) Object.assign(rec, changed);
-          V2.editPricing = null; rerenderPricingPane(pid); refreshProductSummary(pid); markListDirty();
-          MastAdmin.showToast(res.staged ? 'Staged ' + MastFormat.countNoun(res.changed, 'change') + ' (Apply to go live)' : 'Saved');
-        }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
-      });
+      function doSave() {
+        withProductBridge(function () {
+          Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
+            if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
+            if (!res.staged) Object.assign(rec, changed);
+            V2.editPricing = null; rerenderPricingPane(pid); refreshProductSummary(pid); markListDirty();
+            MastAdmin.showToast(res.staged ? 'Staged ' + MastFormat.countNoun(res.changed, 'change') + ' (Apply to go live)' : 'Saved');
+          }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
+        });
+      }
+      // $0 is allowed (giveaways are legitimate) but never silent — require an
+      // explicit confirm before saving a free retail price (F8).
+      if (changed.priceCents === 0 && typeof window.mastConfirm === 'function') {
+        Promise.resolve(window.mastConfirm('This will be free — confirm', { title: 'Free product?', confirmLabel: 'Save as free' })).then(function (ok) { if (ok) doSave(); });
+      } else {
+        doSave();
+      }
     },
     // Live below-cost check while editing the retail price — toggles the inline
     // warning (negative margin vs the recipe unit cost). Display only; Save is
