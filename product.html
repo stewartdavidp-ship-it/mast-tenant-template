@@ -1091,6 +1091,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 <script src="shared/mastdb.js?v=1"></script>
+<!-- Canonical low/out-of-stock classifier — shared with the admin Products page
+     and Dashboard so the storefront badge cannot drift. -->
+<script src="shared/stock-status.core.js?v=1"></script>
 <script>
   // Firebase — load product detail from URL param ?id=pXXX
   window.TENANT_READY.then(function() {
@@ -2391,17 +2394,19 @@
     if (isDiscontinued && effective > 0) {
       return { text: badges.discontinuedInStock || 'Final Stock', cssClass: 'final-stock' };
     }
+    // Canonical low/out classification (shared/stock-status.core.js) — the same
+    // rule the admin Products page and Dashboard now read.
+    var ss = window.MastStockStatus.classify({ stockType: stockType, available: effective, lowStockThreshold: (si && si.lowStockThreshold) });
     if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') {
-      if (effective <= 0) return { text: 'Sold Out', cssClass: 'sold-out' };
-      var threshold = (si && si.lowStockThreshold) || 2;
-      if (effective <= threshold) {
+      if (ss.status === 'out') return { text: 'Sold Out', cssClass: 'sold-out' };
+      if (ss.status === 'low') {
         var lowText = (badges.lowStock || 'Only {n} Left').replace('{n}', effective);
         return { text: lowText, cssClass: 'low-stock' };
       }
       return null; // in stock, no badge
     }
     if (stockType === 'stock-to-build') {
-      if (effective <= 0) return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+      if (ss.status === 'na') return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
       return null; // in stock from stock-to-build
     }
     if (stockType === 'build-to-order' || stockType === 'made-to-order') {

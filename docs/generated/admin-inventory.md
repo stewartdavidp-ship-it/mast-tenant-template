@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **40,177** lines
-- **Feature modules:** **153** files in `app/modules/` (**91** routed), **145,106** lines combined
+- **Core shell:** `app/index.html` — **40,184** lines
+- **Feature modules:** **153** files in `app/modules/` (**91** routed), **145,112** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -116,7 +116,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/pos-v2.js` | 182 | pos-v2 |
 | `modules/procurement-v2.js` | 3,328 | procurement-v2, procurement |
 | `modules/production.js` | 3,838 | jobs, production, stories, forecast |
-| `modules/products-engine.js` | 1,937 | — |
+| `modules/products-engine.js` | 1,943 | — |
 | `modules/products-v2.js` | 4,073 | products-v2 |
 | `modules/promotions-v2.js` | 456 | promotions-v2, promotions |
 | `modules/publish-to-channel-dialog.js` | 179 | — |
