@@ -1100,15 +1100,30 @@
     var params = new URLSearchParams(window.location.search);
     // Accept both ?id= and ?pid= for the product key (bug-sweep 2026-04-15).
     // `?pid=` matches the admin URL convention; `?id=` was the original storefront convention.
-    var pid = params.get('id') || params.get('pid');
+    var queryPid = params.get('id') || params.get('pid');
     var isStoryView = params.get('view') === 'story';
     window._isStoryView = isStoryView;
-    window._pid = pid;
 
-    if (!pid) {
-      document.getElementById('productLoading').style.display = 'none';
-      document.getElementById('productNotFound').style.display = '';
-      return;
+    // Resolve the product key from either the ?id=/?pid= query (original URLs) or
+    // the slug route /product/<slug> (F38): the hosting rewrite serves this page
+    // for that path — mirroring /show/<slug> (show/show.js) — and we map the slug
+    // to its product id via the public products collection (the same source
+    // shop.html reads). Query param wins; slug is the shareable/canonical form.
+    function productSlugFromPath() {
+      var parts = window.location.pathname.split('/').filter(Boolean);
+      var i = parts.indexOf('product');
+      var seg = i >= 0 ? parts[i + 1] : '';
+      if (!seg || /\.html?$/i.test(seg)) return '';
+      try { return decodeURIComponent(seg); } catch (e) { return seg; }
+    }
+    function resolveProductId() {
+      if (queryPid) return Promise.resolve(queryPid);
+      var slug = productSlugFromPath();
+      if (!slug) return Promise.resolve(null);
+      return Promise.resolve(MastDB.get('public/products')).then(function(all) {
+        all = all || {};
+        return Object.keys(all).filter(function(k) { return all[k] && all[k].slug === slug; })[0] || null;
+      }).catch(function() { return null; });
     }
 
     // Build shop category nav
@@ -1123,7 +1138,14 @@
       navEl.innerHTML = html;
     });
 
-    // Load product and active sales in parallel
+    // Load product and active sales in parallel — once the key is resolved.
+    resolveProductId().then(function(pid) {
+      window._pid = pid;
+      if (!pid) {
+        document.getElementById('productLoading').style.display = 'none';
+        document.getElementById('productNotFound').style.display = '';
+        return;
+      }
     Promise.all([
       MastDB.get('public/products/' + pid),
       MastDB.get('public/sales-promotions')
@@ -1709,6 +1731,7 @@
       document.getElementById('productLoading').style.display = 'none';
       document.getElementById('productNotFound').style.display = '';
     });
+    }); // resolveProductId().then
   }).catch(function(err) { console.error('[product] Tenant resolution failed:', err.message); });
 
   function switchImage(idx) {
