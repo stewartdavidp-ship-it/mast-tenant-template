@@ -1028,6 +1028,7 @@
             <span class="qty-value" id="qtyValue">1</span>
             <button class="qty-btn" id="qtyInc">+</button>
           </div>
+          <div class="qty-stock-hint" id="qtyStockHint" style="display:none;"></div>
         </div>
         <div class="product-detail-actions">
           <button id="addToCartBtn" class="btn btn-primary" disabled style="opacity:0.5;cursor:not-allowed;">Add to Cart</button>
@@ -1411,11 +1412,11 @@
           if (effPrice < lowestEffective) lowestEffective = effPrice;
         }
         if (anySaleApplied && lowestEffective < lowest) {
-          priceEl.innerHTML = '<span class="price-prefix">from</span>' +
+          priceEl.innerHTML = '<span class="price-prefix">from</span> ' +
             '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(lowest) + '</span> ' +
             '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(lowestEffective) + '</span>';
         } else {
-          priceEl.innerHTML = '<span class="price-prefix">from</span>' + escHtml(formatPriceCents(lowest));
+          priceEl.innerHTML = '<span class="price-prefix">from</span> ' + escHtml(formatPriceCents(lowest));
         }
       } else if (pCents && _productSaleInfo) {
         var saleP = _calcSalePrice(pCents);
@@ -1650,6 +1651,7 @@
               ? findVariant(window._productVariants, window._selectedOptions) : null;
             tryMatchVariantImage(selectedVariant, value);
             checkAddToCartReady();
+            refreshQtyStepper(); // re-cap qty to the newly selected variant's stock
           });
         });
 
@@ -1699,6 +1701,7 @@
 
       // Show qty stepper
       document.getElementById('productQtyWrap').style.display = '';
+      refreshQtyStepper();
 
       // Product URL (legacy Weebly redirect)
       if (p.url) {
@@ -1781,21 +1784,69 @@
   })();
 
   // ── Qty Stepper ──
+  var QTY_MAX = 10;
+
+  // Units the customer may add for the current selection: the backorder
+  // increment when backordering, else available units on strict-stock products,
+  // else null (no cap beyond QTY_MAX). Mirrors the availableStock the add-to-cart
+  // handler hands MastCart, so the stepper can't ask for more than the cart keeps.
+  function getSelectionAvailableStock() {
+    var bo = window._productBackorder;
+    if (bo && typeof bo.maxQty === 'number') return Math.max(0, bo.maxQty);
+    var p = window._productData;
+    var si = p && p.stockInfo;
+    if (!si) return null;
+    var stockType = si.stockType;
+    var isStrict = stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited';
+    if (!isStrict) return null;
+    var required = window._requiredOptions || [];
+    if (required.length > 0 && si.variants) {
+      // Per-variant stock only once a full combo is chosen; until then don't cap
+      // (Add to Cart stays disabled until a variant is selected anyway).
+      if (!required.every(function(l) { return (window._selectedOptions || {})[l]; })) return null;
+      var variant = findVariant(window._productVariants, window._selectedOptions);
+      var vid = variant && variant.id ? variant.id : null;
+      var v = vid ? si.variants[vid] : null;
+      return v ? Math.max(0, (v.available || 0)) : null;
+    }
+    return Math.max(0, (si.totalAvailable || 0));
+  }
+
+  // Caps window._productQty at what's available, reflects it on the stepper, and
+  // tells the customer when stock is the binding limit (S-16: no more silent clamp
+  // where the cart quietly reduces the quantity after an "added" toast).
+  function refreshQtyStepper() {
+    var avail = getSelectionAvailableStock();
+    var max = (typeof avail === 'number') ? Math.min(QTY_MAX, avail) : QTY_MAX;
+    if (max < 1) max = 1; // sold-out is gated by the cart button; keep stepper usable at 1
+    if (window._productQty > max) window._productQty = max;
+    if (!window._productQty || window._productQty < 1) window._productQty = 1;
+    document.getElementById('qtyValue').textContent = window._productQty;
+    document.getElementById('qtyDec').disabled = (window._productQty <= 1);
+    document.getElementById('qtyInc').disabled = (window._productQty >= max);
+    var hint = document.getElementById('qtyStockHint');
+    if (hint) {
+      // On backorder the ships-by note already explains the limit, so only surface
+      // the in-stock ceiling here.
+      if (!window._productBackorder && typeof avail === 'number' && avail > 0 && avail <= QTY_MAX && window._productQty >= avail) {
+        hint.textContent = 'Only ' + avail + ' available';
+        hint.style.display = '';
+      } else {
+        hint.style.display = 'none';
+      }
+    }
+  }
+  window._refreshQtyStepper = refreshQtyStepper;
+
   document.getElementById('qtyDec').addEventListener('click', function() {
     if (window._productQty > 1) {
       window._productQty--;
-      document.getElementById('qtyValue').textContent = window._productQty;
-      document.getElementById('qtyDec').disabled = (window._productQty <= 1);
-      document.getElementById('qtyInc').disabled = (window._productQty >= 10);
+      refreshQtyStepper();
     }
   });
   document.getElementById('qtyInc').addEventListener('click', function() {
-    if (window._productQty < 10) {
-      window._productQty++;
-      document.getElementById('qtyValue').textContent = window._productQty;
-      document.getElementById('qtyDec').disabled = (window._productQty <= 1);
-      document.getElementById('qtyInc').disabled = (window._productQty >= 10);
-    }
+    window._productQty = (window._productQty || 1) + 1;
+    refreshQtyStepper(); // clamps back down if it would exceed what's available
   });
 
   // Format a 'ships by' date. Parse YYYY-MM-DD as LOCAL midnight so it doesn't
@@ -1898,6 +1949,7 @@
       // QA), not just a greyed-out "Add to Cart".
       if (stockBlocked) btn.textContent = btnText;
       else if (allSelected && !hasPrice) btn.textContent = 'Price Unavailable';
+      else if (required.length > 0 && !allSelected) btn.textContent = required.length === 1 ? ('Select ' + required[0]) : 'Select options';
       else btn.textContent = 'Add to Cart';
     }
 
