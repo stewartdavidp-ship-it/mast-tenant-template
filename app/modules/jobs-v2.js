@@ -32,6 +32,17 @@
     });
   }
   function fmtDate(d) { return d ? U.Num.date(d) : ''; }
+  // Past-deadline flag (F25): true when a still-open job's deadline is before
+  // today. Terminal jobs (completed/cancelled) are never "overdue". Date-only
+  // comparison mirrors the daysUntil pattern used elsewhere (cs-members-v2).
+  function jobOverdue(j) {
+    if (!j || !j.deadline) return false;
+    var s = String(j.status || '').toLowerCase();
+    if (s === 'completed' || s === 'cancelled') return false;
+    var t = new Date(j.deadline); if (isNaN(t.getTime())) return false;
+    var now = new Date(); now.setHours(0, 0, 0, 0); t.setHours(0, 0, 0, 0);
+    return t.getTime() < now.getTime();
+  }
 
   // ── Serializable job-status transition table (jobs-v2-plan.md §3a) ───
   // Source-of-truth artifact: function-free DATA ONLY, mirroring the MCP
@@ -338,6 +349,28 @@
     });
   }
 
+  // The header summary tiles — DERIVED from the job record, so the same builder
+  // backs both the initial render and the post-write refresh (no cached copy to
+  // drift). Items/Progress recompute straight from j.lineItems.
+  function jobTiles(UU, j) {
+    var prog = progressOf(j);
+    return UU.tiles([
+      { k: 'Purpose', v: esc(purposeLabel(j.purpose)) },
+      { k: 'Priority', v: j.priority ? statusLabel(j.priority) : '—' },
+      { k: 'Progress', v: prog.target ? (prog.done + '/' + prog.target + ' · ' + prog.pct + '%') : '—' },
+      { k: 'Items', v: String(lineItemsArr(j).length) }
+    ]);
+  }
+
+  // Recompute the header summary (Items/Progress tiles) AND the Definition
+  // readiness checklist from the SAME live record an items write just produced —
+  // in place, so they update together with the Line Items pane (vs the old
+  // snapshot that stayed 0 / red ❌ until a reopen).
+  function refreshJobSummary(j) {
+    if (!j || !window.MastEntity || !MastEntity.refreshFlowHeader) return;
+    MastEntity.refreshFlowHeader(j, jobTiles(window.MastUI, j));
+  }
+
   // ── Schema: the whole Jobs surface, declaratively ───────────────────
   MastEntity.define('jobs-v2', {
     label: 'Job', labelPlural: 'Jobs', size: 'xl',
@@ -388,13 +421,7 @@
         return true;
       },
       render: function (UU, j) {
-        var prog = progressOf(j);
-        var tiles = UU.tiles([
-          { k: 'Purpose', v: esc(purposeLabel(j.purpose)) },
-          { k: 'Priority', v: j.priority ? statusLabel(j.priority) : '—' },
-          { k: 'Progress', v: prog.target ? (prog.done + '/' + prog.target + ' · ' + prog.pct + '%') : '—' },
-          { k: 'Items', v: String(lineItemsArr(j).length) }
-        ]);
+        var tiles = jobTiles(UU, j);
         var tabs = [
           { key: 'overview', label: 'Overview' }, { key: 'items', label: 'Line Items' },
           { key: 'builds', label: 'Builds' }, { key: 'costs', label: 'Costs' },
@@ -622,6 +649,9 @@
       var body = document.getElementById('mastSlideOutBody');
       var pane = body && body.querySelector('.mu-pane[data-pane="items"]');
       if (pane) pane.innerHTML = itemsPane(window.MastUI, fresh);
+      // Derive the header tiles + Definition checklist from the same fresh record
+      // so "Items" and "At least one line item" update with the pane, not on reopen.
+      refreshJobSummary(fresh);
     });
   }
 
@@ -1032,8 +1062,25 @@
       window.MastEntity.renderList('jobs-v2', {
         rows: visibleRows(), sortKey: V2.sortKey, sortDir: V2.sortDir,
         onSortFnName: 'JobsV2.sort', onRowClickFnName: 'JobsV2.open',
+        columns: deadlineFlaggedColumns(),
         empty: { title: 'No jobs match these filters', message: 'Try a different status or purpose.' }
       });
+  }
+  // F25: reuse the default schema columns, but wrap the Deadline cell so a
+  // past-deadline open job gets the app's existing danger badge appended. On-time
+  // (and terminal) rows render exactly as before — no look-and-feel change.
+  function deadlineFlaggedColumns() {
+    var cols = window.MastEntity.listColumns('jobs-v2');
+    cols.forEach(function (c) {
+      if (c.key !== 'deadline') return;
+      var base = c.render;
+      c.render = function (j) {
+        var html = base(j);
+        if (jobOverdue(j)) html += ' ' + U.badge('Overdue', 'danger');
+        return html;
+      };
+    });
+    return cols;
   }
 
   // ── Public handlers (referenced by engine-rendered HTML) ────────────

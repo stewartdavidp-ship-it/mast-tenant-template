@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **40,188** lines
-- **Feature modules:** **153** files in `app/modules/` (**91** routed), **144,672** lines combined
+- **Core shell:** `app/index.html` — **40,184** lines
+- **Feature modules:** **153** files in `app/modules/` (**91** routed), **145,112** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -91,14 +91,14 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/intake-ops.js` | 485 | — |
 | `modules/inventory-ask-ai.js` | 151 | — |
 | `modules/inventory-stock-ops.js` | 653 | — |
-| `modules/jobs-v2.js` | 1,315 | jobs-v2 |
+| `modules/jobs-v2.js` | 1,362 | jobs-v2 |
 | `modules/library-upload-modal.js` | 163 | — |
 | `modules/link-recipe-dialog.js` | 107 | — |
 | `modules/lookbooks-v2.js` | 561 | lookbooks-v2, lookbooks |
 | `modules/lots-v2.js` | 178 | lots-v2 |
 | `modules/loyalty-v2.js` | 495 | loyalty-v2 |
 | `modules/maker-settings.js` | 353 | — |
-| `modules/maker.js` | 7,923 | materials, products |
+| `modules/maker.js` | 8,062 | materials, products |
 | `modules/mapping-v2.js` | 382 | mapping-v2 |
 | `modules/mapping.js` | 1,802 | mapping |
 | `modules/marketing-calendar-v2.js` | 250 | marketing-calendar-v2, marketing-calendar |
@@ -114,10 +114,10 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/passes-v2.js` | 539 | passes-v2 |
 | `modules/permission-matrix.js` | 211 | — |
 | `modules/pos-v2.js` | 182 | pos-v2 |
-| `modules/procurement-v2.js` | 3,278 | procurement-v2, procurement |
-| `modules/production.js` | 3,826 | jobs, production, stories, forecast |
+| `modules/procurement-v2.js` | 3,328 | procurement-v2, procurement |
+| `modules/production.js` | 3,838 | jobs, production, stories, forecast |
 | `modules/products-engine.js` | 1,943 | — |
-| `modules/products-v2.js` | 3,881 | products-v2 |
+| `modules/products-v2.js` | 4,073 | products-v2 |
 | `modules/promotions-v2.js` | 456 | promotions-v2, promotions |
 | `modules/publish-to-channel-dialog.js` | 179 | — |
 | `modules/receipts-v2.js` | 460 | receipts-v2 |

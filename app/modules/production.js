@@ -1724,6 +1724,18 @@ async function doCompleteBuild(jobId, buildId) {
         if (data.warnings && data.warnings.length) {
           data.warnings.forEach(function(w) { summaryItems.push('⚠️ ' + w); });
         }
+        // Defect A: explain WHY no sellable stock was added rather than showing
+        // nothing. The D47 matrix only restocks inventory-general / -event jobs;
+        // other purposes (custom, fulfillment, …) build to order and add no
+        // sellable stock by design. purposeRestocks comes from completeBuildJob.
+        if (data.purposeRestocks === false && !(data.autoPushed && data.autoPushed.length)) {
+          var pLabel = (PURPOSE_LABELS[data.purpose] || data.purpose || 'this');
+          summaryItems.push('ℹ️ No sellable stock added — ' + pLabel + ' builds don\'t restock inventory. Use a General/Event Inventory job to add sellable stock.');
+        }
+        // Explain the silent no-op when material tracking is off for the tenant.
+        if (data.trackMaterials === false) {
+          summaryItems.push('ℹ️ Materials not deducted — material inventory tracking is off for this tenant.');
+        }
       }
     } catch (cfErr) {
       console.error('completeBuildJob failed:', cfErr);
