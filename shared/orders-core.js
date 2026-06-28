@@ -54,6 +54,18 @@
     return order.orderNumber || order.orderId || order._key;
   }
 
+  // statusHistory is stored as a plain ARRAY by the storefront / POS / admin order
+  // paths, but as a timestamp-KEYED MAP ({ "<iso>": {…} }) by tenant-MCP and other
+  // external order-creation paths (RTDB rejects '.'-bearing keys as array indices,
+  // so those writers persist a map). Every lifecycle core appends a new entry then
+  // persists, so normalize to a fresh array regardless of stored shape. A naive
+  // `o.statusHistory.slice()` throws "slice is not a function" on the map shape —
+  // the bug that left MCP-created orders un-confirmable / un-cancellable in admin.
+  function statusHistoryArray(o) {
+    if (!o || !o.statusHistory) return [];
+    return Array.isArray(o.statusHistory) ? o.statusHistory.slice() : Object.values(o.statusHistory);
+  }
+
   // Tenant business timezone, fetched lazily from businessEntity. All
   // date display + filtering goes through this so admin agrees with
   // MCP regardless of where the user is browsing from.
@@ -255,7 +267,7 @@
     if (!o) throw new Error('Order not found');
     var now = new Date().toISOString();
     var updates = {};
-    var history = o.statusHistory ? o.statusHistory.slice() : [];
+    var history = statusHistoryArray(o);
 
     // Did this order ALREADY reserve `committed` for its stock lines at PLACEMENT?
     // Only the storefront checkout (arch submitOrder, non-POS) does — and it stamps
@@ -515,8 +527,8 @@
       updates['status'] = newStatus;
       updates[newStatus + 'At'] = now;
 
-      // Append to statusHistory (handle both array and object formats)
-      var history = Array.isArray(o.statusHistory) ? o.statusHistory.slice() : (o.statusHistory ? Object.values(o.statusHistory) : []);
+      // Append to statusHistory (statusHistoryArray handles array + map shapes)
+      var history = statusHistoryArray(o);
       history.push({ status: newStatus, at: now, by: 'admin' });
       updates['statusHistory'] = history;
 
@@ -930,7 +942,7 @@
     if (!o) return;
     var now = new Date().toISOString();
 
-    var history = o.statusHistory ? o.statusHistory.slice() : [];
+    var history = statusHistoryArray(o);
     history.push({ status: 'cancelled', at: now, by: 'admin', note: reason || null });
 
     // Release any inventory still RESERVED (committed) for this order's lines.
@@ -1118,7 +1130,7 @@
     var o = orders[orderId];
     if (!o) return;
     var now = new Date().toISOString();
-    var history = Array.isArray(o.statusHistory) ? o.statusHistory.slice() : (o.statusHistory ? Object.values(o.statusHistory) : []);
+    var history = statusHistoryArray(o);
     history.push({ status: 'shipped', at: now, by: 'admin' });
     var updates = { status: 'shipped', shippedAt: now, statusHistory: history };
     await MastDB.orders.update(orderId, updates);
@@ -1264,6 +1276,7 @@
   var OrdersCore = {
     etsySourceBadgeStyle: etsySourceBadgeStyle,
     getOrderDisplayNumber: getOrderDisplayNumber,
+    statusHistoryArray: statusHistoryArray,
     getOrderItemsLabel: getOrderItemsLabel,
     formatOrderDate: formatOrderDate,
     formatOrderDateTime: formatOrderDateTime,
@@ -1305,6 +1318,7 @@
     window.OrdersCore = OrdersCore;
     window.etsySourceBadgeStyle = etsySourceBadgeStyle;
     window.getOrderDisplayNumber = getOrderDisplayNumber;
+    window.statusHistoryArray = statusHistoryArray;
     window.getOrderItemsLabel = getOrderItemsLabel;
     window.formatOrderDate = formatOrderDate;
     window.formatOrderDateTime = formatOrderDateTime;
