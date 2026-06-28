@@ -29,8 +29,17 @@
   var STATUS_TONE = {
     placed: 'amber', confirmed: 'info', building: 'amber', packed: 'teal',
     shipped: 'teal', delivered: 'success', cancelled: 'neutral', refunded: 'danger',
-    payment_failed: 'danger'
+    payment_failed: 'danger',
+    return_requested: 'amber', return_approved: 'amber', return_shipped: 'info',
+    return_received: 'info', partially_returned: 'danger'
   };
+  // Return/refund-in-progress vocabulary, grouped under the "Returns" filter
+  // pill. 'refunded' (fully refunded) keeps its own pill; this set is the
+  // return lifecycle plus partial refunds. Single source of truth so the pill,
+  // its count, and the filter predicate never drift.
+  var RETURN_STATUSES = ['return_requested', 'return_approved', 'return_shipped',
+    'return_received', 'partially_returned'];
+  function isReturnStatus(s) { return RETURN_STATUSES.indexOf(String(s || '').toLowerCase()) !== -1; }
   // Friendly channel label for an order. External orders (Shopify/Etsy/Square,
   // ingested by the orders/paid webhook) carry externalSource.platform; native
   // orders use `source` ('direct' = the Mast storefront, wholesale = bulk buyers).
@@ -387,7 +396,19 @@
     if (!acc || typeof acc.get !== 'function') { if (window.OrdersV2) OrdersV2.open(orderId); return Promise.resolve(); }
     return Promise.resolve(acc.get(orderId)).then(function (o) {
       var rec = o ? Object.assign({ _key: orderId }, o) : (V2.byId[orderId] || null);
-      if (rec) { V2.byId[orderId] = rec; window.MastEntity.openRecord('orders-v2', rec, 'read'); }
+      if (rec) {
+        V2.byId[orderId] = rec;
+        // Keep the LIST row + pill counts in lockstep with the detail. The live
+        // listener also catches this, but a server-side status flip (a refund →
+        // partially_returned) can lag; patching the row here makes the list and
+        // the slide-out agree immediately instead of disagreeing until the
+        // listener fires.
+        var i = -1;
+        for (var j = 0; j < V2.rows.length; j++) { if (V2.rows[j]._key === orderId) { i = j; break; } }
+        if (i >= 0) V2.rows[i] = rec; else V2.rows.push(rec);
+        render();
+        window.MastEntity.openRecord('orders-v2', rec, 'read');
+      }
     });
   }
 
@@ -989,13 +1010,22 @@
     // (which holds only QBO-webhook test docs). list() for initial paint; listen()
     // for live updates where available.
     if (typeof o.list === 'function') Promise.resolve(o.list()).then(apply).catch(function (e) { console.error('[orders-v2] list', e); });
-    if (typeof o.listen === 'function') { try { V2.off = o.listen(apply); } catch (e) {} }
+    // Live updates: listen(limit, cb) — the callback is the SECOND arg. The
+    // prior `o.listen(apply)` passed apply as the limit and dropped the cb, so
+    // the list never refreshed after a status change (a refund left the row
+    // showing the old status while the detail/oracle moved on — SGTE-0250).
+    // Subscribe once; re-subscribing on every load() would leak listeners.
+    if (!V2.off && typeof o.listen === 'function') { try { V2.off = o.listen(200, apply); } catch (e) {} }
   }
 
   function visibleRows() {
     var rows = V2.rows;
     if (V2.filter && V2.filter !== 'all') {
-      rows = rows.filter(function (r) { return String(r.status || '').toLowerCase() === V2.filter; });
+      if (V2.filter === 'returns') {
+        rows = rows.filter(function (r) { return isReturnStatus(r.status); });
+      } else {
+        rows = rows.filter(function (r) { return String(r.status || '').toLowerCase() === V2.filter; });
+      }
     }
     return window.mastSortRows(rows, V2.sortKey, V2.sortDir, function (r, k) {
       var f = MastEntity.get('orders-v2').fields.filter(function (x) { return x.name === k; })[0];
@@ -1050,13 +1080,26 @@
   function render() {
     var tab = ensureTab();
     var counts = statusCounts();
-    var pills = ['all', 'placed', 'confirmed', 'delivered', 'cancelled', 'refunded'].map(function (s) {
-      var on = V2.filter === s;
-      return '<button onclick="OrdersV2.setFilter(\'' + s + '\')" style="border:1px solid var(--border);' +
+    // 'returns' is a GROUPED pill (return lifecycle + partial refunds) so
+    // partially_returned orders are filterable — they previously matched no
+    // pill at all (SGTE-0250). 'Refunded' keeps its own pill for fully-refunded.
+    var returnsCount = RETURN_STATUSES.reduce(function (n, s) { return n + (counts[s] || 0); }, 0);
+    var pillDefs = [
+      { key: 'all', label: 'All', count: counts.all || 0 },
+      { key: 'placed', label: 'Placed', count: counts.placed || 0 },
+      { key: 'confirmed', label: 'Confirmed', count: counts.confirmed || 0 },
+      { key: 'delivered', label: 'Delivered', count: counts.delivered || 0 },
+      { key: 'cancelled', label: 'Cancelled', count: counts.cancelled || 0 },
+      { key: 'refunded', label: 'Refunded', count: counts.refunded || 0 },
+      { key: 'returns', label: 'Returns', count: returnsCount }
+    ];
+    var pills = pillDefs.map(function (p) {
+      var on = V2.filter === p.key;
+      return '<button onclick="OrdersV2.setFilter(\'' + p.key + '\')" style="border:1px solid var(--border);' +
         'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
         'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
         'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' +
-        s.charAt(0).toUpperCase() + s.slice(1) + ' <span style="color:var(--warm-gray);">' + (counts[s] || 0) + '</span></button>';
+        p.label + ' <span style="color:var(--warm-gray);">' + p.count + '</span></button>';
     }).join('');
 
     var rows = visibleRows();

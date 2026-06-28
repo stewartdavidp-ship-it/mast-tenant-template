@@ -18,9 +18,13 @@
  *   handed_to_carrier, shipped              → shipped (branch: pack-ship)
  *   delivered                               → delivered (terminal success)
  *   cancelled, refunded                     → closed (terminal failure)
- *   return_*                                → delivered (returns are
- *                                              modeled separately; this
- *                                              workflow ends at delivery)
+ *   return_*, partially_returned            → delivered IF the order actually
+ *                                              shipped/was delivered first
+ *                                              (genuine post-delivery return);
+ *                                              otherwise → returned (off-backbone
+ *                                              terminal pill — a refund on a
+ *                                              never-shipped order is not a
+ *                                              delivery). See wasEverFulfilled().
  */
 (function() {
   'use strict';
@@ -44,6 +48,24 @@
     return !!(o.shipping && (o.shipping.packageDims || (o.shipping.length && o.shipping.width && o.shipping.height)));
   }
   function customerNotified(o) { return !!(o.shippedNotifiedAt || (o.shipping && o.shipping.notifiedAt)); }
+  // Did this order actually leave the building before the return/refund? Used
+  // to decide whether a return/refund sits ON the delivered backbone (genuine
+  // post-delivery return) or OFF it (a refund on an order that never shipped —
+  // which must NOT highlight "Delivered"). Evidence: a shipping label/tracking,
+  // a shipped/delivered timestamp, or a fulfillment status in the audit trail.
+  function wasEverFulfilled(o) {
+    if (!o) return false;
+    if (hasLabel(o) || hasTracking(o)) return true;
+    if (o.shippedAt || o.deliveredAt || o.handedToCarrierAt) return true;
+    var hist = (o.statusHistory && o.statusHistory.length) ? o.statusHistory : null;
+    if (hist) {
+      for (var i = 0; i < hist.length; i++) {
+        var hs = hist[i] && hist[i].status;
+        if (hs === 'handed_to_carrier' || hs === 'shipped' || hs === 'delivered') return true;
+      }
+    }
+    return false;
+  }
   function pickupNotified(o) { return !!o.pickupNotifiedAt; }
   function pickupConfirmed(o) { return !!o.pickedUpAt; }
   function dropshipPoSent(o) { return !!o.dropshipPoSentAt; }
@@ -290,9 +312,26 @@
     {
       key: 'delivered',
       label: 'Delivered',
-      statuses: ['delivered', 'return_requested', 'return_approved', 'return_shipped', 'return_received', 'partially_returned'],
+      // Return statuses only stay on the delivered backbone when the order
+      // was genuinely delivered first — derivePhaseFromLegacy() decides that
+      // per-order via wasEverFulfilled(). A return/refund on a never-shipped
+      // order routes to the off-backbone 'returned' phase instead, so the
+      // stepper never highlights "Delivered" for an unfulfilled order.
+      statuses: ['delivered'],
       entryStatus: 'delivered',
       terminal: 'success',
+      exitRequirements: []
+    },
+    // ---- Terminal: returned / refunded (off-backbone) ----
+    // Renders as a standalone pill, NOT a progression step — a returned or
+    // refunded-without-shipping order has no meaningful fulfillment progress
+    // to show. Reuses the engine's terminal-'failure' pill rendering.
+    {
+      key: 'returned',
+      label: 'Returned / refunded',
+      statuses: ['return_requested', 'return_approved', 'return_shipped', 'return_received', 'partially_returned'],
+      entryStatus: 'partially_returned',
+      terminal: 'failure',
       exitRequirements: []
     },
     // ---- Terminal failure ----
@@ -331,10 +370,21 @@
     if (s === 'cancelled' || s === 'refunded') {
       return { phase: 'closed', satisfiedRequirementOverrides: [] };
     }
-    if (s === 'delivered' || s === 'return_requested' || s === 'return_approved' ||
-        s === 'return_shipped' || s === 'return_received' || s === 'partially_returned') {
-      // Returns happen after delivery; the workflow ends at delivered.
+    if (s === 'delivered') {
       return { phase: 'delivered', satisfiedRequirementOverrides: [] };
+    }
+    if (s === 'return_requested' || s === 'return_approved' || s === 'return_shipped' ||
+        s === 'return_received' || s === 'partially_returned') {
+      // A return/refund AFTER the order actually shipped or was delivered stays
+      // on the delivered backbone (the order genuinely reached delivery; the
+      // return is modeled separately). A return/refund on an order that NEVER
+      // shipped is not a delivery — route it to the off-backbone 'returned'
+      // pill so the stepper doesn't contradict reality by highlighting
+      // "Delivered" (and showing the skipped Confirmed/Ready-to-fulfill steps
+      // as incomplete). Caught live on sgtest15 (SGTE-0250: placed → refund).
+      return wasEverFulfilled(o)
+        ? { phase: 'delivered', satisfiedRequirementOverrides: [] }
+        : { phase: 'returned', satisfiedRequirementOverrides: [] };
     }
     // Map pack-ship branch statuses → recorded branch so the stepper draws
     // the right chain even though __workflow.branch isn't set yet on legacy
