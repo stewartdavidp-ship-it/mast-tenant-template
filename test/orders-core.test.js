@@ -639,6 +639,65 @@ test('triageAndConfirmOrder: build + backorder mix → status "building", build 
   assert.strictEqual(pr[0].data.productId, 'P1', 'only the build line P1 opens a build job — the backorder line P2 does not');
 });
 
+// Tenant-MCP and other external order-creation paths persist statusHistory as a
+// timestamp-KEYED MAP ({ "<iso>": {…} }), not an array (RTDB rejects '.'-bearing
+// keys as array indices). The lifecycle write-cores append a row then persist, so
+// a naive `o.statusHistory.slice()` threw "slice is not a function" and left every
+// MCP-created order un-confirmable / un-cancellable in admin (the Confirm & route
+// silent no-op found via live QA on sgtest15). statusHistoryArray normalizes both
+// shapes; these pin that a map-shaped order is processable end to end.
+test('triageAndConfirmOrder: MAP-shaped statusHistory (tenant-MCP order) confirms without throwing → status pack, statusHistory normalized to an array', async () => {
+  const orders = { ORD1: {
+    source: 'test', // non-storefront (MCP) order — confirm is the first commit
+    items: [{ pid: 'P1', qty: 1 }],
+    statusHistory: { '2026-06-28T14:00:36_619Z': { status: 'placed', at: '2026-06-28T14:00:36.619Z', by: 'test' } }
+  } };
+  const { OrdersCore, rec } = makeCtx({ orders: orders, inventory: STOCKED });
+  await assert.doesNotReject(
+    () => OrdersCore.triageAndConfirmOrder('ORD1', [{ item: { pid: 'P1', qty: 1 }, action: 'stock' }]),
+    'map-shaped statusHistory must NOT throw "slice is not a function"'
+  );
+  const upd = ops(rec, 'orders.update').find((w) => w.data.status);
+  assert.strictEqual(upd.data.status, 'pack', 'all-stock order advances to pack');
+  assert.ok(Array.isArray(upd.data.statusHistory), 'statusHistory persisted as an array (map normalized)');
+  assert.ok(upd.data.statusHistory.some((h) => h.status === 'placed'), 'original placed entry carried over from the map');
+  assert.ok(upd.data.statusHistory.some((h) => h.status === 'pack'), 'new pack entry appended');
+});
+
+test('_cancelOrderCore: MAP-shaped statusHistory (tenant-MCP order) cancels without throwing → statusHistory normalized to an array', async () => {
+  const orders = { ORD1: {
+    orderNumber: 'SO-MCP', status: 'placed', email: 'c@x.com',
+    statusHistory: { '2026-06-28T14:00:36_619Z': { status: 'placed', at: '2026-06-28T14:00:36.619Z', by: 'test' } }
+  } };
+  // No MastFlow → the engine-absent fallback path persists statusHistory directly
+  // via MastDB.orders.update, so we can assert the normalized shape. (With the
+  // engine present, history rides through MastFlow.transition's recordExtraPatch —
+  // either way the read at the top of the core is where the naive .slice() crashed.)
+  const { OrdersCore, rec } = makeCtx({ orders: orders, productionRequests: {} });
+  await assert.doesNotReject(
+    () => OrdersCore._cancelOrderCore('ORD1', 'cust cancelled'),
+    'map-shaped statusHistory must NOT throw on cancel'
+  );
+  const cancelUpd = ops(rec, 'orders.update').find((w) => w.data.statusHistory);
+  assert.ok(cancelUpd && Array.isArray(cancelUpd.data.statusHistory), 'statusHistory persisted as an array (map normalized)');
+  assert.ok(cancelUpd.data.statusHistory.some((h) => h.status === 'cancelled'), 'cancelled entry appended');
+  assert.ok(cancelUpd.data.statusHistory.some((h) => h.status === 'placed'), 'original placed entry carried over from the map');
+});
+
+test('statusHistoryArray: array passthrough (copy), map → values, null/empty → []', () => {
+  // NB: returned arrays are vm-realm — compare via .join()/.length primitives, not
+  // deepStrictEqual (cross-realm prototype mismatch, per the harness note above).
+  const { OrdersCore } = makeCtx();
+  const f = OrdersCore.statusHistoryArray;
+  const arr = [{ status: 'placed' }];
+  const out = f({ statusHistory: arr });
+  assert.strictEqual(out.map((h) => h.status).join(','), 'placed', 'array shape preserved');
+  assert.notStrictEqual(out, arr, 'returns a fresh copy (callers .push without mutating the cache)');
+  assert.strictEqual(f({ statusHistory: { k1: { status: 'placed' }, k2: { status: 'pack' } } }).map((h) => h.status).join(','), 'placed,pack', 'map → ordered values');
+  assert.strictEqual(f({}).length, 0, 'no statusHistory → []');
+  assert.strictEqual(f(null).length, 0, 'null order → []');
+});
+
 test('transitionOrder: INVALID transition is refused — error toast, NO db write, NO cloud call', async () => {
   const orders = { ORD1: { status: 'placed' } };
   const { OrdersCore, rec } = makeCtx({ orders: orders });
@@ -832,7 +891,7 @@ test('_addOrderNoteCore: MAP-shaped notes (tenant-MCP) append a keyed entry (pre
 // ── summary line ──────────────────────────────────────────────────────────────
 test('orders-core exports the full PR1–PR4 surface (no accidental drop)', () => {
   const { OrdersCore } = makeCtx();
-  ['etsySourceBadgeStyle', 'getOrderDisplayNumber', 'getOrderItemsLabel', 'formatOrderDate',
+  ['etsySourceBadgeStyle', 'getOrderDisplayNumber', 'statusHistoryArray', 'getOrderItemsLabel', 'formatOrderDate',
    'formatOrderDateTime', 'renderOrderProgress', 'ensureTenantTz', 'tzPartsFromIso',
    'getOrdersArray', 'getItemInventoryStatus', 'getItemFulfillmentKey', 'triageAndConfirmOrder',
    'reserveInventory', 'releaseInventory', 'pullFromStock', 'createProductionRequests',
