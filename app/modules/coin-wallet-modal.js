@@ -202,18 +202,23 @@
     h += '<div id="walletHistory" style="display:none;padding-bottom:8px;"></div>';
     h += '</div>';
 
-    // Purchase section
-    h += '<div style="border-top:1px solid var(--cream-dark, var(--cream-dark));padding-top:16px;margin-top:4px;">';
-    h += '<h4 style="margin:0 0 8px;font-size:0.9rem;">Buy Coins</h4>';
-    h += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">1 coin = 100 tokens = $1. Minimum 10 coins ($10). Coins never expire.</p>';
-    h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">';
-    h += '<input type="number" id="coinPurchaseAmount" min="10" value="10" step="5" style="width:80px;padding:8px 12px;border:1px solid var(--cream-dark);border-radius:8px;font-size:1rem;text-align:center;" />';
-    h += '<span style="font-size:0.9rem;color:var(--warm-gray);">coins</span>';
-    h += '<span style="margin-left:auto;font-size:1.15rem;font-weight:600;" id="coinPurchaseTotal">$10</span>';
-    h += '</div>';
-    h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;" id="coinPurchaseEstimate">1,000 tokens ≈ 303 Studio Assistant calls</div>';
-    h += '<button onclick="purchaseCoins()" id="coinPurchaseBtn" style="width:100%;padding:12px;background:var(--amber, var(--amber));color:white;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;">Purchase Coins</button>';
-    h += '</div>';
+    // Purchase section — Stripe-backed coin checkout. Suppressed for Shopify-billed
+    // tenants (Shopify App Store policy forbids non-Shopify payment surfaces); they
+    // keep the read-only balance/history above.
+    var _shopifyBilled = !!(window.isShopifyBilledTenant && window.isShopifyBilledTenant());
+    if (!_shopifyBilled) {
+      h += '<div style="border-top:1px solid var(--cream-dark, var(--cream-dark));padding-top:16px;margin-top:4px;">';
+      h += '<h4 style="margin:0 0 8px;font-size:0.9rem;">Buy Coins</h4>';
+      h += '<p style="font-size:0.78rem;color:var(--warm-gray);margin:0 0 12px;">1 coin = 100 tokens = $1. Minimum 10 coins ($10). Coins never expire.</p>';
+      h += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">';
+      h += '<input type="number" id="coinPurchaseAmount" min="10" value="10" step="5" style="width:80px;padding:8px 12px;border:1px solid var(--cream-dark);border-radius:8px;font-size:1rem;text-align:center;" />';
+      h += '<span style="font-size:0.9rem;color:var(--warm-gray);">coins</span>';
+      h += '<span style="margin-left:auto;font-size:1.15rem;font-weight:600;" id="coinPurchaseTotal">$10</span>';
+      h += '</div>';
+      h += '<div style="font-size:0.78rem;color:var(--warm-gray);margin-bottom:16px;" id="coinPurchaseEstimate">1,000 tokens ≈ 303 Studio Assistant calls</div>';
+      h += '<button onclick="purchaseCoins()" id="coinPurchaseBtn" style="width:100%;padding:12px;background:var(--amber, var(--amber));color:white;border:none;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer;">Purchase Coins</button>';
+      h += '</div>';
+    }
 
     h += '</div>';
 
@@ -241,6 +246,11 @@
   }
 
   async function purchaseCoins() {
+    // Shopify-billed tenants never reach the Stripe coin checkout.
+    if (window.isShopifyBilledTenant && window.isShopifyBilledTenant()) {
+      showToast('Your plan is managed in Shopify.');
+      return;
+    }
     var amountInput = document.getElementById('coinPurchaseAmount');
     var coins = parseInt(amountInput ? amountInput.value : '0');
     if (!coins || coins < 10) {

@@ -290,9 +290,9 @@
   <script defer src="modules/add-to-mast.js?v=1"></script>
   <script defer src="modules/settings-tabs.js?v=1"></script>
   <script defer src="modules/ask-ai-chat.js?v=1"></script>
-  <script defer src="modules/coins-tab.js?v=1"></script>
+  <script defer src="modules/coins-tab.js?v=2"></script>
   <script defer src="modules/migration-dashboard.js?v=1"></script>
-  <script defer src="modules/subscription-billing.js?v=1"></script>
+  <script defer src="modules/subscription-billing.js?v=2"></script>
   <script defer src="modules/csv-import-ui.js?v=1"></script>
   <script defer src="modules/forecast.js?v=1"></script>
   <script defer src="modules/users-admin.js?v=1"></script>
@@ -13227,6 +13227,8 @@ function getEngagementSurface() {
   return _engagementSurface || { mode: 'hybrid', surface: 'ui-first', modulesShown: null };
 }
 
+// Shopify-billed billing-gate (isShopifyBilledTenant / hydrateShopifyBillingFlag / renderShopifyBillingPanel) lives in eager app/modules/subscription-billing.js; default FALSE keeps direct (Stripe) tenants unchanged.
+
 async function hydrateEngagementSurface() {
   var fallback = { mode: 'hybrid', surface: 'ui-first', modulesShown: null };
   try {
@@ -13304,6 +13306,8 @@ function getTenantSubscription() {
 // Load subscription from Firebase. If missing, minimal access (no auto-seed as command).
 async function loadTenantSubscription() {
   var _hydratePromise = hydrateEngagementSurface(); // parallel boot read: independent admin_businessEntity get; awaited before each return; catches internally (never rejects)
+  // Parallel boot read: resolves window.__mastIsShopifyBilled before any billing UI renders (guarded; never rejects).
+  var _shopifyBillingPromise = (typeof window.hydrateShopifyBillingFlag === 'function') ? Promise.resolve(window.hydrateShopifyBillingFlag()).catch(function () { return false; }) : Promise.resolve(false);
   try {
     var data = await MastDB.subscription.get();
     if (!data) {
@@ -13362,6 +13366,7 @@ async function loadTenantSubscription() {
     if (data && !data.model) data.model = 'revenue-1pct';
     _tenantSubscription = data;
     await _hydratePromise;
+    await _shopifyBillingPromise;
     return data;
   } catch (err) {
     console.warn('Subscription load failed, defaulting to revenue-pricing unlocked access:', err.message);
@@ -13369,6 +13374,7 @@ async function loadTenantSubscription() {
     // pricing — default to the unlocked revenue model, not the legacy gated shape.
     _tenantSubscription = { model: 'revenue-1pct', tier: 'publish', modules: ['web'], baseModules: ['web'], selectedModules: [], needsModuleSelection: false };
     await _hydratePromise;
+    await _shopifyBillingPromise;
     return _tenantSubscription;
   }
 }
@@ -19546,7 +19552,7 @@ var MODULE_MANIFEST = {
   'employees-v2': { src: 'modules/employees-v2.js', v: 'dd93f4e479f0', routes: ['employees-v2'] }, // record archetype (scaffolded; flag-gated, side-by-side)
   'auditlog-v2': { src: 'modules/auditlog-v2.js', v: 'b2001546137e', routes: ['auditlog-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'diagnostics': { src: 'modules/diagnostics.js', v: '51d79b65b215', routes: ['diagnostics'] }, // L3 self-diagnosis surface (admin-gated)
-  'subscription-v2': { src: 'modules/subscription-v2.js', v: '4fe160832575', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
+  'subscription-v2': { src: 'modules/subscription-v2.js', v: '04c7df7c461b', routes: ['subscription-v2', 'plan-billing-coins-v2'] }, // Plan & billing hub: Plan + Top-ups (coins) lenses, one tab (flag-gated, side-by-side)
   'analytics-v2': { src: 'modules/analytics-v2.js', v: '430b29209f0c', routes: ['analytics-v2'] }, // queue archetype (scaffolded; flag-gated, side-by-side)
   'advisor-v2': { src: 'modules/advisor-v2.js', v: '25c5999c2c6f', routes: ['advisor-v2', 'advisor'] }, // Business-Plan advisor; owns the legacy 'advisor' route too (V1 advisor.js retired, T6). Entity writes via MastDB.businessEntity.* — no bridge.
   // Unified Business Entity read-only dashboard (D-22) — no route; lazy-loaded
@@ -19560,7 +19566,7 @@ var MODULE_MANIFEST = {
   addVariantDialog: { src: 'modules/add-variant-dialog.js', v: '129e614bfcb4', routes: [] },
   // Coin/token wallet modal — no route; lazy-loaded on demand via the eager
   // openCoinPurchaseModal shim (decomposition Track 1).
-  coinWalletModal: { src: 'modules/coin-wallet-modal.js', v: '709831b7d46e', routes: [] },
+  coinWalletModal: { src: 'modules/coin-wallet-modal.js', v: '0e08b47a1058', routes: [] },
   // Create-Role modal — no route; lazy-loaded via the eager openCreateRoleModal
   // shim (decomposition Track 1).
   createRoleModal: { src: 'modules/create-role-modal.js', v: '8419154c17c4', routes: [] },
@@ -23377,6 +23383,14 @@ function v1PickActiveSub(platformTenant) {
 }
 
 function renderSubscriptionSettings() {
+  // Shopify-billed: replace the whole Stripe subscription view (prices / Manage Billing / trial paywall / coin top-ups) with the native panel; clear the other sub-surfaces.
+  if (window.isShopifyBilledTenant && window.isShopifyBilledTenant()) {
+    var infoEl = document.getElementById('subscriptionBillingInfo'); if (infoEl) infoEl.innerHTML = (typeof window.renderShopifyBillingPanel === 'function') ? window.renderShopifyBillingPanel() : '';
+    ['subscriptionTrialPanel', 'subscriptionUpgradeOfferBanner', 'subscriptionTierCard', 'subscriptionUsageCard', 'subscriptionRevenueCard', 'subscriptionTierTable', 'subscriptionManageBlock'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.innerHTML = '';
+    });
+    return;
+  }
   var sub = getTenantSubscription();
   renderSubscriptionBillingInfo(sub);
   renderTrialDecisionPanel(sub);
@@ -23413,6 +23427,9 @@ function renderV1UpgradeOfferBanner(platformTenant) {
 }
 
 async function upgradeFreeTenant(targetTier, billingInterval) {
+  if (window.isShopifyBilledTenant && window.isShopifyBilledTenant()) { // Shopify-billed: upgrade via Shopify Managed Pricing, never Stripe.
+    var sOff = document.getElementById('upgradeOfferStatus'); if (sOff) sOff.textContent = 'Your plan is managed in Shopify.'; return;
+  }
   var statusEl = document.getElementById('upgradeOfferStatus');
   if (statusEl) statusEl.textContent = 'Opening Checkout…';
   try {
@@ -23578,6 +23595,9 @@ function trialSetInterval(interval) {
 window.trialSetInterval = trialSetInterval;
 
 async function trialGoPaid(tierKey) {
+  if (window.isShopifyBilledTenant && window.isShopifyBilledTenant()) { // Shopify-billed: convert via Shopify Managed Pricing, never Stripe.
+    var sTrial = document.getElementById('trialDecisionStatus'); if (sTrial) sTrial.textContent = 'Your plan is managed in Shopify.'; return;
+  }
   var statusEl = document.getElementById('trialDecisionStatus');
   if (statusEl) statusEl.textContent = 'Opening Checkout…';
   try {
@@ -23892,29 +23912,7 @@ function renderV1ManageBlock() {
   el.innerHTML = h;
 }
 
-async function openBillingPortal() {
-  var btn = document.getElementById('billingPortalBtn');
-  var statusEl = document.getElementById('billingPortalStatus');
-  if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
-  try {
-    var user = firebase.auth().currentUser;
-    if (!user) throw new Error('Sign in first');
-    var idToken = await user.getIdToken();
-    var resp = await fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/createBillingPortalSession', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
-      body: JSON.stringify({ tenantId: MastDB.tenantId() })
-    });
-    var data = await resp.json();
-    if (!resp.ok || !data.url) throw new Error((data && data.error) || 'Portal session failed');
-    window.location.href = data.url;
-  } catch (err) {
-    if (statusEl) statusEl.innerHTML = '<span style="color:var(--amber);">' + esc(err.message || String(err)) + '</span>';
-  } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Manage subscription'; }
-  }
-}
-window.openBillingPortal = openBillingPortal;
+// NOTE: openBillingPortal's dead duplicate (shadowed by the lower CLOUD_FUNCTIONS_BASE definition) was removed here; the live definition + Shopify-billed gate + window binding are below.
 
 // Coins tab (F-M1b) extracted to app/modules/coins-tab.js (T1 decomposition; eager <script defer src> in head).
 
@@ -23944,6 +23942,7 @@ async function fetchSubscriptionDetails() {
 }
 
 async function openBillingPortal() {
+  if (window.isShopifyBilledTenant && window.isShopifyBilledTenant()) { showToast('Your plan is managed in Shopify.'); return; } // Shopify-billed: never open the Stripe portal.
   try {
     showToast('Opening billing portal...');
     var token = await firebase.auth().currentUser.getIdToken();
@@ -23966,6 +23965,7 @@ async function openBillingPortal() {
     showToast(err.message, true);
   }
 }
+window.openBillingPortal = openBillingPortal;
 
 // --- Stop Auto-Renewal (lighter touch — "I'm not sure yet") ---
 async function stopAutoRenewalUI() {
