@@ -13298,6 +13298,7 @@ function getTenantSubscription() {
 
 // Load subscription from Firebase. If missing, minimal access (no auto-seed as command).
 async function loadTenantSubscription() {
+  var _hydratePromise = hydrateEngagementSurface(); // parallel boot read: independent admin_businessEntity get; awaited before each return; catches internally (never rejects)
   try {
     var data = await MastDB.subscription.get();
     if (!data) {
@@ -13352,18 +13353,17 @@ async function loadTenantSubscription() {
     // tier:'free'/modules:['web'] with no model, and the wizard's revenue-1pct
     // stamp may never have persisted (it aborts if a platformAdmin-gated registry
     // write upstream is denied). Treat any unstamped subscription as revenue-1pct
-    // so module gating doesn't wrongly lock a free/trial tenant out of every
-    // purchasable module (the shirglassworks first-customer regression).
+    // so gating doesn't wrongly lock a free/trial tenant out of every purchasable module (the shirglassworks first-customer regression).
     if (data && !data.model) data.model = 'revenue-1pct';
     _tenantSubscription = data;
-    await hydrateEngagementSurface();
+    await _hydratePromise;
     return data;
   } catch (err) {
     console.warn('Subscription load failed, defaulting to revenue-pricing unlocked access:', err.message);
     // A transient read failure must not strip module access under revenue
     // pricing — default to the unlocked revenue model, not the legacy gated shape.
     _tenantSubscription = { model: 'revenue-1pct', tier: 'publish', modules: ['web'], baseModules: ['web'], selectedModules: [], needsModuleSelection: false };
-    await hydrateEngagementSurface();
+    await _hydratePromise;
     return _tenantSubscription;
   }
 }
