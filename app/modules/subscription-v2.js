@@ -249,6 +249,17 @@
 
   function render() {
     var tab = ensureTab();
+    // Shopify-billed tenants: no Stripe affordance on the Plan & billing hub.
+    // Replace BOTH lenses (Plan: tiles/usage/revenue/offer-banner/manage-subscription;
+    // Top-ups: coin packs) with the Shopify-native panel. The About lens (build/tenant
+    // info, no money) is left intact. Trial CTAs + openBillingPortal are never reached.
+    if (window.isShopifyBilledTenant && window.isShopifyBilledTenant() && V2.lens !== 'about') {
+      var nativePanel = (typeof window.renderShopifyBillingPanel === 'function') ? window.renderShopifyBillingPanel() : '';
+      tab.innerHTML =
+        U.pageHeader({ title: 'Plan & billing', subtitle: 'Your Mast plan is managed in Shopify' }) +
+        '<div style="margin-top:14px;">' + nativePanel + '</div>';
+      return;
+    }
     if (!V2.loaded) {
       tab.innerHTML = U.pageHeader({ title: 'Plan & billing' }) + '<div style="margin-top:14px;color:var(--warm-gray);">Loading…</div>';
       return;

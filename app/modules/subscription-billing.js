@@ -16,6 +16,66 @@
  * (not new) local-fmt debt — index.html isn't scanned by lint-no-local-fmt.
  */
 
+// ============================================================
+// Shopify-billed tenant signal — single source of truth for the billing UI gate.
+// A tenant that INSTALLED Mast from the Shopify App Store has its plan + payments
+// managed entirely in Shopify (Shopify Billing API). Shopify's App Store policy
+// forbids showing such a merchant ANY non-Shopify (Stripe) billing affordance, so
+// every Stripe-branded billing surface checks isShopifyBilledTenant() and renders
+// renderShopifyBillingPanel() instead.
+//
+// Resolved early at boot from config/shopify.installSource === 'shopify-app-store'
+// (mirrors setup-wizard.js's _wizardDetectShopifyOrigin, but billing-scoped and
+// boot-resolved). DEFAULT FALSE — any non-Shopify tenant, or an unresolved/failed
+// read, keeps the existing Stripe behavior (conservative: never strip billing UI
+// from a direct tenant). This module is eager-loaded (<script defer>), so the
+// resolver is defined before the auth-funnel boot (loadTenantSubscription) awaits
+// it — the flag is set before any billing view can render (no flash of Stripe UI).
+window.__mastIsShopifyBilled = false;
+window.__mastShopifyConfig = null; // { shopDomain, ... } cached for the native panel's deep-link
+function isShopifyBilledTenant() { return window.__mastIsShopifyBilled === true; }
+window.isShopifyBilledTenant = isShopifyBilledTenant;
+
+async function hydrateShopifyBillingFlag() {
+  try {
+    var cfg = await MastDB.get('config/shopify');
+    window.__mastShopifyConfig = cfg || null;
+    window.__mastIsShopifyBilled = !!(cfg && cfg.installSource === 'shopify-app-store');
+  } catch (err) {
+    // Fail conservative: unresolved → treat as a direct (Stripe) tenant.
+    window.__mastIsShopifyBilled = false;
+  }
+  return window.__mastIsShopifyBilled;
+}
+window.hydrateShopifyBillingFlag = hydrateShopifyBillingFlag;
+
+// Shopify-native billing panel — the ONLY billing surface a Shopify-installed
+// tenant sees. Returns an HTML string (consistent with the --cream card idiom).
+// Mentions NO Stripe, prices, or runmast.com. Deep-links to the merchant's Shopify
+// admin Apps settings when the shop domain is known; otherwise shows the
+// explanatory copy with no broken link. Defined here (eager-loaded billing-panel
+// home) and exposed on window so the shell (renderSubscriptionSettings) and the
+// other billing modules (coins-tab, subscription-v2, coin-wallet-modal) can all
+// call it. Reads window.__mastShopifyConfig (set at boot by hydrateShopifyBillingFlag).
+function renderShopifyBillingPanel() {
+  var cfg = window.__mastShopifyConfig || {};
+  var raw = (cfg.shopDomain || '').toString().trim().toLowerCase();
+  // shopDomain is stored stripped of .myshopify.com in some paths and full in
+  // others — normalize to the store handle either way.
+  var handle = raw.replace(/^https?:\/\//, '').replace(/\/+$/, '').replace(/\.myshopify\.com$/, '');
+  var manageLink = handle ? ('https://admin.shopify.com/store/' + encodeURIComponent(handle) + '/settings/apps') : '';
+
+  var h = '<div style="background:var(--cream);border:1px solid var(--cream-dark);border-radius:8px;padding:20px;max-width:560px;">';
+  h += '<div style="font-weight:600;font-family:\'Cormorant Garamond\',serif;font-size:1.15rem;color:var(--text-primary);margin-bottom:8px;">Your Mast plan is billed through Shopify</div>';
+  h += '<div style="font-size:0.9rem;color:var(--warm-gray);line-height:1.5;margin-bottom:16px;">Your subscription and payments for this store are managed in your Shopify admin, under <strong>Settings &rarr; Apps and sales channels &rarr; Mast Connect</strong>. Plan changes happen there.</div>';
+  if (manageLink) {
+    h += '<a class="btn btn-primary" href="' + esc(manageLink) + '" target="_blank" rel="noopener noreferrer">Manage in Shopify</a>';
+  }
+  h += '</div>';
+  return h;
+}
+window.renderShopifyBillingPanel = renderShopifyBillingPanel;
+
 async function renderRevenueMeter() {
   var el = document.getElementById('subscriptionRevenueMeter');
   if (!el) return;
@@ -207,6 +267,13 @@ async function renderBillHistory() {
 function renderSubscriptionBillingInfo(sub) {
   var el = document.getElementById('subscriptionBillingInfo');
   if (!el) return;
+
+  // Shopify-billed tenants: no Stripe billing card (no Manage Billing button, no
+  // stored-card "ending <last4>", no price string). Render the Shopify-native panel.
+  if (window.isShopifyBilledTenant && window.isShopifyBilledTenant()) {
+    el.innerHTML = (typeof window.renderShopifyBillingPanel === 'function') ? window.renderShopifyBillingPanel() : '';
+    return;
+  }
 
   var isRevenueModel = sub && sub.model === 'revenue-1pct';
   var details = _subscriptionDetails;
