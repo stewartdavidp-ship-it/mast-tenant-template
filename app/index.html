@@ -13239,6 +13239,7 @@ async function hydrateEngagementSurface() {
       return _engagementSurface;
     }
     var ent = await window.MastDB.businessEntity.get();
+    window._lastBusinessEntity = ent; // launch-time cache reused by loadNextStepsCache (dedupe)
     var e = ent && ent.engagement;
     if (e && e.mode) {
       var defaults = (window.BusinessEntityConstants && window.BusinessEntityConstants.DEFAULT_SURFACE_BY_MODE) || {};
@@ -28833,119 +28834,73 @@ window._nextStepsCache = {
 };
 
 async function loadNextStepsCache() {
-  try {
-    // Check if products exist
-    var prodSnap = await MastDB.products.query().limitToFirst(1).once('value');
-    window._nextStepsCache.hasProducts = !!(prodSnap && Object.keys(prodSnap).length > 0);
-  } catch (e) { /* ignore */ }
-  try {
-    // Check if website is published
-    var webSnap = await MastDB.config.get('websiteConfig/published');
-    window._nextStepsCache.hasWebsite = !!webSnap;
-  } catch (e) { /* ignore */ }
-  try {
-    // Check if template has been selected (beyond wizard default)
-    var templateId = await MastDB.get('public/config/theme/templateId');
-    window._nextStepsCache.hasTemplate = !!templateId;
-  } catch (e) { /* ignore */ }
-  try {
-    // Check if hero content has been customized
-    var heroHeadline = await MastDB.get('webPresence/config/sections/hero/headline');
-    window._nextStepsCache.hasContent = !!heroHeadline;
-  } catch (e) { /* ignore */ }
-  try {
-    // Check for an *active* tenant API key (matches the UI's filter at
-    // loadAiIntegrations — a tenant with only revoked keys still needs to
-    // mint a new one before MCP works, so the Connect Claude step must
-    // re-surface in that case).
-    var keysSnap = await MastDB.query('admin/config/aiIntegrations/keys').orderByChild('status').equalTo('active').limitToFirst(1).once('value');
-    var keysVal = keysSnap && (typeof keysSnap.val === 'function' ? keysSnap.val() : keysSnap);
-    window._nextStepsCache.hasAiApiKey = !!(keysVal && Object.keys(keysVal).length > 0);
-    // Defensive fallback: the indexed status=='active' query (which mirrors the
-    // UI reader at loadAiIntegrations) returns nothing if minted keys lack an
-    // explicit status:'active' field (older keys / CF status-value drift). In
-    // that case, re-read all keys and count any that aren't explicitly revoked,
-    // so a tenant that genuinely has a usable key still sees the step complete.
-    if (!window._nextStepsCache.hasAiApiKey) {
-      var allKeysSnap = await MastDB.query('admin/config/aiIntegrations/keys').limitToFirst(20).once('value');
-      var allKeys = allKeysSnap && (typeof allKeysSnap.val === 'function' ? allKeysSnap.val() : allKeysSnap);
-      if (allKeys) {
-        var hasUsable = Object.keys(allKeys).some(function(k) {
-          var rec = allKeys[k] || {};
-          return rec.status !== 'revoked' && rec.revoked !== true;
-        });
-        window._nextStepsCache.hasAiApiKey = hasUsable;
+  // All checks are independent — run CONCURRENTLY (was ~10 strictly-serial Firestore
+  // reads, measured ~1.9s; parallel ≈ one read's worth). Each task swallows its own
+  // errors and sets its flag. businessEntity + pricingDefaults reuse the values already
+  // read during boot (hydrate / loadPricingDefaults). Tax is derived from three sources
+  // read in parallel (was a sequential short-circuit chain).
+  var C = window._nextStepsCache;
+  var swallow = function (p) { return Promise.resolve(p).catch(function () {}); };
+  await Promise.all([
+    swallow((async function () {
+      var s = await MastDB.products.query().limitToFirst(1).once('value');
+      C.hasProducts = !!(s && Object.keys(s).length > 0);
+    })()),
+    swallow((async function () { C.hasWebsite = !!(await MastDB.config.get('websiteConfig/published')); })()),
+    swallow((async function () { C.hasTemplate = !!(await MastDB.get('public/config/theme/templateId')); })()),
+    swallow((async function () { C.hasContent = !!(await MastDB.get('webPresence/config/sections/hero/headline')); })()),
+    swallow((async function () {
+      // Active tenant API key (mirrors loadAiIntegrations). Fall back to a broad read if the
+      // indexed status=='active' query returns nothing (older keys lacking status:'active').
+      var snap = await MastDB.query('admin/config/aiIntegrations/keys').orderByChild('status').equalTo('active').limitToFirst(1).once('value');
+      var v = snap && (typeof snap.val === 'function' ? snap.val() : snap);
+      C.hasAiApiKey = !!(v && Object.keys(v).length > 0);
+      if (!C.hasAiApiKey) {
+        var allSnap = await MastDB.query('admin/config/aiIntegrations/keys').limitToFirst(20).once('value');
+        var all = allSnap && (typeof allSnap.val === 'function' ? allSnap.val() : allSnap);
+        if (all) C.hasAiApiKey = Object.keys(all).some(function (k) { var r = all[k] || {}; return r.status !== 'revoked' && r.revoked !== true; });
       }
-    }
-  } catch (e) { /* ignore */ }
-  // Folded in from the retired Setup Scorecard so the merged Set-Up-Your-Shop
-  // checklist can render the items that used to live in the Workspace card.
-  try {
-    // NOTE: businessEntity.get() returns the FULL entity at the top level
-    // (identity/tax/engagement are direct properties), NOT under a `.data`
-    // wrapper — `.data` is only present on single-section reads like
-    // businessEntity.get('engagement'). The original `(entityRes.data) || {}`
-    // therefore always read `{}` here, so all three flags below were stuck
-    // false. Read the entity directly.
-    var ent = (await MastDB.businessEntity.get()) || {};
-    // Business type: the wizard (wizardConfirmBizIdentity) writes
-    // identity.businessType + identity.effectiveBusinessType + identity.archetype,
-    // but the Settings "Change my business setup" save (bsApplyChanges) writes
-    // identity.category. Accept any of them so the step flips no matter which
-    // surface persisted the choice (read/write field-name fork).
-    var ident = (ent && ent.identity) || {};
-    window._nextStepsCache.hasBusinessType = !!(ident.businessType || ident.category ||
-      ident.effectiveBusinessType || ident.businessCategory || ident.archetype);
-    // Tax: businessEntity has no first-class `tax` section (the Tax tab writes
-    // nexusState to config/settings and rates to public/taxRates). Keep the
-    // legacy ent.tax.state read for forward-compat, then fall through to the
-    // real persistence paths below.
-    window._nextStepsCache.hasTaxConfig = !!(ent.tax && ent.tax.state);
-    // Modules: saveEngagementModulesShown writes engagement.modulesShown as an
-    // ARRAY. Firebase round-trips a non-empty array as an array (Object.keys =
-    // indices) or, for sparse/large maps, as an object — handle both, plus the
-    // wizard's identical array write.
-    var ms = (ent.engagement && ent.engagement.modulesShown) || null;
-    window._nextStepsCache.hasModulesShown = !!(ms && (Array.isArray(ms) ? ms.length > 0 : Object.keys(ms).length > 0));
-  } catch (e) { /* ignore */ }
-  try {
-    var pricing = await MastDB.get('public/config/pricingDefaults');
-    window._nextStepsCache.hasPricingDefaults = !!(pricing && pricing.markupStrategy && pricing.markupStrategy !== 'none');
-  } catch (e) { /* ignore */ }
-  try {
-    // Tax is really satisfied by the Tax tab's actual writes:
-    //   - nexusState → config/settings.nexusState  (saveTaxRates)
-    //   - rates      → public/taxRates             (MastDB.config.setTaxRates)
-    // Read both; either one present means tax has been configured.
-    if (!window._nextStepsCache.hasTaxConfig) {
-      var settingsSnap = await MastDB.get('config/settings');
-      if (settingsSnap && settingsSnap.nexusState) window._nextStepsCache.hasTaxConfig = true;
-    }
-    if (!window._nextStepsCache.hasTaxConfig) {
-      var taxRatesSnap = await MastDB.get('public/taxRates');
-      if (taxRatesSnap && Object.keys(taxRatesSnap).length > 0) window._nextStepsCache.hasTaxConfig = true;
-    }
-  } catch (e) { /* ignore */ }
-  try {
-    // Channel-listing mapping status. Lazy-load the module if the dashboard
-    // rendered before the post-boot mapping load ran. status() is read-only and
-    // never mounts the interstitial.
-    if (!(window.MastMappingFlow && typeof window.MastMappingFlow.status === 'function')
-        && typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
-      await MastAdmin.loadModule('mapping');
-    }
-    if (window.MastMappingFlow && typeof window.MastMappingFlow.status === 'function') {
-      var mapStatus = await window.MastMappingFlow.status();
-      window._nextStepsCache.mappingComplete = !!(mapStatus && mapStatus.completed);
-      window._nextStepsCache.mappingPending = !!(mapStatus && mapStatus.pending);
-    }
-  } catch (e) { /* ignore */ }
-  try {
-    // Business-profile fields the wizard couldn't fill (it no longer blocks
-    // launch on them — they land here as a flagged to-do instead).
-    var gaps = await MastDB.get('webPresence/config/launchGaps');
-    window._nextStepsCache.launchGaps = Array.isArray(gaps) ? gaps : [];
-  } catch (e) { window._nextStepsCache.launchGaps = []; }
+    })()),
+    swallow((async function () {
+      // Entity-derived flags + tax. businessEntity is reused from boot (hydrate) when cached.
+      // Tax is satisfied by ANY of: ent.tax.state, config/settings.nexusState, public/taxRates —
+      // read settings + taxRates in parallel and OR them (no sequential short-circuit, no race).
+      var cached = window._lastBusinessEntity;
+      var p = await Promise.all([
+        (cached !== undefined && cached !== null) ? Promise.resolve(cached) : MastDB.businessEntity.get().catch(function () { return null; }),
+        MastDB.get('config/settings').catch(function () { return null; }),
+        MastDB.get('public/taxRates').catch(function () { return null; })
+      ]);
+      var ent = p[0] || {}, settings = p[1], taxRates = p[2];
+      var ident = ent.identity || {};
+      C.hasBusinessType = !!(ident.businessType || ident.category || ident.effectiveBusinessType || ident.businessCategory || ident.archetype);
+      var ms = (ent.engagement && ent.engagement.modulesShown) || null;
+      C.hasModulesShown = !!(ms && (Array.isArray(ms) ? ms.length > 0 : Object.keys(ms).length > 0));
+      C.hasTaxConfig = !!((ent.tax && ent.tax.state) || (settings && settings.nexusState) || (taxRates && Object.keys(taxRates).length > 0));
+    })()),
+    swallow((async function () {
+      // Reuse pricingDefaults read during boot (loadPricingDefaults → _pricingDefaults) when present.
+      var pricing = (typeof _pricingDefaults !== 'undefined' && _pricingDefaults) ? _pricingDefaults : await MastDB.get('public/config/pricingDefaults');
+      C.hasPricingDefaults = !!(pricing && pricing.markupStrategy && pricing.markupStrategy !== 'none');
+    })()),
+    swallow((async function () {
+      // Channel-listing mapping status; lazy-load the module if needed. status() is read-only.
+      if (!(window.MastMappingFlow && typeof window.MastMappingFlow.status === 'function')
+          && typeof MastAdmin !== 'undefined' && typeof MastAdmin.loadModule === 'function') {
+        await MastAdmin.loadModule('mapping');
+      }
+      if (window.MastMappingFlow && typeof window.MastMappingFlow.status === 'function') {
+        var st = await window.MastMappingFlow.status();
+        C.mappingComplete = !!(st && st.completed);
+        C.mappingPending = !!(st && st.pending);
+      }
+    })()),
+    swallow((async function () {
+      var gaps = await MastDB.get('webPresence/config/launchGaps');
+      C.launchGaps = Array.isArray(gaps) ? gaps : [];
+    })())
+  ]);
+  if (!Array.isArray(C.launchGaps)) C.launchGaps = [];
 }
 
 // Feature gating map: route → { feature, title, message, settingsRoute }
