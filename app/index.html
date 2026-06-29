@@ -22072,8 +22072,8 @@ function renderAboutSettings() {
   h += '</div>';
   h += '</div>';
   h += '<button type="button" onclick="openWhatsNew()" style="margin-top:16px;display:flex;align-items:center;gap:8px;width:100%;justify-content:space-between;background:var(--cream);border:1px solid var(--cream-dark);border-radius:12px;padding:14px 18px;cursor:pointer;font-family:inherit;font-size:0.9rem;color:var(--text-primary);text-align:left;">'
-    + '<span style="display:flex;flex-direction:column;gap:2px;"><span style="font-weight:600;">What’s New</span><span style="color:var(--warm-gray);font-size:0.8rem;">Recent updates &amp; new capabilities</span></span>'
-    + '<span aria-hidden="true" style="color:var(--warm-gray);font-size:1.1rem;">&rarr;</span>'
+    + '<span style="display:flex;flex-direction:column;gap:2px;"><span style="font-weight:600;">What’s New</span><span style="color:var(--warm-gray);font-size:0.78rem;">Recent updates &amp; new capabilities</span></span>'
+    + '<span aria-hidden="true" style="color:var(--warm-gray);font-size:1.15rem;">&rarr;</span>'
     + '</button>';
   h += '<p style="margin-top:16px;font-size:0.78rem;color:var(--warm-gray);">Powered by Mast &mdash; runmast.com</p>';
   h += '</div>';
@@ -22102,7 +22102,7 @@ function _whatsNewBadge(release) {
   var label = isPush ? 'Push-now' : 'Weekly';
   var bg = isPush ? 'rgba(212,160,83,0.18)' : 'rgba(42,124,111,0.12)';
   var fg = isPush ? 'var(--gold, #b9893f)' : 'var(--teal, #2a7c6f)';
-  return '<span style="flex:none;font-size:0.68rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;'
+  return '<span style="flex:none;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;'
     + 'padding:2px 8px;border-radius:999px;background:' + bg + ';color:' + fg + ';">' + label + '</span>';
 }
 
@@ -22147,10 +22147,10 @@ function _whatsNewHtml(selectedIdx) {
         +     _whatsNewBadge(e.release)
         +     '<span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(_whatsNewDate(e.date)) + '</span>'
         +   '</span>'
-        +   '<span style="font-weight:600;color:var(--text-primary);font-size:0.96rem;">' + esc(e.title || '') + '</span>'
-        +   (e.summary ? '<span style="color:var(--warm-gray);font-size:0.82rem;">' + esc(e.summary) + '</span>' : '')
+        +   '<span style="font-weight:600;color:var(--text-primary);font-size:0.9rem;">' + esc(e.title || '') + '</span>'
+        +   (e.summary ? '<span style="color:var(--warm-gray);font-size:0.85rem;">' + esc(e.summary) + '</span>' : '')
         + '</span>'
-        + '<span aria-hidden="true" style="flex:none;color:var(--warm-gray);font-size:1.1rem;">&rarr;</span>'
+        + '<span aria-hidden="true" style="flex:none;color:var(--warm-gray);font-size:1.15rem;">&rarr;</span>'
         + '</button>';
     }
   } else {
@@ -22162,9 +22162,9 @@ function _whatsNewHtml(selectedIdx) {
       + '<span aria-hidden="true">&larr;</span> All updates</button>';
     h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">'
       + _whatsNewBadge(sel.release)
-      + '<span style="color:var(--warm-gray);font-size:0.8rem;">' + esc(_whatsNewDate(sel.date)) + '</span></div>';
+      + '<span style="color:var(--warm-gray);font-size:0.78rem;">' + esc(_whatsNewDate(sel.date)) + '</span></div>';
     h += '<h4 style="margin:0 0 4px;font-size:1.15rem;color:var(--text-primary);">' + esc(sel.title || '') + '</h4>';
-    if (sel.summary) h += '<p style="margin:0 0 14px;color:var(--warm-gray);font-size:0.88rem;">' + esc(sel.summary) + '</p>';
+    if (sel.summary) h += '<p style="margin:0 0 14px;color:var(--warm-gray);font-size:0.9rem;">' + esc(sel.summary) + '</p>';
     var caps = Array.isArray(sel.capabilities) ? sel.capabilities : [];
     h += '<ul style="margin:0;padding-left:0;list-style:none;display:flex;flex-direction:column;gap:10px;">';
     for (var c = 0; c < caps.length; c++) {
