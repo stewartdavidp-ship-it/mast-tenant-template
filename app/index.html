@@ -19275,36 +19275,51 @@ var MastAdmin = (function() {
       console.error('[MastAdmin] No manifest entry for module:', moduleId);
       return Promise.reject(new Error('Unknown module: ' + moduleId));
     }
-    _loadPromises[moduleId] = new Promise(function(resolve, reject) {
-      // Temporarily catch script parse/runtime errors
-      var errorHandler = function(event) {
-        if (event.filename && event.filename.indexOf(manifest.src) !== -1) {
+    // One injection attempt: rejects on network failure OR parse error (e.g. a truncated body — prod "Unexpected end of input"); `settled` stops the parse-error path and onload racing.
+    var MAX_LOAD_ATTEMPTS = 3;
+    function _attemptLoad(n) {
+      return new Promise(function(resolve, reject) {
+        var settled = false;
+        var errorHandler = function(event) {
+          if (event.filename && event.filename.indexOf(manifest.src) !== -1) {
+            window.removeEventListener('error', errorHandler);
+            if (!settled) { settled = true; reject(new Error('parse error: ' + (event.message || 'unknown') + ' (line ' + (event.lineno || '?') + ')')); }
+          }
+        };
+        window.addEventListener('error', errorHandler);
+        var script = document.createElement('script');
+        // Per-file cache-bust: each manifest entry carries a content hash (`v`),
+        // stamped by scripts/gen-cache-bust.mjs, so a deploy only re-fetches modules
+        // that actually changed. MAST_MODULES_V is the fallback for dangling stubs.
+        // On retry (n>0) append a unique nonce after the hash so a truncated cached copy isn't re-served.
+        var _nonce = n > 0 ? ('.r' + n + '.' + (window.performance && performance.now ? Math.floor(performance.now()) : n)) : '';
+        script.src = manifest.src + '?v=' + (manifest.v || MAST_MODULES_V) + _nonce;
+        script.onload = function() {
+          // A parse error fires a synchronous window 'error' before onload, so settled is already true for a truncated module.
+          if (!settled) { settled = true; resolve(); }
+          setTimeout(function() { window.removeEventListener('error', errorHandler); }, 100);
+        };
+        script.onerror = function() {
           window.removeEventListener('error', errorHandler);
-          delete _loadPromises[moduleId];
-          var msg = 'Failed to load module: ' + moduleId + ' — ' + (event.message || 'unknown error') + ' (line ' + (event.lineno || '?') + ')';
-          showToast(msg, true);
-          reject(new Error(msg));
+          if (!settled) { settled = true; reject(new Error('Script load failed: ' + manifest.src)); }
+        };
+        document.head.appendChild(script);
+      });
+    }
+    _loadPromises[moduleId] = (function run(n) {
+      return _attemptLoad(n).catch(function(err) {
+        if (n + 1 < MAX_LOAD_ATTEMPTS) {
+          console.warn('[MastAdmin] module ' + moduleId + ' load failed (attempt ' + (n + 1) + '/' + MAX_LOAD_ATTEMPTS + '), retrying:', err.message);
+          return new Promise(function(r) { setTimeout(r, 300 * (n + 1)); }).then(function() { return run(n + 1); });
         }
-      };
-      window.addEventListener('error', errorHandler);
-      var script = document.createElement('script');
-      // Per-file cache-bust: each manifest entry carries a content hash (`v`),
-      // stamped by scripts/gen-cache-bust.mjs, so a deploy only re-fetches modules
-      // that actually changed. MAST_MODULES_V is the fallback for dangling stubs.
-      script.src = manifest.src + '?v=' + (manifest.v || MAST_MODULES_V);
-      script.onload = function() {
-        // Remove error handler after a short delay (parse errors fire synchronously)
-        setTimeout(function() { window.removeEventListener('error', errorHandler); }, 100);
-        delete _loadPromises[moduleId];
-        resolve();
-      };
-      script.onerror = function() {
-        window.removeEventListener('error', errorHandler);
-        delete _loadPromises[moduleId];
-        showToast('Failed to load module: ' + moduleId, true);
-        reject(new Error('Script load failed: ' + manifest.src));
-      };
-      document.head.appendChild(script);
+        throw err;
+      });
+    })(0).then(function() {
+      delete _loadPromises[moduleId];
+    }, function(err) {
+      delete _loadPromises[moduleId];
+      showToast('Failed to load module: ' + moduleId, true);
+      throw err;
     });
     return _loadPromises[moduleId];
   }
