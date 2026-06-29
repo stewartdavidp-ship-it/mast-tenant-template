@@ -11821,7 +11821,7 @@ var MastDirty = (function() {
     if (typeof exitFn !== 'function') exitFn = function() {};
     var dirty = getDirtyKeys();
     if (dirty.length === 0) { exitFn(); return; }
-    var labels = dirty.map(function(k) { return registrations[k].opts.label || k; });
+    var labels = dirty.map(function(k) { var r = registrations[k]; return (r && r.opts && r.opts.label) || k; });
     var msg = 'You have unsaved changes on ' + labels.join(', ') + '. Discard them?';
     // Use mastConfirm (dark-mode-compliant) — async, so the nav happens in the callback
     // when the user confirms. This means callers of checkAndExit must not rely on
@@ -11833,7 +11833,7 @@ var MastDirty = (function() {
     }) : Promise.resolve(window.confirm(msg))).then(function(ok) {
       if (!ok) return; // Stay
       dirty.forEach(function(k) {
-        var d = registrations[k].opts.discardFn;
+        var r = registrations[k]; var d = r && r.opts && r.opts.discardFn;
         if (typeof d === 'function') { try { d(); } catch (e) {} }
       });
       // Cleared on caller side via unregister, but defensively wipe
@@ -26015,7 +26015,7 @@ async function saveShipProviderConfig() {
 // ============================================================
 
 function onShipStrategyChange(type) {
-  var strategy = document.getElementById('ship' + (type === 'wholesale' ? 'Wholesale' : 'Retail') + 'Strategy').value;
+  var stratEl = document.getElementById('ship' + (type === 'wholesale' ? 'Wholesale' : 'Retail') + 'Strategy'); if (!stratEl) return; var strategy = stratEl.value; // guard: shipping tab not mounted
   var prefix = type === 'wholesale' ? 'shipWholesale' : 'shipRetail';
   var cats = document.getElementById(prefix + 'CategoryParams') || document.getElementById('shipRetailCategoryParams');
   // Show/hide param sections based on strategy
@@ -36410,7 +36410,7 @@ function renderEvents() {
   var table = document.getElementById('eventsTable');
   var tbody = document.getElementById('eventsTableBody');
   var cards = document.getElementById('eventCards');
-
+  if (!loading || !empty || !table || !tbody || !cards) return; // events surface not mounted (feature hidden / different route)
   loading.style.display = 'none';
 
   var entries = Object.entries(events);
