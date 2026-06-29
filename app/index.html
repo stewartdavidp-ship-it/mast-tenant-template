@@ -90,7 +90,7 @@
 
     function showBootIntermediate() {
       if (!document.body) { document.addEventListener('DOMContentLoaded', showBootIntermediate); return; }
-      if (document.getElementById('__mastBootOverlay')) return;
+      if (window.__mastBootOk || document.getElementById('__mastBootOverlay')) return; // __mastBootOk guard: deferred DOMContentLoaded re-entry can fire after boot finished + poll stopped → stuck wall
       var d = document.createElement('div');
       d.id = '__mastBootOverlay';
       d.style.cssText = 'position:fixed;inset:0;background:#1a1a1a;color:#aaa;z-index:9999;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;font-size:14px;';
