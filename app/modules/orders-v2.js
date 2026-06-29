@@ -266,11 +266,18 @@
         ], items);
         var t = (d.totals ? d.totals(r) : {}) || {};
         var subtotalDisplay = grossMode ? (t.subtotal || 0) + memberDiscUSD : t.subtotal;
+        // Refunds recorded on the order (refundedCents) — written by the refund CF
+        // (transitionRma 'complete' / processRefund) and the MCP refund_order tool.
+        // Surface them so a UI-issued refund is visible on the order itself, not
+        // only on the Returns/RMA page. Net = total − refunded. (QA 2026-06-28)
+        var refundedUSD = (r.refundedCents > 0) ? UI.Num.moneyVal(r, 'refundedCents') : 0;
         var totalsHtml = '<div class="mu-totrow"><span>Subtotal</span><span>' + m(subtotalDisplay) + '</span></div>' +
           (grossMode ? '<div class="mu-totrow"><span>' + esc((r.membershipDiscount && r.membershipDiscount.programName) || 'Member Discount') + '</span><span>-' + m(memberDiscUSD) + '</span></div>' : '') +
           '<div class="mu-totrow"><span>Shipping</span><span>' + m(t.shipping) + '</span></div>' +
           '<div class="mu-totrow"><span>Tax</span><span>' + m(t.tax) + '</span></div>' +
-          '<div class="mu-totrow grand"><span>Total</span><span>' + m(t.total) + '</span></div>';
+          '<div class="mu-totrow grand"><span>Total</span><span>' + m(t.total) + '</span></div>' +
+          (refundedUSD > 0 ? '<div class="mu-totrow" style="color:var(--danger);"><span>Refunded</span><span>-' + m(refundedUSD) + '</span></div>' +
+            '<div class="mu-totrow"><span>Net</span><span>' + m((t.total || 0) - refundedUSD) + '</span></div>' : '');
         // ── Customer ───────────────────────────────────────────────────
         var cust = d.customer ? d.customer(r) : null;
         var custBlock = cust ? (
