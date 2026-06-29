@@ -6,6 +6,25 @@
     ],
     "headers": [
       {
+        "_comment": "Content-hash-versioned assets (modules carry ?v=<hash>, shared engine likewise). MUST precede the broad no-store rules below — Firebase Hosting applies the FIRST matching rule per header key, so these immutable rules only take effect when listed first. Cuts launch latency and avoids re-fetching (and re-truncating) modules from origin on every load.",
+        "source": "/app/modules/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/shared/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
         "source": "**/*.@(html|js|css)",
         "headers": [
           {
@@ -95,24 +114,6 @@
           {
             "key": "Cache-Control",
             "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "/app/modules/**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=31536000, immutable"
-          }
-        ]
-      },
-      {
-        "source": "/shared/**",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "public, max-age=31536000, immutable"
           }
         ]
       }
