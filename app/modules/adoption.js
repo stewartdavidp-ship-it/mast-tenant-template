@@ -420,7 +420,7 @@
     var html = '<span id="adoptionScoreBubble" onclick="AdoptionV2.show()" role="button" tabindex="0" ' +
       'title="Show your Mast value score" ' +
       'style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;padding:3px 11px;border-radius:999px;' +
-      'background:var(--hover-bg, var(--cream-dark));color:var(--teal);font-size:0.8rem;font-weight:700;cursor:pointer;line-height:1.4;">' +
+      'background:var(--hover-bg, var(--cream-dark));color:var(--teal);font-size:0.78rem;font-weight:700;cursor:pointer;line-height:1.4;">' +
       '🏅 ' + scores.pct + '%</span>';
     if (existing) existing.outerHTML = html;
     else gear.insertAdjacentHTML('beforebegin', html);
