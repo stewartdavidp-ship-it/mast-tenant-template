@@ -41,6 +41,9 @@
   "app/modules/coin-wallet-modal.js": {
     "hardcodedHex": 8
   },
+  "app/modules/compliance-settings.js": {
+    "hardcodedHex": 18
+  },
   "app/modules/composer.js": {
     "nativeDialogs": 1
   },
