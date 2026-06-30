@@ -123,6 +123,9 @@
     "rogueOverlays": 1,
     "hardcodedHex": 13
   },
+  "app/modules/operations-settings.js": {
+    "hardcodedHex": 33
+  },
   "app/modules/orders-v2.js": {
     "hardcodedHex": 1
   },
