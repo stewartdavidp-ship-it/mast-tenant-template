@@ -5,8 +5,8 @@
 Source-of-truth counts for the admin app, generated from the code so docs
 cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 
-- **Core shell:** `app/index.html` — **40,181** lines
-- **Feature modules:** **153** files in `app/modules/` (**91** routed), **144,579** lines combined
+- **Core shell:** `app/index.html` — **37,344** lines
+- **Feature modules:** **162** files in `app/modules/` (**91** routed), **148,344** lines combined
 
 | Module file | Lines | Routes |
 |---|---:|---|
@@ -16,7 +16,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/add-to-mast.js` | 532 | — |
 | `modules/add-to-sale-dialog.js` | 133 | — |
 | `modules/add-variant-dialog.js` | 112 | — |
-| `modules/adoption.js` | 636 | — |
+| `modules/adoption.js` | 672 | — |
 | `modules/advisor-v2.js` | 1,406 | advisor-v2, advisor |
 | `modules/analytics-v2.js` | 221 | analytics-v2 |
 | `modules/ask-ai-chat.js` | 296 | — |
@@ -26,7 +26,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/audit.js` | 1,721 | audit |
 | `modules/auditlog-v2.js` | 243 | auditlog-v2 |
 | `modules/blog-v2.js` | 1,900 | blog-v2, blog |
-| `modules/book.js` | 6,669 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
+| `modules/book.js` | 6,677 | book, book-detail, enrollments, instructors, instructor-detail, resources, resource-detail, passes, pass-detail, calendar, book-reports |
 | `modules/business-setup.js` | 277 | — |
 | `modules/business-view.js` | 640 | — |
 | `modules/calendar-v2.js` | 108 | calendar-v2 |
@@ -35,10 +35,12 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/channels-v2.js` | 1,007 | channels-v2, channels |
 | `modules/classes-v2.js` | 1,276 | classes-v2, book-reports-v2, classes-rooms-v2, classes-settings-v2 |
 | `modules/clone-product-dialog.js` | 111 | — |
-| `modules/coin-wallet-modal.js` | 288 | — |
-| `modules/coins-tab.js` | 179 | — |
+| `modules/close-policy-settings.js` | 177 | — |
+| `modules/coin-wallet-modal.js` | 298 | — |
+| `modules/coins-tab.js` | 190 | — |
 | `modules/commission-terms-v2.js` | 271 | commission-terms-v2, commission-terms |
 | `modules/commissions-v2.js` | 1,037 | commissions-v2, commissions |
+| `modules/compliance-settings.js` | 530 | — |
 | `modules/composer-v2.js` | 403 | composer-v2 |
 | `modules/composer.js` | 479 | composer |
 | `modules/connections-providers.js` | 1,292 | — |
@@ -46,6 +48,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/consignments-v2.js` | 496 | consignments-v2 |
 | `modules/contacts-v2.js` | 1,028 | contacts-v2, contacts |
 | `modules/coupon-modals.js` | 322 | — |
+| `modules/coupons-list.js` | 221 | — |
 | `modules/coupons-v2.js` | 534 | coupons-v2 |
 | `modules/create-role-modal.js` | 71 | — |
 | `modules/cs-faqs-v2.js` | 334 | cs-faqs-v2 |
@@ -58,12 +61,13 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/customer-service.js` | 3,616 | cs-inbox, cs-tickets, cs-surveys, cs-reviews, cs-faqs, cs-members |
 | `modules/customers-core.js` | 613 | — |
 | `modules/customers-v2.js` | 1,070 | customers-v2, customers |
-| `modules/demo-mode.js` | 279 | — |
+| `modules/demo-mode.js` | 280 | — |
 | `modules/diagnostics.js` | 216 | diagnostics |
 | `modules/duplicates-v2.js` | 175 | duplicates-v2 |
 | `modules/email-log-v2.js` | 386 | email-log-v2 |
 | `modules/email-log.js` | 563 | email-log |
 | `modules/email-preview-drawer.js` | 123 | — |
+| `modules/email-settings.js` | 274 | — |
 | `modules/employees-v2.js` | 581 | employees-v2 |
 | `modules/engagement-inbox-v2.js` | 383 | engagement-inbox-v2 |
 | `modules/engagement-inbox.js` | 525 | engagement-inbox |
@@ -75,7 +79,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/finance-openitems-v2.js` | 545 | finance-ar-v2, finance-ap-v2 |
 | `modules/finance-reports-v2.js` | 258 | finance-reports-v2 |
 | `modules/finance-statements-v2.js` | 470 | financials-v2, finance-revenue-v2, finance-pl-v2, finance-cash-flow-v2, finance-tax-v2 |
-| `modules/finance.js` | 8,680 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
+| `modules/finance.js` | 8,717 | finance-revenue, finance-expenses, finance-pl, finance-cash-flow, finance-ar, finance-ap, finance-tax, finance-reports, customer-portfolio, financials, finance-period-close, finance-amendments |
 | `modules/forecast-job-modal.js` | 116 | — |
 | `modules/forecast.js` | 728 | — |
 | `modules/fulfillment-v2.js` | 614 | pack-v2, ship-v2 |
@@ -90,37 +94,41 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/instructors-v2.js` | 416 | instructors-v2 |
 | `modules/intake-ops.js` | 485 | — |
 | `modules/inventory-ask-ai.js` | 151 | — |
+| `modules/inventory-locations.js` | 264 | — |
 | `modules/inventory-stock-ops.js` | 653 | — |
-| `modules/jobs-v2.js` | 1,315 | jobs-v2 |
+| `modules/jobs-v2.js` | 1,362 | jobs-v2 |
 | `modules/library-upload-modal.js` | 163 | — |
 | `modules/link-recipe-dialog.js` | 107 | — |
 | `modules/lookbooks-v2.js` | 561 | lookbooks-v2, lookbooks |
 | `modules/lots-v2.js` | 178 | lots-v2 |
 | `modules/loyalty-v2.js` | 495 | loyalty-v2 |
 | `modules/maker-settings.js` | 353 | — |
-| `modules/maker.js` | 7,887 | materials, products |
+| `modules/maker.js` | 8,062 | materials, products |
 | `modules/mapping-v2.js` | 382 | mapping-v2 |
 | `modules/mapping.js` | 1,802 | mapping |
 | `modules/marketing-calendar-v2.js` | 250 | marketing-calendar-v2, marketing-calendar |
 | `modules/match-confirm-modal.js` | 139 | — |
-| `modules/materials-v2.js` | 597 | materials-v2 |
+| `modules/materials-v2.js` | 602 | materials-v2 |
 | `modules/membership-v2.js` | 473 | membership-v2 |
 | `modules/migration-dashboard.js` | 279 | — |
 | `modules/migration-plan.js` | 657 | — |
 | `modules/module-selection-modal.js` | 147 | — |
 | `modules/nav-profiles.js` | 263 | — |
 | `modules/newsletter-v2.js` | 1,753 | newsletter-v2, newsletter |
-| `modules/orders-v2.js` | 1,433 | orders-v2, orders |
+| `modules/operations-settings.js` | 579 | — |
+| `modules/orders-v2.js` | 1,506 | orders-v2, orders |
 | `modules/passes-v2.js` | 539 | passes-v2 |
 | `modules/permission-matrix.js` | 211 | — |
 | `modules/pos-v2.js` | 182 | pos-v2 |
-| `modules/procurement-v2.js` | 3,278 | procurement-v2, procurement |
-| `modules/production.js` | 3,826 | jobs, production, stories, forecast |
-| `modules/products-engine.js` | 1,937 | — |
-| `modules/products-v2.js` | 3,881 | products-v2 |
+| `modules/procurement-v2.js` | 3,328 | procurement-v2, procurement |
+| `modules/product-pricing-settings.js` | 188 | — |
+| `modules/production.js` | 3,838 | jobs, production, stories, forecast |
+| `modules/products-engine.js` | 1,943 | — |
+| `modules/products-v2.js` | 4,073 | products-v2 |
 | `modules/promotions-v2.js` | 456 | promotions-v2, promotions |
 | `modules/publish-to-channel-dialog.js` | 179 | — |
 | `modules/receipts-v2.js` | 460 | receipts-v2 |
+| `modules/renewals-notifications-settings.js` | 238 | — |
 | `modules/resources-v2.js` | 345 | resources-v2 |
 | `modules/rma-admin.js` | 1,051 | rma |
 | `modules/rma-v2.js` | 219 | rma-v2 |
@@ -139,10 +147,11 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/studio-locations.js` | 281 | — |
 | `modules/studio-v2.js` | 446 | studio-v2 |
 | `modules/studio.js` | 823 | studio |
-| `modules/subscription-billing.js` | 342 | — |
-| `modules/subscription-v2.js` | 344 | subscription-v2, plan-billing-coins-v2 |
+| `modules/subscription-billing.js` | 409 | — |
+| `modules/subscription-v2.js` | 355 | subscription-v2, plan-billing-coins-v2 |
 | `modules/team-v2.js` | 4,132 | team-v2, team |
 | `modules/terms-v2.js` | 300 | terms-v2 |
+| `modules/testing-mode.js` | 503 | — |
 | `modules/trips-v2.js` | 2,535 | trips-v2, trips |
 | `modules/unified-drift-dialog.js` | 152 | — |
 | `modules/user-detail.js` | 650 | — |
@@ -157,7 +166,7 @@ cannot silently drift. See `mast-docs/platform/doc-sync-proposal.md`.
 | `modules/wholesale-v2.js` | 862 | wholesale-v2, wholesale |
 | `modules/workflows/commissions.workflow.js` | 266 | — |
 | `modules/workflows/jobs.workflow.js` | 118 | — |
-| `modules/workflows/pickship.workflow.js` | 394 | — |
+| `modules/workflows/pickship.workflow.js` | 444 | — |
 | `modules/workflows/procurement.workflow.js` | 111 | — |
 | `modules/workflows/products.workflow.js` | 165 | — |
 | `modules/workflows/return.workflow.js` | 151 | — |

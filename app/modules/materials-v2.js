@@ -131,7 +131,12 @@
         function fg(label, inner, flex) { return '<div class="form-group"' + (flex ? ' style="flex:1;min-width:150px;"' : '') + '><label class="form-label">' + label + '</label>' + inner + '</div>'; }
 
         return '<div class="mu-editbar"><span class="mu-editpill">' + (mode === 'create' ? 'NEW' : 'EDITING') + '</span>' + (mode === 'create' ? 'New material' : 'Edit this material') + '</div>' +
-          fg('Name *', '<input class="form-input" id="matV2Name" value="' + esc(m.name || '') + '" style="width:100%;" placeholder="e.g. 14K Gold Wire">') +
+          // name="name" is load-bearing: the entity engine's pre-save validate()
+          // collects required fields from name-attributed inputs (mast-entity.js
+          // onSave). Without it, create() starts from an empty record, the engine
+          // never sees the typed name, and "Name is required" fires before this
+          // module's own onSave runs — blocking every new-material create.
+          fg('Name *', '<input class="form-input" id="matV2Name" name="name" value="' + esc(m.name || '') + '" style="width:100%;" placeholder="e.g. 14K Gold Wire">') +
           row2(
             fg('Category', '<select class="form-input" id="matV2Category" style="width:100%;">' + catOpts + '</select>', true),
             fg('Unit of measure', '<select class="form-input" id="matV2Uom" style="width:100%;">' + uomOpts + '</select>', true)

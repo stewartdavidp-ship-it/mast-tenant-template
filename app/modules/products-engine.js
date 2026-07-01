@@ -126,15 +126,16 @@ function renderProducts() {
   var stockFilter = window.productsStockFilter;
   function _stockBucket(p) {
     var inv = inventory[p.pid];
-    if (!inv) return 'untracked';
-    var st = inv.stockType;
-    if (st === 'made-to-order' || st === 'build-to-order') return 'untracked';
-    var totals = (typeof getInventoryTotals === 'function') ? getInventoryTotals(inv) : null;
-    if (!totals) return 'untracked';
-    var threshold = inv.lowStockThreshold || 2;
-    if (totals.available <= 0) return 'out';
-    if (totals.available <= threshold) return 'low';
-    return 'in';
+    if (!inv || typeof getInventoryTotals !== 'function' || !window.MastStockStatus) return 'untracked';
+    // Canonical low/out classification (shared/stock-status.core.js) — same
+    // rule the storefront badge uses. 'na' (build/made-to-order, depleted
+    // stock-to-build) carries no shortage alarm, so it maps to 'untracked'.
+    var c = window.MastStockStatus.classify({
+      stockType: inv.stockType,
+      available: getInventoryTotals(inv).available,
+      lowStockThreshold: inv.lowStockThreshold
+    });
+    return c.status === 'na' ? 'untracked' : c.status;
   }
 
   var filtered = productsData.filter(function(p) {
@@ -580,11 +581,15 @@ function renderInventoryOverview() {
 
     totalOnHand += totals.onHand;
     totalCommitted += totals.committed;
+    // Category tallies (stat cards) stay keyed off the raw stockType; the
+    // out/low alarm counts come from the canonical classifier so they match the
+    // filter pills, the dashboard card and the storefront.
     if (stockType === 'build-to-order' || stockType === 'made-to-order') buildToOrderCount++;
-    else if (stockType === 'stock-to-build') { stockToBuildCount++; if (totals.available > 0 && totals.available <= threshold) lowStockCount++; }
-    else if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') { strictCount++; if (totals.available <= 0) outOfStockCount++; else if (totals.available <= threshold) lowStockCount++; }
-    else if (totals.available <= 0) outOfStockCount++;
-    else if (totals.available <= threshold) lowStockCount++;
+    else if (stockType === 'stock-to-build') stockToBuildCount++;
+    else if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') strictCount++;
+    var _ssOverview = window.MastStockStatus.classify({ stockType: stockType, available: totals.available, lowStockThreshold: threshold });
+    if (_ssOverview.status === 'out') outOfStockCount++;
+    else if (_ssOverview.status === 'low') lowStockCount++;
 
     // Build attribute summary for this product
     var attrSummary = '';
@@ -819,13 +824,16 @@ function renderInventoryOverview() {
     var statusBadge = '';
     var isBTORow = (r.stockType === 'build-to-order' || r.stockType === 'made-to-order');
     var isSTBRow = (r.stockType === 'stock-to-build');
+    // Canonical out/low classification (shared/stock-status.core.js); the badge
+    // text/treatments stay exactly as before.
+    var _ssRow = window.MastStockStatus.classify({ stockType: r.stockType, available: r.available, lowStockThreshold: r.threshold });
     if (isBTORow) {
       statusBadge = '<span class="status-badge stock-badge made-to-order" style="font-size:0.72rem;">Build to Order</span>';
-    } else if (isSTBRow && r.available <= 0) {
+    } else if (isSTBRow && _ssRow.status === 'na') {
       statusBadge = '<span class="status-badge stock-badge made-to-order" style="font-size:0.72rem;">Made to Order</span>';
-    } else if (r.available <= 0) {
+    } else if (_ssRow.status === 'out') {
       statusBadge = '<span class="status-badge stock-badge out-of-stock" style="font-size:0.72rem;">Out of Stock</span>';
-    } else if (r.available <= r.threshold) {
+    } else if (_ssRow.status === 'low') {
       statusBadge = '<span class="status-badge stock-badge low-stock" style="font-size:0.72rem;">Low Stock</span>';
     } else {
       statusBadge = '<span class="status-badge stock-badge in-stock" style="font-size:0.72rem;">In Stock</span>';
@@ -835,14 +843,12 @@ function renderInventoryOverview() {
       ? '<img src="' + esc(r.imgSrc) + '" alt="" style="width:36px;height:36px;object-fit:cover;border-radius:6px;">'
       : '<div style="width:36px;height:36px;border-radius:6px;background:var(--cream-dark);"></div>';
 
+    // Out → danger red, low → warning orange; build/made-to-order and depleted
+    // stock-to-build (status 'na') get no alarming color. Drives the same rule
+    // as the badge above.
     var qtyStyle = '';
-    if (!isBTORow && !isSTBRow) {
-      // Only strict/in-stock/limited show danger/warning — STB falls back to made-to-order
-      if (r.available <= 0) qtyStyle = 'color:var(--danger);font-weight:600;';
-      else if (r.available <= r.threshold) qtyStyle = 'color:#E65100;font-weight:600;';
-    } else if (isSTBRow && r.available > 0 && r.available <= r.threshold) {
-      qtyStyle = 'color:#E65100;font-weight:600;';
-    }
+    if (_ssRow.status === 'out') qtyStyle = 'color:var(--danger);font-weight:600;';
+    else if (_ssRow.status === 'low') qtyStyle = 'color:#E65100;font-weight:600;';
 
     var discontinuedBadge = r.availability === 'discontinued'
       ? ' <span class="status-badge stock-badge out-of-stock" style="font-size:0.72rem;padding:1px 6px;vertical-align:middle;">Discontinued</span>'

@@ -55,6 +55,7 @@ const LOCKSTEP_SHARED = new Set([
   'customer-filters',
   'variant-reconcile',
   'product-readiness.core',
+  'stock-status.core',
   'channel-normalization.core',
   'brand-sync',
   'orders-core',

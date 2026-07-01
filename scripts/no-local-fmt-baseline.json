@@ -53,6 +53,9 @@
   "app/modules/contacts-v2.js": {
     "localeDate": 1
   },
+  "app/modules/coupons-list.js": {
+    "moneyToFixed": 3
+  },
   "app/modules/coupons-v2.js": {
     "moneyToFixed": 1
   },

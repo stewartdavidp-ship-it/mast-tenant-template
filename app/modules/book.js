@@ -955,6 +955,14 @@
 
   async function showClassForm(classId) {
     var cls = classId ? classesData.find(function(c) { return c.id === classId; }) : null;
+    // Cache miss on a deep-link load (e.g. #book-detail?id=...): classesData may be
+    // empty, so fall back to fetching the class directly (mirrors loadClassDetail).
+    // Without this, isNew would wrongly become true and render a blank "New Class"
+    // form, risking a duplicate/orphan class on Save.
+    if (classId && !cls) {
+      cls = await MastDB.classes.get(classId);
+      if (cls) cls.id = classId;
+    }
     var isNew = !cls;
 
     // Ensure instructors/resources loaded for dropdowns

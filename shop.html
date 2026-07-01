@@ -580,6 +580,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="shared/mastdb.js?v=1"></script>
+<!-- Canonical low/out-of-stock classifier — shared with the admin Products page
+     and Dashboard so the storefront badge cannot drift. -->
+<script src="shared/stock-status.core.js?v=1"></script>
 <script>
 window.TENANT_READY.then(function() {
   // Firebase — load shop products dynamically grouped by category
@@ -612,11 +615,15 @@ window.TENANT_READY.then(function() {
     var isDiscontinued = product.availability === 'discontinued';
     var effective = si ? ((si.totalAvailable || 0)) : 0;
     var stockType = si ? si.stockType : null;
+    // Canonical low/out classification (shared/stock-status.core.js) — same rule
+    // as product.html resolveBadge and the admin Products page / Dashboard.
+    var ss = window.MastStockStatus.classify({ stockType: stockType, available: effective, lowStockThreshold: (si && si.lowStockThreshold) });
+    var isStrictish = (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited');
     if (isDiscontinued && effective <= 0) return { text: badges.discontinuedSold || 'Retired', cssClass: 'retired' };
     if (isDiscontinued && effective > 0) return { text: badges.discontinuedInStock || 'Final Stock', cssClass: 'final-stock' };
-    if ((stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') && effective <= 0) return { text: 'Sold Out', cssClass: 'sold-out' };
-    if ((stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') && effective <= ((si && si.lowStockThreshold) || 2)) return { text: (badges.lowStock || 'Only {n} Left').replace('{n}', effective), cssClass: 'low-stock' };
-    if (stockType === 'stock-to-build' && effective <= 0) return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+    if (isStrictish && ss.status === 'out') return { text: 'Sold Out', cssClass: 'sold-out' };
+    if (isStrictish && ss.status === 'low') return { text: (badges.lowStock || 'Only {n} Left').replace('{n}', effective), cssClass: 'low-stock' };
+    if (stockType === 'stock-to-build' && ss.status === 'na') return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
     if (stockType === 'build-to-order' || stockType === 'made-to-order') return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
     // Legacy fallback
     if (product.availability === 'made-to-order') return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };

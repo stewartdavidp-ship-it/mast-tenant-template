@@ -75,7 +75,7 @@
           sink +
         '</div>' +
         '<button class="demo-banner-cta" onclick="demoUpgradeFlow(\'banner\')" ' +
-          'aria-label="Make this demo your real store">⭐ Make this my real store</button>' +
+          'aria-label="Start your own store">⭐ Start my own store</button>' +
       '</div>';
 
     if (_timer) clearInterval(_timer);
@@ -99,10 +99,11 @@
     track('demo_cta_clicked');                       // every click, any outcome
     if (_inFlight) return;
 
-    var confirmMsg = 'We’ll spin up a fresh Mast store that’s yours to keep — your ' +
-      'demo edits can come with you. This sandbox stays as-is until it expires.';
+    var confirmMsg = 'We’ll spin up a fresh, empty Mast store that’s yours to keep — a ' +
+      'clean slate for your own products and photos. The demo’s sample content stays ' +
+      'here. This sandbox remains as-is until it expires.';
     var asked = (typeof window.mastConfirm === 'function')
-      ? window.mastConfirm(confirmMsg, { title: 'Make this your real store', confirmText: 'Create my store' })
+      ? window.mastConfirm(confirmMsg, { title: 'Start my own store', confirmText: 'Create my store' })
       : Promise.resolve(true);   // no native-dialog fallback; proceed if helper missing
 
     asked.then(function (ok) {
@@ -159,7 +160,7 @@
       '<div class="empty-title">' + esc(opts.title || 'Available in the full product') + '</div>' +
       '<p>' + esc(opts.body || 'This is a live demo, so this feature is switched off here. It works end-to-end in your own Mast store.') + '</p>' +
       '<button class="btn btn-primary btn-small" style="margin-top:16px;" ' +
-        'onclick="demoUpgradeFlow(\'stub_' + esc(key) + '\')">⭐ Make this my real store</button>' +
+        'onclick="demoUpgradeFlow(\'stub_' + esc(key) + '\')">⭐ Start my own store</button>' +
       '</div>';
   }
   function demoBlockCapability(opts) {
@@ -174,7 +175,7 @@
         '<h3 style="margin:0 0 8px;font-size:1.15rem;">' + esc(title) + '</h3>' +
         '<p style="color:var(--warm-gray);font-size:0.9rem;line-height:1.5;margin:0 auto 20px;max-width:340px;">' + esc(body) + '</p>' +
         '<div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">' +
-          '<button class="btn btn-primary" onclick="closeModal();demoUpgradeFlow(\'stub_' + esc(key) + '\')">⭐ Make this my real store</button>' +
+          '<button class="btn btn-primary" onclick="closeModal();demoUpgradeFlow(\'stub_' + esc(key) + '\')">⭐ Start my own store</button>' +
           '<button class="btn btn-secondary" onclick="closeModal()">Close</button>' +
         '</div>' +
       '</div>';
@@ -241,7 +242,7 @@
     btn.className = 'avatar-menu-item';
     btn.setAttribute('role', 'menuitem');
     btn.setAttribute('data-demo-cta', '');
-    btn.innerHTML = '<span>⭐ Make this my real store</span>';
+    btn.innerHTML = '<span>⭐ Start my own store</span>';
     btn.onclick = function () { if (typeof window.closeAvatarMenu === 'function') window.closeAvatarMenu(); demoUpgradeFlow('avatar_menu'); };
     if (divider && divider.parentNode) divider.parentNode.insertBefore(btn, divider);
     else menu.appendChild(btn);

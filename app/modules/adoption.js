@@ -400,9 +400,39 @@
     return h;
   }
 
+  // -- hide/show: collapse the card to a score bubble next to the dashboard gear --
+  // The bubble lives in the Dashboard section-header (beside the ⚙ gear); the card
+  // and the bubble are mutually exclusive. State persists per browser/tenant origin.
+  var HIDE_KEY = '__mast_adoption_card_hidden';
+  function isHidden() { try { return localStorage.getItem(HIDE_KEY) === '1'; } catch (_e) { return false; } }
+  function setHidden(v) {
+    try { v ? localStorage.setItem(HIDE_KEY, '1') : localStorage.removeItem(HIDE_KEY); } catch (_e) {}
+  }
+
+  // Paint (or remove) the collapsed score bubble. Shown only while hidden AND we
+  // have a real score; otherwise removed so a stale badge never lingers.
+  function renderBubble(scores) {
+    var existing = document.getElementById('adoptionScoreBubble');
+    var show = isHidden() && scores && scores.total > 0;
+    if (!show) { if (existing) existing.parentNode.removeChild(existing); return; }
+    var gear = document.querySelector('#dashboardTab .dash-settings-gear');
+    if (!gear) return; // header not on screen yet; next repaint will catch it
+    var html = '<span id="adoptionScoreBubble" onclick="AdoptionV2.show()" role="button" tabindex="0" ' +
+      'title="Show your Mast value score" ' +
+      'style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;padding:3px 11px;border-radius:999px;' +
+      'background:var(--hover-bg, var(--cream-dark));color:var(--teal);font-size:0.78rem;font-weight:700;cursor:pointer;line-height:1.4;">' +
+      '🏅 ' + scores.pct + '%</span>';
+    if (existing) existing.outerHTML = html;
+    else gear.insertAdjacentHTML('beforebegin', html);
+  }
+
   function renderCard() {
     var container = document.getElementById('dashCardAdoption');
     if (!container) return;
+    var scores = S.loaded ? computeScores() : null;
+    // Hidden → empty the card slot and collapse to the gear-side bubble.
+    if (isHidden()) { container.innerHTML = ''; renderBubble(scores); return; }
+    renderBubble(null); // shown → ensure no leftover bubble
     if (!S.loaded) {
       container.innerHTML =
         '<div class="dash-card" id="dashCard_adoption"><div class="dash-card-header" style="cursor:default;">' +
@@ -410,13 +440,17 @@
         '<div class="dash-card-body"><p style="font-size:0.85rem;color:var(--warm-gray);margin:0;">Calculating…</p></div></div>';
       return;
     }
-    var scores = computeScores();
     if (scores.total === 0) { container.innerHTML = ''; return; }
     container.innerHTML =
       '<div class="dash-card" id="dashCard_adoption">' +
         '<div class="dash-card-header" style="cursor:default;">' +
           '<div class="dash-card-title"><h3>Your Mast value score</h3></div>' +
-          '<div class="dash-card-actions"><span class="dash-card-count">' + scores.pct + '%</span></div>' +
+          '<div class="dash-card-actions">' +
+            '<span class="dash-card-count">' + scores.pct + '%</span>' +
+            '<span onclick="event.stopPropagation();AdoptionV2.hide()" role="button" tabindex="0" ' +
+              'title="Hide — collapse to a badge next to the dashboard gear" ' +
+              'style="font-size:0.78rem;color:var(--warm-gray);cursor:pointer;">Hide</span>' +
+          '</div>' +
         '</div>' +
         '<div class="dash-card-body">' + cardBody(scores) + '</div>' +
       '</div>';
@@ -630,7 +664,9 @@
 
   window.AdoptionV2 = {
     refresh: function () { reloadAndRender(); },
-    open: function () { if (typeof navigateTo === 'function') navigateTo('adoption'); }
+    open: function () { if (typeof navigateTo === 'function') navigateTo('adoption'); },
+    hide: function () { setHidden(true); renderCard(); },
+    show: function () { setHidden(false); renderCard(); }
   };
   start();
 })();

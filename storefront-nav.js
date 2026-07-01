@@ -127,8 +127,8 @@
     banner.innerHTML =
       '<span class="demo-banner-text">🧪 Demo store — resets in ' +
       '<strong class="demo-banner-countdown">' + esc(countdown()) + '</strong></span>' +
-      '<button class="demo-banner-cta" type="button" aria-label="Make this demo your real store">' +
-      'Make this my real store</button>';
+      '<button class="demo-banner-cta" type="button" aria-label="Start your own store">' +
+      'Start my own store</button>';
     var btn = banner.querySelector('.demo-banner-cta');
     if (btn) btn.addEventListener('click', function () {
       if (typeof window.demoUpgradeFlow === 'function') window.demoUpgradeFlow('storefront_banner');
@@ -136,6 +136,16 @@
     var nav = document.getElementById('mainNav');
     if (nav && nav.parentNode) nav.parentNode.insertBefore(banner, nav);
     else if (document.body) document.body.insertBefore(banner, document.body.firstChild);
+    // The banner is a fixed overlay strip (CSS); expose its height so ONLY the
+    // sticky nav drops below it. Nothing else in the page layout changes — the
+    // hero stays full-bleed and the nav keeps its existing look. (Measured, not
+    // hardcoded: the banner wraps to two lines on narrow screens.)
+    document.body.classList.add('has-demo-banner');
+    var syncBannerHeight = function () {
+      document.documentElement.style.setProperty('--demo-banner-h', banner.offsetHeight + 'px');
+    };
+    syncBannerHeight();
+    window.addEventListener('resize', syncBannerHeight);
     // Live countdown — update the single span, never re-paint (keeps the button).
     setInterval(function () {
       var el = banner.querySelector('.demo-banner-countdown');

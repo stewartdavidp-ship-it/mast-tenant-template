@@ -376,7 +376,7 @@
     <div class="about-text fade-up">
       <p class="section-label" id="aboutSectionLabel">About Us</p>
       <h2 class="section-title" data-tenant="brand">Our Story</h2>
-      <p data-tenant="description">Welcome to our shop. We create unique, handcrafted products with care and attention to detail.</p>
+      <p id="aboutBody" data-tenant="description" data-content="about-body">Welcome to our shop. We create unique, handcrafted products with care and attention to detail.</p>
       <p data-tenant="location-description" id="aboutLocationDesc"></p>
     </div>
   </div>
@@ -498,6 +498,26 @@
       if (config.sectionLabel) {
         var sl = document.getElementById('aboutSectionLabel');
         if (sl) sl.textContent = config.sectionLabel;
+      }
+
+      // Story body — config/about.body is the canonical admin-written field.
+      // Without this, the body falls back to data-tenant="description" (the
+      // brand description from publicConfig), which is often empty.
+      if (config.body) {
+        var bodyEl = document.getElementById('aboutBody');
+        if (bodyEl) bodyEl.textContent = config.body;
+      }
+
+      // About image — config/about.imageUrl fallback (the gallery section:'about'
+      // handler below overrides it if the operator added gallery images).
+      if (config.imageUrl) {
+        var cImg = document.getElementById('aboutImage');
+        var cPlaceholder = document.getElementById('aboutImagePlaceholder');
+        if (cImg) {
+          cImg.src = config.imageUrl;
+          cImg.style.display = '';
+          if (cPlaceholder) cPlaceholder.style.display = 'none';
+        }
       }
 
       // Techniques section

@@ -29,8 +29,17 @@
   var STATUS_TONE = {
     placed: 'amber', confirmed: 'info', building: 'amber', packed: 'teal',
     shipped: 'teal', delivered: 'success', cancelled: 'neutral', refunded: 'danger',
-    payment_failed: 'danger'
+    payment_failed: 'danger',
+    return_requested: 'amber', return_approved: 'amber', return_shipped: 'info',
+    return_received: 'info', partially_returned: 'danger'
   };
+  // Return/refund-in-progress vocabulary, grouped under the "Returns" filter
+  // pill. 'refunded' (fully refunded) keeps its own pill; this set is the
+  // return lifecycle plus partial refunds. Single source of truth so the pill,
+  // its count, and the filter predicate never drift.
+  var RETURN_STATUSES = ['return_requested', 'return_approved', 'return_shipped',
+    'return_received', 'partially_returned'];
+  function isReturnStatus(s) { return RETURN_STATUSES.indexOf(String(s || '').toLowerCase()) !== -1; }
   // Friendly channel label for an order. External orders (Shopify/Etsy/Square,
   // ingested by the orders/paid webhook) carry externalSource.platform; native
   // orders use `source` ('direct' = the Mast storefront, wholesale = bulk buyers).
@@ -226,6 +235,27 @@
         // ── Items ──────────────────────────────────────────────────────
         var m = function (x) { return UI.Num.money(x) || '—'; };
         var items = (d.lineItems ? d.lineItems(r) : []) || [];
+        // Receipt mode (mirrors the storefront /orders receipt). Stored line price is NET
+        // (membership discount baked in). When per-line membershipDiscountCents reconciles
+        // exactly to the order-level discount, promote the lines + subtotal to GROSS and show a
+        // Member Discount row so "Subtotal − discount = Total" foots. Otherwise leave NET (which
+        // already foots: net lines sum to the net subtotal). Line items always sum to subtotal.
+        // Detection works in integer cents (no formatting); dollar conversions go through
+        // UI.Num.moneyVal so the receipt stays on the centralized money core.
+        var rawItems = r.items || [];
+        var memberDiscCents = (r.membershipDiscount && r.membershipDiscount.discountCents) || 0;
+        var attributedCents = 0;
+        rawItems.forEach(function (it) { attributedCents += (it.membershipDiscountCents || 0); });
+        var grossMode = memberDiscCents > 0 && attributedCents === memberDiscCents;
+        var memberDiscUSD = grossMode ? UI.Num.moneyVal(r.membershipDiscount, 'discountCents') : 0;
+        if (grossMode) {
+          for (var gi = 0; gi < items.length; gi++) {
+            var dUSD = (rawItems[gi] && rawItems[gi].membershipDiscountCents) ? UI.Num.moneyVal(rawItems[gi], 'membershipDiscountCents') : 0;
+            var q = items[gi].qty || 1;
+            items[gi].price = (items[gi].price || 0) + dUSD / q;
+            items[gi].total = (items[gi].total || 0) + dUSD;
+          }
+        }
         // Built with the relatedTable primitive (not a hand-rolled mu-rel table)
         // so the chrome comes from MastUI, matching the stock transaction template.
         var itemsTable = UI.relatedTable([
@@ -235,10 +265,19 @@
           { label: 'Total', align: 'right', render: function (it) { return m(it.total); } }
         ], items);
         var t = (d.totals ? d.totals(r) : {}) || {};
-        var totalsHtml = '<div class="mu-totrow"><span>Subtotal</span><span>' + m(t.subtotal) + '</span></div>' +
+        var subtotalDisplay = grossMode ? (t.subtotal || 0) + memberDiscUSD : t.subtotal;
+        // Refunds recorded on the order (refundedCents) — written by the refund CF
+        // (transitionRma 'complete' / processRefund) and the MCP refund_order tool.
+        // Surface them so a UI-issued refund is visible on the order itself, not
+        // only on the Returns/RMA page. Net = total − refunded. (QA 2026-06-28)
+        var refundedUSD = (r.refundedCents > 0) ? UI.Num.moneyVal(r, 'refundedCents') : 0;
+        var totalsHtml = '<div class="mu-totrow"><span>Subtotal</span><span>' + m(subtotalDisplay) + '</span></div>' +
+          (grossMode ? '<div class="mu-totrow"><span>' + esc((r.membershipDiscount && r.membershipDiscount.programName) || 'Member Discount') + '</span><span>-' + m(memberDiscUSD) + '</span></div>' : '') +
           '<div class="mu-totrow"><span>Shipping</span><span>' + m(t.shipping) + '</span></div>' +
           '<div class="mu-totrow"><span>Tax</span><span>' + m(t.tax) + '</span></div>' +
-          '<div class="mu-totrow grand"><span>Total</span><span>' + m(t.total) + '</span></div>';
+          '<div class="mu-totrow grand"><span>Total</span><span>' + m(t.total) + '</span></div>' +
+          (refundedUSD > 0 ? '<div class="mu-totrow" style="color:var(--danger);"><span>Refunded</span><span>-' + m(refundedUSD) + '</span></div>' +
+            '<div class="mu-totrow"><span>Net</span><span>' + m((t.total || 0) - refundedUSD) + '</span></div>' : '');
         // ── Customer ───────────────────────────────────────────────────
         var cust = d.customer ? d.customer(r) : null;
         var custBlock = cust ? (
@@ -364,7 +403,19 @@
     if (!acc || typeof acc.get !== 'function') { if (window.OrdersV2) OrdersV2.open(orderId); return Promise.resolve(); }
     return Promise.resolve(acc.get(orderId)).then(function (o) {
       var rec = o ? Object.assign({ _key: orderId }, o) : (V2.byId[orderId] || null);
-      if (rec) { V2.byId[orderId] = rec; window.MastEntity.openRecord('orders-v2', rec, 'read'); }
+      if (rec) {
+        V2.byId[orderId] = rec;
+        // Keep the LIST row + pill counts in lockstep with the detail. The live
+        // listener also catches this, but a server-side status flip (a refund →
+        // partially_returned) can lag; patching the row here makes the list and
+        // the slide-out agree immediately instead of disagreeing until the
+        // listener fires.
+        var i = -1;
+        for (var j = 0; j < V2.rows.length; j++) { if (V2.rows[j]._key === orderId) { i = j; break; } }
+        if (i >= 0) V2.rows[i] = rec; else V2.rows.push(rec);
+        render();
+        window.MastEntity.openRecord('orders-v2', rec, 'read');
+      }
     });
   }
 
@@ -966,13 +1017,22 @@
     // (which holds only QBO-webhook test docs). list() for initial paint; listen()
     // for live updates where available.
     if (typeof o.list === 'function') Promise.resolve(o.list()).then(apply).catch(function (e) { console.error('[orders-v2] list', e); });
-    if (typeof o.listen === 'function') { try { V2.off = o.listen(apply); } catch (e) {} }
+    // Live updates: listen(limit, cb) — the callback is the SECOND arg. The
+    // prior `o.listen(apply)` passed apply as the limit and dropped the cb, so
+    // the list never refreshed after a status change (a refund left the row
+    // showing the old status while the detail/oracle moved on — SGTE-0250).
+    // Subscribe once; re-subscribing on every load() would leak listeners.
+    if (!V2.off && typeof o.listen === 'function') { try { V2.off = o.listen(200, apply); } catch (e) {} }
   }
 
   function visibleRows() {
     var rows = V2.rows;
     if (V2.filter && V2.filter !== 'all') {
-      rows = rows.filter(function (r) { return String(r.status || '').toLowerCase() === V2.filter; });
+      if (V2.filter === 'returns') {
+        rows = rows.filter(function (r) { return isReturnStatus(r.status); });
+      } else {
+        rows = rows.filter(function (r) { return String(r.status || '').toLowerCase() === V2.filter; });
+      }
     }
     return window.mastSortRows(rows, V2.sortKey, V2.sortDir, function (r, k) {
       var f = MastEntity.get('orders-v2').fields.filter(function (x) { return x.name === k; })[0];
@@ -1027,13 +1087,26 @@
   function render() {
     var tab = ensureTab();
     var counts = statusCounts();
-    var pills = ['all', 'placed', 'confirmed', 'delivered', 'cancelled', 'refunded'].map(function (s) {
-      var on = V2.filter === s;
-      return '<button onclick="OrdersV2.setFilter(\'' + s + '\')" style="border:1px solid var(--border);' +
+    // 'returns' is a GROUPED pill (return lifecycle + partial refunds) so
+    // partially_returned orders are filterable — they previously matched no
+    // pill at all (SGTE-0250). 'Refunded' keeps its own pill for fully-refunded.
+    var returnsCount = RETURN_STATUSES.reduce(function (n, s) { return n + (counts[s] || 0); }, 0);
+    var pillDefs = [
+      { key: 'all', label: 'All', count: counts.all || 0 },
+      { key: 'placed', label: 'Placed', count: counts.placed || 0 },
+      { key: 'confirmed', label: 'Confirmed', count: counts.confirmed || 0 },
+      { key: 'delivered', label: 'Delivered', count: counts.delivered || 0 },
+      { key: 'cancelled', label: 'Cancelled', count: counts.cancelled || 0 },
+      { key: 'refunded', label: 'Refunded', count: counts.refunded || 0 },
+      { key: 'returns', label: 'Returns', count: returnsCount }
+    ];
+    var pills = pillDefs.map(function (p) {
+      var on = V2.filter === p.key;
+      return '<button onclick="OrdersV2.setFilter(\'' + p.key + '\')" style="border:1px solid var(--border);' +
         'background:' + (on ? 'color-mix(in srgb,var(--amber) 18%,transparent)' : 'transparent') + ';' +
         'color:' + (on ? 'var(--text-primary)' : 'var(--warm-gray)') + ';border-radius:999px;' +
         'padding:6px 13px;font-size:0.85rem;cursor:pointer;margin-right:8px;">' +
-        s.charAt(0).toUpperCase() + s.slice(1) + ' <span style="color:var(--warm-gray);">' + (counts[s] || 0) + '</span></button>';
+        p.label + ' <span style="color:var(--warm-gray);">' + p.count + '</span></button>';
     }).join('');
 
     var rows = visibleRows();

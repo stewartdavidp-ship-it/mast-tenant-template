@@ -57,6 +57,12 @@ function renderCoinsBalanceCard(platformTenant) {
 function renderCoinsPackList(platformTenant) {
   var el = document.getElementById('coinsPackList');
   if (!el) return;
+  // Shopify-billed tenants: no Stripe-backed coin purchase UI. Show the native
+  // "managed in Shopify" panel instead of the buy-coins pack grid.
+  if (window.isShopifyBilledTenant && window.isShopifyBilledTenant()) {
+    el.innerHTML = (typeof window.renderShopifyBillingPanel === 'function') ? window.renderShopifyBillingPanel() : '';
+    return;
+  }
   var v1sub = v1PickActiveSub(platformTenant);
   var tierKey = v1ResolveTierKey(v1sub ? v1sub.plan : (platformTenant && platformTenant.currentTier));
   var tier = V1_TIER_BY_KEY[tierKey];
@@ -89,6 +95,11 @@ function renderCoinsPackList(platformTenant) {
 
 async function buyCoinPack(coins, btn) {
   var statusEl = document.getElementById('coinsPurchaseStatus');
+  // Shopify-billed tenants never reach the Stripe coin checkout.
+  if (window.isShopifyBilledTenant && window.isShopifyBilledTenant()) {
+    if (statusEl) statusEl.textContent = 'Your plan is managed in Shopify.';
+    return;
+  }
   if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
   if (statusEl) statusEl.textContent = '';
   try {

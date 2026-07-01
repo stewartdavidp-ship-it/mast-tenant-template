@@ -2004,6 +2004,20 @@
 
     isSubmitting = true;
 
+    // Idempotency: a per-checkout-attempt key, generated ONCE and reused across
+    // retries of THIS attempt (a double-click, a back-button re-confirm, an
+    // automatic network retry). The server (submitOrder) dedupes submits that
+    // share this key to a SINGLE order instead of minting N duplicates +
+    // duplicate inventory reservations (sgtest15 race-canary 2026-06-29). We
+    // rotate it after a successful submit (below) so a genuinely new order gets
+    // a fresh key. Server also has a verified-uid+cart-hash fallback, so an
+    // older client that omits this is still deduped — this just makes it exact.
+    if (!checkoutData.idempotencyKey) {
+      checkoutData.idempotencyKey = (window.crypto && window.crypto.randomUUID)
+        ? window.crypto.randomUUID()
+        : ('co_' + Date.now() + '_' + Math.random().toString(36).slice(2, 12));
+    }
+
     var btn = document.querySelector('[data-co="place-order"]');
     if (btn) {
       btn.disabled = true;
@@ -2055,6 +2069,7 @@
       couponSource: checkoutData.couponSource || null,
       uid: user ? user.uid : 'anonymous',
       isWholesale: isWholesaleCart(),
+      idempotencyKey: checkoutData.idempotencyKey,
       resaleCertNumber: checkoutData.resaleCertNumber || '',
       // Tier 2: hint that this order contains a backorder line (server still
       // re-derives per-line eligibility; this just short-circuits messaging).
@@ -2097,6 +2112,11 @@
       // W5 — demo_key_action: a demo prospect placed a test order (covers both
       // the $0 wallet path and the payment-redirect path below). Deduped, fires once.
       if (result && result.success) markDemoKeyAction('test_order');
+
+      // Rotate the idempotency key once the order succeeded, so a genuinely new
+      // order (the customer deliberately buys the same cart again) gets a fresh
+      // key instead of being deduped/replayed against this one.
+      if (result && result.success) checkoutData.idempotencyKey = null;
 
       // $0 wallet-covered order: server handled everything (passes, enrollments, gift cards)
       if (result && result.success && result.zeroDollar) {

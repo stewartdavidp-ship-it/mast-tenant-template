@@ -1,6 +1,6 @@
 {
   "app/index.html": {
-    "unboundedList": 18,
+    "unboundedList": 17,
     "onSnapshot": 1
   },
   "app/modules/accounting.js": {
@@ -14,5 +14,8 @@
   },
   "app/modules/image-library.js": {
     "unboundedList": 9
+  },
+  "app/modules/renewals-notifications-settings.js": {
+    "unboundedList": 1
   }
 }

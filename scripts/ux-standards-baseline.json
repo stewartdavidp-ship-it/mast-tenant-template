@@ -41,6 +41,9 @@
   "app/modules/coin-wallet-modal.js": {
     "hardcodedHex": 8
   },
+  "app/modules/compliance-settings.js": {
+    "hardcodedHex": 18
+  },
   "app/modules/composer.js": {
     "nativeDialogs": 1
   },
@@ -119,6 +122,9 @@
   "app/modules/rma-admin.js": {
     "rogueOverlays": 1,
     "hardcodedHex": 13
+  },
+  "app/modules/operations-settings.js": {
+    "hardcodedHex": 33
   },
   "app/modules/orders-v2.js": {
     "hardcodedHex": 1

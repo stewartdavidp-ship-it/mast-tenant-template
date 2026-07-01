@@ -1028,6 +1028,7 @@
             <span class="qty-value" id="qtyValue">1</span>
             <button class="qty-btn" id="qtyInc">+</button>
           </div>
+          <div class="qty-stock-hint" id="qtyStockHint" style="display:none;"></div>
         </div>
         <div class="product-detail-actions">
           <button id="addToCartBtn" class="btn btn-primary" disabled style="opacity:0.5;cursor:not-allowed;">Add to Cart</button>
@@ -1091,6 +1092,9 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 <script src="shared/mastdb.js?v=1"></script>
+<!-- Canonical low/out-of-stock classifier — shared with the admin Products page
+     and Dashboard so the storefront badge cannot drift. -->
+<script src="shared/stock-status.core.js?v=1"></script>
 <script>
   // Firebase — load product detail from URL param ?id=pXXX
   window.TENANT_READY.then(function() {
@@ -1100,15 +1104,30 @@
     var params = new URLSearchParams(window.location.search);
     // Accept both ?id= and ?pid= for the product key (bug-sweep 2026-04-15).
     // `?pid=` matches the admin URL convention; `?id=` was the original storefront convention.
-    var pid = params.get('id') || params.get('pid');
+    var queryPid = params.get('id') || params.get('pid');
     var isStoryView = params.get('view') === 'story';
     window._isStoryView = isStoryView;
-    window._pid = pid;
 
-    if (!pid) {
-      document.getElementById('productLoading').style.display = 'none';
-      document.getElementById('productNotFound').style.display = '';
-      return;
+    // Resolve the product key from either the ?id=/?pid= query (original URLs) or
+    // the slug route /product/<slug> (F38): the hosting rewrite serves this page
+    // for that path — mirroring /show/<slug> (show/show.js) — and we map the slug
+    // to its product id via the public products collection (the same source
+    // shop.html reads). Query param wins; slug is the shareable/canonical form.
+    function productSlugFromPath() {
+      var parts = window.location.pathname.split('/').filter(Boolean);
+      var i = parts.indexOf('product');
+      var seg = i >= 0 ? parts[i + 1] : '';
+      if (!seg || /\.html?$/i.test(seg)) return '';
+      try { return decodeURIComponent(seg); } catch (e) { return seg; }
+    }
+    function resolveProductId() {
+      if (queryPid) return Promise.resolve(queryPid);
+      var slug = productSlugFromPath();
+      if (!slug) return Promise.resolve(null);
+      return Promise.resolve(MastDB.get('public/products')).then(function(all) {
+        all = all || {};
+        return Object.keys(all).filter(function(k) { return all[k] && all[k].slug === slug; })[0] || null;
+      }).catch(function() { return null; });
     }
 
     // Build shop category nav
@@ -1123,7 +1142,14 @@
       navEl.innerHTML = html;
     });
 
-    // Load product and active sales in parallel
+    // Load product and active sales in parallel — once the key is resolved.
+    resolveProductId().then(function(pid) {
+      window._pid = pid;
+      if (!pid) {
+        document.getElementById('productLoading').style.display = 'none';
+        document.getElementById('productNotFound').style.display = '';
+        return;
+      }
     Promise.all([
       MastDB.get('public/products/' + pid),
       MastDB.get('public/sales-promotions')
@@ -1386,11 +1412,11 @@
           if (effPrice < lowestEffective) lowestEffective = effPrice;
         }
         if (anySaleApplied && lowestEffective < lowest) {
-          priceEl.innerHTML = '<span class="price-prefix">from</span>' +
+          priceEl.innerHTML = '<span class="price-prefix">from</span> ' +
             '<span style="text-decoration:line-through;color:var(--warm-gray,#6B6560);font-weight:400;">' + formatPriceCents(lowest) + '</span> ' +
             '<span style="font-weight:700;color:var(--accent,var(--primary,#c05621));">' + formatPriceCents(lowestEffective) + '</span>';
         } else {
-          priceEl.innerHTML = '<span class="price-prefix">from</span>' + escHtml(formatPriceCents(lowest));
+          priceEl.innerHTML = '<span class="price-prefix">from</span> ' + escHtml(formatPriceCents(lowest));
         }
       } else if (pCents && _productSaleInfo) {
         var saleP = _calcSalePrice(pCents);
@@ -1625,6 +1651,7 @@
               ? findVariant(window._productVariants, window._selectedOptions) : null;
             tryMatchVariantImage(selectedVariant, value);
             checkAddToCartReady();
+            refreshQtyStepper(); // re-cap qty to the newly selected variant's stock
           });
         });
 
@@ -1674,6 +1701,7 @@
 
       // Show qty stepper
       document.getElementById('productQtyWrap').style.display = '';
+      refreshQtyStepper();
 
       // Product URL (legacy Weebly redirect)
       if (p.url) {
@@ -1709,6 +1737,7 @@
       document.getElementById('productLoading').style.display = 'none';
       document.getElementById('productNotFound').style.display = '';
     });
+    }); // resolveProductId().then
   }).catch(function(err) { console.error('[product] Tenant resolution failed:', err.message); });
 
   function switchImage(idx) {
@@ -1755,21 +1784,69 @@
   })();
 
   // ── Qty Stepper ──
+  var QTY_MAX = 10;
+
+  // Units the customer may add for the current selection: the backorder
+  // increment when backordering, else available units on strict-stock products,
+  // else null (no cap beyond QTY_MAX). Mirrors the availableStock the add-to-cart
+  // handler hands MastCart, so the stepper can't ask for more than the cart keeps.
+  function getSelectionAvailableStock() {
+    var bo = window._productBackorder;
+    if (bo && typeof bo.maxQty === 'number') return Math.max(0, bo.maxQty);
+    var p = window._productData;
+    var si = p && p.stockInfo;
+    if (!si) return null;
+    var stockType = si.stockType;
+    var isStrict = stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited';
+    if (!isStrict) return null;
+    var required = window._requiredOptions || [];
+    if (required.length > 0 && si.variants) {
+      // Per-variant stock only once a full combo is chosen; until then don't cap
+      // (Add to Cart stays disabled until a variant is selected anyway).
+      if (!required.every(function(l) { return (window._selectedOptions || {})[l]; })) return null;
+      var variant = findVariant(window._productVariants, window._selectedOptions);
+      var vid = variant && variant.id ? variant.id : null;
+      var v = vid ? si.variants[vid] : null;
+      return v ? Math.max(0, (v.available || 0)) : null;
+    }
+    return Math.max(0, (si.totalAvailable || 0));
+  }
+
+  // Caps window._productQty at what's available, reflects it on the stepper, and
+  // tells the customer when stock is the binding limit (S-16: no more silent clamp
+  // where the cart quietly reduces the quantity after an "added" toast).
+  function refreshQtyStepper() {
+    var avail = getSelectionAvailableStock();
+    var max = (typeof avail === 'number') ? Math.min(QTY_MAX, avail) : QTY_MAX;
+    if (max < 1) max = 1; // sold-out is gated by the cart button; keep stepper usable at 1
+    if (window._productQty > max) window._productQty = max;
+    if (!window._productQty || window._productQty < 1) window._productQty = 1;
+    document.getElementById('qtyValue').textContent = window._productQty;
+    document.getElementById('qtyDec').disabled = (window._productQty <= 1);
+    document.getElementById('qtyInc').disabled = (window._productQty >= max);
+    var hint = document.getElementById('qtyStockHint');
+    if (hint) {
+      // On backorder the ships-by note already explains the limit, so only surface
+      // the in-stock ceiling here.
+      if (!window._productBackorder && typeof avail === 'number' && avail > 0 && avail <= QTY_MAX && window._productQty >= avail) {
+        hint.textContent = 'Only ' + avail + ' available';
+        hint.style.display = '';
+      } else {
+        hint.style.display = 'none';
+      }
+    }
+  }
+  window._refreshQtyStepper = refreshQtyStepper;
+
   document.getElementById('qtyDec').addEventListener('click', function() {
     if (window._productQty > 1) {
       window._productQty--;
-      document.getElementById('qtyValue').textContent = window._productQty;
-      document.getElementById('qtyDec').disabled = (window._productQty <= 1);
-      document.getElementById('qtyInc').disabled = (window._productQty >= 10);
+      refreshQtyStepper();
     }
   });
   document.getElementById('qtyInc').addEventListener('click', function() {
-    if (window._productQty < 10) {
-      window._productQty++;
-      document.getElementById('qtyValue').textContent = window._productQty;
-      document.getElementById('qtyDec').disabled = (window._productQty <= 1);
-      document.getElementById('qtyInc').disabled = (window._productQty >= 10);
-    }
+    window._productQty = (window._productQty || 1) + 1;
+    refreshQtyStepper(); // clamps back down if it would exceed what's available
   });
 
   // Format a 'ships by' date. Parse YYYY-MM-DD as LOCAL midnight so it doesn't
@@ -1872,6 +1949,7 @@
       // QA), not just a greyed-out "Add to Cart".
       if (stockBlocked) btn.textContent = btnText;
       else if (allSelected && !hasPrice) btn.textContent = 'Price Unavailable';
+      else if (required.length > 0 && !allSelected) btn.textContent = required.length === 1 ? ('Select ' + required[0]) : 'Select options';
       else btn.textContent = 'Add to Cart';
     }
 
@@ -2368,17 +2446,19 @@
     if (isDiscontinued && effective > 0) {
       return { text: badges.discontinuedInStock || 'Final Stock', cssClass: 'final-stock' };
     }
+    // Canonical low/out classification (shared/stock-status.core.js) — the same
+    // rule the admin Products page and Dashboard now read.
+    var ss = window.MastStockStatus.classify({ stockType: stockType, available: effective, lowStockThreshold: (si && si.lowStockThreshold) });
     if (stockType === 'strict' || stockType === 'in-stock' || stockType === 'limited') {
-      if (effective <= 0) return { text: 'Sold Out', cssClass: 'sold-out' };
-      var threshold = (si && si.lowStockThreshold) || 2;
-      if (effective <= threshold) {
+      if (ss.status === 'out') return { text: 'Sold Out', cssClass: 'sold-out' };
+      if (ss.status === 'low') {
         var lowText = (badges.lowStock || 'Only {n} Left').replace('{n}', effective);
         return { text: lowText, cssClass: 'low-stock' };
       }
       return null; // in stock, no badge
     }
     if (stockType === 'stock-to-build') {
-      if (effective <= 0) return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
+      if (ss.status === 'na') return { text: badges.madeToOrder || 'Made to Order', cssClass: 'made-to-order' };
       return null; // in stock from stock-to-build
     }
     if (stockType === 'build-to-order' || stockType === 'made-to-order') {
