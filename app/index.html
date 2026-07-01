@@ -21908,7 +21908,21 @@ async function upgradeFreeTenant(targetTier, billingInterval) {
 async function dismissUpgradeOfferBanner() {
   if (!confirm('Dismiss the upgrade offer? We won\'t show it again until you cross a new tier threshold.')) return;
   try {
-    await firebase.functions().httpsCallable('dismissUpgradeOffer')({ tenantId: MastDB.tenantId() });
+    // onRequest (not httpsCallable): the central CF runs in the control-plane
+    // project, but POD tenants (Shopify installs, region-pod placements) are
+    // signed into their pod's Auth, so the callable framework would reject their
+    // token before our handler runs. Bearer-fetch lets the CF verify pod-aware,
+    // exactly like the sibling billing endpoints.
+    var user = firebase.auth().currentUser;
+    if (!user) throw new Error('Sign in first');
+    var idToken = await user.getIdToken();
+    var resp = await fetch('https://us-central1-mast-platform-prod.cloudfunctions.net/dismissUpgradeOffer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + idToken },
+      body: JSON.stringify({ tenantId: MastDB.tenantId() })
+    });
+    var data = await resp.json();
+    if (!resp.ok || !data.success) throw new Error((data && data.error) || 'Dismiss failed');
     showToast('Upgrade offer dismissed.');
     _v1PlatformTenantCache = null;
     renderSubscriptionSettings();
