@@ -443,7 +443,7 @@
         '<button class="btn btn-secondary btn-small" onclick="ProductsV2.discardRevision(\'' + pid + '\')">Discard</button>'
       : '';
     return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border-radius:8px;background:rgba(217,119,6,0.14);border:1px solid rgba(217,119,6,0.45);">' +
-      '<div style="font-size:0.88rem;"><strong>⏳ Pending revision — not yet live.</strong>' + diff + '</div>' +
+      '<div style="font-size:0.85rem;"><strong>⏳ Pending revision — not yet live.</strong>' + diff + '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + actions + '</div>' +
     '</div>';
   }
