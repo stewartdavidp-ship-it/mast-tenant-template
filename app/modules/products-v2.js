@@ -425,7 +425,7 @@
   // shared maker apply/discard so there is one revision engine, not two.
   function fmtPendingVal(key, v) {
     if (v == null) return '—';
-    if (/Cents$/.test(key) && typeof v === 'number') return N.money(v / 100);
+    if (/Cents$/.test(key) && typeof v === 'number') return MastFormat.money(v, { cents: true });
     if (typeof v === 'object') return '(updated)';
     var s = String(v);
     return esc(s.length > 40 ? s.slice(0, 37) + '…' : s);
