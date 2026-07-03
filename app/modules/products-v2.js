@@ -414,6 +414,71 @@
     if (!rec || !window.MastEntity || !MastEntity.refreshFlowHeader) return;
     MastEntity.refreshFlowHeader(rec, productTiles(U, rec));
   }
+
+  // ── Pending-revision bar (Checkpoint F, surfaced in the v2 product SO) ──
+  // Active/Published products route edits through a pending revision (see maker's
+  // MakerProductBridge.setFields → enterRevisionMode/stagePendingChanges): staged
+  // edits reach the storefront only after an explicit Apply. This bar is the SO's
+  // Apply/Discard affordance. Without it, a revision staged FROM this editor had no
+  // way to go live — the only Apply/Discard lived in the legacy maker product view,
+  // which the v2 SO doesn't use — so edits silently stuck as pending. Wired to the
+  // shared maker apply/discard so there is one revision engine, not two.
+  function fmtPendingVal(key, v) {
+    if (v == null) return '—';
+    if (/Cents$/.test(key) && typeof v === 'number') return MastFormat.money(v, { cents: true });
+    if (typeof v === 'object') return '(updated)';
+    var s = String(v);
+    return esc(s.length > 40 ? s.slice(0, 37) + '…' : s);
+  }
+  function revisionBarInner(p) {
+    if (!p || !p.hasPendingRevision) return '';
+    var changes = p.pendingChanges || {};
+    var keys = Object.keys(changes);
+    var pid = esc(p._key || p.pid);
+    var diff = keys.length
+      ? ' <span style="opacity:0.85;">' + keys.map(function (k) { return esc(k) + ': ' + fmtPendingVal(k, changes[k]); }).join(' · ') + '</span>'
+      : '';
+    var actions = canEditProduct()
+      ? '<button class="btn btn-primary btn-small" onclick="ProductsV2.applyRevision(\'' + pid + '\')"' + (keys.length ? '' : ' disabled') + '>Apply' + (keys.length ? ' (' + keys.length + ')' : '') + '</button>' +
+        '<button class="btn btn-secondary btn-small" onclick="ProductsV2.discardRevision(\'' + pid + '\')">Discard</button>'
+      : '';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 12px;padding:10px 14px;border-radius:8px;background:rgba(217,119,6,0.14);border:1px solid rgba(217,119,6,0.45);">' +
+      '<div style="font-size:0.85rem;"><strong>⏳ Pending revision — not yet live.</strong>' + diff + '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + actions + '</div>' +
+    '</div>';
+  }
+  // Re-render the SO's pending-revision bar in place from FRESH record state, so a
+  // just-staged edit shows Apply/Discard without a full reopen (and a live write —
+  // or an applied/discarded revision — clears it). No-op when the bar isn't mounted.
+  function refreshRevisionBar(pid) {
+    if (!document.getElementById('pv2RevBar')) return;
+    var before = V2.byId[pid]; // guard: a reopen may swap the record mid-fetch
+    Promise.resolve(MastDB.products.get(pid)).then(function (p) {
+      if (!p || V2.byId[pid] !== before) return; // record replaced (already fresh) → skip
+      var rec = V2.byId[pid];
+      if (rec) { rec.hasPendingRevision = p.hasPendingRevision; rec.pendingChanges = p.pendingChanges; }
+      var host = document.getElementById('pv2RevBar');
+      if (host) host.innerHTML = revisionBarInner(rec || p);
+    }).catch(function () {});
+  }
+  // Apply/discard a product's pending revision via the shared maker engine, then
+  // reopen the SO ONLY if the revision actually resolved. maker's apply/discard
+  // resolve to undefined on BOTH success and confirm-cancel, so compare the pending
+  // flag before/after: unchanged ⇒ the operator cancelled ⇒ leave the SO (and any
+  // open, unsaved edit) untouched. fnName is a window.maker* global.
+  function _resolveRevision(pid, fnName) {
+    if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; }
+    withProductBridge(function () {
+      if (typeof window[fnName] !== 'function') { MastAdmin.showToast('Product editor unavailable', true); return; }
+      var had = !!(V2.byId[pid] && V2.byId[pid].hasPendingRevision);
+      Promise.resolve(window[fnName](pid)).then(function () {
+        Promise.resolve(MastDB.products.get(pid)).then(function (p) {
+          if (p && !!p.hasPendingRevision === had) return; // cancelled — genuine no-op
+          reopenProduct(pid); markListDirty();
+        }).catch(function () {});
+      }, function () {});
+    });
+  }
   function pricingPane(p) {
     var pid = p._key || p.pid;
     if (V2.editPricing === pid) return pricingEditForm(p);
@@ -1379,7 +1444,9 @@
         // Product image thumbnail on the header — click for the full-size picture.
         // Header strip: product image thumbnail + the variant switcher pill.
         // #muFlowHost: the engine injects the MastFlow process header here (the structure).
-        return headerStrip(p, firstImage(p), p.name || 'Product', null) + defaultBanner + UU.stickyHead(tiles, '') +
+        return headerStrip(p, firstImage(p), p.name || 'Product', null) + defaultBanner +
+          '<div id="pv2RevBar">' + revisionBarInner(p) + '</div>' +
+          UU.stickyHead(tiles, '') +
           '<div id="muFlowHost" class="pv2-flowhost">Loading workflow…</div>' +
           UU.paneTabsBar(tabs, 'pricing') +
           pane('pricing', pricingPane(p), true) +
@@ -3451,6 +3518,12 @@
     // ── Pricing tab edit (direct price; revision-aware via setFields) ──
     editPricing: function (pid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editPricing = pid; rerenderPricingPane(pid); },
     cancelPricing: function (pid) { V2.editPricing = null; rerenderPricingPane(pid); },
+    // Apply / discard the product's pending revision (the bar rendered by
+    // revisionBarInner). Both route through _resolveRevision, which delegates to the
+    // shared maker revision engine and reopens the SO only when the revision actually
+    // resolves (a cancelled confirm is a genuine no-op — see _resolveRevision).
+    applyRevision: function (pid) { _resolveRevision(pid, 'makerApplyPendingChanges'); },
+    discardRevision: function (pid) { _resolveRevision(pid, 'makerDiscardPendingChanges'); },
     savePricing: function (pid) {
       var rec = V2.byId[pid] || {};
       function num(id) { var el = document.getElementById(id); if (!el) return null; var s = el.value.trim(); if (s === '') return ''; var n = Number(s); return (isFinite(n) && n >= 0) ? n : null; }
@@ -3470,7 +3543,7 @@
           Promise.resolve(window.MakerProductBridge.setFields(pid, changed)).then(function (res) {
             if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
             if (!res.staged) Object.assign(rec, changed);
-            V2.editPricing = null; rerenderPricingPane(pid); refreshProductSummary(pid); markListDirty();
+            V2.editPricing = null; rerenderPricingPane(pid); refreshProductSummary(pid); refreshRevisionBar(pid); markListDirty();
             MastAdmin.showToast(res.staged ? 'Staged ' + MastFormat.countNoun(res.changed, 'change') + ' (Apply to go live)' : 'Saved');
           }, function (e) { console.error('[products-v2] savePricing', e); MastAdmin.showToast('Save failed', true); });
         });
@@ -3515,7 +3588,7 @@
         Promise.resolve(window.MakerProductBridge.setFields(pid, { priceCents: newCents })).then(function (res) {
           if (!res || !res.ok) { MastAdmin.showToast('Apply failed: ' + ((res && res.error) || 'unknown'), true); return; }
           if (!res.staged) Object.assign(rec, { priceCents: newCents });
-          rerenderPricingPane(pid); markListDirty();
+          rerenderPricingPane(pid); refreshRevisionBar(pid); markListDirty();
           MastAdmin.showToast(res.staged ? 'Staged recipe ' + tier + ' price (Apply to go live)' : 'Applied recipe ' + tier + ' price');
         }, function (e) { console.error('[products-v2] applyRecipePrice', e); MastAdmin.showToast('Apply failed', true); });
       });
@@ -3736,7 +3809,7 @@
           // Also refresh the Inventory pane: it shows the same Stock mode (read
           // from the shared stockInfo), so a fulfillment save must re-render it or
           // the two tabs visibly disagree until the drawer is reopened.
-          function finish(extra) { V2.editFulfill = null; rerenderFulfillmentPane(pid); rerenderInventoryPane(pid); refreshProductSummary(pid); MastAdmin.showToast('Fulfillment updated' + (extra || '')); }
+          function finish(extra) { V2.editFulfill = null; rerenderFulfillmentPane(pid); rerenderInventoryPane(pid); refreshProductSummary(pid); refreshRevisionBar(pid); MastAdmin.showToast('Fulfillment updated' + (extra || '')); }
           // 2) catalog fields (availability / dimensions / weight / second) — one
           //    revision-aware setFields call (stages on Active, live otherwise).
           if (Object.keys(changed).length) {
@@ -3839,7 +3912,7 @@
           // Mirror the live cache so the read pane shows the edit immediately.
           if (!res.staged) Object.assign(rec, changed);
           V2.editInfo = null;
-          rerenderInfoPane(pid); refreshProductSummary(pid); if (!res.staged) markListDirty();
+          rerenderInfoPane(pid); refreshProductSummary(pid); refreshRevisionBar(pid); if (!res.staged) markListDirty();
           // A live name edit also changes the SO title bar ("Product: <name>").
           // The header strip is image-only, so refresh the title element directly
           // (swap the old name in place — robust to the "Product: " label prefix).
