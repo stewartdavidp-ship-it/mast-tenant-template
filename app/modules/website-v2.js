@@ -63,6 +63,8 @@
       blurb: 'Which pages your storefront has — shop, blog, schedule, classes, wholesale, commissions, gift cards, and the My Wallet page.', pr: 'this builder' },
     { key: 'shop', title: 'Categories & import', mount: 'wv2ShopBody',
       blurb: 'Product categories (the shop filter pills) and importing your catalog.', pr: 'this builder' },
+    { key: 'storelayout', title: 'Store layout', mount: 'wv2StoreLayoutBody',
+      blurb: 'How your shop looks — product-grid columns and the order of the sections on each product page. Applies to any storefront connected to this shop.', pr: 'this builder' },
     { key: 'live', title: 'Live preview', mount: 'wv2LiveBody',
       blurb: 'Preview your site and share the link. Every change here is already live.', pr: 'this builder' },
     { key: 'display', title: 'Product page display', mount: 'wv2DisplayBody',
@@ -81,7 +83,7 @@
     { key: 'design',   label: 'Design',              cards: ['lookfeel'] },
     { key: 'homepage', label: 'Homepage',            cards: ['words'] },
     { key: 'pages',    label: 'Pages',               cards: ['pages'] },
-    { key: 'shop',     label: 'Shop & products',     cards: ['shop', 'display'] },
+    { key: 'shop',     label: 'Shop & products',     cards: ['storelayout', 'shop', 'display'] },
     { key: 'programs', label: 'Programs & settings', cards: ['wallet', 'domains', 'visibility'] },
     { key: 'preview',  label: 'Preview',             cards: ['live'] }
   ];
@@ -1934,6 +1936,7 @@
       else if (key === 'words') mountWords();
       else if (key === 'pages') mountPages();
       else if (key === 'shop') mountShop();
+      else if (key === 'storelayout') mountStoreLayout();
       else if (key === 'display') mountProductDisplay();
       else if (key === 'wallet') mountWallet();
       else if (key === 'domains') mountDomains();
@@ -1967,6 +1970,120 @@
       U.pageHeader({ title: 'Your website', subtitle: 'Everything your visitors see — organized by area.' }) +
       headerHtml() + nav + '<div id="wv2Pane" class="wv2-pane"></div>';
     renderPane();
+  }
+
+  // ── Card · Store layout (the storefrontConfig presentation contract) ─
+  // Edits ONE doc — public/config/storefront — the renderer-agnostic
+  // presentation contract ANY connected storefront honors live: Mast's own
+  // template (client SDK) and bespoke Managed sites (a1 publicReadProjection
+  // singleton). Knob ids are canonical + versioned; renderers ignore unknown
+  // knobs and fall back to their own defaults. Same shop, N renderers.
+  var STORE_GRID_OPTIONS = [
+    { v: 'auto', label: 'Auto (fit to screen)' },
+    { v: 1, label: '1 across' }, { v: 2, label: '2 across' },
+    { v: 3, label: '3 across' }, { v: 4, label: '4 across' }
+  ];
+  var STORE_DENSITIES = [
+    { v: 'tight', label: 'Tight' }, { v: 'normal', label: 'Normal' }, { v: 'spacious', label: 'Spacious' }
+  ];
+  // Canonical PDP module ids (the contract vocabulary) + operator labels.
+  // `locked` modules can't be hidden (a product page without them is broken);
+  // `pinned` modules aren't reorderable (gallery is its own column on most renderers).
+  var STORE_PDP_MODULES = [
+    { id: 'gallery', label: 'Photo gallery', pinned: true },
+    { id: 'eyebrow', label: 'Category label' },
+    { id: 'title', label: 'Product name', locked: true },
+    { id: 'price', label: 'Price' },
+    { id: 'stock', label: 'Stock status' },
+    { id: 'description', label: 'Description' },
+    { id: 'buyRow', label: 'Buy buttons', locked: true },
+    { id: 'assurances', label: 'Assurance bullets' }
+  ];
+  var STORE_DEFAULT_ORDER = ['eyebrow', 'title', 'price', 'stock', 'description', 'buyRow', 'assurances'];
+
+  // Working state (load-once per mount; Save writes the whole doc).
+  function storeCfgDefaults() {
+    return { version: 1, shop: { gridColumns: 'auto', cardDensity: 'normal' }, pdp: { moduleOrder: STORE_DEFAULT_ORDER.slice(), hidden: [] } };
+  }
+  function normalizeStoreCfg(raw) {
+    var d = storeCfgDefaults();
+    if (!raw || typeof raw !== 'object') return d;
+    var shop = raw.shop || {};
+    if (STORE_GRID_OPTIONS.some(function (o) { return o.v === shop.gridColumns; })) d.shop.gridColumns = shop.gridColumns;
+    if (STORE_DENSITIES.some(function (o) { return o.v === shop.cardDensity; })) d.shop.cardDensity = shop.cardDensity;
+    var pdp = raw.pdp || {};
+    if (Array.isArray(pdp.moduleOrder)) {
+      var known = pdp.moduleOrder.filter(function (id) { return STORE_DEFAULT_ORDER.indexOf(id) >= 0; });
+      // Append any canonical module the stored order is missing (additive contract).
+      STORE_DEFAULT_ORDER.forEach(function (id) { if (known.indexOf(id) < 0) known.push(id); });
+      d.pdp.moduleOrder = known;
+    }
+    if (Array.isArray(pdp.hidden)) {
+      d.pdp.hidden = pdp.hidden.filter(function (id) {
+        var m = STORE_PDP_MODULES.filter(function (x) { return x.id === id; })[0];
+        return m && !m.locked;
+      });
+    }
+    return d;
+  }
+
+  function storeLayoutRowsHtml() {
+    var cfg = V2.storeCfg;
+    var pinned = STORE_PDP_MODULES.filter(function (m) { return m.pinned; });
+    var rows = pinned.concat(cfg.pdp.moduleOrder.map(function (id) {
+      return STORE_PDP_MODULES.filter(function (m) { return m.id === id; })[0];
+    }).filter(Boolean));
+    var orderable = cfg.pdp.moduleOrder;
+    return rows.map(function (m) {
+      var hiddenNow = cfg.pdp.hidden.indexOf(m.id) >= 0;
+      var idx = orderable.indexOf(m.id);
+      var arrows = m.pinned
+        ? '<span class="mu-sub" style="font-size:0.78rem;">shown first</span>'
+        : '<button type="button" class="btn btn-secondary btn-small" ' + (idx <= 0 ? 'disabled ' : '') + 'onclick="WebsiteV2.storeLayoutMove(\'' + m.id + '\',-1)" aria-label="Move ' + esc(m.label) + ' up">&uarr;</button>' +
+          '<button type="button" class="btn btn-secondary btn-small" ' + (idx >= orderable.length - 1 ? 'disabled ' : '') + 'onclick="WebsiteV2.storeLayoutMove(\'' + m.id + '\',1)" aria-label="Move ' + esc(m.label) + ' down">&darr;</button>';
+      var vis = m.locked
+        ? '<span class="mu-sub" style="font-size:0.78rem;">always shown</span>'
+        : '<label class="toggle-switch" style="margin:0;"><input type="checkbox" ' + (hiddenNow ? '' : 'checked') + ' onchange="WebsiteV2.storeLayoutToggle(\'' + m.id + '\')"><span class="toggle-slider"></span></label>';
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;' + (hiddenNow ? 'opacity:0.55;' : '') + '">' +
+        '<span style="font-size:0.85rem;font-weight:600;">' + esc(m.label) + '</span>' +
+        '<span style="display:flex;align-items:center;gap:6px;">' + arrows + vis + '</span>' +
+      '</div>';
+    }).join('');
+  }
+
+  function renderStoreLayoutBody() {
+    var host = document.getElementById('wv2StoreLayoutBody'); if (!host) return;
+    var cfg = V2.storeCfg;
+    var gridSel = STORE_GRID_OPTIONS.map(function (o) {
+      return '<option value="' + o.v + '"' + (String(cfg.shop.gridColumns) === String(o.v) ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+    }).join('');
+    var densSel = STORE_DENSITIES.map(function (o) {
+      return '<option value="' + o.v + '"' + (cfg.shop.cardDensity === o.v ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+    }).join('');
+    host.innerHTML =
+      '<div class="tab-section-title">Product grid</div>' +
+      '<p class="tab-section-purpose">How many products sit side-by-side on your shop page, and how much breathing room each card gets.</p>' +
+      '<div class="form-group" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:520px;">' +
+        '<div><label style="font-size:0.85rem;">Columns</label><select id="wv2StoreGridCols" style="font-size:0.85rem;">' + gridSel + '</select></div>' +
+        '<div><label style="font-size:0.85rem;">Spacing</label><select id="wv2StoreDensity" style="font-size:0.85rem;">' + densSel + '</select></div>' +
+      '</div>' +
+      '<div class="tab-section-title" style="margin-top:18px;">Product page sections</div>' +
+      '<p class="tab-section-purpose">The order sections appear on each product page. Hide a section to remove it from every product.</p>' +
+      '<div id="wv2StoreModList" style="display:flex;flex-direction:column;gap:8px;max-width:520px;">' + storeLayoutRowsHtml() + '</div>' +
+      '<div style="margin-top:14px;display:flex;align-items:center;gap:12px;">' +
+        '<button class="btn btn-primary" onclick="WebsiteV2.storeLayoutSave()">Save layout</button>' +
+        '<span id="wv2StoreSaveStatus" class="mu-sub" style="font-size:0.85rem;"></span>' +
+      '</div>';
+  }
+
+  function mountStoreLayout() {
+    var host = document.getElementById('wv2StoreLayoutBody'); if (!host) return;
+    if (!canEdit()) { host.innerHTML = '<div class="mu-sub">You do not have permission to edit the store layout.</div>'; return; }
+    host.innerHTML = '<div class="mu-sub">Loading…</div>';
+    Promise.resolve(MastDB.get('public/config/storefront')).catch(function () { return null; }).then(function (raw) {
+      V2.storeCfg = normalizeStoreCfg(raw);
+      renderStoreLayoutBody();
+    });
   }
 
   // ── Card 5 · Product page display (relocated from Settings, PR2) ────
@@ -2145,6 +2262,49 @@
   // ── public API ─────────────────────────────────────────────────────
   window.WebsiteV2 = {
     refresh: function () { render(); },
+
+    // ── Store layout (the storefrontConfig presentation contract) ──────
+    // Move a PDP module up/down in the working order, then repaint the list.
+    storeLayoutMove: function (id, dir) {
+      var order = V2.storeCfg && V2.storeCfg.pdp.moduleOrder; if (!order) return;
+      var i = order.indexOf(id), j = i + dir;
+      if (i < 0 || j < 0 || j >= order.length) return;
+      order[i] = order[j]; order[j] = id;
+      renderStoreLayoutBody();
+    },
+    storeLayoutToggle: function (id) {
+      var cfg = V2.storeCfg; if (!cfg) return;
+      var m = STORE_PDP_MODULES.filter(function (x) { return x.id === id; })[0];
+      if (!m || m.locked) return;
+      var i = cfg.pdp.hidden.indexOf(id);
+      if (i >= 0) cfg.pdp.hidden.splice(i, 1); else cfg.pdp.hidden.push(id);
+      renderStoreLayoutBody();
+    },
+    // Save the WHOLE contract doc (we own public/config/storefront) + selects.
+    storeLayoutSave: function () {
+      if (!canEdit()) { MastAdmin.showToast('You do not have permission to edit the store layout', true); return; }
+      var cfg = V2.storeCfg; if (!cfg) return;
+      var colsEl = document.getElementById('wv2StoreGridCols');
+      var densEl = document.getElementById('wv2StoreDensity');
+      if (colsEl) { var v = colsEl.value; cfg.shop.gridColumns = (v === 'auto') ? 'auto' : parseInt(v, 10); }
+      if (densEl) cfg.shop.cardDensity = densEl.value;
+      var doc = {
+        version: 1,
+        shop: { gridColumns: cfg.shop.gridColumns, cardDensity: cfg.shop.cardDensity },
+        pdp: { moduleOrder: cfg.pdp.moduleOrder.slice(), hidden: cfg.pdp.hidden.slice() },
+        updatedAt: new Date().toISOString()
+      };
+      var status = document.getElementById('wv2StoreSaveStatus');
+      if (status) status.textContent = 'Saving…';
+      Promise.resolve(MastDB.set('public/config/storefront', doc)).then(function () {
+        if (status) status.textContent = 'Saved — live on your storefront within a minute.';
+        MastAdmin.writeAudit('update', 'storefrontConfig', 'storefront');
+        MastAdmin.showToast('Store layout saved');
+      }, function (e) {
+        if (status) status.textContent = '';
+        MastAdmin.showToast('Save failed: ' + ((e && e.message) || 'unknown'), true);
+      });
+    },
 
     // Sub-nav: switch which area (pane) is shown. Re-renders the whole tab so the
     // nav active state + pane stay in sync.
