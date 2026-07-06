@@ -1074,6 +1074,72 @@
     var paneEl = body && body.querySelector('.mu-pane[data-pane="info"]');
     if (paneEl) paneEl.innerHTML = infoPane(rec);
   }
+
+  // ── Details (structured "Product Details" — product.specs) ───────────
+  // Ordered named groups, each an ordered bullet list ([{group, items[]}]) —
+  // e.g. Steel / Handle / Blade / Good For. Merchandising copy the storefront
+  // renders as the PDP "Product Details" section (projected via the a1 products
+  // contract). Writes delegate to the revision-aware setFields bridge, so on a
+  // Published product they stage + surface the Apply/Discard bar.
+  function specsOf(p) {
+    if (!Array.isArray(p.specs)) return [];
+    return p.specs.filter(function (g) { return g && typeof g === 'object' && g.group && Array.isArray(g.items) && g.items.length; });
+  }
+  function detailsPane(p) {
+    var pid = p._key || p.pid;
+    if (V2.editDetails === pid) return detailsEditForm();
+    var guarded = String(p.status || '').toLowerCase() === 'active';
+    var editBtn = canEditProduct() ? '<button class="btn btn-secondary btn-small" onclick="ProductsV2.editDetails(\'' + esc(pid) + '\')">' + (guarded ? 'Revise' : 'Edit') + '</button>' : '';
+    var groups = specsOf(p);
+    var body = groups.length
+      ? U.kv(groups.map(function (g) { return { k: esc(g.group), v: g.items.map(esc).join(' · ') }; }))
+      : '<div class="mu-sub">No product details yet. Add named groups of bullet points — like Steel, Handle, or Good For — and the storefront shows them as a “Product Details” section.</div>';
+    return U.card('Product details', body, { headerRight: editBtn }) +
+      '<div class="pv2-pnote">Details are grouped bullet points shown on the product page (e.g. <strong>Steel</strong>: VG-10 core · Stainless). Order here is display order.</div>';
+  }
+  // Edit form renders from V2.specsDraft (never the record) so add/remove group
+  // re-renders keep typed input — handlers harvest the DOM into the draft first.
+  function detailsEditForm() {
+    var draft = V2.specsDraft || [];
+    var inputStyle = 'display:block;width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--cream-dark);border-radius:6px;font-size:0.9rem;background:var(--cream);color:inherit;box-sizing:border-box;';
+    var rows = draft.map(function (g, i) {
+      return '<div data-spec-row="' + i + '" style="border:1px solid var(--cream-dark);border-radius:8px;padding:10px 12px;margin-bottom:10px;">' +
+        '<div style="display:flex;align-items:center;gap:8px;">' +
+          '<input data-spec-group type="text" value="' + esc(g.group || '') + '" placeholder="Group name (e.g. Steel)" style="' + inputStyle + 'margin-top:0;flex:1;">' +
+          '<button class="btn btn-secondary btn-small" onclick="ProductsV2.specRemoveGroup(' + i + ')" aria-label="Remove group">&times;</button>' +
+        '</div>' +
+        '<label style="display:block;margin-top:8px;font-size:0.78rem;color:var(--warm-gray);">Bullets — one per line' +
+          '<textarea data-spec-items rows="3" style="' + inputStyle + 'resize:vertical;font-family:inherit;">' + esc(g.itemsText || '') + '</textarea>' +
+        '</label>' +
+      '</div>';
+    }).join('');
+    var guarded = V2.editDetailsGuarded
+      ? '<div class="pv2-pnote">This product is Published — your edits stage as a pending revision and go live when you Apply.</div>'
+      : '';
+    var body = guarded + '<div id="pv2SpecRows">' + rows + '</div>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.specAddGroup()">+ Add group</button>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;">' +
+      '<button class="btn btn-primary btn-small" onclick="ProductsV2.saveDetails(\'' + esc(V2.editDetails) + '\')">' + (V2.editDetailsGuarded ? 'Stage changes' : 'Save') + '</button>' +
+      '<button class="btn btn-secondary btn-small" onclick="ProductsV2.cancelDetails(\'' + esc(V2.editDetails) + '\')">Cancel</button>' +
+      '</div>';
+    return U.card('Edit product details', body);
+  }
+  // Read the edit form's current DOM values into V2.specsDraft (so re-renders
+  // from add/remove never lose typed input).
+  function harvestSpecsDraft() {
+    var host = document.getElementById('pv2SpecRows'); if (!host) return;
+    V2.specsDraft = Array.prototype.map.call(host.querySelectorAll('[data-spec-row]'), function (row) {
+      var g = row.querySelector('[data-spec-group]');
+      var t = row.querySelector('[data-spec-items]');
+      return { group: (g && g.value) || '', itemsText: (t && t.value) || '' };
+    });
+  }
+  function rerenderDetailsPane(pid) {
+    var rec = V2.byId[pid]; if (!rec) return;
+    var body = document.getElementById('mastSlideOutBody');
+    var paneEl = body && body.querySelector('.mu-pane[data-pane="details"]');
+    if (paneEl) paneEl.innerHTML = detailsPane(rec);
+  }
   // ── Attributes (channel/merchandising metadata) ───────────────────────
   // Model (ratified, see docs/ux-audit/channel-attributes-research.md):
   //   attributes.authored  — set in Mast, pushed OUT on publish (tags/materials/custom). EDITABLE.
@@ -1365,6 +1431,7 @@
       onPaneLeave: function (prevPane, nextPane, rec) {
         var pid = rec._key || rec.pid;
         if (prevPane === 'info' && V2.editInfo) { V2.editInfo = null; rerenderInfoPane(pid); }
+        else if (prevPane === 'details' && V2.editDetails) { V2.editDetails = null; V2.specsDraft = null; rerenderDetailsPane(pid); }
         else if (prevPane === 'fulfillment' && V2.editFulfill) { V2.editFulfill = null; rerenderFulfillmentPane(pid); }
         else if (prevPane === 'pricing' && V2.editPricing) { V2.editPricing = null; rerenderPricingPane(pid); }
         else if (prevPane === 'inventory' && V2.editInv) { V2.editInv = null; rerenderInventoryPane(pid); }
@@ -1421,12 +1488,13 @@
       render: function (UU, p) {
         // Fresh open/reopen always starts read-only — a prior session's abandoned
         // edit flag must not reopen a pane in edit mode (cancel-on-leave on close).
-        V2.editInfo = V2.editFulfill = V2.editPricing = V2.editInv = V2.editAttrs = null;
+        V2.editInfo = V2.editFulfill = V2.editPricing = V2.editInv = V2.editAttrs = V2.editDetails = null;
+        V2.specsDraft = null;
         var tiles = productTiles(UU, p);
         var tabs = [
           { key: 'pricing', label: 'Pricing' }, { key: 'sales', label: 'Sales' }, { key: 'recipe', label: 'Recipe' },
           { key: 'inventory', label: 'Inventory' }, { key: 'forecast', label: 'Forecast' },
-          { key: 'fulfillment', label: 'Fulfillment' }, { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }, { key: 'attributes', label: 'Attributes' }
+          { key: 'fulfillment', label: 'Fulfillment' }, { key: 'channels', label: 'Channels' }, { key: 'image', label: 'Image' }, { key: 'info', label: 'Info' }, { key: 'details', label: 'Details' }, { key: 'attributes', label: 'Attributes' }
         ].filter(function (t) {
           // Finance-sensitive tabs follow the retired module's view permission.
           if (t.key === 'sales') return canViewLens('sales');
@@ -1458,6 +1526,7 @@
           pane('channels', channelsPane(p)) +
           pane('image', imagePane(p)) +
           pane('info', infoPane(p)) +
+          pane('details', detailsPane(p)) +
           pane('attributes', attributesPane(p));
       }
     }
@@ -3831,6 +3900,59 @@
     // ── Info tab edit (P4 pilot) ──────────────────────────────────────
     editInfo: function (pid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editInfo = pid; rerenderInfoPane(pid); },
     cancelInfo: function (pid) { V2.editInfo = null; rerenderInfoPane(pid); },
+    // ── Details tab (product.specs — grouped bullet lists) ────────────
+    editDetails: function (pid) {
+      if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; }
+      var rec = V2.byId[pid] || {};
+      V2.editDetails = pid;
+      V2.editDetailsGuarded = String(rec.status || '').toLowerCase() === 'active';
+      // Seed the draft from the record (itemsText = one bullet per line).
+      V2.specsDraft = (Array.isArray(rec.specs) ? rec.specs : []).map(function (g) {
+        return { group: (g && g.group) || '', itemsText: (g && Array.isArray(g.items) ? g.items : []).join('\n') };
+      });
+      if (!V2.specsDraft.length) V2.specsDraft = [{ group: '', itemsText: '' }];
+      rerenderDetailsPane(pid);
+    },
+    cancelDetails: function (pid) { V2.editDetails = null; V2.specsDraft = null; rerenderDetailsPane(pid); },
+    specAddGroup: function () {
+      if (!V2.editDetails) return;
+      harvestSpecsDraft();
+      V2.specsDraft.push({ group: '', itemsText: '' });
+      rerenderDetailsPane(V2.editDetails);
+    },
+    specRemoveGroup: function (i) {
+      if (!V2.editDetails) return;
+      harvestSpecsDraft();
+      V2.specsDraft.splice(i, 1);
+      if (!V2.specsDraft.length) V2.specsDraft = [{ group: '', itemsText: '' }];
+      rerenderDetailsPane(V2.editDetails);
+    },
+    saveDetails: function (pid) {
+      var rec = V2.byId[pid] || {};
+      harvestSpecsDraft();
+      // Draft → contract shape: split bullets on newlines, trim, drop empties;
+      // a group needs a name AND at least one bullet. Empty set clears the field.
+      var specs = (V2.specsDraft || []).map(function (g) {
+        return {
+          group: String(g.group || '').trim(),
+          items: String(g.itemsText || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean),
+        };
+      }).filter(function (g) { return g.group && g.items.length; });
+      var incomplete = (V2.specsDraft || []).some(function (g) {
+        var hasName = String(g.group || '').trim(), hasItems = String(g.itemsText || '').trim();
+        return (hasName && !hasItems) || (!hasName && hasItems);
+      });
+      if (incomplete) { MastAdmin.showToast('Each group needs a name and at least one bullet (or remove it)', true); return; }
+      withProductBridge(function () {
+        Promise.resolve(window.MakerProductBridge.setFields(pid, { specs: specs.length ? specs : null })).then(function (res) {
+          if (!res || !res.ok) { MastAdmin.showToast('Save failed: ' + ((res && res.error) || 'unknown'), true); return; }
+          if (!res.staged) rec.specs = specs.length ? specs : null;
+          V2.editDetails = null; V2.specsDraft = null;
+          rerenderDetailsPane(pid); refreshRevisionBar(pid);
+          MastAdmin.showToast(res.staged ? 'Staged ' + MastFormat.countNoun(res.changed, 'change') + ' (Apply to go live)' : 'Saved');
+        }, function (e) { console.error('[products-v2] saveDetails', e); MastAdmin.showToast('Save failed', true); });
+      });
+    },
     // ── Attributes (authored tags/materials) ──
     editAttributes: function (pid) { if (!canEditProduct()) { MastAdmin.showToast('You don’t have permission to edit products', true); return; } V2.editAttrs = pid; rerenderAttributesPane(pid); },
     cancelAttributes: function (pid) { V2.editAttrs = null; rerenderAttributesPane(pid); },
