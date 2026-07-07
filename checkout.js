@@ -68,6 +68,18 @@
   var placesLoaded = false;
   var placesApiKey = null;
 
+  // ── Embeddable-host state (shared-checkout Phase 2) ──
+  // hostReturnPath: the host's post-payment confirmation route, supplied via
+  // MastCheckout.mount({ returnPath }). Rides the submitOrder payload; the
+  // server honors it ONLY when the request Origin maps to this tenant in
+  // tenantsByDomain (and re-validates the shape) — never raw client trust.
+  // Stays null on the template, so its submitOrder payload is unchanged.
+  var hostReturnPath = null;
+  // Set when the load-time payment-return check fires before the host called
+  // mount() (dynamically-loaded file: no MastCart, no drawer slots yet).
+  // mount() replays the check once the shell exists.
+  var paymentReturnDeferred = false;
+
   // ── Shipping defaults ──
   // Rates are integer cents (Phase C). $6 = 600, $10 = 1000, etc.
   var DEFAULT_SHIPPING_CONFIG = {
@@ -2100,6 +2112,11 @@
     var wd = buildWalletDeductionsPayload();
     if (wd) payload.walletDeductions = wd;
 
+    // Embedded host's confirmation route (mount({ returnPath })). submitOrder
+    // validates the shape (same-origin-relative) and honors it only with a
+    // tenantsByDomain-validated request Origin. Never set on the template.
+    if (hostReturnPath) payload.returnPath = hostReturnPath;
+
     // W2.5 — UTM-on-checkout. Persist first-touch attribution captured by
     // cart.js (sessionStorage __mast_attr) onto the order so the Analytics
     // Traffic-by-Source panel can join hits→orders by source/campaign.
@@ -2618,6 +2635,17 @@
     var orderId = params.get('order');
 
     if (paymentStatus === 'success' && orderId) {
+      // Embeddable host (shared-checkout Phase 2): when this file is loaded
+      // dynamically, this auto-run can fire BEFORE MastCheckout.mount()
+      // installed MastCart and built the drawer slots. Consuming the URL
+      // params + sessionStorage now would lose the confirmation forever, so
+      // defer — mount() replays this once the shell exists. Template pages
+      // always have both by this point (cart.js and the drawer DOM precede
+      // checkout.js), so nothing changes there.
+      if (!window.MastCart || !document.getElementById('cartDrawerBody')) {
+        paymentReturnDeferred = true;
+        return;
+      }
       // Clean URL without reloading
       window.history.replaceState({}, document.title, window.location.pathname);
 
@@ -3163,6 +3191,12 @@
   //   getItemMetadata(), resolveItemType()
   // opts (optional): acceptsPayments:boolean (defaults true unless the host
   //   already set window.TENANT_ACCEPTS_PAYMENTS)
+  // opts (optional): returnPath:string — same-origin-relative route (e.g.
+  //   '/checkout/') the payment processor redirects back to. Rides the
+  //   submitOrder payload; the server honors it ONLY when the request Origin
+  //   maps to this tenant in tenantsByDomain. The route's page must load this
+  //   file and call mount() again — the payment-return check then renders the
+  //   confirmation (sessionStorage 'mast_pending_order') instead of start().
   //
   // Host integration notes (Phase 1/2 of the shared-checkout plan):
   //   • The order/wallet CFs must allow CORS from the host origin (Authorization
@@ -3186,6 +3220,12 @@
     // page that never declared it would otherwise throw at first CF call.
     if (typeof window.TENANT_ID === 'undefined') {
       window.TENANT_ID = opts.tenant;
+    }
+    // Post-payment confirmation route on THIS host. Client-side shape gate
+    // only (single-leading-slash relative path); the server re-validates and
+    // honors it solely with a tenantsByDomain-validated request Origin.
+    if (typeof opts.returnPath === 'string' && opts.returnPath.charAt(0) === '/' && opts.returnPath.charAt(1) !== '/') {
+      hostReturnPath = opts.returnPath;
     }
     var pick = function (name, fallback) { return typeof a[name] === 'function' ? a[name] : fallback; };
     if (!window.MastCart) {
@@ -3219,6 +3259,14 @@
       '<div class="cart-drawer-header"><div class="cart-drawer-title">Checkout</div><span id="cartDrawerCount"></span></div>' +
       '<div id="cartDrawerBody" class="cart-drawer-body"></div>' +
       '<div id="cartDrawerFooter" class="cart-drawer-footer"></div>';
+    // Returning from the payment processor? The load-time check deferred
+    // (no MastCart/shell yet) — replay it now so the confirmation renders
+    // instead of a fresh checkout flow starting over it.
+    if (paymentReturnDeferred) {
+      paymentReturnDeferred = false;
+      checkPaymentReturn();
+      return;
+    }
     window.MastCheckout.start();
   }
 
