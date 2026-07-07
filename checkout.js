@@ -3,6 +3,26 @@
    Multi-step checkout within the cart drawer.
    Steps: Cart → Address → Shipping → Review → Confirmation
    Depends on: cart.js (MastCart), Firebase compat SDK
+
+   HOST CONTRACT (shared-checkout Phase 0) — this file is the fleet's ONE
+   checkout implementation; renderers never rebuild it. Its host contract:
+     • window.MastCart — the cart/auth surface (getItems, getFirebaseApp,
+       getCurrentUser, showToast, clear, refreshDrawer, openDrawer,
+       closeDrawer, isNonShippableCart, hasWholesaleItems, and optionally
+       getItemMetadata/resolveItemType for class/pass carts).
+     • DOM slots — #cartDrawerBody, #cartDrawerFooter, #cartDrawerCount,
+       .cart-drawer-title (the flow renders into these).
+     • Globals — TENANT_FIREBASE_CONFIG (optional cloudFunctionsBase
+       override; else derived from the Firebase app's projectId) and
+       TENANT_ACCEPTS_PAYMENTS (payments kill switch).
+   On the template, cart.js provides all of it — nothing here behaves
+   differently. A bespoke (Managed) storefront reuses this SAME file (it is
+   already served per-tenant at /checkout.js) via MastCheckout.mount(
+   container, { adapter }): the adapter supplies its cart + Firebase app,
+   mount builds the slot shell inside `container`, installs a MastCart-
+   compatible shim (ONLY when no MastCart exists), and starts the flow.
+   Full design: external-websites sites/manresa/docs/
+   shared-checkout-architecture.md.
    ========================================================= */
 (function () {
   'use strict';
@@ -3124,8 +3144,87 @@
     }, 1500);
   }
 
+  // ── Embeddable mount (shared-checkout Phase 0) ────────────────────────
+  // Reuse this checkout from a NON-template host (a bespoke Managed
+  // storefront): the host supplies its cart + Firebase app through a small
+  // adapter; mount builds the drawer-slot shell inside `container`, installs a
+  // MastCart-compatible shim (never clobbers the template's real MastCart),
+  // and starts the flow. The host page must also load checkout.css (and
+  // provide/borrow the drawer base styles for the shell classes).
+  //
+  // opts (required): tenant:string — the tenant id (becomes window.TENANT_ID,
+  //   which this module reads UNGUARDED in CF payloads + MastDB init).
+  // adapter (required): getItems():CartLine[]  getFirebaseApp():firebase.App
+  //   getItems must return the SAME mutable line objects across calls (the flow
+  //   annotates them in place for class/pass matching) — not fresh copies.
+  // adapter (optional): getCurrentUser, showToast(msg,isErr), clear(),
+  //   refreshCart() [invoked when checkout cancels/needs the host cart view],
+  //   openDrawer(), closeDrawer(), isNonShippableCart(), hasWholesaleItems(),
+  //   getItemMetadata(), resolveItemType()
+  // opts (optional): acceptsPayments:boolean (defaults true unless the host
+  //   already set window.TENANT_ACCEPTS_PAYMENTS)
+  //
+  // Host integration notes (Phase 1/2 of the shared-checkout plan):
+  //   • The order/wallet CFs must allow CORS from the host origin (Authorization
+  //     + X-Tenant-ID preflights) — audit before first bespoke launch.
+  //   • submitOrder's post-payment return URL must land on a host page that
+  //     loads this file (confirmation reads sessionStorage 'mast_pending_order').
+  //   • Wallet/loyalty panels degrade silently without the MastDB library +
+  //     tenant Firebase rules; Places autocomplete degrades without a
+  //     referrer-allowlisted Google Maps key. /membership.html + /policies.html
+  //     links are template routes (dead on bespoke hosts until parameterized).
+  function mountCheckout(container, opts) {
+    opts = opts || {};
+    var a = opts.adapter || {};
+    if (!container || typeof a.getItems !== 'function' || typeof a.getFirebaseApp !== 'function') {
+      throw new Error('MastCheckout.mount: container, adapter.getItems and adapter.getFirebaseApp are required');
+    }
+    if (typeof opts.tenant !== 'string' || !opts.tenant) {
+      throw new Error('MastCheckout.mount: opts.tenant (tenant id) is required');
+    }
+    // TENANT_ID is read WITHOUT a typeof guard throughout this module — a host
+    // page that never declared it would otherwise throw at first CF call.
+    if (typeof window.TENANT_ID === 'undefined') {
+      window.TENANT_ID = opts.tenant;
+    }
+    var pick = function (name, fallback) { return typeof a[name] === 'function' ? a[name] : fallback; };
+    if (!window.MastCart) {
+      window.MastCart = {
+        getItems: a.getItems,
+        getFirebaseApp: a.getFirebaseApp,
+        getCurrentUser: pick('getCurrentUser', function () {
+          var app = a.getFirebaseApp();
+          return app && app.auth ? app.auth().currentUser : null;
+        }),
+        isNonShippableCart: pick('isNonShippableCart', function () {
+          var items = a.getItems() || [];
+          return items.length > 0 && items.every(function (i) { return i.requiresShipping === false; });
+        }),
+        hasWholesaleItems: pick('hasWholesaleItems', function () { return false; }),
+        showToast: pick('showToast', function (msg) { try { console.warn('[MastCheckout] ' + msg); } catch (e) { /* noop */ } }),
+        clear: pick('clear', function () { /* host cart unknown — noop */ }),
+        refreshDrawer: pick('refreshCart', function () { /* host renders its own cart view */ }),
+        openDrawer: pick('openDrawer', function () { /* noop */ }),
+        closeDrawer: pick('closeDrawer', function () { /* noop */ }),
+        getItemMetadata: (typeof a.getItemMetadata === 'function') ? a.getItemMetadata : undefined,
+        resolveItemType: (typeof a.resolveItemType === 'function') ? a.resolveItemType : undefined,
+      };
+    }
+    if (typeof window.TENANT_ACCEPTS_PAYMENTS === 'undefined') {
+      window.TENANT_ACCEPTS_PAYMENTS = (opts.acceptsPayments !== false);
+    }
+    // The slot shell the flow renders into — the same ids/classes the
+    // template's drawer provides, scoped inside the host's container.
+    container.innerHTML =
+      '<div class="cart-drawer-header"><div class="cart-drawer-title">Checkout</div><span id="cartDrawerCount"></span></div>' +
+      '<div id="cartDrawerBody" class="cart-drawer-body"></div>' +
+      '<div id="cartDrawerFooter" class="cart-drawer-footer"></div>';
+    window.MastCheckout.start();
+  }
+
   // ── Public API ──
   window.MastCheckout = {
+    mount: mountCheckout,
     start: function () {
       // B2: upfront payments guard — if tenant can't accept online orders,
       // bail out with a toast instead of opening the checkout flow. The cart
