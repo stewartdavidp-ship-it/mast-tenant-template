@@ -60,7 +60,13 @@
     ] },
     { id: 'about', label: 'About', peek: 'heading', fields: [
       { id: 'heading', label: 'Heading', type: 'text' },
-      { id: 'body', label: 'Body text', type: 'textarea' }
+      { id: 'body', label: 'Body text', type: 'textarea' },
+      { id: 'process', label: 'Process & materials', type: 'textarea', placeholder: 'How each piece is made — your materials and technique.' },
+      { id: 'established', label: 'Established', type: 'text', placeholder: 'e.g. Est. 2016' },
+      { id: 'credEducation', label: 'Training / education (one per line)', type: 'textarea', placeholder: 'BFA, Rhode Island School of Design' },
+      { id: 'credExhibitions', label: 'Exhibitions & shows (one per line)', type: 'textarea', placeholder: 'ACC Baltimore 2024' },
+      { id: 'credAwards', label: 'Awards (one per line)', type: 'textarea', placeholder: 'Niche Award, 2019' },
+      { id: 'credPress', label: 'Press (one per line)', type: 'textarea', placeholder: 'Featured in American Craft' }
     ] },
     { id: 'contact', label: 'Contact', peek: 'heading', fields: [
       { id: 'heading', label: 'Heading', type: 'text' },
@@ -148,8 +154,9 @@
   function fieldInput(secId, f, data) {
     var val = data[f.id] !== undefined ? data[f.id] : '';
     var idAttr = 'id="hpv2-' + secId + '-' + f.id + '"';
+    var ph = f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '';
     if (f.type === 'textarea') {
-      return '<textarea class="form-input" ' + idAttr + ' rows="4" style="width:100%;resize:vertical;" oninput="HomepageV2.field(\'' + secId + '\',\'' + f.id + '\',this.value)">' + esc(String(val)) + '</textarea>';
+      return '<textarea class="form-input" ' + idAttr + ph + ' rows="4" style="width:100%;resize:vertical;" oninput="HomepageV2.field(\'' + secId + '\',\'' + f.id + '\',this.value)">' + esc(String(val)) + '</textarea>';
     }
     if (f.type === 'number') {
       return '<input class="form-input" type="number" ' + idAttr + ' value="' + esc(String(val)) + '" style="width:100%;" oninput="HomepageV2.field(\'' + secId + '\',\'' + f.id + '\',this.value,\'number\')">';
@@ -161,7 +168,7 @@
     if (f.type === 'toggle') {
       return '<label class="toggle-switch"><input type="checkbox"' + (val ? ' checked' : '') + ' onchange="HomepageV2.field(\'' + secId + '\',\'' + f.id + '\',this.checked,\'bool\')"><span class="toggle-slider"></span></label>';
     }
-    return '<input class="form-input" type="text" ' + idAttr + ' value="' + esc(String(val)) + '" style="width:100%;" oninput="HomepageV2.field(\'' + secId + '\',\'' + f.id + '\',this.value)">';
+    return '<input class="form-input" type="text" ' + idAttr + ph + ' value="' + esc(String(val)) + '" style="width:100%;" oninput="HomepageV2.field(\'' + secId + '\',\'' + f.id + '\',this.value)">';
   }
 
   function sectionEditHtml(sec) {
@@ -255,6 +262,23 @@
   // read-on-page cards reflect the change without a full reload.
   function reloadSoon() { setTimeout(load, 250); }
 
+  // Debounced publish of the About/story section to the storefront-public read
+  // seam (config/about) via the admin-gated publishAboutStory CF. webPresence
+  // stays the edit source; this pushes the published copy the Managed `about`
+  // projection + bespoke storefronts read. One write per burst of keystrokes.
+  var _aboutPubTimer = null;
+  function publishAboutSoon() {
+    if (_aboutPubTimer) clearTimeout(_aboutPubTimer);
+    _aboutPubTimer = setTimeout(function () {
+      var about = (V2.wp && V2.wp.sections && V2.wp.sections.about) || {};
+      try {
+        firebase.functions().httpsCallable('publishAboutStory')({ tenantId: window.TENANT_ID, about: about })
+          .then(function () { if (window.showToast) showToast('About story published to your storefront'); })
+          .catch(function (e) { if (window.showToast) showToast('About publish failed: ' + ((e && e.message) || e), true); });
+      } catch (e) { /* functions SDK not ready yet */ }
+    }, 1200);
+  }
+
   window.HomepageV2 = {
     // Section enable/disable → hpToggleSection (arg-taking, no DOM).
     toggleSection: function (id, enabled) {
@@ -286,6 +310,17 @@
       if (kind === 'number') value = parseInt(raw, 10) || 0;
       else if (kind === 'bool') value = !!raw;
       window.hpUpdateField(secId, fieldId, value);
+      // About/story ALSO publishes to the storefront-public read seam
+      // (config/about) so bespoke Managed sites + the `about` projection reflect
+      // edits. webPresence stays the source for Mast's own template; this is the
+      // published storefront copy. Debounced so a burst of keystrokes = one write.
+      if (secId === 'about') {
+        if (!V2.wp) V2.wp = {};
+        if (!V2.wp.sections) V2.wp.sections = {};
+        if (!V2.wp.sections.about) V2.wp.sections.about = {};
+        V2.wp.sections.about[fieldId] = value;
+        publishAboutSoon();
+      }
     },
     // Contact social link → hpUpdateSocial (arg-taking, no DOM, debounced write).
     social: function (platform, value) {
