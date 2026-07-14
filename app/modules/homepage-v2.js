@@ -262,19 +262,20 @@
   // read-on-page cards reflect the change without a full reload.
   function reloadSoon() { setTimeout(load, 250); }
 
-  // Debounced publish of the About/story section to the storefront-public read
-  // seam (config/about) via the admin-gated publishAboutStory CF. webPresence
-  // stays the edit source; this pushes the published copy the Managed `about`
-  // projection + bespoke storefronts read. One write per burst of keystrokes.
-  var _aboutPubTimer = null;
-  function publishAboutSoon() {
-    if (_aboutPubTimer) clearTimeout(_aboutPubTimer);
-    _aboutPubTimer = setTimeout(function () {
-      var about = (V2.wp && V2.wp.sections && V2.wp.sections.about) || {};
+  // Debounced publish of a storefront CONTENT section (about/contact/...) to the
+  // storefront-public read seam (config/<section>) via the admin-gated
+  // publishStorefrontSection CF. webPresence stays the edit source; this pushes
+  // the published copy the Managed projection + bespoke storefronts read. One
+  // write per burst of keystrokes, per section.
+  var _sectionPubTimers = {};
+  function publishSectionSoon(section) {
+    if (_sectionPubTimers[section]) clearTimeout(_sectionPubTimers[section]);
+    _sectionPubTimers[section] = setTimeout(function () {
+      var fields = (V2.wp && V2.wp.sections && V2.wp.sections[section]) || {};
       try {
-        firebase.functions().httpsCallable('publishAboutStory')({ tenantId: window.TENANT_ID, about: about })
-          .then(function () { if (window.showToast) showToast('About story published to your storefront'); })
-          .catch(function (e) { if (window.showToast) showToast('About publish failed: ' + ((e && e.message) || e), true); });
+        firebase.functions().httpsCallable('publishStorefrontSection')({ tenantId: window.TENANT_ID, section: section, fields: fields })
+          .then(function () { if (window.showToast) showToast(titleCase(section) + ' published to your storefront'); })
+          .catch(function (e) { if (window.showToast) showToast(titleCase(section) + ' publish failed: ' + ((e && e.message) || e), true); });
       } catch (e) { /* functions SDK not ready yet */ }
     }, 1200);
   }
@@ -310,16 +311,17 @@
       if (kind === 'number') value = parseInt(raw, 10) || 0;
       else if (kind === 'bool') value = !!raw;
       window.hpUpdateField(secId, fieldId, value);
-      // About/story ALSO publishes to the storefront-public read seam
-      // (config/about) so bespoke Managed sites + the `about` projection reflect
-      // edits. webPresence stays the source for Mast's own template; this is the
-      // published storefront copy. Debounced so a burst of keystrokes = one write.
-      if (secId === 'about') {
+      // Managed content sections ALSO publish to the storefront-public read seam
+      // (config/<section>) so bespoke Managed sites + the projection manifests
+      // reflect edits. webPresence stays the source for Mast's own template; this
+      // is the published storefront copy. Debounced so a burst of keystrokes =
+      // one write, per section.
+      if (secId === 'about' || secId === 'contact') {
         if (!V2.wp) V2.wp = {};
         if (!V2.wp.sections) V2.wp.sections = {};
-        if (!V2.wp.sections.about) V2.wp.sections.about = {};
-        V2.wp.sections.about[fieldId] = value;
-        publishAboutSoon();
+        if (!V2.wp.sections[secId]) V2.wp.sections[secId] = {};
+        V2.wp.sections[secId][fieldId] = value;
+        publishSectionSoon(secId);
       }
     },
     // Contact social link → hpUpdateSocial (arg-taking, no DOM, debounced write).
